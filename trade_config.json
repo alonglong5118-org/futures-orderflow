@@ -1,0 +1,527 @@
+{
+  "signal_ttl_minutes": 120,
+  "stop_cooldown_sec": 1800,
+  "portfolio_var_pct_cap": 3.3,
+  "portfolio_risk_pct": 4.5,
+  "kelly_max": 1.2,
+  "kelly_min": 0.6,
+  "var_method": "hist",
+  "var_hist_window": 250,
+  "var_hist_min_samples": 120,
+  "var_evt_enabled": 1,
+  "var_evt_threshold_q": 0.9,
+  "var_data_cache_sec": 300,
+  "bias_synthesis": {
+    "direction_mode": "threshold",
+    "direction_alpha": 0.5,
+    "fc_confirm": 25,
+    "confirm_relief": 0.85,
+    "fc_hard": 25,
+    "fc_hard_regime_offset": {
+      "趋势": 0,
+      "波动": 5,
+      "震荡": 10
+    },
+    "bias_g_min": 50
+  },
+  "decorrelate": {
+    "enabled": true,
+    "crowd_penalty": 0.35,
+    "crowd_thresh": 0.8,
+    "contrarian_damp": 0.25
+  },
+  "seasonal_boost": {
+    "enabled": true,
+    "global_mult": 1.5,
+    "by_group": {
+      "农产品": 1.8,
+      "化工": 1.4
+    }
+  },
+  "trailing_tail": {
+    "enabled": true,
+    "trend_only": true,
+    "tail_pct": 0.25,
+    "tail_trail_R": 2.0,
+    "min_profit_R": 2.0
+  },
+  "regime_params": {
+    "enabled": true,
+    "default": {
+      "atr_thresh": 0.025,
+      "flat_dev": 0.008,
+      "flat_atr": 0.012,
+      "trend_slope": 0.003,
+      "trend_dev": 0.01
+    },
+    "by_group": {
+      "黑系": {
+        "atr_thresh": 0.035,
+        "flat_dev": 0.01,
+        "flat_atr": 0.018,
+        "trend_slope": 0.0035,
+        "trend_dev": 0.012
+      },
+      "化工": {
+        "atr_thresh": 0.029,
+        "flat_dev": 0.009,
+        "flat_atr": 0.014,
+        "trend_slope": 0.0032,
+        "trend_dev": 0.011
+      },
+      "农产品": {
+        "atr_thresh": 0.021,
+        "flat_dev": 0.006,
+        "flat_atr": 0.009,
+        "trend_slope": 0.0025,
+        "trend_dev": 0.008
+      },
+      "有色": {
+        "atr_thresh": 0.026,
+        "flat_dev": 0.008,
+        "flat_atr": 0.012,
+        "trend_slope": 0.003,
+        "trend_dev": 0.01
+      },
+      "贵金属": {
+        "atr_thresh": 0.028,
+        "flat_dev": 0.009,
+        "flat_atr": 0.013,
+        "trend_slope": 0.0032,
+        "trend_dev": 0.011
+      },
+      "能源": {
+        "atr_thresh": 0.032,
+        "flat_dev": 0.009,
+        "flat_atr": 0.016,
+        "trend_slope": 0.0034,
+        "trend_dev": 0.012
+      },
+      "航运": {
+        "atr_thresh": 0.038,
+        "flat_dev": 0.011,
+        "flat_atr": 0.02,
+        "trend_slope": 0.0038,
+        "trend_dev": 0.013
+      }
+    },
+    "by_symbol": {}
+  },
+  "robust_pool_gate": {
+    "enabled": true,
+    "auto_adapt": false,
+    "relax_pp": 0.5,
+    "max_relax": 0.05,
+    "floor_oos": 0.1
+  },
+  "account": {
+    "equity": 612140,
+    "equity_note": "模拟盘当前权益(2026-08-11收盘)。回本目标=1,000,000。每日收盘后手动同步一次真实权益。",
+    "risk_pct": 1.5,
+    "margin_cap_pct": 30,
+    "max_lots": 6,
+    "per_symbol_lots": {},
+    "portfolio_margin_cap_pct": 60,
+    "max_total_lots": 20,
+    "use_realtime_margin": true
+  },
+  "notify": {
+    "enabled": true,
+    "native": true,
+    "voice": true,
+    "sound": false
+  },
+  "risk_gate": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 2.0,
+    "limit_proximity": 0.9,
+    "consec_loss_lock": 3,
+    "slip_pts": 1
+  },
+  "contract_specs": {
+    "cu": {
+      "multiplier": 5,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "沪铜",
+      "contract": "CU2610"
+    },
+    "al": {
+      "multiplier": 5,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "沪铝",
+      "contract": "AL2610"
+    },
+    "zn": {
+      "multiplier": 5,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "沪锌",
+      "contract": "ZN2610"
+    },
+    "ni": {
+      "multiplier": 1,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "沪镍",
+      "contract": "NI2610"
+    },
+    "sn": {
+      "multiplier": 1,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "沪锡",
+      "contract": "SN2610"
+    },
+    "ao": {
+      "multiplier": 20,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "氧化铝",
+      "contract": "AO2610"
+    },
+    "au": {
+      "multiplier": 1000,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "沪金",
+      "contract": "AU2610"
+    },
+    "ag": {
+      "multiplier": 15,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "沪银",
+      "contract": "AG2610"
+    },
+    "rb": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "螺纹钢",
+      "contract": "RB2610"
+    },
+    "hc": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "热卷",
+      "contract": "HC2610"
+    },
+    "ss": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "不锈钢",
+      "contract": "SS2610"
+    },
+    "bu": {
+      "multiplier": 10,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "沥青",
+      "contract": "BU2610"
+    },
+    "fu": {
+      "multiplier": 10,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "燃油",
+      "contract": "FU2611"
+    },
+    "ru": {
+      "multiplier": 10,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "橡胶",
+      "contract": "RU2701"
+    },
+    "sp": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "纸浆",
+      "contract": "SP2611"
+    },
+    "sc": {
+      "multiplier": 1000,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "原油",
+      "contract": "SC2610"
+    },
+    "ec": {
+      "multiplier": 50,
+      "margin_rate": 0.18,
+      "limit_pct": 0.1,
+      "name": "欧线",
+      "contract": "EC2610"
+    },
+    "i": {
+      "multiplier": 100,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "铁矿石",
+      "contract": "I2701"
+    },
+    "J": {
+      "multiplier": 100,
+      "margin_rate": 0.13,
+      "limit_pct": 0.08,
+      "name": "焦炭",
+      "contract": "J2701"
+    },
+    "JM": {
+      "multiplier": 60,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "焦煤",
+      "contract": "JM2701"
+    },
+    "eb": {
+      "multiplier": 5,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "苯乙烯",
+      "contract": "EB2610"
+    },
+    "eg": {
+      "multiplier": 10,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "乙二醇",
+      "contract": "EG2610"
+    },
+    "l": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "塑料/LLDPE",
+      "contract": "L2701"
+    },
+    "pp": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "聚丙烯",
+      "contract": "PP2701"
+    },
+    "v": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "PVC",
+      "contract": "V2701"
+    },
+    "pg": {
+      "multiplier": 20,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "液化气",
+      "contract": "PG2610"
+    },
+    "m": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "豆粕",
+      "contract": "M2701"
+    },
+    "y": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "豆油",
+      "contract": "Y2701"
+    },
+    "a": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "豆一",
+      "contract": "A2611"
+    },
+    "b": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "豆二",
+      "contract": "B2611"
+    },
+    "p": {
+      "multiplier": 10,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "棕榈油",
+      "contract": "P2701"
+    },
+    "c": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "玉米",
+      "contract": "C2611"
+    },
+    "cs": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "玉米淀粉",
+      "contract": "CS2611"
+    },
+    "jd": {
+      "multiplier": 10,
+      "margin_rate": 0.07,
+      "limit_pct": 0.08,
+      "name": "鸡蛋",
+      "contract": "JD2610"
+    },
+    "lh": {
+      "multiplier": 16,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "生猪",
+      "contract": "LH2611"
+    },
+    "rr": {
+      "multiplier": 10,
+      "margin_rate": 0.08,
+      "limit_pct": 0.05,
+      "name": "粳米",
+      "contract": "RR2610"
+    },
+    "FG": {
+      "multiplier": 20,
+      "margin_rate": 0.13,
+      "limit_pct": 0.04,
+      "name": "玻璃",
+      "contract": "FG2701"
+    },
+    "SA": {
+      "multiplier": 20,
+      "margin_rate": 0.09,
+      "limit_pct": 0.04,
+      "name": "纯碱",
+      "contract": "SA2701"
+    },
+    "MA": {
+      "multiplier": 10,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "甲醇",
+      "contract": "MA2610"
+    },
+    "TA": {
+      "multiplier": 5,
+      "margin_rate": 0.09,
+      "limit_pct": 0.05,
+      "name": "PTA",
+      "contract": "TA2701"
+    },
+    "PF": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "短纤",
+      "contract": "PF2610"
+    },
+    "PX": {
+      "multiplier": 5,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "对二甲苯",
+      "contract": "PX2611"
+    },
+    "SH": {
+      "multiplier": 30,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "烧碱",
+      "contract": "SH2611"
+    },
+    "UR": {
+      "multiplier": 20,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "尿素",
+      "contract": "UR2701"
+    },
+    "PR": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.05,
+      "name": "瓶片",
+      "contract": "PR2611"
+    },
+    "SR": {
+      "multiplier": 10,
+      "margin_rate": 0.09,
+      "limit_pct": 0.06,
+      "name": "白糖",
+      "contract": "SR2701"
+    },
+    "CF": {
+      "multiplier": 5,
+      "margin_rate": 0.09,
+      "limit_pct": 0.06,
+      "name": "棉花",
+      "contract": "CF2701"
+    },
+    "RM": {
+      "multiplier": 10,
+      "margin_rate": 0.09,
+      "limit_pct": 0.06,
+      "name": "菜粕",
+      "contract": "RM2611"
+    },
+    "OI": {
+      "multiplier": 10,
+      "margin_rate": 0.09,
+      "limit_pct": 0.06,
+      "name": "菜油",
+      "contract": "OI2611"
+    },
+    "PK": {
+      "multiplier": 5,
+      "margin_rate": 0.1,
+      "limit_pct": 0.06,
+      "name": "花生",
+      "contract": "PK2611"
+    },
+    "AP": {
+      "multiplier": 10,
+      "margin_rate": 0.12,
+      "limit_pct": 0.08,
+      "name": "苹果",
+      "contract": "AP2610"
+    },
+    "si": {
+      "multiplier": 5,
+      "margin_rate": 0.12,
+      "limit_pct": 0.06,
+      "name": "工业硅",
+      "contract": "SI2609"
+    },
+    "lc": {
+      "multiplier": 1,
+      "margin_rate": 0.15,
+      "limit_pct": 0.08,
+      "name": "碳酸锂",
+      "contract": "LC2609"
+    },
+    "SA01": {
+      "multiplier": 20,
+      "margin_rate": 0.09,
+      "limit_pct": 0.04,
+      "name": "纯碱2701",
+      "contract_mode": "fixed",
+      "contract": "SA2701"
+    }
+  },
+  "consec_loss_gate": {
+    "warn": 2,
+    "lock": 3,
+    "_note": "连续止损≥warn笔软警告，≥lock笔当日冻结（跨日解除）"
+  }
+}
