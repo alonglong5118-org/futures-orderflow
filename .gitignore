@@ -1,6 +1,14 @@
-# 本地密钥 / 环境（切勿提交）
+# 临时脚本
+_*.py
+# 备份
+*.bak
+*.bak_*
+# 运行期状态/缓存
+*.log
+.oos_lock
+.workbuddy/
+# 凭据
 .env
-
 # Python 缓存
 __pycache__/
 *.pyc
