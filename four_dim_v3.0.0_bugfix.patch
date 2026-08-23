@@ -1,0 +1,31 @@
+From: WorkBuddy <autopilot@local>
+Subject: [PATCH] fix: snapshot() 空仓分支合约改用权威源 _authoritative_contract
+
+违反红线「账户总览合约必须 = main_overrides」。
+snapshot() 持仓分支(460行)已走 _authoritative_contract(main_overrides 权威源)，
+但空仓分支(477行)仍直接用 contract_specs 陈旧合约，换月后空仓品种显示旧月代码。
+修复：空仓分支与持仓分支保持一致，统一走 _authoritative_contract。
+
+应用：在 futures-orderflow 目录执行 `git apply four_dim_v3.0.0_bugfix.patch`
+      或 `patch -p1 < four_dim_v3.0.0_bugfix.patch`
+改完需重启 runner：launchctl kickstart -k gui/502/com.ken.futures-orderflow.live
+---
+ account_tracker.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/account_tracker.py b/account_tracker.py
+index 0000000..1111111 100644
+--- a/account_tracker.py
++++ b/account_tracker.py
+@@ -474,9 +474,9 @@ def snapshot(prices=None):
+         else:
+             positions.append({
+                 "symbol": sym, "name": sp.get("name", sym),
+-                "contract": sp.get("contract", sym),
++                "contract": _authoritative_contract(sym, sp.get("contract", sym)),
+                 "direction": "—", "lots": 0, "avg": None, "price": px,
+                 "float_pnl": None, "margin_used": 0, "margin_pct": 0.0,
+                 "dist_to_cap": round(equity_synced * margin_cap_pct / 100, 2) if equity_synced > 0 else 0.0,
+             })
+-- 
+2.30.1 (WorkBuddy)
