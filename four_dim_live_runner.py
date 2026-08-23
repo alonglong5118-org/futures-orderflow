@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v2.5.0"
+APP_VERSION = "v3.0.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -417,7 +417,275 @@ PORTFOLIO_CORR_BUCKET_PCT = 1.0   # 同相关桶（同向）风险上限 = 权�
 # 净敞口则管不住「全组合清一色做多」的方向性风险。两道闸补上这两个洞。
 PORTFOLIO_SECTOR_PCT = 1.2        # 单板块（化工/黑系/农产品…）风险上限 = 权益 × 1.2%
 PORTFOLIO_NET_DIR_PCT = 1.5       # 单边净敞口上限 = 权益 × 1.5%（Σ多风险 或 Σ空风险）
-PORTFOLIO_SECTOR_MAX_N = 3        # 单板块最多同时持有/发信 3 个品种
+PORTFOLIO_SECTOR_MAX_N = 3
+
+# ─────────────────────────────────────────────────────────────────
+# v5 风控增强常量（基于7大量化策略研究）
+# ─────────────────────────────────────────────────────────────────
+MAX_SINGLE_TRADE_RISK_PCT = 1.0   # 单笔风险上限 = 权益 × 1%（趋势跟踪1%铁律）
+MIN_RR_RATIO = 2.0                 # 最低盈亏比 = 2:1（趋势跟踪盈亏比要求）
+DRAWDOWN_FULL_STOP_PCT = 10.0      # 10%回撤→强制全平+休息（趋势跟踪熔断）
+DRAWDOWN_FORCE_REST_SEC = 86400    # 10%回撤后强制休息24小时
+TIME_STOP_MAX_DAYS = 5             # 持仓超过5天未达T1→时间止损检查
+SIGMA_STOP_MULT = 3.0              # 3σ标准差硬止损（统计套利风控）
+CONSEC_LOSS_HARD_LIMIT = 5         # 连亏5次→强制冻结（AI策略风控）
+
+# ── v5.1 分级止损常量 ──
+BREAKEVEN_TRIGGER_R = 1.0          # 浮盈达到1R时触发保本止损
+TRAILING_STOP_ATR_MULT = 2.0       # 移动止损的ATR倍数
+STOP_LOSS_LEVEL_INITIAL = "initial"    # 初始止损
+STOP_LOSS_LEVEL_BREAKEVEN = "breakeven"  # 保本止损
+STOP_LOSS_LEVEL_TRAILING = "trailing"    # 移动止损
+STOP_LOSS_LEVEL_HARD = "hard"            # 硬止损（3σ）
+
+# ── v5.1 信号质量过滤常量 ──
+SIGNAL_QUALITY_MIN_SCORE = 60       # 信号质量最低通过分数（百分制）
+BREAKOUT_BODY_MIN_PCT = 0.5         # 突破K线实体最小幅度（%）
+BREAKOUT_VOLUME_MULT = 1.5          # 突破成交量需达到均量的倍数
+BREAKOUT_PULLBACK_CONFIRM = True    # 是否需要回踩确认
+VOLUME_MA_PERIOD = 20               # 成交量均线周期
+
+# ── v5.1 多周期确认常量 ──
+MULTI_TIMEFRAME_ENABLED = True          # 是否启用多周期确认
+HIGHER_TF_TREND_PERIOD = "1d"           # 大周期（日线）
+ENTRY_TF_PERIOD = "1h"                  # 入场周期（1小时）
+HIGHER_TF_MA_FAST = 20                  # 大周期快线周期
+HIGHER_TF_MA_SLOW = 55                  # 大周期慢线周期
+COUNTER_TREND_POS_SCALE = 0.5           # 逆大周期时的仓位缩放比例
+COUNTER_TREND_RR_BOOST = 1.3            # 逆大周期时盈亏比要求倍率
+
+# ═══════════════════════════════════════════
+# v6.0 新增常量 — 市场状态引擎（阶段一）
+# ═══════════════════════════════════════════
+
+# ── 市场状态定义 ──
+MARKET_STATE_TREND_EARLY = "trend_early"     # 趋势初期
+MARKET_STATE_TREND_MID = "trend_mid"         # 趋势中期
+MARKET_STATE_TREND_LATE = "trend_late"       # 趋势末期
+MARKET_STATE_SIDEWAYS = "sideways"           # 震荡市
+
+# ── 状态切换确认机制 ──
+STATE_CONFIRM_BARS = 3                       # 连续N根K线确认才切换状态
+STATE_HYSTERESIS_PCT = 10                    # 状态切换迟滞（评分差>10%才切换）
+
+# ── 技术面识别指标权重（总和=100%） ──
+TECH_WEIGHT_MA_ALIGNMENT = 25
+TECH_WEIGHT_VOL_LEVEL = 20
+TECH_WEIGHT_VOL_CHANGE = 15
+TECH_WEIGHT_VOLUME_PRICE = 20
+TECH_WEIGHT_TREND_STRENGTH = 20
+
+# ── 技术面识别周期参数 ──
+TECH_MA_FAST = 20
+TECH_MA_SLOW = 55
+TECH_ATR_PERIOD = 14
+TECH_VOLUME_MA_PERIOD = 20
+TECH_ADX_PERIOD = 14
+TECH_LOOKBACK_BARS = 10
+
+# ── 表现面反馈窗口 ──
+PERF_WINDOW_SHORT = 5
+PERF_WINDOW_MID = 20
+PERF_WEIGHT_WINRATE = 30
+PERF_WEIGHT_PROFIT_FACTOR = 30
+PERF_WEIGHT_STREAK = 20
+PERF_WEIGHT_RECENT_R = 20
+
+# ── 状态判定阈值（技术面得分 0-100） ──
+TECH_SCORE_TREND_EARLY_MIN = 55
+TECH_SCORE_TREND_MID_MIN = 70
+TECH_SCORE_TREND_LATE_MIN = 80
+TECH_SCORE_SIDEWAYS_MAX = 45
+
+# ── 状态判定阈值（表现面得分 0-100） ──
+PERF_SCORE_GOOD_MIN = 65
+PERF_SCORE_MID_MIN = 40
+
+# ── 动态参数映射（相对于v5.1基准值的倍数） ──
+STATE_PARAM_MAPPING = {
+    MARKET_STATE_TREND_EARLY: {
+        "single_trade_risk_mult": 1.2,
+        "min_rr_ratio_mult": 0.8,
+        "quality_score_mult": 0.85,
+        "atr_stop_mult": 1.2,
+        "time_stop_days_mult": 1.2,
+        "max_positions_mult": 1.2,
+        "take_profit_mult": 1.5,
+    },
+    MARKET_STATE_TREND_MID: {
+        "single_trade_risk_mult": 1.0,
+        "min_rr_ratio_mult": 1.0,
+        "quality_score_mult": 1.0,
+        "atr_stop_mult": 1.0,
+        "time_stop_days_mult": 1.0,
+        "max_positions_mult": 1.0,
+        "take_profit_mult": 1.0,
+    },
+    MARKET_STATE_TREND_LATE: {
+        "single_trade_risk_mult": 0.5,
+        "min_rr_ratio_mult": 1.5,
+        "quality_score_mult": 1.3,
+        "atr_stop_mult": 0.7,
+        "time_stop_days_mult": 0.6,
+        "max_positions_mult": 0.6,
+        "take_profit_mult": 0.7,
+    },
+    MARKET_STATE_SIDEWAYS: {
+        "single_trade_risk_mult": 0.6,
+        "min_rr_ratio_mult": 0.75,
+        "quality_score_mult": 1.15,
+        "atr_stop_mult": 0.8,
+        "time_stop_days_mult": 0.8,
+        "max_positions_mult": 0.7,
+        "take_profit_mult": 0.6,
+    }
+}
+
+# ── 引擎开关（阶段一只显示状态，不启用动态参数） ──
+MARKET_STATE_ENGINE_ENABLED = True
+DYNAMIC_PARAMS_ENABLED = False
+
+# ── v6.0 Phase 2：状态切换日志 ──
+STATE_LOG_ENABLED = True
+STATE_LOG_MAX_RECORDS = 100
+STATE_LOG_FILE = "market_state_log.json"
+
+# ── v6.0 Phase 2：分级止盈状态机常量 ──
+TAKE_PROFIT_LEVEL_NONE = "tp_none"
+TAKE_PROFIT_LEVEL_T1 = "tp_t1"
+TAKE_PROFIT_LEVEL_T2 = "tp_t2"
+TAKE_PROFIT_LEVEL_T3 = "tp_t3"
+TAKE_PROFIT_LEVEL_DONE = "tp_done"
+TP_T1_ATR_MULT = 3.0          # T1: ATR×3 减仓1/3 + 止损上移至保本
+TP_T2_ATR_MULT = 5.0          # T2: ATR×5 再减1/3 + 止损上移至T1
+TP_T3_TRAILING_ATR_MULT = 2.0 # T3: ATR×2 移动止盈跟踪
+TP_SIDEWAYS_SKIP_T3 = True    # 震荡市跳过T3，T2全平
+TP_T1_REDUCE_RATIO = 0.33     # T1减仓比例（1/3）
+TP_T2_REDUCE_RATIO = 0.50     # T2减仓比例（剩余的1/2 = 总1/3）
+TP_T1_STOP_MOVE_TO_BREAKEVEN = True  # T1触发后止损上移至保本
+TP_T2_STOP_MOVE_TO_T1 = True         # T2触发后止损上移至T1价位
+
+# ═══════════════════════════════════════════
+# v6.0 Phase 3: 策略参数自优化
+# ═══════════════════════════════════════════
+
+# ── 总开关 ──
+AUTO_OPTIMIZE_ENABLED = False
+
+# ── 可调参数定义 ──
+AUTO_OPTIMIZE_PARAMS = {
+    "quality_threshold": {
+        "label": "信号质量门槛",
+        "base": 60, "min": 50, "max": 75, "step": 5,
+        "unit": "分", "direction": "inverse", "locked": False,
+        "current_value": 60, "last_adjust_time": 0, "adjust_count": 0,
+    },
+    "single_trade_risk_pct": {
+        "label": "单笔风险比例",
+        "base": 1.0, "min": 0.5, "max": 1.5, "step": 0.1,
+        "unit": "%", "direction": "direct", "locked": False,
+        "current_value": 1.0, "last_adjust_time": 0, "adjust_count": 0,
+    },
+    "atr_stop_mult": {
+        "label": "ATR止损倍数",
+        "base": 2.0, "min": 1.5, "max": 3.0, "step": 0.2,
+        "unit": "x", "direction": "adaptive", "locked": False,
+        "current_value": 2.0, "last_adjust_time": 0, "adjust_count": 0,
+    },
+    "min_rr_ratio": {
+        "label": "盈亏比要求",
+        "base": 2.0, "min": 1.5, "max": 3.0, "step": 0.2,
+        "unit": ":1", "direction": "inverse", "locked": False,
+        "current_value": 2.0, "last_adjust_time": 0, "adjust_count": 0,
+    },
+    "time_stop_days": {
+        "label": "时间止损天数",
+        "base": 5, "min": 3, "max": 7, "step": 1,
+        "unit": "天", "direction": "adaptive", "locked": False,
+        "current_value": 5, "last_adjust_time": 0, "adjust_count": 0,
+    },
+}
+
+# ── 表现统计窗口 ──
+AUTO_OPT_WINDOW_SHORT = 5
+AUTO_OPT_WINDOW_MID = 20
+AUTO_OPT_WINDOW_STOP = 10
+
+# ── 触发阈值 ──
+AUTO_OPT_STREAK_THRESHOLD = 3
+AUTO_OPT_WINRATE_HIGH = 60
+AUTO_OPT_WINRATE_LOW = 40
+AUTO_OPT_PF_HIGH = 2.5
+AUTO_OPT_PF_LOW = 1.5
+AUTO_OPT_STOP_RATE_HIGH = 70
+AUTO_OPT_STOP_RATE_LOW = 30
+
+# ── 冷却期 & 回退 ──
+AUTO_OPT_COOLDOWN_HOURS = 24
+AUTO_OPT_ROLLBACK_TRADES = 5
+AUTO_OPT_ROLLBACK_THRESHOLD = -0.5
+
+# ── 日志 ──
+AUTO_OPT_LOG_FILE = "auto_optimize_log.json"
+AUTO_OPT_LOG_MAX_RECORDS = 200
+
+# ═══════════════════════════════════════════
+# v6.0 Phase 4: 知识增强版 — 6大模块常量
+# ═══════════════════════════════════════════
+PHASE4_ENABLED = True  # 知识增强总开关
+
+# ── 模块A: 认知偏差防御 ──
+COGNITIVE_BIAS_ENABLED = True
+OVERCONFIDENCE_WIN_STREAK = 4       # 连赢次数触发过度自信检测
+OVERCONFIDENCE_SHRINK_PCT = 30      # 过度自信时缩仓30%
+OVERCONFIDENCE_RAISE_THRESHOLD = 10 # 过度自信时提高信号门槛10分
+REVENGE_TRADING_LOSS_STREAK = 3     # 连亏次数触发报复性交易检测
+REVENGE_TRADING_COOLDOWN_MIN = 60   # 报复性交易冷却期(分钟)
+
+# ── 模块B: 期望值决策引擎 ──
+EXPECTED_VALUE_ENGINE_ENABLED = True
+EV_MIN_THRESHOLD = 0.3              # 期望值最低通过阈值(R)
+EV_DIMENSIONS = {
+    "trend_strength": 0.25,         # 趋势强度权重
+    "volume_confirmation": 0.20,    # 成交量确认权重
+    "market_state": 0.20,           # 市场状态权重
+    "risk_reward": 0.20,            # 盈亏比质量权重
+    "timing": 0.15,                 # 时机把握权重
+}
+EV_CONFIDENCE_BOOST = 0.15          # 多维度一致时置信度加成
+
+# ── 模块C: 反脆弱风控 ──
+ANTIFRAGILE_ENABLED = True
+ANTIFRAGILE_DRAWDOWN_TRIGGER = 3.0  # 回撤达3%触发反脆弱加仓
+ANTIFRAGILE_MAX_ADD_PCT = 50         # 最多加仓至原仓位50%
+ANTIFRAGILE_MIN_QUALITY = 70         # 反脆弱加仓最低信号质量
+ANTIFRAGILE_COOLDOWN_TRADES = 3      # 反脆弱加仓后冷却交易数
+
+# ── 模块D: 交易者状态监控 ──
+TRADER_STATE_ENABLED = True
+TRADER_FATIGUE_HOURS = 4            # 连续运行4小时触发疲劳检测
+TRADER_DAILY_MAX_TRADES = 20        # 每日最多交易次数
+TRADER_EMOTION_STREAK = 3           # 连续亏损次数触发情绪检测
+TRADER_SCARCITY_THRESHOLD = 0.2     # 权益回撤20%触发稀缺心态检测
+
+# ── 模块E: 策略进化复盘 ──
+STRATEGY_REVIEW_ENABLED = True
+REVIEW_MIN_TRADES = 10              # 最少交易数才触发复盘
+REVIEW_QUALITY_WEIGHTS = {
+    "decision_quality": 0.4,         # 决策质量权重
+    "execution_quality": 0.3,        # 执行质量权重
+    "result_quality": 0.3,           # 结果质量权重
+}
+DECISION_DIARY_FILE = "decision_diary.json"
+
+# ── 模块F: 第二层思维过滤 ──
+SECOND_LEVEL_THINKING_ENABLED = True
+CONSENSUS_EXTREME_HIGH = 80         # 共识极端乐观阈值(%)
+CONSENSUS_EXTREME_LOW = 20          # 共识极端悲观阈值(%)
+CONSENSUS_MIN_SAMPLES = 50          # 计算共识最小样本数
+SECOND_LEVEL_BARRIER_BOOST = 15     # 第二层思维时提高门槛15分
+
+        # 单板块最多同时持有/发信 3 个品种
 PORTFOLIO_VAR_PCT_CAP = 3.3       # P1-4：组合 1日95% VaR 上限 = 权益 × 3.3%（≈2%×1.65，与线性预算对齐；超则本轮回禁新增信号）
 PAIR_CORR_TTL = 1800              # 两两相关性缓存有效期（秒，30min）
 
@@ -438,8 +706,12 @@ STRESS_BUFFER_MULT = 1.0         # 计提幅度系数：应力 = limit_pct × �
 NO_NIGHT = {"jd", "lh", "AP", "CJ", "PK", "RS", "PM", "WH", "JR", "LR", "CS", "rr", "ss", "sp"}
 def _in_session(sym, now=None):
     """该品种当前是否处于交易时段（决定是否允许推送信号）。
-    G4：夜盘资格由 SYMBOLS[sym]["night"] 统一真值源决定（替代旧的 NO_NIGHT 集合）。"""
+    G4：夜盘资格由 SYMBOLS[sym]["night"] 统一真值源决定（替代旧的 NO_NIGHT 集合）。
+    周六/周日 全天休市，不推送任何信号。"""
     now = now or datetime.now()
+    # 周末全天休市（周六=5，周日=6）
+    if now.weekday() >= 5:
+        return False
     t = now.hour * 60 + now.minute
     # 日盘：09:00-10:15 / 10:30-11:30 / 13:30-15:00
     day = (540 <= t <= 615) or (630 <= t <= 690) or (810 <= t <= 900)
@@ -1393,6 +1665,65 @@ CLOSE_COOLDOWN_SEC = 900   # 平仓/减仓后同品种禁止开新仓冷静期�
 ALERT_REFIRE_SEC = 1800    # 持仓触价告警重推窗口（秒=30min）：同 sym+同 level 在窗口内只推一次，防震荡刷屏
 _LAST_STOP_EXIT = {}       # sym -> 最近止损离场时间戳（冷静期判定用）
 _LAST_POS_CLOSE = {}       # sym -> 最近平仓/减仓时间戳（防刚平就开新仓）
+
+# ── v6.0 市场状态缓存 ──
+market_state_cache = {}  # symbol -> {state, tech_score, perf_score, ...}
+
+# ── v6.0 Phase 3: 参数自优化全局状态 ──
+# NOTE: _load_auto_opt_params() 定义在 L6062，这里先给安全默认值，main() 里再调一次
+auto_opt_params = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
+if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
+    try:
+        with open(AUTO_OPT_LOG_FILE, 'r', encoding='utf-8') as _f:
+            _data = json.load(_f)
+            if 'params' in _data:
+                for _k, _v in _data['params'].items():
+                    if _k in auto_opt_params:
+                        for _sk, _sv in _v.items():
+                            auto_opt_params[_k][_sk] = _sv
+    except Exception:
+        pass
+auto_opt_adjustment_logs = []
+try:
+    if os.path.exists(AUTO_OPT_LOG_FILE):
+        with open(AUTO_OPT_LOG_FILE, 'r', encoding='utf-8') as _f:
+            _data = json.load(_f)
+            if "logs" in _data:
+                auto_opt_adjustment_logs = _data["logs"]
+except Exception as _e:
+    print(f"[v6.0] 加载自优化日志失败: {_e}")
+
+# ── v6.0 Phase 4: 知识增强全局状态 ──
+# 模块A: 认知偏差状态
+cognitive_bias_state = {
+    "win_streak": 0, "loss_streak": 0,
+    "last_trade_time": 0, "overconfidence_active": False,
+    "revenge_cooldown_until": 0,
+}
+# 模块D: 交易者状态
+trader_state = {
+    "session_start_time": time.time(),
+    "daily_trade_count": 0,
+    "daily_date": time.strftime("%Y-%m-%d"),
+    "emotion_streak": 0,
+    "fatigue_level": 0,
+    "scarcity_detected": False,
+}
+# 模块E: 决策日记
+decision_diary = []
+try:
+    if os.path.exists(DECISION_DIARY_FILE):
+        with open(DECISION_DIARY_FILE, 'r', encoding='utf-8') as _f:
+            _dd = json.load(_f)
+            decision_diary = _dd.get("entries", [])
+except Exception:
+    pass
+# 模块F: 共识状态
+consensus_state = {
+    "extreme_high": False, "extreme_low": False,
+    "consensus_score": 50, "last_update": 0,
+}
+
 _POS_DIRECTION_HISTORY = {}  # sym -> [(direction, timestamp), ...] 记录最近方向变化（防来回打脸）
 _SIGNAL_PUSH_LOG = {}       # sym -> {"timestamps": [], "daily_count": date->int} 信号推送频率控制
 _LAST_POSITION_SNAPSHOT = {} # sym -> last known position state (防过期持仓警报)
@@ -1476,6 +1807,91 @@ def check_position_alerts(positions):
     # D1：平仓后 account_tracker 直接 del 持仓，snapshot 不再含该 sym，
     # 「无 lots 复位」分支执行不到 → 按当前持仓集合差集清理所有守卫残留，
     # 保证平仓重开后「配置异常」提醒与止损弹窗不被旧守卫吞掉。
+    # ── v6.0 新增：分级止盈状态机初始化 + 检查 ──
+    for _tp_init in positions:
+        if not _tp_init.get("lots"):
+            continue
+        if "tp_level" not in _tp_init:
+            _tp_init["tp_level"] = TAKE_PROFIT_LEVEL_NONE
+            _tp_init["tp_targets"] = None
+            _tp_init["trailing_stop"] = None
+            _tp_init["tp_history"] = []
+        if _tp_init.get("tp_targets") is None:
+            try:
+                _dir = "long" if _tp_init.get("direction") in ("多", "long") else "short"
+                _atr_val = _tp_init.get("atr", _tp_init.get("stop_dist", 0))
+                if _atr_val and float(_atr_val) > 0:
+                    _entry = float(_tp_init.get("avg") or _tp_init.get("price", 0))
+                    if _entry > 0:
+                        _tp_init["tp_targets"] = calc_take_profit_targets(
+                            _entry, float(_atr_val), _dir,
+                            market_state_cache.get(_tp_init.get("symbol", ""), {}).get("state")
+                        )
+                        _tp_init["init_qty"] = int(_tp_init.get("lots", 0))
+            except Exception:
+                pass
+    # ── v5 新增：时间止损检查（持仓超过5天未达T1 → 建议减仓）──
+    _now_ts = time.time()
+    for _tp in positions:
+        if not _tp.get("lots"):
+            continue
+        _ot = _tp.get("open_time", "")
+        if _ot and isinstance(_ot, str):
+            try:
+                _ot_ts = datetime.strptime(_ot, "%Y-%m-%d %H:%M:%S").timestamp()
+                _days_held = (_now_ts - _ot_ts) / 86400.0
+                if _days_held >= get_effective_param("time_stop_days", TIME_STOP_MAX_DAYS):
+                    _t1_hit = _tp.get("t1_hit", False) or _tp.get("t1_state", "") == "hit"
+                    if not _t1_hit:
+                        log_alert("时间止损检查", _tp.get("sym"), "持仓",
+                                  f"{_tp.get('sym')} 已持仓{_days_held:.1f}天未达T1，建议减仓或止损",
+                                  {"days_held": round(_days_held, 1), "lots": _tp.get("lots", 0)})
+            except Exception:
+                pass
+
+    # ── v6.0 新增：分级止盈状态机检查 ──
+    for _tp in positions:
+        if not _tp.get("lots") or not _tp.get("tp_targets"):
+            continue
+        _sym = _tp.get("symbol", "")
+        _dir_str = _tp.get("direction", "多")
+        _dir = "long" if _dir_str in ("多", "long") else "short"
+        _px = _tp.get("price")
+        if _px is None:
+            continue
+        try:
+            _atr_v = float(_tp.get("atr", _tp.get("stop_dist", 0)) or 0)
+        except (TypeError, ValueError):
+            _atr_v = 0
+        if _atr_v <= 0:
+            continue
+        _pi = {
+            "entry_price": float(_tp.get("avg") or _tp.get("price", 0)),
+            "direction": _dir,
+            "tp_level": _tp.get("tp_level", TAKE_PROFIT_LEVEL_NONE),
+            "tp_targets": _tp.get("tp_targets", {}),
+            "current_qty": int(_tp.get("lots", 0)),
+            "init_qty": _tp.get("init_qty", int(_tp.get("lots", 0))),
+            "trailing_stop": _tp.get("trailing_stop", 0),
+        }
+        _tp_result = update_take_profit_level(_pi, float(_px), _atr_v)
+        if _tp_result["action"] != "none":
+            _tp["tp_level"] = _tp_result["new_level"]
+            if _tp_result["new_stop_price"] is not None:
+                _tp["stop"] = _tp_result["new_stop_price"]
+            if _tp_result["trailing_stop"] is not None:
+                _tp["trailing_stop"] = _tp_result["trailing_stop"]
+            if _tp_result["action"] in ("reduce_t1", "reduce_t2"):
+                _tp["t1_hit"] = True
+                _tp["t1_state"] = "hit" if _tp_result["action"] == "reduce_t1" else "t2_hit"
+            _action_labels = {"reduce_t1": "T1减仓", "reduce_t2": "T2减仓", "close_t1_full": "T1全平", "close_t2_full": "T2全平", "close_t3": "T3止盈平仓"}
+            log_alert("分级止盈", _sym, _dir_str,
+                      f"{_sym} {_action_labels.get(_tp_result['action'], _tp_result['action'])} "
+                      f"@{_px}, 减仓{_tp_result['reduce_qty']}手, "
+                      f"止损{'上移' if _tp_result['new_stop_price'] else '不变'}",
+                      {"tp_level": _tp_result["new_level"], "action": _tp_result["action"],
+                       "reduce_qty": _tp_result["reduce_qty"]})
+
     cur_syms = {p.get("symbol") for p in positions if p.get("lots")}
     for guard in (_POS_ALERT_GUARD, _POS_LEVEL_GUARD, _POS_INSURE_GUARD):
         for old in list(guard.keys()):
@@ -2651,7 +3067,355 @@ def _fire_trail_alert(sym, pos, px, state, new_stop):
               {"state": state, "new_stop": new_stop, "price": px})
 
 
+
+
+def calc_tiered_stop_loss(position, entry_price, atr, sigma_stop_price):
+    """
+    分级止损计算（v5.1 新增）
+    
+    根据持仓浮盈状态，自动判断当前应使用哪一级止损：
+    - 初始止损：入场时设定的止损价（风险1%）
+    - 保本止损：浮盈≥1R时，止损上移至成本价
+    - 移动止损：浮盈≥2R时，使用ATR移动止损追踪
+    - 硬止损：3σ标准差兜底（极端行情）
+    
+    Args:
+        position: 持仓对象（含 direction, entry_price, current_price 等）
+        entry_price: 入场均价
+        atr: 当前ATR值
+        sigma_stop_price: 3σ硬止损价格
+    
+    Returns:
+        dict: {
+            "stop_level": 当前止损级别,
+            "stop_price": 当前止损价,
+            "stop_distance_pct": 止损距离百分比
+        }
+    """
+    direction = position.get("direction", "long")
+    current_price = position.get("current_price", entry_price)
+    
+    # 计算1R的价格距离（基于ATR*2作为初始止损距离）
+    initial_stop_dist = atr * 2.0 if atr and atr > 0 else (entry_price * 0.02)
+    
+    # 计算初始止损价
+    if direction in ("多", "long"):
+        initial_stop = entry_price - initial_stop_dist
+    else:
+        initial_stop = entry_price + initial_stop_dist
+    
+    # 计算当前浮盈（以R为单位）
+    if direction in ("多", "long"):
+        profit_pips = current_price - entry_price
+    else:
+        profit_pips = entry_price - current_price
+    profit_r = profit_pips / initial_stop_dist if initial_stop_dist > 0 else 0
+    
+    # 分级判断
+    if profit_r >= 2.0:
+        # 第三级：移动止损（ATR追踪）
+        if direction in ("多", "long"):
+            trailing_stop = current_price - atr * TRAILING_STOP_ATR_MULT
+        else:
+            trailing_stop = current_price + atr * TRAILING_STOP_ATR_MULT
+        # 移动止损不低于保本
+        if direction in ("多", "long"):
+            stop_price = max(trailing_stop, entry_price)
+        else:
+            stop_price = min(trailing_stop, entry_price)
+        stop_level = STOP_LOSS_LEVEL_TRAILING
+    elif profit_r >= BREAKEVEN_TRIGGER_R:
+        # 第二级：保本止损
+        stop_price = entry_price
+        stop_level = STOP_LOSS_LEVEL_BREAKEVEN
+    else:
+        # 第一级：初始止损
+        stop_price = initial_stop
+        stop_level = STOP_LOSS_LEVEL_INITIAL
+    
+    # 第四级：硬止损兜底（3σ更严格时使用）
+    if sigma_stop_price and sigma_stop_price > 0:
+        if direction in ("多", "long"):
+            if sigma_stop_price > stop_price:
+                stop_price = sigma_stop_price
+                stop_level = STOP_LOSS_LEVEL_HARD
+        else:
+            if sigma_stop_price < stop_price:
+                stop_price = sigma_stop_price
+                stop_level = STOP_LOSS_LEVEL_HARD
+    
+    # 计算止损距离百分比
+    stop_distance_pct = abs(current_price - stop_price) / current_price * 100 if current_price > 0 else 0
+    
+    return {
+        "stop_level": stop_level,
+        "stop_price": round(stop_price, 4),
+        "stop_distance_pct": round(stop_distance_pct, 2),
+        "profit_r": round(profit_r, 2)
+    }
+
+
+
+def calc_signal_quality_score(signal, klines, volume_ma):
+    """
+    信号质量评分（v5.1 新增）
+    对突破类信号进行多维度质量评估，过滤低质量假突破信号。
+    """
+    score = 0
+    details = {}
+    
+    direction = signal.get("direction", "long")
+    signal_type = signal.get("signal_type", "breakout")
+    
+    # 只对突破类信号做质量过滤
+    if signal_type not in ["breakout", "trend_break", "resistance_break"]:
+        return {"score": 100, "passed": True, "details": {"note": "非突破类信号，默认通过"}}
+    
+    if not klines or len(klines) < 3:
+        return {"score": SIGNAL_QUALITY_MIN_SCORE, "passed": True, "details": {"note": "K线数据不足，默认通过"}}
+    
+    # 获取突破K线
+    breakout_candle = klines[-2]
+    open_p = breakout_candle.get("open", 0)
+    close_p = breakout_candle.get("close", 0)
+    high_p = breakout_candle.get("high", 0)
+    low_p = breakout_candle.get("low", 0)
+    volume = breakout_candle.get("volume", 0)
+    
+    if open_p == 0 or volume_ma == 0:
+        return {"score": SIGNAL_QUALITY_MIN_SCORE, "passed": True, "details": {"note": "数据异常，默认通过"}}
+    
+    # 维度1：收盘价确认（30分）
+    body_pct = abs(close_p - open_p) / open_p * 100
+    body_score = min(30, body_pct / BREAKOUT_BODY_MIN_PCT * 30)
+    details["body_confirm"] = {
+        "score": round(body_score, 1),
+        "max": 30,
+        "body_pct": round(body_pct, 2),
+        "threshold": BREAKOUT_BODY_MIN_PCT
+    }
+    score += body_score
+    
+    # 维度2：成交量确认（30分）
+    if volume_ma > 0:
+        volume_ratio = volume / volume_ma
+        volume_score = min(30, volume_ratio / BREAKOUT_VOLUME_MULT * 30)
+    else:
+        volume_ratio = 1.0
+        volume_score = 15
+    details["volume_confirm"] = {
+        "score": round(volume_score, 1),
+        "max": 30,
+        "volume_ratio": round(volume_ratio, 2),
+        "threshold": BREAKOUT_VOLUME_MULT
+    }
+    score += volume_score
+    
+    # 维度3：回踩确认（20分）
+    pullback_score = 0
+    if len(klines) >= 3:
+        if direction == "long":
+            upper_wick = high_p - max(open_p, close_p)
+            body_size = abs(close_p - open_p)
+            if body_size > 0 and upper_wick / body_size < 0.5:
+                pullback_score = 20
+            else:
+                pullback_score = 10
+        else:
+            lower_wick = min(open_p, close_p) - low_p
+            body_size = abs(close_p - open_p)
+            if body_size > 0 and lower_wick / body_size < 0.5:
+                pullback_score = 20
+            else:
+                pullback_score = 10
+    
+    if BREAKOUT_PULLBACK_CONFIRM and len(klines) < 4:
+        pullback_score = max(pullback_score, 10)
+    
+    details["pullback_confirm"] = {
+        "score": round(pullback_score, 1),
+        "max": 20
+    }
+    score += pullback_score
+    
+    # 维度4：位置合理性（20分）
+    entry_price = signal.get("entry_price", close_p)
+    if direction == "long":
+        breakout_dist = (entry_price - high_p) / high_p * 100 if high_p > 0 else 0
+    else:
+        breakout_dist = (low_p - entry_price) / low_p * 100 if low_p > 0 else 0
+    
+    if 0.3 <= breakout_dist <= 2.0:
+        position_score = 20
+    elif breakout_dist < 0.3:
+        position_score = 10
+    elif breakout_dist <= 5:
+        position_score = 15
+    else:
+        position_score = 5
+    
+    details["position_quality"] = {
+        "score": round(position_score, 1),
+        "max": 20,
+        "breakout_dist_pct": round(breakout_dist, 2)
+    }
+    score += position_score
+    
+    score = round(score, 1)
+    passed = score >= SIGNAL_QUALITY_MIN_SCORE
+    
+    return {
+        "score": score,
+        "passed": passed,
+        "details": details
+    }
+
+
+def get_higher_tf_trend(higher_tf_klines):
+    """
+    大周期趋势判断（v5.1 新增）
+    使用双均线（快线+慢线）判断大周期趋势方向。
+    """
+    if not higher_tf_klines or len(higher_tf_klines) < HIGHER_TF_MA_SLOW + 5:
+        return {"trend": "sideways", "strength": 0, "ma_fast": 0, "ma_slow": 0}
+    
+    closes = [k.get("close", 0) for k in higher_tf_klines if k.get("close", 0) > 0]
+    
+    if len(closes) < HIGHER_TF_MA_SLOW:
+        return {"trend": "sideways", "strength": 0, "ma_fast": 0, "ma_slow": 0}
+    
+    ma_fast = sum(closes[-HIGHER_TF_MA_FAST:]) / HIGHER_TF_MA_FAST
+    ma_slow = sum(closes[-HIGHER_TF_MA_SLOW:]) / HIGHER_TF_MA_SLOW
+    
+    if ma_slow == 0:
+        return {"trend": "sideways", "strength": 0, "ma_fast": ma_fast, "ma_slow": ma_slow}
+    
+    divergence_pct = (ma_fast - ma_slow) / ma_slow * 100
+    strength = min(100, abs(divergence_pct) * 20)
+    
+    if divergence_pct > 0.5:
+        trend = "bullish"
+    elif divergence_pct < -0.5:
+        trend = "bearish"
+    else:
+        trend = "sideways"
+    
+    return {
+        "trend": trend,
+        "strength": round(strength, 1),
+        "ma_fast": round(ma_fast, 4),
+        "ma_slow": round(ma_slow, 4),
+        "divergence_pct": round(divergence_pct, 2)
+    }
+
+
+def apply_multi_tf_filter(signal, higher_tf_trend):
+    """
+    应用多周期过滤（v5.1 新增）
+    根据大周期趋势对信号进行调整。
+    """
+    if not MULTI_TIMEFRAME_ENABLED:
+        return {"passed": True, "pos_scale": 1.0, "rr_required": MIN_RR_RATIO, "reason": "多周期确认未启用"}
+    
+    trend = higher_tf_trend.get("trend", "sideways")
+    strength = higher_tf_trend.get("strength", 0)
+    direction = signal.get("direction", "long")
+    
+    is_bullish = trend == "bullish" and direction == "long"
+    is_bearish = trend == "bearish" and direction == "short"
+    is_with_trend = is_bullish or is_bearish
+    
+    if trend == "sideways":
+        return {
+            "passed": True,
+            "pos_scale": 0.8,
+            "rr_required": get_effective_param("min_rr_ratio", MIN_RR_RATIO),
+            "reason": f"大周期震荡，仓位×0.8（趋势强度: {strength}）"
+        }
+    
+    if is_with_trend:
+        return {
+            "passed": True,
+            "pos_scale": 1.0,
+            "rr_required": get_effective_param("min_rr_ratio", MIN_RR_RATIO),
+            "reason": f"顺大周期趋势（{trend}），趋势强度: {strength}"
+        }
+    else:
+        new_rr = MIN_RR_RATIO * COUNTER_TREND_RR_BOOST
+        return {
+            "passed": True,
+            "pos_scale": COUNTER_TREND_POS_SCALE,
+            "rr_required": round(new_rr, 2),
+            "reason": f"逆大周期趋势（{trend}），仓位×{COUNTER_TREND_POS_SCALE}，盈亏比要求≥{new_rr:.1f}:1"
+        }
+
+
+def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
+    """计算分级止损的各档位价格。
+    返回: {initial, breakeven, trailing, hard}
+    """
+    ds = 1 if direction == "多" else -1
+    oneR = abs(entry - t1) if t1 else abs(entry - stop)
+    
+    levels = {}
+    # 初始止损
+    levels[STOP_LOSS_LEVEL_INITIAL] = stop
+    
+    # 保本止损（1R触发）
+    levels[STOP_LOSS_LEVEL_BREAKEVEN] = entry
+    
+    # 移动止损（当前价 -/+ ATR倍数）
+    if atr and atr > 0:
+        if ds > 0:
+            levels[STOP_LOSS_LEVEL_TRAILING] = entry - TRAILING_STOP_ATR_MULT * atr
+        else:
+            levels[STOP_LOSS_LEVEL_TRAILING] = entry + TRAILING_STOP_ATR_MULT * atr
+    else:
+        levels[STOP_LOSS_LEVEL_TRAILING] = stop
+    
+    # 硬止损（3σ）
+    if atr and atr > 0:
+        if ds > 0:
+            levels[STOP_LOSS_LEVEL_HARD] = entry - SIGMA_STOP_MULT * atr
+        else:
+            levels[STOP_LOSS_LEVEL_HARD] = entry + SIGMA_STOP_MULT * atr
+    else:
+        levels[STOP_LOSS_LEVEL_HARD] = stop
+    
+    return levels
+
+
+def _get_stop_level_state(profit_R, cur_state, direction, px, entry, oneR, atr):
+    """根据浮盈R倍数确定当前止损状态。
+    返回: (new_stop, new_state)
+    """
+    ds = 1 if direction == "多" else -1
+    
+    if profit_R < BREAKEVEN_TRIGGER_R:
+        # 未达1R：保持初始止损
+        return None, STOP_LOSS_LEVEL_INITIAL
+    
+    elif profit_R < 2.0:
+        # 1R-2R：保本止损
+        return entry, STOP_LOSS_LEVEL_BREAKEVEN
+    
+    else:
+        # ≥2R：进入移动止损
+        if atr and atr > 0:
+            if ds > 0:
+                trailing_stop = max(entry, px - TRAILING_STOP_ATR_MULT * atr)
+            else:
+                trailing_stop = min(entry, px + TRAILING_STOP_ATR_MULT * atr)
+        else:
+            if ds > 0:
+                trailing_stop = max(entry, px - oneR)
+            else:
+                trailing_stop = min(entry, px + oneR)
+        return trailing_stop, STOP_LOSS_LEVEL_TRAILING
+
+
 def manage_trailing_stops():
+
     """移动止损自动管理（仅实时行情可用时跑，避免非交易时段误调）：
       - 价格触及 t1(1R) → 止损上移至开仓价(保本)
       - 盈利继续扩大 → 按 1R 跟踪上移锁定利润（多头止损=max(开仓价, 现价-1R)）
@@ -2899,6 +3663,28 @@ DEFAULT_RISK_RULES = [
      "metric": "n_positions", "op": ">", "threshold": 8, "unit": "int",
      "severity": "notice", "notify": True,
      "action": "持仓≥8 个品种，注意力分散、相关性难控；聚焦核心 3–5 个。"},
+    # ── v5 新增：7大量化策略研究结论 ──
+    {"id": "dd_circuit_breaker", "name": "10%回撤硬熔断", "category": "熔断",
+     "metric": "dd_pct", "op": ">=", "threshold": 10.0, "unit": "pct",
+     "severity": "danger", "notify": False,
+     "action": "10%回撤触发硬熔断：全平所有仓位 + 强制休息24小时 + 重启风险评估。"},
+    {"id": "consec_loss_hard", "name": "连亏5次硬冻结", "category": "纪律",
+     "metric": "consec_losses", "op": ">=", "threshold": 5, "unit": "int",
+     "severity": "danger", "notify": False,
+     "action": "连亏5次触发硬冻结：当日禁止所有新开仓，次日自动解除。"},
+    {"id": "per_trade_risk", "name": "单笔风险超1%上限", "category": "仓位",
+     "metric": "risk_pct", "op": ">", "threshold": 1.0, "unit": "pct",
+     "severity": "warning", "notify": True,
+     "action": "单笔风险超1%上限，应缩手数或调整止损，控制单笔风险在1%以内。"},
+    {"id": "time_stop_check", "name": "持仓超时检查", "category": "纪律",
+     "metric": "position_count", "op": ">", "threshold": 0, "unit": "int",
+     "severity": "notice", "notify": True,
+     "action": "有持仓超过5天未达T1，应检查是否继续持有或减仓。"},
+    # ── v5.1 新增：分级止损规则 ──
+    {"id": "tiered_stop_loss", "name": "分级止损联动", "category": "止损",
+     "metric": "stop_level", "op": "auto", "threshold": None, "unit": "level",
+     "severity": "info", "notify": True,
+     "action": "根据浮盈自动调整止损级别：初始→保本→移动→硬止损，实现止损级联保护。"},
 ]
 
 
@@ -4390,8 +5176,12 @@ def account_marketsync(force=False, heal=False):
 
 
 def _market_phase():
-    """当前整体交易时段：日盘交易中 / 夜盘交易中 / 休市。"""
+    """当前整体交易时段：日盘交易中 / 夜盘交易中 / 休市。
+    周六/周日 全天休市。"""
     now = datetime.now()
+    # 周末全天休市
+    if now.weekday() >= 5:
+        return "休市"
     t = now.hour * 60 + now.minute
     day = (540 <= t <= 615) or (630 <= t <= 690) or (810 <= t <= 900)
     night = (1260 <= t <= 1380)
@@ -4777,6 +5567,1078 @@ def _load_open_positions():
     except Exception:
         return []
 
+
+
+# ═══════════════════════════════════════════════════════════
+# v6.0 市场状态引擎 — 核心函数（阶段一）
+# ═══════════════════════════════════════════════════════════
+
+def _calc_ma_alignment_score(klines):
+    """技术面指标1：均线排列评分（v6.0 新增）"""
+    if not klines or len(klines) < TECH_MA_SLOW + 5:
+        return 50
+    closes = [k.get("close", 0) for k in klines if k.get("close", 0) > 0]
+    if len(closes) < TECH_MA_SLOW:
+        return 50
+    ma_fast_now = sum(closes[-TECH_MA_FAST:]) / TECH_MA_FAST
+    ma_slow_now = sum(closes[-TECH_MA_SLOW:]) / TECH_MA_SLOW
+    prev_closes = closes[:-5] if len(closes) > 5 else closes
+    ma_fast_prev = sum(prev_closes[-TECH_MA_FAST:]) / TECH_MA_FAST if len(prev_closes) >= TECH_MA_FAST else ma_fast_now
+    ma_slow_prev = sum(prev_closes[-TECH_MA_SLOW:]) / TECH_MA_SLOW if len(prev_closes) >= TECH_MA_SLOW else ma_slow_now
+    if ma_slow_now == 0:
+        return 50
+    divergence_now = (ma_fast_now - ma_slow_now) / ma_slow_now * 100
+    divergence_prev = (ma_fast_prev - ma_slow_prev) / ma_slow_prev * 100 if ma_slow_prev != 0 else 0
+    divergence_change = divergence_now - divergence_prev
+    abs_div = abs(divergence_now)
+    if abs_div < 0.3:
+        base_score = 10 + abs_div / 0.3 * 20
+    elif abs_div < 1.5:
+        base_score = 30 + (abs_div - 0.3) / 1.2 * 40
+    elif abs_div < 3.0:
+        base_score = 70 + (abs_div - 1.5) / 1.5 * 20
+    else:
+        base_score = 90 + min(10, (abs_div - 3.0) * 5)
+    if divergence_change < -0.1 and abs_div > 1.0:
+        base_score = max(base_score, 75)
+    return round(min(100, max(0, base_score)), 1)
+
+
+def _calc_vol_level_score(klines):
+    """技术面指标2：波动率水平评分（v6.0 新增）"""
+    if not klines or len(klines) < TECH_ATR_PERIOD + 5:
+        return 50
+    closes = [k.get("close", 0) for k in klines if k.get("close", 0) > 0]
+    if len(closes) < TECH_ATR_PERIOD:
+        return 50
+    tr_values = []
+    for i in range(1, len(klines)):
+        high = klines[i].get("high", 0)
+        low = klines[i].get("low", 0)
+        prev_close = klines[i-1].get("close", 0)
+        if high > 0 and low > 0 and prev_close > 0:
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_values.append(tr)
+    if len(tr_values) < TECH_ATR_PERIOD:
+        return 50
+    atr = sum(tr_values[-TECH_ATR_PERIOD:]) / TECH_ATR_PERIOD
+    current_price = closes[-1]
+    if current_price == 0:
+        return 50
+    atr_pct = atr / current_price * 100
+    if atr_pct < 0.8:
+        score = 10 + atr_pct / 0.8 * 20
+    elif atr_pct < 2.0:
+        score = 30 + (atr_pct - 0.8) / 1.2 * 40
+    elif atr_pct < 4.0:
+        score = 70 + (atr_pct - 2.0) / 2.0 * 25
+    else:
+        score = 95 + min(5, (atr_pct - 4.0) * 2)
+    return round(min(100, max(0, score)), 1)
+
+
+def _calc_vol_change_score(klines):
+    """技术面指标3：波动率变化评分（v6.0 新增）"""
+    if not klines or len(klines) < TECH_ATR_PERIOD + TECH_LOOKBACK_BARS + 5:
+        return 50
+    tr_values = []
+    for i in range(1, len(klines)):
+        high = klines[i].get("high", 0)
+        low = klines[i].get("low", 0)
+        prev_close = klines[i-1].get("close", 0)
+        if high > 0 and low > 0 and prev_close > 0:
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_values.append(tr)
+    if len(tr_values) < TECH_ATR_PERIOD + TECH_LOOKBACK_BARS:
+        return 50
+    atr_recent = sum(tr_values[-TECH_ATR_PERIOD:]) / TECH_ATR_PERIOD
+    atr_prev = sum(tr_values[-TECH_ATR_PERIOD-TECH_LOOKBACK_BARS:-TECH_LOOKBACK_BARS]) / TECH_ATR_PERIOD
+    if atr_prev == 0:
+        return 50
+    change_pct = (atr_recent - atr_prev) / atr_prev * 100
+    if change_pct > 30:
+        score = 75 + min(25, (change_pct - 30) * 0.5)
+    elif change_pct > 10:
+        score = 55 + (change_pct - 10) / 20 * 20
+    elif change_pct > -10:
+        score = 45 + (change_pct + 10) / 20 * 10
+    elif change_pct > -30:
+        score = 25 + (change_pct + 30) / 20 * 20
+    else:
+        score = max(5, 25 - (abs(change_pct) - 30) * 0.5)
+    return round(min(100, max(0, score)), 1)
+
+
+def _calc_volume_price_score(klines, volumes=None):
+    """技术面指标4：量价配合评分（v6.0 新增）"""
+    if not klines or len(klines) < TECH_VOLUME_MA_PERIOD + 5:
+        return 50
+    closes = [k.get("close", 0) for k in klines if k.get("close", 0) > 0]
+    if not volumes or len(volumes) < TECH_VOLUME_MA_PERIOD:
+        if len(closes) < 10:
+            return 50
+        price_changes = [abs(closes[i] - closes[i-1]) / closes[i-1] * 100 
+                        for i in range(1, len(closes)) if closes[i-1] > 0]
+        if len(price_changes) < 5:
+            return 50
+        avg_change = sum(price_changes[-10:]) / 10
+        if avg_change < 0.3: return 30
+        elif avg_change < 1.0: return 55
+        elif avg_change < 2.0: return 70
+        else: return 85
+    vol_ma = sum(volumes[-TECH_VOLUME_MA_PERIOD:]) / TECH_VOLUME_MA_PERIOD
+    recent_scores = []
+    for i in range(-3, 0):
+        if len(klines) + i < 1 or len(volumes) + i < 1:
+            continue
+        close = klines[i].get("close", 0)
+        prev_close = klines[i-1].get("close", 0) if i > -len(klines) else close
+        vol = volumes[i] if i < len(volumes) else vol_ma
+        if prev_close == 0 or vol_ma == 0:
+            continue
+        price_change_pct = (close - prev_close) / prev_close * 100
+        vol_ratio = vol / vol_ma
+        if abs(price_change_pct) < 0.2:
+            if vol_ratio < 0.8: recent_scores.append(20)
+            else: recent_scores.append(40)
+        elif price_change_pct > 0:
+            if vol_ratio > 1.2: recent_scores.append(70)
+            elif vol_ratio > 0.8: recent_scores.append(55)
+            else: recent_scores.append(85)
+        else:
+            if vol_ratio > 1.2: recent_scores.append(75)
+            elif vol_ratio > 0.8: recent_scores.append(50)
+            else: recent_scores.append(80)
+    if not recent_scores:
+        return 50
+    return round(sum(recent_scores) / len(recent_scores), 1)
+
+
+def _calc_trend_strength_score(klines):
+    """技术面指标5：趋势强度评分（v6.0 新增）"""
+    if not klines or len(klines) < TECH_ADX_PERIOD + 5:
+        return 50
+    closes = [k.get("close", 0) for k in klines if k.get("close", 0) > 0]
+    if len(closes) < TECH_ADX_PERIOD:
+        return 50
+    ma_fast = sum(closes[-TECH_MA_FAST:]) / TECH_MA_FAST
+    ma_slow = sum(closes[-TECH_MA_SLOW:]) / TECH_MA_SLOW
+    if ma_slow == 0:
+        return 50
+    divergence_pct = abs(ma_fast - ma_slow) / ma_slow * 100
+    if divergence_pct < 0.5:
+        score = 10 + divergence_pct / 0.5 * 20
+    elif divergence_pct < 1.5:
+        score = 30 + (divergence_pct - 0.5) / 1.0 * 30
+    elif divergence_pct < 3.0:
+        score = 60 + (divergence_pct - 1.5) / 1.5 * 30
+    else:
+        score = 90 + min(10, (divergence_pct - 3.0) * 3)
+    return round(min(100, max(0, score)), 1)
+
+
+def calc_tech_market_state(klines, volumes=None):
+    """技术面市场状态综合评分（v6.0 新增）"""
+    if not klines or len(klines) < TECH_MA_SLOW + 10:
+        return {"total_score": 50, "state_candidate": MARKET_STATE_SIDEWAYS,
+                "indicators": {}, "ma_fast": 0, "ma_slow": 0}
+    ma_score = _calc_ma_alignment_score(klines)
+    vol_level_score = _calc_vol_level_score(klines)
+    vol_change_score = _calc_vol_change_score(klines)
+    vp_score = _calc_volume_price_score(klines, volumes)
+    trend_strength_score = _calc_trend_strength_score(klines)
+    total_score = (ma_score * TECH_WEIGHT_MA_ALIGNMENT + vol_level_score * TECH_WEIGHT_VOL_LEVEL +
+                   vol_change_score * TECH_WEIGHT_VOL_CHANGE + vp_score * TECH_WEIGHT_VOLUME_PRICE +
+                   trend_strength_score * TECH_WEIGHT_TREND_STRENGTH) / 100
+    total_score = round(total_score, 1)
+    closes = [k.get("close", 0) for k in klines if k.get("close", 0) > 0]
+    ma_fast = sum(closes[-TECH_MA_FAST:]) / TECH_MA_FAST if len(closes) >= TECH_MA_FAST else 0
+    ma_slow = sum(closes[-TECH_MA_SLOW:]) / TECH_MA_SLOW if len(closes) >= TECH_MA_SLOW else 0
+    trend_direction = "long" if ma_fast > ma_slow else "short"
+    if total_score < TECH_SCORE_SIDEWAYS_MAX:
+        state_candidate = MARKET_STATE_SIDEWAYS
+    elif total_score < TECH_SCORE_TREND_MID_MIN:
+        state_candidate = MARKET_STATE_TREND_EARLY
+    elif total_score < TECH_SCORE_TREND_LATE_MIN:
+        state_candidate = MARKET_STATE_TREND_MID
+    else:
+        state_candidate = MARKET_STATE_TREND_LATE
+    if total_score >= 70 and vol_change_score < 40:
+        state_candidate = MARKET_STATE_TREND_LATE
+    return {"total_score": total_score, "state_candidate": state_candidate,
+            "trend_direction": trend_direction,
+            "indicators": {"ma_alignment": ma_score, "vol_level": vol_level_score,
+                          "vol_change": vol_change_score, "volume_price": vp_score,
+                          "trend_strength": trend_strength_score},
+            "ma_fast": round(ma_fast, 4), "ma_slow": round(ma_slow, 4)}
+
+
+def calc_performance_score(recent_trades):
+    """表现面反馈统计（v6.0 新增）"""
+    if not recent_trades or len(recent_trades) == 0:
+        return {"total_score": 50, "level": "mid", "metrics": {}}
+    trades = recent_trades[-PERF_WINDOW_MID:]
+    n = len(trades)
+    if n < 3:
+        return {"total_score": 50, "level": "mid", "metrics": {"note": f"交易数不足({n}笔)"}}
+    wins = sum(1 for t in trades if t.get("win", t.get("r_result", 0) > 0))
+    win_rate = wins / n * 100
+    if win_rate > 60: winrate_score = 80 + min(20, (win_rate - 60) * 2)
+    elif win_rate > 45: winrate_score = 50 + (win_rate - 45) / 15 * 30
+    elif win_rate > 30: winrate_score = 20 + (win_rate - 30) / 15 * 30
+    else: winrate_score = max(0, 20 - (30 - win_rate) * 1.5)
+    winning_r = [t.get("r_result", 0) for t in trades if t.get("r_result", 0) > 0]
+    losing_r = [abs(t.get("r_result", 0)) for t in trades if t.get("r_result", 0) < 0]
+    profit_factor = sum(winning_r) / sum(losing_r) if losing_r and sum(losing_r) > 0 else (3.0 if winning_r else 1.0)
+    if profit_factor > 2.5: pf_score = 80 + min(20, (profit_factor - 2.5) * 10)
+    elif profit_factor > 1.5: pf_score = 50 + (profit_factor - 1.5) * 30
+    elif profit_factor > 0.8: pf_score = 20 + (profit_factor - 0.8) / 0.7 * 30
+    else: pf_score = max(0, 20 - (0.8 - profit_factor) * 30)
+    current_streak = 0
+    streak_type = "none"
+    for t in reversed(trades):
+        is_win = t.get("win", t.get("r_result", 0) > 0)
+        if is_win:
+            if streak_type in ("win", "none"): current_streak += 1; streak_type = "win"
+            else: break
+        else:
+            if streak_type in ("lose", "none"): current_streak += 1; streak_type = "lose"
+            else: break
+    if streak_type == "win":
+        streak_score = 90 if current_streak >= 5 else (75 if current_streak >= 3 else (60 if current_streak >= 2 else 55))
+    elif streak_type == "lose":
+        streak_score = 10 if current_streak >= 5 else (25 if current_streak >= 3 else (40 if current_streak >= 2 else 45))
+    else: streak_score = 50
+    recent_short = trades[-PERF_WINDOW_SHORT:] if len(trades) >= PERF_WINDOW_SHORT else trades
+    total_r = sum(t.get("r_result", 0) for t in recent_short)
+    r_score = max(0, min(100, 50 + (total_r / 3.0) * 50))
+    total_score = (winrate_score * PERF_WEIGHT_WINRATE + pf_score * PERF_WEIGHT_PROFIT_FACTOR +
+                   streak_score * PERF_WEIGHT_STREAK + r_score * PERF_WEIGHT_RECENT_R) / 100
+    total_score = round(total_score, 1)
+    level = "good" if total_score >= PERF_SCORE_GOOD_MIN else ("mid" if total_score >= PERF_SCORE_MID_MIN else "poor")
+    return {"total_score": total_score, "level": level,
+            "metrics": {"win_rate": round(win_rate, 1), "winrate_score": round(winrate_score, 1),
+                        "profit_factor": round(profit_factor, 2), "pf_score": round(pf_score, 1),
+                        "current_streak": current_streak, "streak_type": streak_type,
+                        "streak_score": round(streak_score, 1), "recent_total_r": round(total_r, 2),
+                        "r_score": round(r_score, 1), "trade_count": n}}
+
+
+def determine_market_state(tech_result, perf_result, prev_state=None, confirm_counter=0):
+    """市场状态最终判定 - 双因子交叉+确认机制（v6.0 新增）"""
+    tech_state = tech_result.get("state_candidate", MARKET_STATE_SIDEWAYS)
+    perf_level = perf_result.get("level", "mid")
+    switch_matrix = {
+        MARKET_STATE_TREND_EARLY: {"good": (MARKET_STATE_TREND_EARLY, "high"), "mid": (MARKET_STATE_TREND_EARLY, "mid"), "poor": (MARKET_STATE_SIDEWAYS, "low")},
+        MARKET_STATE_TREND_MID: {"good": (MARKET_STATE_TREND_MID, "high"), "mid": (MARKET_STATE_TREND_MID, "mid"), "poor": (MARKET_STATE_TREND_LATE, "low")},
+        MARKET_STATE_TREND_LATE: {"good": (MARKET_STATE_TREND_LATE, "mid"), "mid": (MARKET_STATE_TREND_LATE, "mid"), "poor": (MARKET_STATE_TREND_LATE, "high")},
+        MARKET_STATE_SIDEWAYS: {"good": (MARKET_STATE_SIDEWAYS, "mid"), "mid": (MARKET_STATE_SIDEWAYS, "mid"), "poor": (MARKET_STATE_SIDEWAYS, "high")},
+    }
+    if tech_state in switch_matrix and perf_level in switch_matrix[tech_state]:
+        candidate_state, confidence = switch_matrix[tech_state][perf_level]
+    else:
+        candidate_state = tech_state
+        confidence = "low"
+    switched = False
+    if prev_state is None or prev_state == candidate_state:
+        new_state = candidate_state
+        new_counter = 0
+    else:
+        new_counter = confirm_counter + 1
+        if new_counter >= STATE_CONFIRM_BARS:
+            new_state = candidate_state
+            switched = True
+            new_counter = 0
+        else:
+            new_state = prev_state
+    return {"state": new_state, "confidence": confidence, "tech_state": tech_state,
+            "perf_level": perf_level, "tech_score": tech_result.get("total_score", 50),
+            "perf_score": perf_result.get("total_score", 50), "confirm_counter": new_counter,
+            "switched": switched, "trend_direction": tech_result.get("trend_direction", "long")}
+
+
+def get_dynamic_params(market_state):
+    """获取当前市场状态下的动态参数（v6.0 新增）"""
+    if not DYNAMIC_PARAMS_ENABLED:
+        return {"single_trade_risk_mult": 1.0, "min_rr_ratio_mult": 1.0, "quality_score_mult": 1.0,
+                "atr_stop_mult": 1.0, "time_stop_days_mult": 1.0, "max_positions_mult": 1.0,
+                "take_profit_mult": 1.0, "note": "动态参数未启用（阶段一观察期）"}
+    if market_state in STATE_PARAM_MAPPING:
+        return STATE_PARAM_MAPPING[market_state].copy()
+    return {"single_trade_risk_mult": 1.0, "min_rr_ratio_mult": 1.0, "quality_score_mult": 1.0,
+            "atr_stop_mult": 1.0, "time_stop_days_mult": 1.0, "max_positions_mult": 1.0,
+            "take_profit_mult": 1.0, "note": "未知状态"}
+
+
+def get_state_label(state):
+    """获取市场状态中文标签（v6.0 新增）"""
+    labels = {MARKET_STATE_TREND_EARLY: "趋势初期", MARKET_STATE_TREND_MID: "趋势中期",
+              MARKET_STATE_TREND_LATE: "趋势末期", MARKET_STATE_SIDEWAYS: "震荡市"}
+    return labels.get(state, state)
+
+
+
+# ═══════════════════════════════════════════════════════════
+# v6.0 分级止盈状态机 — 核心函数
+# ═══════════════════════════════════════════════════════════
+
+def calc_take_profit_targets(entry_price, atr, direction, market_state=None):
+    """计算分级止盈目标位"""
+    t1_mult = TP_T1_ATR_MULT
+    t2_mult = TP_T2_ATR_MULT
+    t3_mult = TP_T3_TRAILING_ATR_MULT
+    skip_t3 = False
+    if DYNAMIC_PARAMS_ENABLED and market_state:
+        params = get_dynamic_params(market_state)
+        tp_mult = params.get("take_profit_mult", 1.0)
+        t1_mult = TP_T1_ATR_MULT * tp_mult
+        t2_mult = TP_T2_ATR_MULT * tp_mult
+        if TP_SIDEWAYS_SKIP_T3 and market_state == MARKET_STATE_SIDEWAYS:
+            skip_t3 = True
+    if direction == "long":
+        t1_price = entry_price + atr * t1_mult
+        t2_price = entry_price + atr * t2_mult
+    else:
+        t1_price = entry_price - atr * t1_mult
+        t2_price = entry_price - atr * t2_mult
+    return {
+        "t1_price": round(t1_price, 4), "t2_price": round(t2_price, 4),
+        "t1_atr_mult": round(t1_mult, 2), "t2_atr_mult": round(t2_mult, 2),
+        "t3_trailing_atr_mult": round(t3_mult, 2), "skip_t3": skip_t3
+    }
+
+
+def update_take_profit_level(position_info, current_price, atr):
+    """更新分级止盈状态（T1→T2→T3状态机）"""
+    entry_price = position_info.get("entry_price", 0)
+    direction = position_info.get("direction", "long")
+    current_level = position_info.get("tp_level", TAKE_PROFIT_LEVEL_NONE)
+    tp_targets = position_info.get("tp_targets", {})
+    current_qty = position_info.get("current_qty", 0)
+    init_qty = position_info.get("init_qty", current_qty)
+    
+    result = {"new_level": current_level, "action": "none",
+              "reduce_qty": 0, "new_stop_price": None, "trailing_stop": None}
+    
+    if entry_price <= 0 or current_price <= 0 or not tp_targets:
+        return result
+    
+    t1_price = tp_targets.get("t1_price", 0)
+    t2_price = tp_targets.get("t2_price", 0)
+    skip_t3 = tp_targets.get("skip_t3", False)
+    
+    def hit_target(target):
+        if direction == "long":
+            return current_price >= target
+        else:
+            return current_price <= target
+    
+    # 状态1: T1未达
+    if current_level == TAKE_PROFIT_LEVEL_NONE:
+        if hit_target(t1_price):
+            _raw_reduce = max(1, int(init_qty * TP_T1_REDUCE_RATIO))
+            # Bug fix: 减仓量≥持仓量时直接全平，避免"平半变全平"或下单失败
+            if _raw_reduce >= current_qty:
+                result["new_level"] = TAKE_PROFIT_LEVEL_DONE
+                result["action"] = "close_t1_full"
+                result["reduce_qty"] = current_qty
+            else:
+                result["new_level"] = TAKE_PROFIT_LEVEL_T1
+                result["action"] = "reduce_t1"
+                result["reduce_qty"] = _raw_reduce
+            if TP_T1_STOP_MOVE_TO_BREAKEVEN:
+                result["new_stop_price"] = entry_price
+        return result
+    
+    # 状态2: T1已达
+    elif current_level == TAKE_PROFIT_LEVEL_T1:
+        if hit_target(t2_price):
+            _raw_reduce2 = max(1, int(init_qty * TP_T2_REDUCE_RATIO))
+            # Bug fix: T2减仓量≥剩余持仓时全平
+            if _raw_reduce2 >= current_qty:
+                result["new_level"] = TAKE_PROFIT_LEVEL_DONE
+                result["action"] = "close_t2_full"
+                result["reduce_qty"] = current_qty
+            else:
+                result["new_level"] = TAKE_PROFIT_LEVEL_T2
+                result["action"] = "reduce_t2"
+                result["reduce_qty"] = _raw_reduce2
+            if TP_T2_STOP_MOVE_TO_T1:
+                result["new_stop_price"] = t1_price
+        return result
+    
+    # 状态3: T2已达 → 进入T3或全平
+    elif current_level == TAKE_PROFIT_LEVEL_T2:
+        if skip_t3:
+            result["new_level"] = TAKE_PROFIT_LEVEL_DONE
+            result["action"] = "close_t3"
+            result["reduce_qty"] = current_qty
+        else:
+            result["new_level"] = TAKE_PROFIT_LEVEL_T3
+            result["action"] = "none"
+            if direction == "long":
+                result["trailing_stop"] = current_price - atr * TP_T3_TRAILING_ATR_MULT
+            else:
+                result["trailing_stop"] = current_price + atr * TP_T3_TRAILING_ATR_MULT
+        return result
+    
+    # 状态4: T3追踪中
+    elif current_level == TAKE_PROFIT_LEVEL_T3:
+        prev_trailing = position_info.get("trailing_stop", 0)
+        if direction == "long":
+            new_trailing = current_price - atr * TP_T3_TRAILING_ATR_MULT
+            if prev_trailing and new_trailing > prev_trailing:
+                result["trailing_stop"] = new_trailing
+            else:
+                result["trailing_stop"] = prev_trailing or new_trailing
+            if current_price <= result["trailing_stop"]:
+                result["new_level"] = TAKE_PROFIT_LEVEL_DONE
+                result["action"] = "close_t3"
+                result["reduce_qty"] = current_qty
+        else:
+            new_trailing = current_price + atr * TP_T3_TRAILING_ATR_MULT
+            if prev_trailing and new_trailing < prev_trailing:
+                result["trailing_stop"] = new_trailing
+            else:
+                result["trailing_stop"] = prev_trailing or new_trailing
+            if current_price >= result["trailing_stop"]:
+                result["new_level"] = TAKE_PROFIT_LEVEL_DONE
+                result["action"] = "close_t3"
+                result["reduce_qty"] = current_qty
+        return result
+    
+    return result
+
+# ═══════════════════════════════════════════════════════════
+# v6.0 止盈状态机结束
+# ═══════════════════════════════════════════════════════════
+
+def _load_state_log():
+    """加载状态切换日志"""
+    if not STATE_LOG_ENABLED:
+        return []
+    try:
+        if os.path.exists(STATE_LOG_FILE):
+            with open(STATE_LOG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[v6.0] 加载状态日志失败: {e}")
+    return []
+
+
+def _save_state_log(log_list):
+    """保存状态切换日志"""
+    if not STATE_LOG_ENABLED:
+        return
+    try:
+        trimmed = log_list[-STATE_LOG_MAX_RECORDS:]
+        with open(STATE_LOG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(trimmed, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[v6.0] 保存状态日志失败: {e}")
+
+
+def log_state_transition(symbol, prev_state, new_state, tech_result, perf_result, confidence):
+    """记录一次状态切换"""
+    if not STATE_LOG_ENABLED:
+        return
+    log_entry = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "ts_unix": int(time.time()),
+        "symbol": symbol,
+        "from_state": prev_state,
+        "to_state": new_state,
+        "from_label": get_state_label(prev_state),
+        "to_label": get_state_label(new_state),
+        "confidence": confidence,
+        "tech": {
+            "total_score": tech_result.get("total_score", 0),
+            "state_candidate": tech_result.get("state_candidate", ""),
+            "indicators": tech_result.get("indicators", {}),
+            "trend_direction": tech_result.get("trend_direction", ""),
+            "ma_fast": tech_result.get("ma_fast", 0),
+            "ma_slow": tech_result.get("ma_slow", 0),
+        },
+        "perf": {
+            "total_score": perf_result.get("total_score", 0),
+            "level": perf_result.get("level", ""),
+            "metrics": perf_result.get("metrics", {}),
+        }
+    }
+    log_list = _load_state_log()
+    log_list.append(log_entry)
+    _save_state_log(log_list)
+    print(f"[v6.0] 状态切换: {symbol} {get_state_label(prev_state)} → {get_state_label(new_state)} "
+          f"(技术{tech_result.get('total_score', 0)}分 / 表现{perf_result.get('total_score', 0)}分)")
+
+
+def get_state_log(symbol=None, limit=20):
+    """获取状态切换历史日志"""
+    log_list = _load_state_log()
+    if symbol:
+        log_list = [l for l in log_list if l.get("symbol") == symbol]
+    log_list.reverse()
+    return log_list[:limit]
+
+
+# ═══════════════════════════════════════════
+# v6.0 Phase 3: 参数自优化核心函数
+# ═══════════════════════════════════════════
+
+def _load_auto_opt_params():
+    """加载自优化参数配置（从本地JSON文件持久化）"""
+    if not AUTO_OPTIMIZE_ENABLED:
+        return {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
+    try:
+        if os.path.exists(AUTO_OPT_LOG_FILE):
+            with open(AUTO_OPT_LOG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if "params" in data:
+                    result = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
+                    for key, saved in data["params"].items():
+                        if key in result:
+                            for sk, sv in saved.items():
+                                result[key][sk] = sv
+                    return result
+    except Exception as e:
+        print(f"[v6.0] 加载自优化参数失败: {e}")
+    return {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
+
+
+def _save_auto_opt_params(params, adjustment_logs=None):
+    """保存自优化参数到本地JSON文件"""
+    if not AUTO_OPTIMIZE_ENABLED:
+        return
+    try:
+        data = {"params": params, "last_save_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+        if adjustment_logs is not None:
+            data["logs"] = adjustment_logs[-AUTO_OPT_LOG_MAX_RECORDS:]
+        with open(AUTO_OPT_LOG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[v6.0] 保存自优化参数失败: {e}")
+
+
+def _add_adjustment_log(logs, param_key, action, old_val, new_val, reason, metrics):
+    """添加一条参数调整记录"""
+    log_entry = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "ts_unix": int(time.time()),
+        "param_key": param_key,
+        "param_label": AUTO_OPTIMIZE_PARAMS.get(param_key, {}).get("label", param_key),
+        "action": action,
+        "old_value": old_val,
+        "new_value": new_val,
+        "reason": reason,
+        "metrics": metrics,
+    }
+    logs.append(log_entry)
+    if len(logs) > AUTO_OPT_LOG_MAX_RECORDS:
+        logs = logs[-AUTO_OPT_LOG_MAX_RECORDS:]
+    return logs
+
+
+
+def _get_trade_r(t):
+    """获取交易的R值（兼容多种数据源字段）"""
+    if "r_result" in t:
+        return float(t.get("r_result", 0))
+    if "pnl_r" in t:
+        return float(t.get("pnl_r", 0))
+    if "pnl" in t:
+        pnl = float(t.get("pnl", 0))
+        entry = float(t.get("entry_price", 0))
+        stop = float(t.get("stop_dist", t.get("stop", 0)))
+        if stop > 0 and entry > 0:
+            return pnl / stop
+        return pnl / max(1, abs(entry)) if entry else pnl
+    return 0.0
+
+def _calc_performance_metrics(recent_trades, stop_trades=None):
+    """计算近期表现指标"""
+    if not recent_trades or len(recent_trades) == 0:
+        return {"win_rate": 50, "profit_factor": 1.0, "streak_count": 0,
+                "streak_type": "none", "stop_rate": 50, "recent_total_r": 0, "trade_count": 0}
+    trades = recent_trades[-AUTO_OPT_WINDOW_MID:]
+    n = len(trades)
+    wins = sum(1 for t in trades if (_get_trade_r(t)) > 0)
+    win_rate = wins / n * 100 if n > 0 else 50
+    winning_r = sum(max(0, _get_trade_r(t)) for t in trades)
+    losing_r = sum(abs(min(0, _get_trade_r(t))) for t in trades)
+    profit_factor = winning_r / losing_r if losing_r > 0 else (3.0 if winning_r > 0 else 1.0)
+    streak_count = 0
+    streak_type = "none"
+    for t in reversed(trades):
+        is_win = _get_trade_r(t) > 0
+        if is_win:
+            if streak_type in ("win", "none"):
+                streak_count += 1
+                streak_type = "win"
+            else:
+                break
+        else:
+            if streak_type in ("lose", "none"):
+                streak_count += 1
+                streak_type = "lose"
+            else:
+                break
+    if stop_trades is not None and len(stop_trades) > 0:
+        stop_count = sum(1 for t in stop_trades[-AUTO_OPT_WINDOW_STOP:] if t.get("exit_type") == "stop_loss")
+        total = min(AUTO_OPT_WINDOW_STOP, len(stop_trades))
+        stop_rate = stop_count / total * 100 if total > 0 else 50
+    else:
+        stop_count = sum(1 for t in trades[-AUTO_OPT_WINDOW_STOP:] if _get_trade_r(t) < -0.1)
+        total = min(AUTO_OPT_WINDOW_STOP, len(trades))
+        stop_rate = stop_count / total * 100 if total > 0 else 50
+    short_trades = recent_trades[-AUTO_OPT_WINDOW_SHORT:] if len(recent_trades) >= AUTO_OPT_WINDOW_SHORT else recent_trades
+    recent_total_r = sum(_get_trade_r(t) for t in short_trades)
+    return {"win_rate": round(win_rate, 1), "profit_factor": round(profit_factor, 2),
+            "streak_count": streak_count, "streak_type": streak_type,
+            "stop_rate": round(stop_rate, 1), "recent_total_r": round(recent_total_r, 2), "trade_count": n}
+
+
+def check_and_adjust_params(params, recent_trades, adjustment_logs):
+    """检查并调整参数"""
+    if not AUTO_OPTIMIZE_ENABLED:
+        return params, adjustment_logs, []
+    if not recent_trades or len(recent_trades) < AUTO_OPT_WINDOW_SHORT:
+        return params, adjustment_logs, []
+    adjustments = []
+    now = time.time()
+    metrics = _calc_performance_metrics(recent_trades)
+    pending = []
+
+    # 1. 信号质量门槛
+    p = params.get("quality_threshold", {})
+    if not p.get("locked", False):
+        cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
+        if cd:
+            if metrics["streak_type"] == "win" and metrics["streak_count"] >= AUTO_OPT_STREAK_THRESHOLD:
+                pending.append({"param_key": "quality_threshold", "direction": "decrease", "priority": 10,
+                                "reason": f"连盈{metrics['streak_count']}次，降低信号质量门槛"})
+            elif metrics["streak_type"] == "lose" and metrics["streak_count"] >= AUTO_OPT_STREAK_THRESHOLD:
+                pending.append({"param_key": "quality_threshold", "direction": "increase", "priority": 10,
+                                "reason": f"连亏{metrics['streak_count']}次，提高信号质量门槛"})
+
+    # 2. 单笔风险比例
+    p = params.get("single_trade_risk_pct", {})
+    if not p.get("locked", False):
+        cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
+        if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_MID:
+            if metrics["win_rate"] > AUTO_OPT_WINRATE_HIGH:
+                pending.append({"param_key": "single_trade_risk_pct", "direction": "increase", "priority": 8,
+                                "reason": f"胜率{metrics['win_rate']}% > {AUTO_OPT_WINRATE_HIGH}%，提高单笔风险"})
+            elif metrics["win_rate"] < AUTO_OPT_WINRATE_LOW:
+                pending.append({"param_key": "single_trade_risk_pct", "direction": "decrease", "priority": 8,
+                                "reason": f"胜率{metrics['win_rate']}% < {AUTO_OPT_WINRATE_LOW}%，降低单笔风险"})
+
+    # 3. 盈亏比要求
+    p = params.get("min_rr_ratio", {})
+    if not p.get("locked", False):
+        cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
+        if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_MID:
+            if metrics["profit_factor"] > AUTO_OPT_PF_HIGH:
+                pending.append({"param_key": "min_rr_ratio", "direction": "decrease", "priority": 6,
+                                "reason": f"盈亏比{metrics['profit_factor']} > {AUTO_OPT_PF_HIGH}，降低入场要求"})
+            elif metrics["profit_factor"] < AUTO_OPT_PF_LOW:
+                pending.append({"param_key": "min_rr_ratio", "direction": "increase", "priority": 6,
+                                "reason": f"盈亏比{metrics['profit_factor']} < {AUTO_OPT_PF_LOW}，提高入场要求"})
+
+    # 4. ATR止损倍数
+    p = params.get("atr_stop_mult", {})
+    if not p.get("locked", False):
+        cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
+        if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_STOP:
+            if metrics["stop_rate"] > AUTO_OPT_STOP_RATE_HIGH:
+                pending.append({"param_key": "atr_stop_mult", "direction": "increase", "priority": 7,
+                                "reason": f"止损触发率{metrics['stop_rate']}% > {AUTO_OPT_STOP_RATE_HIGH}%，放宽止损"})
+            elif metrics["stop_rate"] < AUTO_OPT_STOP_RATE_LOW:
+                pending.append({"param_key": "atr_stop_mult", "direction": "decrease", "priority": 7,
+                                "reason": f"止损触发率{metrics['stop_rate']}% < {AUTO_OPT_STOP_RATE_LOW}%，收紧止损"})
+
+    # 5. 时间止损天数
+    p = params.get("time_stop_days", {})
+    if not p.get("locked", False):
+        cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
+        if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_MID:
+            if metrics["win_rate"] > 55 and metrics["profit_factor"] > 2.0:
+                pending.append({"param_key": "time_stop_days", "direction": "increase", "priority": 4,
+                                "reason": f"胜率{metrics['win_rate']}%+盈亏比{metrics['profit_factor']}，延长持仓时间"})
+            elif metrics["win_rate"] < 45 and metrics["profit_factor"] < 1.5:
+                pending.append({"param_key": "time_stop_days", "direction": "decrease", "priority": 4,
+                                "reason": f"胜率{metrics['win_rate']}%+盈亏比{metrics['profit_factor']}，缩短持仓时间"})
+
+    if pending:
+        pending.sort(key=lambda x: x["priority"], reverse=True)
+        adj = pending[0]
+        param_key = adj["param_key"]
+        direction = adj["direction"]
+        param_info = params[param_key]
+        current_val = param_info.get("current_value", param_info["base"])
+        step = param_info["step"]
+        if direction == "increase":
+            new_val = min(param_info["max"], current_val + step)
+        else:
+            new_val = max(param_info["min"], current_val - step)
+        if new_val != current_val:
+            old_val = current_val
+            params[param_key]["current_value"] = new_val
+            params[param_key]["last_adjust_time"] = now
+            params[param_key]["adjust_count"] = params[param_key].get("adjust_count", 0) + 1
+            adjustment_logs = _add_adjustment_log(adjustment_logs, param_key, direction, old_val, new_val, adj["reason"], metrics)
+            adjustments.append(f"{param_info['label']}: {old_val}{param_info['unit']} → {new_val}{param_info['unit']} ({adj['reason']})")
+            _save_auto_opt_params(params, adjustment_logs)
+            print(f"[v6.0] 参数自优化: {param_info['label']} {old_val} → {new_val} ({adj['reason']})")
+    return params, adjustment_logs, adjustments
+
+
+def check_rollback_needed(params, recent_trades, adjustment_logs):
+    """回退机制检查"""
+    if not AUTO_OPTIMIZE_ENABLED:
+        return params, adjustment_logs, False
+    if not recent_trades or len(recent_trades) < AUTO_OPT_ROLLBACK_TRADES:
+        return params, adjustment_logs, False
+    last_adjust_time = 0
+    last_adjusted_param = None
+    last_adjusted_val = None
+    for log in reversed(adjustment_logs):
+        if log.get("action") in ("increase", "decrease"):
+            last_adjust_time = log.get("ts_unix", 0)
+            last_adjusted_param = log.get("param_key")
+            last_adjusted_val = log.get("old_value")
+            break
+    if last_adjust_time == 0 or last_adjusted_param is None:
+        return params, adjustment_logs, False
+    trades_after = [t for t in recent_trades if t.get("exit_time", 0) > last_adjust_time]
+    if len(trades_after) < AUTO_OPT_ROLLBACK_TRADES:
+        return params, adjustment_logs, False
+    recent_after = trades_after[-AUTO_OPT_ROLLBACK_TRADES:]
+    total_r = sum(_get_trade_r(t) for t in recent_after)
+    if total_r < AUTO_OPT_ROLLBACK_THRESHOLD:
+        param_info = params[last_adjusted_param]
+        current_val = param_info.get("current_value", param_info["base"])
+        rollback_val = last_adjusted_val
+        rollback_val = max(param_info["min"], min(param_info["max"], rollback_val))
+        if rollback_val != current_val:
+            params[last_adjusted_param]["current_value"] = rollback_val
+            adjustment_logs = _add_adjustment_log(adjustment_logs, last_adjusted_param, "rollback",
+                current_val, rollback_val,
+                f"调整后{AUTO_OPT_ROLLBACK_TRADES}笔累积R={total_r:.2f} < {AUTO_OPT_ROLLBACK_THRESHOLD}，自动回退",
+                {"total_r_after": total_r, "trade_count": len(recent_after)})
+            _save_auto_opt_params(params, adjustment_logs)
+            print(f"[v6.0] 参数回退: {param_info['label']} {current_val} → {rollback_val} (调整后累积R={total_r:.2f})")
+            return params, adjustment_logs, True
+    return params, adjustment_logs, False
+
+
+def get_effective_param(param_key, default_val):
+    """获取实际生效的参数值"""
+    if AUTO_OPTIMIZE_ENABLED and param_key in auto_opt_params:
+        return auto_opt_params[param_key].get("current_value", default_val)
+    return default_val
+
+
+
+# Phase 4 Modules A-F
+
+def update_cognitive_bias(result_r):
+    if not COGNITIVE_BIAS_ENABLED:
+        return
+    if result_r > 0:
+        cognitive_bias_state['win_streak'] += 1
+        cognitive_bias_state['loss_streak'] = 0
+    else:
+        cognitive_bias_state['loss_streak'] += 1
+        cognitive_bias_state['win_streak'] = 0
+    cognitive_bias_state['last_trade_time'] = time.time()
+    if cognitive_bias_state['win_streak'] >= OVERCONFIDENCE_WIN_STREAK:
+        cognitive_bias_state['overconfidence_active'] = True
+        print(f'[v6.0 Phase4] overconfidence: {cognitive_bias_state["win_streak"]} wins')
+    if cognitive_bias_state['loss_streak'] >= REVENGE_TRADING_LOSS_STREAK:
+        if time.time() > cognitive_bias_state.get('revenge_cooldown_until', 0):
+            cognitive_bias_state['revenge_cooldown_until'] = time.time() + REVENGE_TRADING_COOLDOWN_MIN * 60
+            print(f'[v6.0 Phase4] revenge cooldown: {REVENGE_TRADING_COOLDOWN_MIN}min')
+
+def get_cognitive_bias_overlay():
+    if not COGNITIVE_BIAS_ENABLED:
+        return {}
+    overlay = {}
+    if cognitive_bias_state.get('overconfidence_active'):
+        overlay['quality_threshold_boost'] = OVERCONFIDENCE_RAISE_THRESHOLD
+        overlay['position_shrink_pct'] = OVERCONFIDENCE_SHRINK_PCT
+        overlay['reason'] = f'win_streak={cognitive_bias_state["win_streak"]}'
+    if time.time() < cognitive_bias_state.get('revenge_cooldown_until', 0):
+        overlay['block_new_signals'] = True
+        overlay['reason'] = 'revenge_trading_cooldown'
+    return overlay
+
+def calc_expected_value_signal(signal, market_state=None, position_info=None):
+    if not EXPECTED_VALUE_ENGINE_ENABLED:
+        return {'ev_score': 0, 'ev_passed': True, 'ev_details': {}}
+    dims = {}
+    trend_score = 50
+    if signal.get('trend_strength'):
+        trend_score = min(100, max(0, int(signal['trend_strength'])))
+    elif market_state and market_state.get('state') in ('trend_early', 'trend_mid'):
+        trend_score = 70
+    elif market_state and market_state.get('state') == 'trend_late':
+        trend_score = 55
+    elif market_state and market_state.get('state') == 'sideways':
+        trend_score = 30
+    dims['trend_strength'] = trend_score
+    vol_score = signal.get('volume_score', 50)
+    dims['volume_confirmation'] = min(100, max(0, int(vol_score)))
+    if market_state:
+        state_score_map = {'trend_early': 75, 'trend_mid': 65, 'trend_late': 45, 'sideways': 30}
+        state_score = state_score_map.get(market_state.get('state', 'sideways'), 40)
+        if market_state.get('confirm_count', 0) >= 3:
+            state_score += 10
+    else:
+        state_score = 50
+    dims['market_state'] = min(100, state_score)
+    rr = signal.get('rr_ratio', 2.0)
+    rr_score = min(100, int(rr * 30)) if rr > 0 else 20
+    dims['risk_reward'] = rr_score
+    timing_score = 50
+    if signal.get('momentum_score'):
+        timing_score = int(signal['momentum_score'])
+    dims['timing'] = min(100, max(0, timing_score))
+    total_weight = sum(EV_DIMENSIONS.values())
+    weighted_score = sum(dims[k] * v for k, v in EV_DIMENSIONS.items()) / total_weight
+    values = list(dims.values())
+    if all(v >= 60 for v in values):
+        weighted_score = min(100, weighted_score * (1 + EV_CONFIDENCE_BOOST))
+    est_win_rate = weighted_score / 100
+    avg_rr = max(1.5, rr)
+    expected_value = est_win_rate * avg_rr - (1 - est_win_rate)
+    passed = expected_value >= EV_MIN_THRESHOLD
+    return {'ev_score': round(weighted_score, 1), 'ev_expected_value': round(expected_value, 2), 'ev_passed': passed, 'ev_details': dims, 'ev_min_threshold': EV_MIN_THRESHOLD}
+
+def calc_antifragile_adjustment(equity, peak_equity, signal_quality, position_info=None):
+    if not ANTIFRAGILE_ENABLED:
+        return {'action': 'none', 'reason': ''}
+    if equity <= 0 or peak_equity <= 0:
+        return {'action': 'none', 'reason': ''}
+    drawdown = (peak_equity - equity) / peak_equity * 100
+    if drawdown < ANTIFRAGILE_DRAWDOWN_TRIGGER:
+        return {'action': 'none', 'reason': f'drawdown={drawdown:.1f}% < {ANTIFRAGILE_DRAWDOWN_TRIGGER}%'}
+    if signal_quality >= ANTIFRAGILE_MIN_QUALITY:
+        add_pct = min(ANTIFRAGILE_MAX_ADD_PCT, int(drawdown * 10))
+        return {'action': 'antifragile_add', 'reason': f'dd={drawdown:.1f}%, q={signal_quality}, add_{add_pct}%', 'add_pct': add_pct}
+    else:
+        shrink_pct = min(50, int(drawdown * 5))
+        return {'action': 'antifragile_shrink', 'reason': f'dd={drawdown:.1f}%, q={signal_quality}, shrink_{shrink_pct}%', 'shrink_pct': shrink_pct}
+
+def update_trader_state(trade_result=None):
+    if not TRADER_STATE_ENABLED:
+        return
+    today = time.strftime('%Y-%m-%d')
+    if trader_state.get('daily_date') != today:
+        trader_state['daily_date'] = today
+        trader_state['daily_trade_count'] = 0
+        trader_state['emotion_streak'] = 0
+    trader_state['daily_trade_count'] += 1
+    if trade_result is not None:
+        if trade_result > 0:
+            trader_state['emotion_streak'] = 0
+        else:
+            trader_state['emotion_streak'] += 1
+    session_hours = (time.time() - trader_state.get('session_start_time', time.time())) / 3600
+    trader_state['fatigue_level'] = min(100, int(session_hours / TRADER_FATIGUE_HOURS * 50))
+    if trader_state.get('daily_trade_count', 0) > TRADER_DAILY_MAX_TRADES:
+        trader_state['scarcity_detected'] = True
+
+def save_decision_diary_entry(entry):
+    if not STRATEGY_REVIEW_ENABLED:
+        return
+    entry['timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
+    entry['ts_unix'] = time.time()
+    decision_diary.append(entry)
+    try:
+        data = {'entries': decision_diary[-500:]}
+        with open(DECISION_DIARY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f'[v6.0 Phase4] save diary failed: {e}')
+
+def calc_review_quality(trade_result, decision_quality, execution_quality=None):
+    if not STRATEGY_REVIEW_ENABLED:
+        return {'total_score': 0, 'grade': 'N/A'}
+    exec_q = execution_quality or decision_quality
+    total = (decision_quality * REVIEW_QUALITY_WEIGHTS['decision_quality'] + exec_q * REVIEW_QUALITY_WEIGHTS['execution_quality'] + (min(100, max(0, 50 + trade_result * 20)) * REVIEW_QUALITY_WEIGHTS['result_quality']))
+    total = round(total, 1)
+    if total >= 80:
+        grade = 'A'
+    elif total >= 70:
+        grade = 'B'
+    elif total >= 60:
+        grade = 'C'
+    else:
+        grade = 'D'
+    return {'total_score': total, 'grade': grade}
+
+def update_consensus_state(market_states):
+    if not SECOND_LEVEL_THINKING_ENABLED:
+        return consensus_state
+    if not market_states:
+        return consensus_state
+    states = list(market_states.values())
+    if len(states) < CONSENSUS_MIN_SAMPLES // 5:
+        return consensus_state
+    state_counts = {}
+    for s in states:
+        st = s.get('state', 'unknown')
+        state_counts[st] = state_counts.get(st, 0) + 1
+    total = len(states)
+    trend_pct = sum(v for k, v in state_counts.items() if k in ('trend_early', 'trend_mid', 'trend_late')) / total * 100
+    consensus_score = min(100, int(trend_pct))
+    consensus_state['consensus_score'] = consensus_score
+    consensus_state['last_update'] = time.time()
+    consensus_state['extreme_high'] = consensus_score >= CONSENSUS_EXTREME_HIGH
+    consensus_state['extreme_low'] = consensus_score <= CONSENSUS_EXTREME_LOW
+    return consensus_state
+
+def check_second_level_thinking(signal, market_state=None):
+    if not SECOND_LEVEL_THINKING_ENABLED:
+        return {'pass': True, 'reason': '', 'barrier_boost': 0}
+    cs = consensus_state
+    if cs.get('extreme_high'):
+        return {'pass': True, 'reason': f'extreme_high({cs["consensus_score"]}%), barrier +{SECOND_LEVEL_BARRIER_BOOST}', 'barrier_boost': SECOND_LEVEL_BARRIER_BOOST, 'warning': 'extreme_bullish'}
+    if cs.get('extreme_low'):
+        signal_dir = signal.get('direction', '')
+        if signal_dir == 'long':
+            return {'pass': True, 'reason': f'extreme_low({cs["consensus_score"]}%), contrarian', 'barrier_boost': 0, 'opportunity': 'contrarian'}
+    return {'pass': True, 'reason': '', 'barrier_boost': 0}
+
+def apply_phase4_filters(signal, market_state=None, position_info=None, equity=None, peak_equity=None):
+    result = {'passed': True, 'reason': '', 'adjustments': {}, 'warnings': [], 'boosts': []}
+    if not PHASE4_ENABLED:
+        return result
+    overlay = get_cognitive_bias_overlay()
+    if overlay.get('block_new_signals'):
+        result['passed'] = False
+        result['reason'] = overlay.get('reason', 'blocked')
+        result['warnings'].append(f'[A]{overlay.get("reason","")}')
+        return result
+    if overlay.get('position_shrink_pct'):
+        result['adjustments']['position_shrink_pct'] = overlay['position_shrink_pct']
+        result['warnings'].append(f'[A]shrink_{overlay["position_shrink_pct"]}%')
+    if overlay.get('quality_threshold_boost'):
+        result['adjustments']['quality_threshold_boost'] = overlay['quality_threshold_boost']
+    ev = calc_expected_value_signal(signal, market_state, position_info)
+    if not ev.get('ev_passed'):
+        result['passed'] = False
+        result['reason'] = f'ev={ev["ev_expected_value"]:.2f} < {EV_MIN_THRESHOLD}'
+        result['warnings'].append(f'[B]{result["reason"]}')
+        return result
+    if ev.get('ev_expected_value', 0) > 1.0:
+        result['boosts'].append(f'[B]ev={ev["ev_expected_value"]:.2f}')
+    if equity and peak_equity:
+        af = calc_antifragile_adjustment(equity, peak_equity, signal.get('quality_score', 50), position_info)
+        if af.get('action') == 'antifragile_add':
+            result['boosts'].append(f'[C]{af["reason"]}')
+            result['adjustments']['antifragile_add_pct'] = af['add_pct']
+        elif af.get('action') == 'antifragile_shrink':
+            result['adjustments']['antifragile_shrink_pct'] = af['shrink_pct']
+            result['warnings'].append(f'[C]{af["reason"]}')
+    t_overlay = get_trader_state_overlay()
+    if t_overlay.get('emotion_block'):
+        result['passed'] = False
+        result['reason'] = t_overlay.get('reason', 'emotion_blocked')
+        result['warnings'].append(f'[D]{result["reason"]}')
+        return result
+    if t_overlay.get('fatigue_shrink_pct'):
+        result['adjustments']['fatigue_shrink_pct'] = t_overlay['fatigue_shrink_pct']
+    slt = check_second_level_thinking(signal, market_state)
+    if slt.get('barrier_boost'):
+        result['adjustments']['second_level_barrier'] = slt['barrier_boost']
+        result['warnings'].append(f'[F]{slt.get("reason","")}')
+    if slt.get('opportunity'):
+        result['boosts'].append(f'[F]contrarian:{slt["opportunity"]}')
+    return result
+
+def get_trader_state_overlay():
+    if not TRADER_STATE_ENABLED:
+        return {}
+    overlay = {}
+    if trader_state.get('fatigue_level', 0) >= 50:
+        overlay['fatigue_shrink_pct'] = min(50, trader_state['fatigue_level'])
+        overlay['reason'] = f'fatigue={trader_state["fatigue_level"]}%'
+    if trader_state.get('emotion_streak', 0) >= TRADER_EMOTION_STREAK:
+        overlay['emotion_block'] = True
+        overlay['reason'] = f'emotion_streak={trader_state["emotion_streak"]}'
+    if trader_state.get('scarcity_detected'):
+        overlay['max_risk_boost'] = -50
+        overlay['reason'] = 'scarcity_detected'
+    return overlay
+def _update_market_states(feed, state):
+    """v6.0: 遍历所有品种更新市场状态"""
+    # Phase 4: 更新共识状态
+    update_consensus_state(market_state_cache)
+    for sym in CONFIG.get("symbols", {}).keys():
+        try:
+            # 获取K线数据
+            klines_data = state.get("klines_data", {})
+            sym_klines = klines_data.get(sym, [])
+            if not sym_klines or len(sym_klines) < TECH_MA_SLOW + 10:
+                continue
+            
+            # 获取成交量数据
+            volumes_list = []
+            for k in sym_klines:
+                v = k.get("volume") or k.get("vol")
+                if v:
+                    volumes_list.append(float(v))
+            
+            # 1. 技术面识别
+            tech_result = calc_tech_market_state(sym_klines, volumes_list or None)
+            
+            # 2. 表现面反馈（从state的交易历史获取）
+            trade_log = state.get("discipline", {}).get("trade_log", [])
+            sym_trades = [t for t in trade_log if t.get("symbol") == sym]
+            perf_result = calc_performance_score(sym_trades)
+            
+            # 3. 获取之前的状态
+            prev_info = market_state_cache.get(sym, {})
+            prev_state = prev_info.get("state", MARKET_STATE_SIDEWAYS)
+            prev_counter = prev_info.get("confirm_counter", 0)
+            
+            # 4. 状态判定
+            state_result = determine_market_state(tech_result, perf_result, prev_state, prev_counter)
+            
+            # 5. 更新缓存
+            market_state_cache[sym] = {
+                "state": state_result["state"],
+                "prev_state": prev_state,
+                "confirm_counter": state_result["confirm_counter"],
+                "tech_score": state_result["tech_score"],
+                "perf_score": state_result["perf_score"],
+                "confidence": state_result["confidence"],
+                "trend_direction": state_result["trend_direction"],
+                "tech_indicators": tech_result.get("indicators", {}),
+                "last_update": time.time(),
+                "switched": state_result["switched"]
+            }
+            
+            # 6. 状态切换日志 + 记录
+            if state_result["switched"]:
+                log_state_transition(
+                    symbol=sym,
+                    prev_state=prev_state,
+                    new_state=state_result["state"],
+                    tech_result=tech_result,
+                    perf_result=perf_result,
+                    confidence=state_result["confidence"]
+                )
+        except Exception as _e:
+            pass
+
+
+
+# ═══════════════════════════════════════════════════════════
+# v6.0 函数结束
+# ═══════════════════════════════════════════════════════════
+
 def _position_aware_advice(sig, open_positions, price):
     """P-持仓感知 v4：信号发出前与用户真实持仓比对。
     核心原则：信号推送必须服从持仓逻辑 + 信号必须经过噪声过滤。
@@ -5152,6 +7014,16 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
     if per_hand <= 0 or lots <= 0:
         return {"ok": True, "lots": lots, "action": "allow", "reason": "", "corr_hits": []}
     cand_risk = per_hand * lots
+    # ── v5 新增：单笔1%风险铁律（趋势跟踪核心规则）──
+    per_trade_budget = equity * get_effective_param("single_trade_risk_pct", MAX_SINGLE_TRADE_RISK_PCT) / 100.0
+    if cand_risk > per_trade_budget:
+        per_trade_fit = max(0, int(per_trade_budget // per_hand)) if per_hand > 0 else 0
+        if per_trade_fit < 1:
+            return {"ok": False, "lots": 0, "action": "blocked",
+                    "reason": f"单笔风险{cand_risk:.0f}超1%上限({per_trade_budget:.0f})，缩手数或调整止损",
+                    "corr_hits": [], "risk_level": "per_trade"}
+        lots = min(lots, per_trade_fit)
+        cand_risk = per_hand * lots
     # 现有敞口 = 持仓 + 本轮回已发信号
     exposures = (open_positions or []) + (round_exposures or [])
     open_risk = sum(e["risk"] for e in exposures)
@@ -5448,6 +7320,89 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     sig["lots"] = pchk["lots"]
                     sig["portfolio_reduced"] = True
                     sig["reason"] += f"（组合层降仓至{pchk['lots']}手·{pchk['reason']}）"
+                # ── v5 新增：2:1盈亏比检查（趋势跟踪核心规则）──
+                _rr_price = sig.get("price") or price
+                _rr_stop = sig.get("stop")
+                _rr_t2 = sig.get("t2")
+                if _rr_stop and _rr_t2 and float(_rr_stop) != float(_rr_t2):
+                    risk_dist = abs(float(_rr_price) - float(_rr_stop))
+                    reward_dist = abs(float(_rr_t2) - float(_rr_price))
+                    if risk_dist > 0:
+                        rr_ratio = reward_dist / risk_dist
+                        sig["rr_ratio"] = round(rr_ratio, 2)
+                        if rr_ratio < MIN_RR_RATIO:
+                            sig["push_suppressed"] = True
+                            sig["hold_context"] = {"rr_too_low": True}
+                            sig["action_advice"] = (
+                                f"{sym} 盈亏比 {rr_ratio:.1f}:1 低于要求 {MIN_RR_RATIO:.0f}:1，"
+                                f"潜在盈利不足风险的{MIN_RR_RATIO:.0f}倍，建议观望或缩小目标。"
+                            )
+                            sig["reason"] += f"【盈亏比不足】{rr_ratio:.1f}:1 < {MIN_RR_RATIO:.0f}:1。"
+                        elif not sig.get("push_suppressed"):
+                            sig["action_advice"] = (
+                                f"盈亏比 {rr_ratio:.1f}:1，符合≥{MIN_RR_RATIO:.0f}:1 要求，风险回报合理。"
+                            )
+                
+                # ── v5.1 新增：信号质量评分过滤 ──
+                if not sig.get("push_suppressed"):
+                    _vols = sig.get("_volumes", [])
+                    if _vols and len(_vols) >= VOLUME_MA_PERIOD:
+                        _vol_ma = sum(_vols[-VOLUME_MA_PERIOD:]) / VOLUME_MA_PERIOD
+                    else:
+                        _vol_ma = 0
+                    _kls = sig.get("_klines", [])
+                    _qq = calc_signal_quality_score(sig, _kls, _vol_ma)
+                    sig["quality_score"] = _qq["score"]
+                    sig["quality_details"] = _qq["details"]
+                    if not _qq["passed"]:
+                        sig["push_suppressed"] = True
+                        sig["hold_context"] = sig.get("hold_context", {})
+                        sig["hold_context"]["quality_too_low"] = True
+                        sig["action_advice"] = (
+                            f"{sym} 信号质量 {_qq['score']}分 < {get_effective_param('quality_threshold', SIGNAL_QUALITY_MIN_SCORE)}分，"
+                            f"假突破风险较高，建议观望。"
+                        )
+                        # v6.0 Phase 4: 知识增强过滤
+                        _p4_signal = dict(sig)
+                        _p4_signal.setdefault("quality_score", _qq['score'])
+                        _p4_result = apply_phase4_filters(_p4_signal, market_state=market_state_cache.get(sym))
+                        if not _p4_result.get("passed", True):
+                            sig["reason"] += f"【Phase4过滤】{_p4_result.get('reason','')}。"
+                            sig["blocked"] = True
+                        for _w in _p4_result.get("warnings", []):
+                            sig["reason"] += f"【{_w}】"
+                        for _b in _p4_result.get("boosts", []):
+                            sig["reason"] += f"✨{_b}"
+                        # 应用调整参数
+                        if _p4_result.get("adjustments", {}).get("position_shrink_pct"):
+                            sig["position_shrink_pct"] = _p4_result["adjustments"]["position_shrink_pct"]
+                        sig["reason"] += f"【信号质量不足】{_qq['score']}分 < {get_effective_param('quality_threshold', SIGNAL_QUALITY_MIN_SCORE)}分。"
+
+                # ── v5.1 新增：多周期趋势确认 ──
+                if not sig.get("push_suppressed"):
+                    _htf = sig.get("_higher_tf_klines", [])
+                    if _htf and len(_htf) >= HIGHER_TF_MA_SLOW:
+                        _tf = get_higher_tf_trend(_htf)
+                        sig["higher_tf_trend"] = _tf
+                        _tfr = apply_multi_tf_filter(sig, _tf)
+                        sig["tf_filter_result"] = _tfr
+                        if _tfr.get("pos_scale", 1.0) != 1.0:
+                            _orig = sig.get("lots", 1)
+                            sig["lots"] = max(1, int(_orig * _tfr["pos_scale"]))
+                            sig["reason"] += f"【多周期调整】{_tfr['reason']}"
+                        _req_rr = _tfr.get("rr_required", MIN_RR_RATIO)
+                        if _req_rr > MIN_RR_RATIO:
+                            _cur_rr = sig.get("rr_ratio", 0)
+                            if _cur_rr < _req_rr:
+                                sig["push_suppressed"] = True
+                                sig["hold_context"] = sig.get("hold_context", {})
+                                sig["hold_context"]["counter_trend_rr"] = True
+                                sig["action_advice"] = (
+                                    f"{sym} 逆大周期（{_tf.get('trend')}），"
+                                    f"盈亏比要求≥{_req_rr:.1f}:1，当前{_cur_rr:.1f}:1不足，建议观望。"
+                                )
+                                sig["reason"] += f"【逆周期盈亏比不足】{_cur_rr:.1f}:1 < {_req_rr:.1f}:1。"
+
                 # P2-B（2026-08-14 整改）：逐仓增量 VaR 预交易闸
                 # 当前组合 VaR 未超上限时，校验「加入本品种最终计划手数」后组合 VaR 是否越界；
                 # 越界则仅否决该品种（不再整轮回禁），避免粗闸误杀其他低风险新仓。
@@ -5624,7 +7579,96 @@ def start_dashboard(state):
                         return
                 except Exception:
                     pass
-            if self.path == "/api/health":
+            if self.path.startswith("/api/market-state"):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _ms_payload = {
+                    "states": market_state_cache,
+                    "engine_enabled": MARKET_STATE_ENGINE_ENABLED,
+                    "dynamic_params_enabled": DYNAMIC_PARAMS_ENABLED,
+                    "timestamp": time.time(),
+                    "state_count": len(market_state_cache),
+                }
+                _ms_body = json.dumps(_ms_payload, ensure_ascii=False, default=str)
+                self.wfile.write(_ms_body.encode("utf-8"))
+            elif self.path.startswith("/api/market-state/log"):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _symbol_param = ""
+                _limit_param = 20
+                try:
+                    _qs = self.path.split("?")[1] if "?" in self.path else ""
+                    for _p in _qs.split("&"):
+                        if "symbol=" in _p:
+                            _symbol_param = _p.split("=")[1]
+                        elif "limit=" in _p:
+                            _limit_param = int(_p.split("=")[1])
+                except Exception:
+                    pass
+                _logs = get_state_log(symbol=_symbol_param or None, limit=_limit_param)
+                _log_payload = {"logs": _logs, "total": len(_logs), "symbol": _symbol_param or "all"}
+                self.wfile.write(json.dumps(_log_payload, ensure_ascii=False, default=str).encode("utf-8"))
+                return
+            # v6.0 Phase 3: 参数自优化 API
+            elif self.path == "/api/auto-optimize":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _ao_payload = {
+                    "enabled": AUTO_OPTIMIZE_ENABLED,
+                    "params": auto_opt_params,
+                    "adjustment_count": len(auto_opt_adjustment_logs),
+                    "recent_logs": auto_opt_adjustment_logs[-20:] if auto_opt_adjustment_logs else []
+                }
+                self.wfile.write(json.dumps(_ao_payload, ensure_ascii=False, default=str).encode("utf-8"))
+                return
+            elif self.path == "/api/auto-optimize/toggle":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                AUTO_OPTIMIZE_ENABLED = not AUTO_OPTIMIZE_ENABLED
+                self.wfile.write(json.dumps({"enabled": AUTO_OPTIMIZE_ENABLED}).encode("utf-8"))
+                return
+            elif self.path.startswith("/api/auto-optimize/lock"):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _param_key = ""
+                _locked = True
+                try:
+                    _qs = self.path.split("?")[1] if "?" in self.path else ""
+                    for _p in _qs.split("&"):
+                        if "param_key=" in _p:
+                            _param_key = _p.split("=")[1]
+                        elif "locked=" in _p:
+                            _locked = _p.split("=")[1].lower() == "true"
+                except Exception:
+                    pass
+                if _param_key in auto_opt_params:
+                    auto_opt_params[_param_key]["locked"] = _locked
+                    _save_auto_opt_params(auto_opt_params, auto_opt_adjustment_logs)
+                    self.wfile.write(json.dumps({"success": True, "param": _param_key, "locked": _locked}).encode("utf-8"))
+                else:
+                    self.wfile.write(json.dumps({"success": False, "error": "param not found"}).encode("utf-8"))
+                return
+            elif self.path == "/api/auto-optimize/reset":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                auto_opt_params = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
+                auto_opt_adjustment_logs = []
+                _save_auto_opt_params(auto_opt_params, auto_opt_adjustment_logs)
+                self.wfile.write(json.dumps({"success": True, "message": "所有参数已重置为基准值"}).encode("utf-8"))
+                return
+            elif self.path == "/api/health":
                 # #16 进程看门狗健康检查：崩溃/卡死自检用
                 try:
                     _last_age = (time.time() - LAST_CYCLE_TS) if LAST_CYCLE_TS else None
@@ -6681,11 +8725,22 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path in ("/", "/index.html"):
+            elif self.path in ("/", "/index.html", "/four_dim_live.html"):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(open(HTML_FILE, "rb").read())
+            elif self.path == "/chart.umd.js":
+                _chart_js = os.path.join(HERE, "chart.umd.js")
+                if os.path.exists(_chart_js):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    with open(_chart_js, "rb") as _f:
+                        self.wfile.write(_f.read())
+                else:
+                    self.send_response(404); self.end_headers()
             else:
                 self.send_response(404); self.end_headers()
         def log_message(self, *a):
@@ -6884,6 +8939,45 @@ def start_dashboard(state):
                                         sym, _dir, _lots, _px, reason=_strategy)
                                     if not _ok2:
                                         msg = f"{msg}（⚠️ 成交记录未同步：{_msg2}）"
+                                    # v6.0 Phase 4: 知识增强更新（每笔交易后）
+                                    if PHASE4_ENABLED and _ok2:
+                                        try:
+                                            _trade_r = float(_pnl or 0)
+                                            update_cognitive_bias(_trade_r)
+                                            update_trader_state(_trade_r)
+                                            # v6.0 Phase 4-E: 策略进化复盘记录
+                                            _dir_emo = "贪婪" if _trade_r > 0 else ("恐惧" if _trade_r < 0 else "中性")
+                                            save_decision_diary_entry({
+                                                "symbol": _sym, "direction": _dir,
+                                                "trade_result": _trade_r,
+                                                "decision_quality": 60,
+                                                "execution_quality": 70,
+                                                "emotion_label": _dir_emo,
+                                                "reason": "auto_settlement"
+                                            })
+                                            _rq = calc_review_quality(_trade_r, 60)
+                                            if _rq.get("total_score", 0) >= 80:
+                                                print(f'[v6.0 Phase4-E] {_sym} review={_rq.get("grade")} score={_rq.get("total_score")}')
+                                        except Exception:
+                                            pass
+                                    # v6.0 Phase 3: 参数自优化检查（每笔平仓/减仓后）
+                                    if AUTO_OPTIMIZE_ENABLED and _ok2:
+                                        try:
+                                            _all_trades = tj.get_all_trades()
+                                            if _all_trades and len(_all_trades) >= AUTO_OPT_WINDOW_SHORT:
+                                                auto_opt_params, auto_opt_adjustment_logs, _rb = check_rollback_needed(
+                                                    auto_opt_params, _all_trades, auto_opt_adjustment_logs)
+                                                auto_opt_params, auto_opt_adjustment_logs, _adj = check_and_adjust_params(
+                                                    auto_opt_params, _all_trades, auto_opt_adjustment_logs)
+                                                if _rb or _adj:
+                                                    _rb_msg = "⚠️ 参数回退" if _rb else ""
+                                                    _adj_msg = " | ".join(_adj) if _adj else ""
+                                                    notify({"name": "⚙️参数自优化", "direction": "",
+                                                            "alert_type": "参数自优化",
+                                                            "reason": f"{_rb_msg} {_adj_msg}".strip()},
+                                                           voice=False, banner=False)
+                                        except Exception as _aoe:
+                                            pass
                             except Exception as _e:
                                 msg = f"{msg}（⚠️ 成交记录同步失败：{_e}）"
                     elif act == "equity":
@@ -7259,6 +9353,18 @@ def _update_aux(feed, state):
                                      peak_equity=_dd_peak)
         new_state = rsm.RISK_FSM.summary()   # 含 daily_loss_pct / daily_loss_stop / killswitch
         state["risk_state"] = new_state
+        # ── v5 新增：10%回撤硬熔断检测 ──
+        _current_dd = new_state.get("drawdown", 0)
+        if _current_dd >= DRAWDOWN_FULL_STOP_PCT and new_state.get("state") != "HALTED":
+            new_state["state"] = "HALTED"
+            new_state["halted_at"] = time.time()
+            new_state["halted_reason"] = f"10%回撤硬熔断（当前{_current_dd:.1f}%）"
+            new_state["force_rest_until"] = time.time() + DRAWDOWN_FORCE_REST_SEC
+            new_state["scale"] = 0.0
+            log_alert("硬熔断触发", None, "熔断",
+                      f"账户回撤{_current_dd:.1f}%≥{DRAWDOWN_FULL_STOP_PCT}%，强制全平+休息24小时",
+                      {"drawdown": _current_dd})
+        
         state["killswitch"] = new_state.get("killswitch", {})
         if _res.get("kill_newly"):
             _ks = new_state.get("killswitch", {})
@@ -8019,6 +10125,12 @@ def main():
         if feed_ok and is_trading_now(now):
             _poll_feed(feed)
             evaluate(feed, today, last_fire, state, corr_histories)
+            # ── v6.0 新增：市场状态引擎更新（阶段一） ──
+            if MARKET_STATE_ENGINE_ENABLED:
+                try:
+                    _update_market_states(feed, state)
+                except Exception:
+                    pass  # 市场状态更新失败不影响主流程
         else:
             # 休市也轻量 poll 维持价格 / C_flow 快照，让账户表盘后也能显示浮动盈亏（不评估）
             try:

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四维策略模型 · 思维导图 v3.0.0</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --panel:#111114; --gold:#d4af37; --line:#2a2a30;
+    --txt:#e6e7ea; --muted:#9aa0aa;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;}
+  header{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;
+    gap:16px;padding:10px 18px;background:linear-gradient(180deg,#14131a,#0c0c0f);
+    border-bottom:1px solid var(--line);}
+  header h1{font-size:16px;margin:0;color:var(--gold);font-weight:700;letter-spacing:.5px;
+    white-space:nowrap;}
+  header .sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  header .btns{margin-left:auto;display:flex;gap:8px}
+  button{background:#1b1b20;color:var(--txt);border:1px solid var(--line);border-radius:8px;
+    padding:6px 12px;font-size:12px;cursor:pointer;transition:.15s;}
+  button:hover{border-color:var(--gold);color:var(--gold);}
+  #legend{position:fixed;left:18px;bottom:14px;z-index:15;display:flex;flex-wrap:wrap;gap:6px 14px;
+    max-width:60vw;background:rgba(17,17,20,.78);border:1px solid var(--line);border-radius:10px;
+    padding:8px 12px;font-size:11px;backdrop-filter:blur(4px);}
+  #legend span{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+  #legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  #wrap{position:absolute;inset:0;top:48px;overflow:hidden;cursor:grab;}
+  #wrap.grabbing{cursor:grabbing;}
+  svg{display:block;width:100%;height:100%;}
+  .node rect{transition:filter .15s, stroke .15s;}
+  .node:hover rect{filter:brightness(1.25);}
+  .node text{pointer-events:none;user-select:none;}
+  .edge{fill:none;stroke-linecap:round;}
+  .toggle{cursor:pointer;}
+  .hint{position:fixed;right:18px;bottom:14px;z-index:15;font-size:11px;color:var(--muted);
+    background:rgba(17,17,20,.7);border:1px solid var(--line);border-radius:8px;padding:6px 10px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>四维策略模型 · 思维导图</h1>
+  <div class="sub">v3.0.0 · 半自动信号系统 · 端口8741 · 端口8742真tick · 12书签 · 55品种 · 认知层五件套(#1/#4/#5/#6/#7) · 风控口径修复(heat_pct预算) · 看门狗语义精确化 · 持仓对账防漂移 · 主力合约自动切换 · 自动参数优化+市场状态机+账户自愈+盘前简报+盈亏归因+异常/熔断/回撤+校准中心+信号拆解 · 点击节点折叠/展开 · 拖拽平移 · 滚轮缩放</div>
+  <div class="note" style="margin:12px;padding:10px;border:1px solid #ffa502;border-radius:8px;font-size:13px;color:#333;">
+    <b>v3.0.0 升级要点（2026-08-23 · 全量自检通过）</b>：自动参数优化 auto-optimize · 市场状态机 market-state · 账户自愈 account_sync/account_heal · 盘前简报 premarket · 交叉验证 crosscheck · 盈亏归因 pnl_attribution · 日志策略标注 journal_strategy · 异常检测 anomaly + 熔断 killswitch + 回撤守护 drawdown · 校准中心 calibration · 券商/批量/工具箱 broker/batch/tools · 信号拆解 decompose（v2.5.0 全部能力继承）。
+  </div>
+  <div class="btns">
+    <button id="bExpand">展开全部</button>
+    <button id="bCollapse">收起分支</button>
+    <button id="bFit">适应窗口</button>
+  </div>
+</header>
+<div id="wrap"><svg id="svg"></svg></div>
+<div id="legend"></div>
+<div class="hint">滚轮缩放 · 空白处拖拽平移 · 点 ● 折叠子节点</div>
+
+<script>
+/* ============ 数据：按功能域组织（逻辑分层，功能一目了然） ============ */
+const CATS = {
+  ctx:    {name:'定位与运行',    color:'#94a3b8'},
+  engine: {name:'四维核心引擎',  color:'#d4af37'},
+  risk:   {name:'风控闸门与仓位',color:'#f87171'},
+  data:   {name:'行情与数据',    color:'#60a5fa'},
+  signal: {name:'信号与出场',    color:'#fbbf24'},
+  panel:  {name:'面板·12书签',   color:'#a78bfa'},
+  perf:   {name:'绩效与复盘',    color:'#34d399'},
+  warn:   {name:'预警监控',      color:'#f472b6'},
+  trade:  {name:'交易与笔记',    color:'#22d3ee'},
+  eng:    {name:'工程与保障',    color:'#cbd5e1'},
+};
+
+const TREE = {
+  t:'四维策略模型', root:true,
+  children:[
+    {t:'定位与运行', cat:'ctx', children:[
+      {t:'半自动信号系统（不自动下单）'},
+      {t:'实盘面板 runner + 前端 HTML'},
+      {t:'端口 8741 · 黑金工业玻璃风'},
+      {t:'55 品种 / 44 激活 / 11 屏蔽'},
+      {t:'合约代码全页覆盖（动态主力·随换月滚动）'},
+    ]},
+    {t:'四维核心引擎 F→T→C 合成', cat:'engine', children:[
+      {t:'F 基本面（背景偏置）', children:[
+        {t:'score_F + fundamental_feed'},
+        {t:'基差·库存（盘前刷新）'},
+        {t:'G1 利润/价差/比价 7 项指标'},
+      ]},
+      {t:'T 技术（主触发）', children:[
+        {t:'compute_T 日线8策略+5m'},
+        {t:'regime 趋势/波动/震荡'},
+        {t:'T_D 降级 / T_5m 实时触发'},
+      ]},
+      {t:'C 资金流（确认/否决）', children:[
+        {t:'C_flow 真tick订单流（CZCE·TqSdk 8742）'},
+        {t:'DCE(JM/J/jd/lh) akshare 分钟线近似'},
+        {t:'C_pos 龙虎榜前20会员净持仓'},
+      ]},
+      {t:'合成流水线 pipeline', children:[
+        {t:'bias_G = F,T,C 合成'},
+        {t:'触发判定 + conv + corr_gate'},
+        {t:'#6 macro_bias 宏观微调 bias_G（±12分·回测零前视）'},
+        {t:'#7 HMM 四态 × GBM/GARCH 波动率 调制 T_thresh_eff'},
+      ]},
+      {t:'认知层与市场状态（v2.4.0）', cat:'engine', children:[
+        {t:'#1 信息维度 info_dimension（F_override 喂 live 不喂回测）'},
+        {t:'#6 跨资产宏观语境 macro_context（股/债/汇三因子）'},
+        {t:'#7 HMM 市场状态 regime_hmm（trend_up/down·choppy·high_vol）'},
+        {t:'#7 GBM/GARCH gbm_garch（GARCH MLE + 前向VaR/区间）'},
+        {t:'risk_scale 0.6~1.0 已接入实际手数（min 取严者）'},
+        {t:'#4 信号解释 signal_explain（结论先行）'},
+        {t:'#5 一致性看门狗 /api/consistency（只报告不修正）'},
+      ]},
+    ]},
+    {t:'风控闸门与仓位', cat:'risk', children:[
+      {t:'4 道硬约束（T阈值/corr/涨跌停/仓位上限）'},
+      {t:'仓位状态机 NORMAL→WARNING→LOCKED'},
+      {t:'#5 硬熔断 KillSwitch（全平+禁开+落盘防重启洗白）'},
+      {t:'#119 回撤水位线自动降险（多档+持久化）'},
+      {t:'#6 板块集中度+净敞口上限'},
+      {t:'#4 fractional-Kelly 仓位缩放'},
+    ]},
+    {t:'行情与数据', cat:'data', children:[
+      {t:'minishare 实时行情 rt_fut_k（降级 akshare 日线）'},
+      {t:'TqSdk 真tick源(8742) · CZCE真tick / DCE分钟线近似'},
+      {t:'龙虎榜 C_pos 前20会员净持仓'},
+      {t:'席位态度榜（偏多/偏空·双向跳转）'},
+      {t:'异动扫描（领涨/领跌·反向跳持仓）'},
+      {t:'#124 账户只读同步（minishare 盯市+对账漂移）'},
+      {t:'#126 多源数据交叉校验（四源互相印证）'},
+      {t:'🔴 主力合约权威覆盖 main_overrides.json（自动切换·单调向前·实时解析）'},
+      {t:'换月异常告警（ABNOLD 6h / 源失败·临界 7天状态变化，osascript 通知）'},
+    ]},
+    {t:'信号与出场', cat:'signal', children:[
+      {t:'exit_plan 止损=ATR×regime系数·目标2R'},
+      {t:'build_signal 结构化信号'},
+      {t:'移动止损自动（t1→保本/跟踪/达t2）'},
+      {t:'#8 一键全平/反手'},
+      {t:'#7 大单拆分冰山/TWAP'},
+    ]},
+    {t:'面板 · 12 书签', cat:'panel', children:[
+      {t:'账户总览 / 信号 / 席位态度'},
+      {t:'交易记录 / 异动 / 预警监控'},
+      {t:'复盘 / 绩效 / 消息 / 健康'},
+      {t:'G1 利润·价差·比价'},
+      {t:'G5 我的品种（聚焦6关注品种）'},
+      {t:'P2-3 子模块并发刷新（复盘F1 30s / 报警历史 15s）'},
+    ]},
+    {t:'绩效与复盘', cat:'perf', children:[
+      {t:'净值曲线 + 11 指标 + CSV 导出'},
+      {t:'复盘日/周/月三层闭环（23:20 冻结）'},
+      {t:'#123 组合 VaR / CVaR'},
+      {t:'#92 情景压力测试 5 档'},
+      {t:'#128 相关性崩溃·危机趋同 Stress'},
+      {t:'#129 板块强弱轮动排序'},
+      {t:'#130 波动率目标化头寸'},
+      {t:'#131 流动性风险 Liquidity-at-Risk'},
+      {t:'#127 实盘盈亏 F/T/C 维度归因'},
+      {t:'#11 蒙特卡洛置信区间'},
+      {t:'#120 概率校准·置信度分层命中率'},
+      {t:'#134 参数鲁棒性敏感性地图'},
+      {t:'G4 日盘/夜盘分时段绩效'},
+    ]},
+    {t:'预警监控', cat:'warn', children:[
+      {t:'B1 自选到价提醒（≤60条）'},
+      {t:'B2 换月预警'},
+      {t:'B3 跳空风险预警'},
+      {t:'C2/C3 分品种 Edge + 波动率 regime'},
+      {t:'C4 报警历史'},
+      {t:'#132 组合预警规则引擎（12条·可配）'},
+    ]},
+    {t:'交易与笔记', cat:'trade', children:[
+      {t:'交易记录 / G2 交易笔记（备注）'},
+      {t:'成交质量监控（滑点/时机/执行）'},
+      {t:'#125 盘前自动作战清单（8项检查）'},
+      {t:'#133 交互式历史回放·时间机器'},
+    ]},
+    {t:'工程与保障', cat:'eng', children:[
+      {t:'#16 进程看门狗 + 健康 (#16)'},
+      {t:'#14 数据质量/陈旧监控'},
+      {t:'#15 手机推送（Telegram/Bark/企微）'},
+      {t:'#1 真重校准 + G3 自动调度'},
+      {t:'流动性敏感滑点 get_slip_pts'},
+      {t:'#9 经纪商成交回灌'},
+      {t:'#121 工具箱 CLI（校准/回放/报告）'},
+      {t:'#12 纪律自动体检 · #13 事件闸门'},
+      {t:'Stream3 订单流真tick · backend_tqsdk.py(8742)'},
+      {t:'start/stop_tqsdk.sh 启停脚本'},
+      {t:'P1配色语义收敛 · P2-3并发刷新 · P2-4 JM合约修复'},
+      {t:'2026-08-17 组合 VaR 升级（历史模拟+EVT+参数化+缓存）'},
+      {t:'OOS 全市场扫描最终态（11 禁·解禁 JM/ag/bu/ss）'},
+      {t:'5m 回测死循环修复（fundamental_feed 缓存）'},
+      {t:'风控状态机 P0（daily_loss_locked 初始化）'},
+      {t:'非交易时段通知门控（_should_suppress）'},
+      {t:'止损止盈方向校验（_validate_levels）'},
+    ]},
+  ]
+};
+
+/* ============ 布局（横向可折叠树） ============ */
+const ROW_H=30, GAP=48, PAD=34, NODE_H=24, FS=13;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function widthOf(t){ return clamp(t.length*FS*0.92+22, 70, 280); }
+
+let idc=0;
+function prep(n,parent){
+  n._id=++idc;
+  n._cat = n.cat || (parent?parent._cat:'ctx');
+  n.w = widthOf(n.t);
+  n.collapsed = !!n.collapsed;
+  if(n.children) n.children.forEach(c=>prep(c,n));
+}
+prep(TREE,null);
+
+function place(n,parent,yc){
+  n.x = parent ? parent.x + parent.w + GAP : PAD;
+  if(n.children && n.children.length && !n.collapsed){
+    n.children.forEach(c=>place(c,n,yc));
+    n.y = (n.children[0].y + n.children[n.children.length-1].y)/2;
+  } else {
+    n.y = yc.v; yc.v += ROW_H;
+  }
+}
+function allNodes(n,acc){ acc.push(n); if(n.children) n.children.forEach(c=>allNodes(c,acc)); return acc; }
+
+/* ============ 渲染 ============ */
+const svg=document.getElementById('svg');
+const wrap=document.getElementById('wrap');
+let panX=0,panY=0,zoom=1;
+
+function render(){
+  const yc={v:0}; place(TREE,null,yc);
+  const nodes=allNodes(TREE,[]);
+  let links='', shapes='';
+  nodes.forEach(n=>{
+    const color=CATS[n._cat].color;
+    const isRoot=!!n.root;
+    if(n.children && n.children.length && !n.collapsed){
+      n.children.forEach(c=>{
+        const x1=n.x+n.w, y1=n.y, x2=c.x, y2=c.y, mx=(x1+x2)/2;
+        links+=`<path class="edge" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" stroke="${color}" stroke-opacity="0.45" stroke-width="1.4"/>`;
+      });
+    }
+    const rh=isRoot?30:NODE_H;
+    const rx=isRoot?8:7;
+    const fill=isRoot?'#1a1710':`${color}22`;
+    const stroke=isRoot?'#d4af37':color;
+    const tcol=isRoot?'#f3d77a':'#e6e7ea';
+    const fs=isRoot?15:FS;
+    shapes+=`<g class="node" data-id="${n._id}">`
+      +`<rect x="${n.x}" y="${n.y-rh/2}" width="${n.w}" height="${rh}" rx="${rx}" `
+      +`fill="${fill}" stroke="${stroke}" stroke-width="${isRoot?2:1.3}"/>`
+      +`<text x="${n.x+10}" y="${n.y}" dominant-baseline="middle" font-size="${fs}" fill="${tcol}" font-weight="${isRoot?'700':'500'}">${n.t}</text>`;
+    if(n.children && n.children.length){
+      const tgx=n.x+n.w+14, tgy=n.y;
+      shapes+=`<g class="toggle" data-id="${n._id}"><circle cx="${tgx}" cy="${tgy}" r="8" fill="#0a0a0b" stroke="${stroke}" stroke-width="1.3"/>`
+        +`<text x="${tgx}" y="${tgy}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="${stroke}" font-weight="700">${n.collapsed?'+':'−'}</text></g>`;
+    }
+    shapes+=`</g>`;
+  });
+  // 背景层先 links 后 shapes（links 透明，shapes 在上）
+  svg.innerHTML=`<g id="root" transform="translate(${panX},${panY}) scale(${zoom})">${links}${shapes}</g>`;
+}
+
+/* 折叠/展开 */
+svg.addEventListener('click',e=>{
+  const g=e.target.closest('[data-id]');
+  if(!g) return;
+  const id=+g.getAttribute('data-id');
+  const n=allNodes(TREE,[]).find(x=>x._id===id);
+  if(n && n.children && n.children.length){ n.collapsed=!n.collapsed; render(); }
+});
+
+/* 平移 + 缩放 */
+let drag=false,sx=0,sy=0,ox=0,oy=0;
+wrap.addEventListener('mousedown',e=>{ if(e.target.closest('.toggle'))return; drag=true;sx=e.clientX;sy=e.clientY;ox=panX;oy=panY;wrap.classList.add('grabbing'); });
+window.addEventListener('mousemove',e=>{ if(!drag)return; panX=ox+(e.clientX-sx); panY=oy+(e.clientY-sy); render(); });
+window.addEventListener('mouseup',()=>{drag=false;wrap.classList.remove('grabbing');});
+wrap.addEventListener('wheel',e=>{ e.preventDefault();
+  const f=e.deltaY<0?1.1:0.9; const nz=clamp(zoom*f,0.25,2.5);
+  const r=wrap.getBoundingClientRect(); const mx=e.clientX-r.left, my=e.clientY-r.top;
+  panX = mx-(mx-panX)*(nz/zoom); panY = my-(my-panY)*(nz/zoom); zoom=nz; render();
+},{passive:false});
+
+/* 适应窗口 */
+function fit(){
+  const yc={v:0}; place(TREE,null,yc);
+  const ns=allNodes(TREE,[]);
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  ns.forEach(n=>{
+    minX=Math.min(minX,n.x); minY=Math.min(minY,n.y-16);
+    maxX=Math.max(maxX,n.x+n.w); maxY=Math.max(maxY,n.y+16);
+  });
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  const cw=maxX-minX+60, ch=maxY-minY+60;
+  zoom=clamp(Math.min(W/cw, H/ch),0.25,1.4);
+  panX=(W-cw*zoom)/2 - (minX-30)*zoom;
+  panY=(H-ch*zoom)/2 - (minY-30)*zoom;
+  render();
+}
+
+/* 按钮 */
+document.getElementById('bExpand').onclick=()=>{ allNodes(TREE,[]).forEach(n=>n.collapsed=false); render(); };
+document.getElementById('bCollapse').onclick=()=>{ allNodes(TREE,[]).forEach(n=>{ if(n.children&&n.children.length) n.collapsed=true; }); render(); };
+document.getElementById('bFit').onclick=fit;
+
+/* 图例 */
+document.getElementById('legend').innerHTML = Object.values(CATS)
+  .map(c=>`<span><i style="background:${c.color}"></i>${c.name}</span>`).join('');
+
+/* 初始：全展开，fit 自适应 */
+fit();
+</script>
+</body>
+</html>

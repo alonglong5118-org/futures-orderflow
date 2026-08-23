@@ -24,6 +24,21 @@ from __future__ import annotations
 import os, sys, json, math, time
 from datetime import datetime
 import numpy as np
+
+# ── v5.1 集成常量 ──
+SIGNAL_QUALITY_MIN_SCORE = 60
+BREAKOUT_BODY_MIN_PCT = 0.5
+BREAKOUT_VOLUME_MULT = 1.5
+VOLUME_MA_PERIOD = 20
+MULTI_TIMEFRAME_ENABLED = True
+HIGHER_TF_MA_FAST = 20
+HIGHER_TF_MA_SLOW = 55
+COUNTER_TREND_POS_SCALE = 0.5
+COUNTER_TREND_RR_BOOST = 1.3
+BREAKEVEN_TRIGGER_R = 1.0
+TRAILING_STOP_ATR_MULT = 2.0
+MIN_RR_RATIO = 2.0
+SIGMA_STOP_MULT = 3.0
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
