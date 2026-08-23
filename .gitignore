@@ -21,3 +21,11 @@ __pycache__/
 _risk_backup*/
 # 临时 json 产物
 _*.json
+
+# 运行时流式日志
+*.jsonl
+# 临时脚本/产物（下划线前缀）
+_*.txt
+_*.sh
+# 带日期后缀的备份
+*.bak*
