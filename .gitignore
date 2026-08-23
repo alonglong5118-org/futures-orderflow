@@ -12,3 +12,12 @@ _*.py
 # Python 缓存
 __pycache__/
 *.pyc
+
+# macOS 元数据
+.DS_Store
+# 运行时日志
+*.log
+# 临时备份目录
+_risk_backup*/
+# 临时 json 产物
+_*.json
