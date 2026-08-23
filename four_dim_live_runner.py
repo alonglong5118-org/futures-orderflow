@@ -4703,6 +4703,19 @@ def check_gap_alerts():
     return len(highs)
 
 
+def _build_gated_notices():
+    """P1-②：为关注品种里被动态门控暂停发信号的生成定性提示卡（供 /api/state 下发前端）。"""
+    out = []
+    for sym in FOCUS_SYMS:
+        try:
+            g = sexp.explain_gated(sym)
+        except Exception:
+            g = None
+        if g:
+            out.append(g)
+    return out
+
+
 def _load_calib():
     if not os.path.exists(CALIB_FILE):
         return {}
@@ -7725,6 +7738,11 @@ def start_dashboard(state):
                             _s2["contract"] = ml.normalize_contract_code(_ct)
                 # 版本号随 /api/state 实时下发，前端侧栏动态渲染（方案 B）
                 state["version"] = APP_VERSION
+                # P1-②：门控品种定性提示（lh/JM 等被动态门控暂停发信号的，让面板露出覆盖缺口）
+                try:
+                    state["gated_notices"] = _build_gated_notices()
+                except Exception:
+                    state["gated_notices"] = []
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
             elif self.path == "/api/account":
                 # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
@@ -8744,7 +8762,32 @@ def start_dashboard(state):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(open(HTML_FILE, "rb").read())
+                # P1-② 注入门控卡片内容（服务端渲染，首屏可见）
+                _html = open(HTML_FILE, "rb").read().decode("utf-8")
+                _gn = _build_gated_notices()
+                if _gn:
+                    _gated_html = "".join(
+                        '<div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:8px">'
+                        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+                        '<span style="font-weight:600">%s</span><span style="font-size:12px;color:var(--mut)">%s</span>'
+                        '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--amber)22;color:var(--amber);border:0.5px solid var(--amber)55">门控·暂停发信号</span>'
+                        '</div>'
+                        '<div style="font-size:12px;color:var(--mut);line-height:1.6">'
+                        '模型判负向：期望R <b style="color:var(--amber)">%s</b> / 胜率 <b>%s</b>%s<br>'
+                        '<b style="color:var(--fg)">定性建议：</b>%s'
+                        '</div></div>' % (
+                            g.get("symbol", ""), g.get("name", ""),
+                            g.get("expR", "?"),
+                            ("%.0f%%" % (g["win_rate"] * 100)) if g.get("win_rate") is not None else "?",
+                            (" / 校准OOS %s" % g["calibrated_oos"]) if g.get("calibrated_oos") is not None else "",
+                            g.get("advice", "")
+                        )
+                        for g in _gn
+                    )
+                else:
+                    _gated_html = '<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'
+                _html = _html.replace("__GATED_CONTENT__", _gated_html)
+                self.wfile.write(_html.encode("utf-8"))
             elif self.path == "/chart.umd.js":
                 _chart_js = os.path.join(HERE, "chart.umd.js")
                 if os.path.exists(_chart_js):

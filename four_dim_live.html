@@ -1371,6 +1371,45 @@
         <div class="stamp" style="margin-bottom:8px">GARCH(1,1) 波动率动力学 + GBM 蒙特卡洛前向情景（live 专属，不喂回测）。逐品种给出波动率状态、风险系数（高波动自动降仓）、5日期望收益 / 下行 VaR / 上行概率 / 价格区间情景带。与「组合 VaR/CVaR」（市值暴露逐日盯市）互补——此处是「单品种波动率维度」的前向推演（非投资建议）。</div>
         <div id="gbm-box" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
+      // P1-② 独立门控品种提示渲染（不依赖 GBM，确保休市/无GBM数据时也能显示）
+let _gatedRetry = 0;
+async function refreshGatedNotices(){
+  try{
+    const r=await fetch('/api/state');const s=await r.json();
+    const gbox=document.getElementById('gated-box');
+    if(!gbox) return;
+    const gs=(s.gated_notices)||[];
+    if(!gs.length){ gbox.innerHTML='<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'; return; }
+    gbox.innerHTML=gs.map(g=>{
+      const name=g.name||g.symbol;
+      const wr=g.win_rate!=null?(g.win_rate*100).toFixed(0)+'%':'?';
+      const oos=g.calibrated_oos!=null?(' / 校准OOS '+g.calibrated_oos):'';
+      return '<div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:8px">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+          '<span style="font-weight:600">'+g.symbol+'</span><span style="font-size:12px;color:var(--mut)">'+name+'</span>'+
+          '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--amber)22;color:var(--amber);border:0.5px solid var(--amber)55">门控·暂停发信号</span>'+
+        '</div>'+
+        '<div style="font-size:12px;color:var(--mut);line-height:1.6">'+
+          '模型判负向：期望R <b style="color:var(--amber)">'+g.expR+'</b> / 胜率 <b>'+wr+'</b>'+oos+'<br>'+
+          '<b style="color:var(--fg)">定性建议：</b>'+g.advice+
+        '</div>'+
+      '</div>';
+    }).join('');
+    _gatedRetry = 0;  // 成功后重置
+  }catch(e){
+    // 失败时重试（最多 10 次，间隔 1 秒）
+    if(_gatedRetry < 10){
+      _gatedRetry++;
+      setTimeout(refreshGatedNotices, 1000);
+    }
+  }
+}
+
+<div class="card" style="margin-top:14px" id="gated-card">
+        <h2>门控品种提示 <span class="price">P1-②</span> <span class="price" id="gated-sub"></span></h2>
+        <div id="gated-box">__GATED_CONTENT__</div>
+        <script>/* P1-② 首屏渲染：若 runner 已注入数据则直接显示，否则异步加载 */ (function(){ var g=document.getElementById("gated-box"); if(g && g.innerHTML.indexOf("加载中")>=0){ refreshGatedNotices(); } })();</script>
+      </div>
 
       <div class="group-head gh-green"><span class="gh-num">⑦</span><span class="gh-title">板块轮动 · 波动率目标 · 流动性</span><span class="gh-sub">强弱排序 / LaR / 波动率目标</span></div>
       <div class="card" id="sector-card">
@@ -1925,6 +1964,31 @@ async function refreshGbm(){
     const focus=['jd','lh','FG','SA','JM','J'];
     syms.sort((a,b)=>{const fa=focus.indexOf(a),fb=focus.indexOf(b);
       if(fa>=0||fb>=0) return (fa<0?999:fa)-(fb<0?999:fb); return 0;});
+    // P1-② 门控品种提示卡渲染（放在 GBM 提前 return 之前，确保休市时也能显示）
+    try{
+      const gbox0=document.getElementById('gated-box');
+      if(gbox0){
+        const gs0=(s.gated_notices)||[];
+        if(!gs0.length){ gbox0.innerHTML='<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'; }
+        else{
+          gbox0.innerHTML=gs0.map(g=>{
+            const name=g.name||g.symbol;
+            const wr=g.win_rate!=null?(g.win_rate*100).toFixed(0)+'%':'?';
+            const oos=g.calibrated_oos!=null?(' / 校准OOS '+g.calibrated_oos):'';
+            return '<div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:8px">'+
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+                '<span style="font-weight:600">'+g.symbol+'</span><span style="font-size:12px;color:var(--mut)">'+name+'</span>'+
+                '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--amber)22;color:var(--amber);border:0.5px solid var(--amber)55">门控·暂停发信号</span>'+
+              '</div>'+
+              '<div style="font-size:12px;color:var(--mut);line-height:1.6">'+
+                '模型判负向：期望R <b style="color:var(--amber)">'+g.expR+'</b> / 胜率 <b>'+wr+'</b>'+oos+'<br>'+
+                '<b style="color:var(--fg)">定性建议：</b>'+g.advice+
+              '</div>'+
+            '</div>';
+          }).join('');
+        }
+      }
+    }catch(e){}
     if(!syms.length){ box.innerHTML='<div class="stamp">暂无 GBM 前向情景数据（需足够日线历史，非交易时段可能为空）</div>'; return; }
     const vc={'normal':'#3a8ee6','low':'var(--green)','low-vol':'var(--green)','mid':'#3a8ee6','中':'#3a8ee6',
               'high':'var(--amber)','高':'var(--amber)','extreme':'var(--red)','极高':'var(--red)'};
@@ -4895,6 +4959,9 @@ refreshStress();setInterval(refreshStress,30000);
 refreshVar();setInterval(refreshVar,30000);
 refreshAttribution();setInterval(refreshAttribution,30000);
 refreshCorrStress();setInterval(refreshCorrStress,30000);
+// P1-② 门控品种定时刷新（每 30 秒）
+setInterval(refreshGatedNotices, 30000);
+// GBM/GARCH 定时刷新
 refreshGbm();setInterval(refreshGbm,30000);
 refreshSector();setInterval(refreshSector,60000);
 refreshVolTarget();setInterval(refreshVolTarget,60000);

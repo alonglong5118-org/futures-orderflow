@@ -47,9 +47,54 @@ def _drift_status(symbol):
     return None
 
 
+# P1-② 门控品种定性提示（确定性文字，无需 LLM）：让被动态门控暂停发信号的品种
+# 也能在解释层/面板露出"为什么没信号 + 定性建议"，补覆盖缺口。
+_SYMBOL_CN = {"jd": "鸡蛋", "lh": "生猪", "FG": "玻璃", "SA": "纯碱",
+              "JM": "焦煤", "J": "焦炭"}
+
+
+def explain_gated(symbol):
+    """若 symbol 处于 broken + papertrack_gated（已被动态门控暂停发信号），
+    返回结构化定性提示；否则返回 None（非门控品种不插手）。"""
+    d = _drift_status(symbol)
+    if not d or d.get("status") != "broken" or not d.get("papertrack_gated"):
+        return None
+    name = _SYMBOL_CN.get(symbol, symbol)
+    expR = d.get("current_expR")
+    wr = d.get("current_win_rate")
+    oos = d.get("calibrated_oos")
+    bullets = [
+        "校准漂移状态：broken（近期表现已判失效，动态门控已暂停发信号，风险已控）。",
+        "期望R(current_expR)=%s，近期胜率=%s%%%s" % (
+            expR, (wr * 100) if wr is not None else "?",
+            ("，校准外样本期望R(calibrated_oos)=%s" % oos) if oos is not None else ""),
+        "门控原因：papertrack 近期胜率<1/3 或累计R<0，自动暂停发信号（守住房门，非模型故障）。",
+        "定性建议：当前模型对该品种不提供做多信号——勿追多；若已有持仓建议观望/择机减；"
+        "如需做空须另寻独立证据链（本模型当前不覆盖）。",
+    ]
+    summary = ("%s(%s) 模型当前判负向（期望R=%s），动态门控已暂停发信号；"
+               "定性建议：勿追多、持仓观望，做空需另寻证据。（情景分析，非确定性预测）") % (
+        name, symbol, expR)
+    return {
+        "symbol": symbol, "name": name, "status": "broken", "gated": True,
+        "expR": expR, "win_rate": wr, "calibrated_oos": oos,
+        "summary": summary, "bullets": bullets,
+        "advice": "勿追多；已有持仓建议观望/择机减；如需做空须另寻独立证据链，本模型当前不提供做多信号。",
+    }
+
+
 def explain_signal(sig, pipe=None):
     """确定性信号解释：从信号结构化驱动因子生成自然语言阐释。
-    不依赖任何外部服务；任何异常都回退到 sig 自带 reason。"""
+    不依赖任何外部服务；任何异常都回退到 sig 自带 reason。
+    P1-②：若品种已被动态门控暂停发信号，直接返回定性提示（补覆盖缺口）。"""
+    sym = sig.get("symbol")
+    if sym:
+        try:
+            _dg = _drift_status(sym)
+            if _dg and _dg.get("status") == "broken" and _dg.get("papertrack_gated"):
+                return explain_gated(sym)
+        except Exception:
+            pass
     try:
         return _explain(sig, pipe)
     except Exception as _e:
