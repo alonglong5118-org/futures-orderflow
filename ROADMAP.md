@@ -112,3 +112,13 @@
 - **JM apply 伪报告教训（独立复核铁律）**：trea 用错误路由返回 404 编造成功 apply 报告，经独立复核（`/api/consistency` 真实响应 + 磁盘 `calibration_params.json`）证伪。JM 当前 `calibrated_oos=-0.967`、动态门控 `gated=True` 不发信号、无候选可落盘（expR<0 不 staging），保持现状（红线：绝不自作主张覆盖线上参数）。
 - **live 周期自检自动化（commit `f0db080`，set-and-forget）**：新增 `live_health_check.py`（四项检查：① `/api/health` 可达 ② `/api/edge` `mean_oos` 非空且 == 磁盘 `calibration_params.json`（防 `CALIB_FILE` 类静默失明）③ `/api/state` 与 `/api/account` 合约 == `main_overrides.json` ④ `/api/consistency` `ok`；边沿触发推送，状态落 `live_health_status.json`）+ 自动化 `automation-1787463425156`（HOURLY 周期执行，调度最小粒度）。脚本直接 Write 落地（辅助工具非策略核心、逻辑已验证零风险）+ `git commit` 入库防丢失，自动化真正生效（此前因脚本只验证未交 trea 落地曾空转一周期，正是「自动化真伪」反例）。
 - **Git 版本管理收尾（仓库干净）**：核心 47 个 `.py` + 前端/脚本/图标 + `c2_batches.txt` 全部 `git add` + commit 锁定（曾大面积裸文件未跟踪）；运行期产物 `*.json/*.jsonl/*.log/*.pid/*.crash*` / `broker_fills/` / `data_5m/` / 截图 / 诊断 txt / `c2wave*/` / `probe_*/` / `_*.py` / `_*.txt` / `_*.sh` / `*.bak*` 及凭据 `.env` / `tushare_token.txt` 全部 `.gitignore` 忽略；已跟踪的 7 份文档 + ROADMAP + bugfix_report 不受影响。
+
+### v3.0.0 改进序列（2026-08-23 晚间 · P1/P2 落地闭环）
+
+> 用户 8/23 实测系统后给出分级改进清单，本晚按优先级落地 P1 三小项 + P2-⑤/④ 两项，全部独立复核入库。
+
+- **P1-① DEEPSEEK 信号解释注入（配置闭环 · 待 8/24 开盘终端终验）**：plist 注入 `DEEPSEEK_API_KEY/BASE_URL/MODEL` 三变量，`signal_explain.llm_explain()` 仅在 key 存在时叠加 `explanation.llm`。launchctl 坑：`kickstart` 不重读 plist，须先 `unload` 再 `load`。终验：8/24 09:00 开盘后新信号 `explanation.llm` 应非空。
+- **P1-② lh/JM 门控品种透明提示卡（commit `1c2fcc8`）**：`signal_explain.explain_gated()` + `/api/state` 注入 `gated_notices` + 前端「门控品种提示」卡片（服务端注入 `__GATED_CONTENT__` 占位符，前端 `refreshGatedNotices()` 30s 轮询兜底）。
+- **P1-③ 换月前瞻预警（commit `c8ec0ad`）**：`live_health_check.py` 新增第 5 项，基于 `main_overrides.json` 合约 YYMM 判断 已过期/交割月临界/下月进交割月 三级预警。
+- **P2-⑤ 静默 except 硬化（commit `49fec35`）**：consistency_watchdog / four_dim_recalibrate / live_health_check 共 6 处 loader `except: return {}` → exists 守卫 + 可见日志（坏文件不再静默空转）。
+- **P2-④ 组合 F OOS 权重验证（commit `a7edda0` + `5857bd0`）**：`walk_forward_backtest` assert 红线守卫（info/HMM/macro/garch 禁入回测）+ `df_in` 注入 + `combine_bias` 读 `cfg["combine_weights"]`（默认不变）+ 新 harness `oos_weight_validation.py`（IS/OOS 切分扫参，只报告不 apply）。**发现**：J 过拟合嫌疑但 OOS 仅 1 笔、combine_weights 非敏感（根因待 seasonal 簇权重入网格）；jd/FG/JM 负退化=regime 切换；lh/SA 降档后可出结论；默认权重 top3 内无需紧急改参。

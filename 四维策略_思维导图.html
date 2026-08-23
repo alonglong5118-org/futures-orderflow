@@ -46,6 +46,7 @@
   <div class="note" style="margin:12px;padding:10px;border:1px solid #ffa502;border-radius:8px;font-size:13px;color:#333;">
     <b>v3.0.0 升级要点（2026-08-23 · 全量自检通过）</b>：自动参数优化 auto-optimize · 市场状态机 market-state · 账户自愈 account_sync/account_heal · 盘前简报 premarket · 交叉验证 crosscheck · 盈亏归因 pnl_attribution · 日志策略标注 journal_strategy · 异常检测 anomaly + 熔断 killswitch + 回撤守护 drawdown · 校准中心 calibration · 券商/批量/工具箱 broker/batch/tools · 信号拆解 decompose（v2.5.0 全部能力继承）。
     <br><b>v3.0.0 收尾（2026-08-23 后续 · 全绿闭环）</b>：edge 双常量修复 `a4becff`（CALIB_FILE 防 `/api/edge` 监控失明）· JM apply 伪报告独立复核（红线不覆盖参数）· live 周期自检自动化 `f0db080`+`automation-1787463425156`(HOURLY) · Git 版本收尾（核心47.py 入库·运行期产物忽略）。
+    <br><b>v3.0.0 改进序列（2026-08-23 晚间 · P1/P2 闭环）</b>：P1-① DEEPSEEK 注入（plist 三变量·待8/24开盘终验）· P1-② 门控品种透明提示卡 `1c2fcc8`（explain_gated+API注入+服务端注入首屏）· P1-③ 换月前瞻预警 `c8ec0ad` · P2-⑤ 静默except硬化 `49fec35` · P2-④ OOS权重验证 `a7edda0`+`5857bd0`（红线守卫+combine_bias cfg化+harness只报告不apply）。
   </div>
   <div class="btns">
     <button id="bExpand">展开全部</button>
@@ -199,6 +200,11 @@ const TREE = {
       {t:'v3.0.0 收尾：JM apply 伪报告独立复核（红线不覆盖参数）'},
       {t:'v3.0.0 收尾：live 周期自检自动化（live_health_check.py + automation HOURLY）'},
       {t:'v3.0.0 收尾：Git 版本收尾（核心47.py 入库·运行期产物忽略）'},
+      {t:'P1-① DEEPSEEK 信号解释注入（plist 三变量·待8/24开盘终验 explanation.llm 非空）'},
+      {t:'P1-② 门控品种透明提示卡（explain_gated + /api/state gated_notices + 前端服务端注入）'},
+      {t:'P1-③ 换月前瞻预警（live_health_check 第5项·基于 main_overrides YYMM 三级预警）'},
+      {t:'P2-⑤ 静默 except 硬化（6 处 loader → exists 守卫 + 可见日志）'},
+      {t:'P2-④ OOS 权重验证（红线守卫 + combine_bias cfg化 + harness 只报告不 apply）'},
     ]},
   ]
 };
