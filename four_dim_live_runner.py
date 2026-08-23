@@ -4934,14 +4934,22 @@ def _reconcile_journal_vs_account(held):
     try:
         data = tj._load()
         jopen = {}
-        javg = {}
+        javg_acc = {}
+        jlevels = {}
         for t in data.get("trades", []):
             if t.get("pnl") is not None:
                 continue
             k = (t.get("symbol"), t.get("direction"))
             jopen[k] = jopen.get(k, 0) + (t.get("lots") or 0)
-            if k not in javg:
-                javg[k] = t.get("entry_price")
+            qty = abs(t.get("quantity") or t.get("lots") or 0) or 1
+            if k not in javg_acc:
+                javg_acc[k] = {"sum": 0.0, "qty": 0.0}
+                jlevels[k] = {"stop": t.get("stop"), "stop_dist": t.get("stop_dist"),
+                              "t1": t.get("t1"), "t2": t.get("t2")}
+            javg_acc[k]["sum"] += (t.get("entry_price") or 0) * qty
+            javg_acc[k]["qty"] += qty
+        javg = {k: round(v["sum"] / v["qty"], 2) if v["qty"] else 0.0
+                for k, v in javg_acc.items()}
         aopen = {}
         for p in held:
             k = (p.get("symbol"), p.get("direction"))
@@ -5330,7 +5338,7 @@ def cross_source_check(force=False):
             gap = (rt - dl) / dl * 100.0
             rt_vs_daily = round(gap, 2)
             amp = (dhi - dlo) / dlo * 100.0 if (dhi and dlo and dlo > 0) else 0.0
-            thr = max(RT_DAILY_GAP_WARN, 2.0 * amp)
+            thr = max(RT_DAILY_GAP_WARN, 1.5 * amp, 3.0)
             if abs(gap) > thr:
                 flags.append(f"实时价({rt:.0f})与日线收盘({dl:.0f})偏离 {gap:+.1f}%（>动态阈值 {thr:.1f}%），疑似行情卡/合约错/复权错")
         # 校验2：实时 vs 持仓均价（持仓 + 交易时段 + 实时可用）
