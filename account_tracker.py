@@ -18,7 +18,7 @@
   snap = at.snapshot(prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
 from __future__ import annotations
-import os, json, threading
+import os, json, sys, threading, tempfile
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -48,14 +48,69 @@ def load_config():
 
 
 def load_state():
+    """读取账户状态。文件不存在/为空/解析失败均返回安全默认，不抛异常（防止 /api/account 500）。
+    若当前文件损坏，尝试从 .bak 恢复上一份好状态。"""
+    default = {"equity": 0, "realized_pnl": 0.0, "positions": {}, "updated": "",
+               "equity_synced": ""}
     if not os.path.exists(STATE_FILE):
-        return {"equity": 0, "realized_pnl": 0.0, "positions": {}, "updated": "",
-                "equity_synced": ""}
-    return json.load(open(STATE_FILE, encoding="utf-8"))
+        return default
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            text = f.read().strip()
+    except OSError as e:
+        sys.stderr.write("[account_tracker] load_state 读文件失败，返回默认: %s\n" % e)
+        return default
+    if not text:
+        return _load_state_from_bak(default)   # 空文件：写盘竞态瞬间，尝试 .bak
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        sys.stderr.write("[account_tracker] load_state 解析失败，尝试 .bak: %s\n" % e)
+        return _load_state_from_bak(default)
+
+
+def _load_state_from_bak(default):
+    """从 .bak 恢复上一份好状态；不存在或损坏则返回 default。"""
+    bak = STATE_FILE + ".bak"
+    if not os.path.exists(bak):
+        return default
+    try:
+        with open(bak, encoding="utf-8") as f:
+            txt = f.read().strip()
+        if txt:
+            return json.loads(txt)
+    except Exception:
+        pass
+    return default
 
 
 def save_state(st):
-    json.dump(st, open(STATE_FILE, "w"), ensure_ascii=False, indent=2)
+    """原子写盘：先写临时文件再 os.replace，消除「半写空文件」竞态窗口（修复 /api/account 偶发 500）。
+    写入前把当前好状态备份为 .bak，供 load_state 失败时恢复。"""
+    # 备份当前好状态（若存在且非空）
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, encoding="utf-8") as f:
+                cur = f.read()
+            if cur.strip():
+                with open(STATE_FILE + ".bak", "w", encoding="utf-8") as f:
+                    f.write(cur)
+        except OSError:
+            pass
+    # 原子写：temp 与 STATE_FILE 同目录（保证 os.replace 同 fs）
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(STATE_FILE), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(st, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, STATE_FILE)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _dir_sign(direction):
