@@ -23,6 +23,9 @@ from datetime import datetime, time as dtime, timedelta
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# 概率校准 OOS 期望R源（variety_edge/_load_calib 依赖；重构时漏定义导致 edge 静默返回空）
+CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
@@ -4701,10 +4704,14 @@ def check_gap_alerts():
 
 
 def _load_calib():
-    try:
-        return json.load(open(CALIB_FILE, encoding="utf-8")) or {}
-    except Exception:
+    if not os.path.exists(CALIB_FILE):
         return {}
+    with open(CALIB_FILE, encoding="utf-8") as f:
+        return json.load(f) or {}
+
+
+# 波动率 regime 缓存（重构时遗漏定义，补回；vol_regime() 依赖）
+_VOL_CACHE: dict = {}
 
 
 def vol_regime(sym, lookback=120):
