@@ -314,6 +314,8 @@ DEFAULT_CONFIG = {
         "fc_hard_regime_offset": {"趋势": 0, "波动": 5, "震荡": 10},
         "bias_g_min": 50,                # combined 模式：|bias_G| 达此且 T_5m 弱时亦可触发
     },
+    # 背景偏置合成权重（P2-④ 新增，供 OOS 扫参）。默认值与原硬编码 0.6/0.25/0.15 一致。
+    "combine_weights": {"T": 0.6, "F": 0.25, "C": 0.15},
     # 技术面 T 去相关（P-A，2026-08-14）：8 策略共线性 → 簇坍缩 + 趋势簇拥挤降权 + 趋势/均值背离阻尼。
     #   解决"趋势市5策略共线=5次投同一方向、T顶满、趋势末端追高杀低"问题。
     #   enabled=False 即退化为旧逐策略加权逻辑（一键回退 / A-B 对照）。
@@ -893,9 +895,12 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None):
 # ----------------------------------------------------------------------------
 # 流水线：F(背景) → T(触发) → C(确认) → 风控
 # ----------------------------------------------------------------------------
-def combine_bias(F, T, C):
-    """背景偏置合成（§1.5）。F/C 中性时退化为 T 主导。"""
-    return round(0.6 * T + 0.25 * F + 0.15 * C, 1)
+def combine_bias(F, T, C, cfg=DEFAULT_CONFIG):
+    """背景偏置合成（§1.5）。F/C 中性时退化为 T 主导。
+    P2-④：权重改读 cfg["combine_weights"]（默认 0.6/0.25/0.15，与原硬编码一致），
+    使 OOS harness 可扫参验证，向后兼容。"""
+    w = (cfg or DEFAULT_CONFIG).get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
+    return round(w["T"] * T + w["F"] * F + w["C"] * C, 1)
 
 
 def effective_params(symbol, cfg=DEFAULT_CONFIG):
@@ -1033,7 +1038,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
         C = 0.0
     elif ablate == "T":
         T_D = 0.0
-    bias_G = combine_bias(F, T_D, C)
+    bias_G = combine_bias(F, T_D, C, cfg)
 
     # ── #6 跨资产宏观语境调制（live 专属，回测 macro_label=None 不进，零前视污染）──
     # macro_bias∈[-1,1]（股/债/汇跨资产语境）。bias_G 量程≈[-100,100]（0.6*T+0.25*F+0.15*C），
@@ -1344,16 +1349,24 @@ ROLL_GAP_MULT = 1.0
 
 
 def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, tail=None,
-                          cooldown_bars=5, ablate=None):
+                          cooldown_bars=5, ablate=None,
+                          F_override=None, hmm_label=None, macro_label=None, garch_label=None,
+                          df_in=None):
     """逐 bar 推进：用截至当日数据算 pipeline（含真实基本面 F），下一根开盘入场，stop/2R 出场，扣费扣滑点。
     触发用日线 T_D（5m 历史仅近 ~10 日，不足以跨年回测；T@5m 实盘另走 minishare 快照聚合）。
     冷却：触发入场后冷却 cooldown_bars 根日线才允许下一次信号（无论方向），
     否则趋势市长期同向只翻仓才交易、严重低估信号数。
-    tail: 仅回测尾部 N 根（快速验证用）。"""
-    df = load_daily(symbol)
+    tail: 仅回测尾部 N 根（快速验证用）。
+    ── 红线守卫（P2-④）：回测严禁注入 live 专属维度，避免前视偏差 ──
+    info 维度(F_override) / HMM(hmm_label) / 宏观(macro_label) / GBM-GARCH(garch_label)
+    必须全为 None；任何非 None 调用立即抛错，永久锁死"info 不喂回测"红线。
+    df_in: 可选预切分 DataFrame（OOS harness 注入 IS/OOS 切片用）；None=内部 load_daily。"""
+    assert F_override is None, "walk_forward_backtest 禁止 F_override（info 维度不得进回测）"
+    assert hmm_label is None and macro_label is None and garch_label is None,         "walk_forward_backtest 禁止 hmm/macro/garch_label（live 专属维度不得进回测）"
+    df = df_in if df_in is not None else load_daily(symbol)
     if df is None:
         return {"symbol": symbol, "trades": 0, "note": "数据不足"}
-    if tail:
+    if tail and df_in is None:
         df = df.tail(tail)
     if len(df) < min_bars + 20:
         return {"symbol": symbol, "trades": 0, "note": "数据不足"}
