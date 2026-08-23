@@ -122,6 +122,8 @@ def main():
     ap.add_argument("--symbols", default="jd,lh,FG,SA,JM,J")
     ap.add_argument("--pilot", action="store_true", help="仅报默认配置 IS/OOS 退化，不扫参")
     ap.add_argument("--is-ratio", type=float, default=0.6)
+    ap.add_argument("--min-trades", type=int, default=20, help="IS 扫参最低成交数（低波动品种可调低）")
+    ap.add_argument("--out", default="oos_validation_report.json", help="报告输出路径（多批跑避免互相覆盖）")
     args = ap.parse_args()
 
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
@@ -130,7 +132,7 @@ def main():
     report = []
     print(f"{'SYM':4} {'IS_expR':>8} {'OOS_expR':>9} {'deg%':>7} {'overfit':>8}  best_params")
     for sym in symbols:
-        r = run_oos_validation(sym, param_grid=grid, is_ratio=args.is_ratio)
+        r = run_oos_validation(sym, param_grid=grid, is_ratio=args.is_ratio, min_trades=args.min_trades)
         report.append(r)
         if "error" in r:
             print(f"{sym:4} ERROR: {r['error']}")
@@ -140,9 +142,9 @@ def main():
               f"{str(r.get('oos_expR_best', r.get('oos_expR_default'))):>9} "
               f"{str(r.get('degradation_pct')):>7} {str(r.get('overfit_flag')):>8}  "
               f"{bp if bp else '(default)'}")
-    with open("oos_validation_report.json", "w", encoding="utf-8") as f:
+    with open(args.out, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
-    print("\n报告已写 oos_validation_report.json")
+    print(f"\n报告已写 {args.out}")
 
 
 if __name__ == "__main__":
