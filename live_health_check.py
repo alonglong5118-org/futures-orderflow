@@ -23,8 +23,10 @@ def load_disk_json(path):
     if not os.path.exists(path):
         return {}
     try:
-        return json.load(open(path, encoding="utf-8"))
-    except Exception:
+        with open(path, encoding="utf-8") as _f:
+            return json.load(_f)
+    except Exception as e:
+        print(f"[health_check] 加载 {path} 失败(非缺失): {e}", flush=True)
         return {}
 
 

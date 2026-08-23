@@ -50,20 +50,26 @@ DRIFT_FACTOR = 0.5
 
 
 def load_calib():
+    if not os.path.exists(CALIB_JSON):
+        return {}
     try:
-        with open(CALIB_JSON, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
+        with open(CALIB_JSON, "r", encoding="utf-8") as _f:
+            return json.load(_f)
+    except Exception as e:
+        print(f"[recalibrate] 加载 CALIB_JSON 失败(非缺失): {e}", flush=True)
         return {}
 
 
 def load_papertrack_trades():
     """读 papertrack 已判定交易（冻结、确定性），供近期真实表现计算。失败返回 []。"""
+    if not os.path.exists(PAPERTRACK_JSON):
+        return []
     try:
-        with open(PAPERTRACK_JSON, "r", encoding="utf-8") as f:
-            rep = json.load(f)
+        with open(PAPERTRACK_JSON, "r", encoding="utf-8") as _f:
+            rep = json.load(_f)
         return [t for t in rep.get("trades", []) if t.get("status") == "done"]
-    except Exception:
+    except Exception as e:
+        print(f"[recalibrate] 加载 PAPERTRACK_JSON 失败(非缺失): {e}", flush=True)
         return []
 
 
@@ -72,7 +78,8 @@ def load_papertrack_gates():
     try:
         import four_dim_papertrack as pt
         return pt.compute_symbol_gates()
-    except Exception:
+    except Exception as e:
+        print(f"[recalibrate] 加载 papertrack gates 失败: {e}", flush=True)
         return {}
 
 

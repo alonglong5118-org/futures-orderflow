@@ -30,16 +30,24 @@ RECAL_GRACE_DAYS = 7    # 近期已主动重校(apply)的品种，偏离基线�
 
 
 def _load_calib():
+    if not os.path.exists(CALIB_FILE):
+        return {}
     try:
-        return json.load(open(CALIB_FILE, encoding="utf-8")) or {}
-    except Exception:
+        with open(CALIB_FILE, encoding="utf-8") as _f:
+            return json.load(_f) or {}
+    except Exception as e:
+        print(f"[consistency_watchdog] 加载 CALIB_FILE 失败(非缺失): {e}", flush=True)
         return {}
 
 
 def _load_drift():
+    if not os.path.exists(DRIFT_FILE):
+        return {}
     try:
-        return json.load(open(DRIFT_FILE, encoding="utf-8")) or {}
-    except Exception:
+        with open(DRIFT_FILE, encoding="utf-8") as _f:
+            return json.load(_f) or {}
+    except Exception as e:
+        print(f"[consistency_watchdog] 加载 DRIFT_FILE 失败(非缺失): {e}", flush=True)
         return {}
 
 
