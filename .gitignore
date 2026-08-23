@@ -45,3 +45,19 @@ _*.sh
 *.json
 # 生成物报告（已跟踪的固定文档不受影响）
 *.md
+
+# ---- 运行期/诊断产物（v3.0.0 收尾补充）----
+*.pid
+*.crash*
+broker_fills/
+data_5m/
+# 截图等运行时图片（app 图标已显式纳入，不受忽略影响）
+*.jpg
+*.png
+!icon-192.png
+!icon-512.png
+# 诊断类 txt（c2wave*/probe_* 等）
+c2wave*.txt
+probe_*.txt
+# 凭据：绝不入库
+tushare_token.txt
