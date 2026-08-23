@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # 四维策略 live 面板周期自检（set-and-forget）
 # 校验：① health 可达 ② edge 数据真的非空(防 CALIB_FILE 类静默失明) ③ 合约一致性(state/account == main_overrides) ④ consistency ok
-# 告警：复用项目 push_notify（Bark/Telegram/企微）；仅在 OK→FAIL 边沿 + FAIL→OK 恢复时推送，避免刷屏。
-import json, os, sys, time, urllib.request, urllib.error
+#     ⑤ 换月前瞻预警(基于 main_overrides 各主力合约 YYMM，判断近月/交割月/过期)
+# 告警：复用项目 push_notify（Bark/Telegram/企微）；仅在 OK→FAIL 边沿 + FAIL→OK 恢复 + 换月新预警 时推送，避免刷屏。
+import json, os, sys, time, re, urllib.request, urllib.error
+from datetime import date, datetime
 
 HERE = os.environ.get("FOUR_DIM_HOME") or os.path.dirname(os.path.abspath(__file__))
 BASE = "http://127.0.0.1:8741"
@@ -24,6 +26,48 @@ def load_disk_json(path):
         return json.load(open(path, encoding="utf-8"))
     except Exception:
         return {}
+
+
+def ym_of(code):
+    """合约码 -> 年月整数(YYYYMM)；无法识别返回 None。语义对齐 refresh_main_contracts.ym_of。"""
+    m = re.match(r"^([A-Za-z]+?)(\d{3,4})$", re.sub(r"[^A-Za-z0-9]", "", str(code).upper()))
+    if not m:
+        return None
+    d = m.group(2)
+    yy = int(d[:2]); mm = int(d[2:])
+    yy += 2000 if yy < 70 else 1900
+    return yy * 100 + mm
+
+
+def now_ym():
+    t = datetime.now()
+    return t.year * 100 + t.month
+
+
+def check_rollover(mo):
+    """换月前瞻：基于各主力合约 YYMM 判断 过期/交割月临界/近月预警。
+    返回 (warns, symbols)：warns 为可读预警文本，symbols 为进入预警的品种（用于边沿去重）。"""
+    warns, symbols = [], []
+    cur = now_ym()
+    for sym, code in mo.items():
+        cym = ym_of(code)
+        if cym is None:
+            continue
+        delta = (cym // 100 - cur // 100) * 12 + (cym % 100 - cur % 100)
+        ey, em = cym // 100, cym % 100
+        est_ltd = date(ey, em, 10)  # 估算最后交易日(交割月10日, 保守), 仅展示
+        days = (est_ltd - date.today()).days
+        if delta <= -1:
+            symbols.append(sym)
+            warns.append(f"{sym}={code} 已过期{-delta}个月(估算LTD~{est_ltd}, 约{days}天前), 疑冻结过期/源未更新")
+        elif delta == 0:
+            symbols.append(sym)
+            warns.append(f"{sym}={code} 处于当月交割月(临界), 请立即换月/核对")
+        elif delta == 1:
+            symbols.append(sym)
+            warns.append(f"{sym}={code} 下月进入交割月(估算LTD~{est_ltd}, 约{days}天), 请关注换月")
+        # delta >= 2: 正常, 不告警
+    return warns, symbols
 
 
 def check():
@@ -108,6 +152,11 @@ def check():
     except Exception as e:
         fails.append(f"consistency 检查异常: {e}")
 
+    # 5) 换月前瞻预警（INFO，不计入硬失败）
+    rollover_warns, rollover_syms = check_rollover(mo)
+    summary["rollover_warnings"] = rollover_warns
+    summary["rollover_symbols"] = rollover_syms
+
     return fails, summary
 
 
@@ -122,7 +171,8 @@ def main():
     transition_to_fail = (not cur_ok) and (prev_ok or first_run)
     transition_to_ok = cur_ok and (not prev_ok) and (not first_run)
 
-    status = {"ok": cur_ok, "ts": now, "fails": fails, "summary": summary}
+    status = {"ok": cur_ok, "ts": now, "fails": fails,
+              "summary": summary, "rollover_symbols": summary.get("rollover_symbols", [])}
     try:
         json.dump(status, open(STATUS_FILE, "w"), ensure_ascii=False, indent=2)
     except Exception:
@@ -137,6 +187,16 @@ def main():
         has_ch = any(ch.get(k) for k in ("telegram", "bark", "wecom"))
     except Exception:
         has_ch = False
+
+    # 换月预警：新进入预警的品种才推一次（符号级边沿）
+    prev_roll = set(prev.get("rollover_symbols", []))
+    cur_roll = set(summary.get("rollover_symbols", []))
+    new_roll = cur_roll - prev_roll
+    if new_roll and has_ch:
+        try:
+            pn.push("⚠️ 换月预警(新触发): " + ", ".join(sorted(new_roll)), title="换月前瞻")
+        except Exception:
+            pass
 
     if cur_ok:
         if transition_to_ok and has_ch:
