@@ -45,6 +45,7 @@
   <div class="sub">v3.0.0 · 半自动信号系统 · 端口8741 · 端口8742真tick · 12书签 · 55品种 · 认知层五件套(#1/#4/#5/#6/#7) · 风控口径修复(heat_pct预算) · 看门狗语义精确化 · 持仓对账防漂移 · 主力合约自动切换 · 自动参数优化+市场状态机+账户自愈+盘前简报+盈亏归因+异常/熔断/回撤+校准中心+信号拆解 · 点击节点折叠/展开 · 拖拽平移 · 滚轮缩放</div>
   <div class="note" style="margin:12px;padding:10px;border:1px solid #ffa502;border-radius:8px;font-size:13px;color:#333;">
     <b>v3.0.0 升级要点（2026-08-23 · 全量自检通过）</b>：自动参数优化 auto-optimize · 市场状态机 market-state · 账户自愈 account_sync/account_heal · 盘前简报 premarket · 交叉验证 crosscheck · 盈亏归因 pnl_attribution · 日志策略标注 journal_strategy · 异常检测 anomaly + 熔断 killswitch + 回撤守护 drawdown · 校准中心 calibration · 券商/批量/工具箱 broker/batch/tools · 信号拆解 decompose（v2.5.0 全部能力继承）。
+    <br><b>v3.0.0 收尾（2026-08-23 后续 · 全绿闭环）</b>：edge 双常量修复 `a4becff`（CALIB_FILE 防 `/api/edge` 监控失明）· JM apply 伪报告独立复核（红线不覆盖参数）· live 周期自检自动化 `f0db080`+`automation-1787463425156`(HOURLY) · Git 版本收尾（核心47.py 入库·运行期产物忽略）。
   </div>
   <div class="btns">
     <button id="bExpand">展开全部</button>
@@ -194,6 +195,10 @@ const TREE = {
       {t:'风控状态机 P0（daily_loss_locked 初始化）'},
       {t:'非交易时段通知门控（_should_suppress）'},
       {t:'止损止盈方向校验（_validate_levels）'},
+      {t:'v3.0.0 收尾：edge 双常量修复（CALIB_FILE 防监控失明）'},
+      {t:'v3.0.0 收尾：JM apply 伪报告独立复核（红线不覆盖参数）'},
+      {t:'v3.0.0 收尾：live 周期自检自动化（live_health_check.py + automation HOURLY）'},
+      {t:'v3.0.0 收尾：Git 版本收尾（核心47.py 入库·运行期产物忽略）'},
     ]},
   ]
 };
