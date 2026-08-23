@@ -1,0 +1,8 @@
+CF,FG,J,JM,MA,OI
+PF,PK,PR,PX,RM,SA
+SH,SR,TA,UR,a,ag
+al,ao,b,bu,bz,c
+cs,eb,ec,eg,fu,hc
+i,jd,l,lh,m,p
+pg,pp,rb,rr,si,sp
+ss,v,y,zn
