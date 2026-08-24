@@ -1031,6 +1031,7 @@
         <div class="row"><span>数据源状态</span><span id="a-datasource" class="stamp">—</span></div>
         <div class="row"><span>CTP真实余额</span><span id="a-ctp-balance" class="stamp">—</span></div>
         <div class="row"><span>行情状态</span><span id="a-feed" class="stamp">—</span></div>
+        <div class="row"><span>系统自检</span><span id="a-selfcheck" class="stamp">检查中...</span></div>
         <div class="row"><span>组合风险热度</span><span id="a-heat" class="stamp">—</span></div>
         <table class="postab">
           <thead><tr><th>品种</th><th>方向</th><th>手数</th><th>均价</th><th>现价</th><th>浮盈亏</th><th>止损</th><th colspan="3">分级止盈 (T1→T2→T3)</th><th>移动止损</th><th>占用%</th><th>距上限</th></tr></thead>
@@ -1373,39 +1374,6 @@
         <div class="stamp" style="margin-bottom:8px">GARCH(1,1) 波动率动力学 + GBM 蒙特卡洛前向情景（live 专属，不喂回测）。逐品种给出波动率状态、风险系数（高波动自动降仓）、5日期望收益 / 下行 VaR / 上行概率 / 价格区间情景带。与「组合 VaR/CVaR」（市值暴露逐日盯市）互补——此处是「单品种波动率维度」的前向推演（非投资建议）。</div>
         <div id="gbm-box" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
-      // P1-② 独立门控品种提示渲染（不依赖 GBM，确保休市/无GBM数据时也能显示）
-let _gatedRetry = 0;
-async function refreshGatedNotices(){
-  try{
-    const r=await fetch('/api/state');const s=await r.json();
-    const gbox=document.getElementById('gated-box');
-    if(!gbox) return;
-    const gs=(s.gated_notices)||[];
-    if(!gs.length){ gbox.innerHTML='<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'; return; }
-    gbox.innerHTML=gs.map(g=>{
-      const name=g.name||g.symbol;
-      const wr=g.win_rate!=null?(g.win_rate*100).toFixed(0)+'%':'?';
-      const oos=g.calibrated_oos!=null?(' / 校准OOS '+g.calibrated_oos):'';
-      return '<div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:8px">'+
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
-          '<span style="font-weight:600">'+g.symbol+'</span><span style="font-size:12px;color:var(--mut)">'+name+'</span>'+
-          '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--amber)22;color:var(--amber);border:0.5px solid var(--amber)55">门控·暂停发信号</span>'+
-        '</div>'+
-        '<div style="font-size:12px;color:var(--mut);line-height:1.6">'+
-          '模型判负向：期望R <b style="color:var(--amber)">'+g.expR+'</b> / 胜率 <b>'+wr+'</b>'+oos+'<br>'+
-          '<b style="color:var(--fg)">定性建议：</b>'+g.advice+
-        '</div>'+
-      '</div>';
-    }).join('');
-    _gatedRetry = 0;  // 成功后重置
-  }catch(e){
-    // 失败时重试（最多 10 次，间隔 1 秒）
-    if(_gatedRetry < 10){
-      _gatedRetry++;
-      setTimeout(refreshGatedNotices, 1000);
-    }
-  }
-}
 
 <div class="card" style="margin-top:14px" id="gated-card">
         <h2>门控品种提示 <span class="price">P1-②</span> <span class="price" id="gated-sub"></span></h2>
@@ -1804,6 +1772,28 @@ async function refreshGatedNotices(){
 <script src="/chart.umd.js"></script>
 
 <script>
+
+
+// 请求队列控制器 - 限制并发请求数，避免 ERR_INSUFFICIENT_RESOURCES
+const _requestQueue = [];
+let _requestActive = 0;
+const _REQUEST_LIMIT = 5; // 最多同时5个请求
+function queueFetch(url, options = {}) {
+    return new Promise((resolve) => {
+        _requestQueue.push({url, options, resolve});
+        _processQueue();
+    });
+}
+function _processQueue() {
+    while (_requestActive < _REQUEST_LIMIT && _requestQueue.length > 0) {
+        const {url, options, resolve} = _requestQueue.shift();
+        _requestActive++;
+        fetch(url, options).then(resolve).catch(resolve).finally(() => {
+            _requestActive--;
+            setTimeout(_processQueue, 100); // 100ms后处理下一个
+        });
+    }
+}
 
 let VOICE_ON = false;
 // Extracted functions moved earlier to avoid parser issues
@@ -3111,6 +3101,77 @@ async function watchAction(id,action){
   }catch(e){}
 }
 
+
+
+// P1-② 门控品种提示函数（移到script内）
+      // P1-② 独立门控品种提示渲染（不依赖 GBM，确保休市/无GBM数据时也能显示）
+let _gatedRetry = 0;
+async function refreshGatedNotices(){
+  try{
+    const r=await fetch('/api/state');const s=await r.json();
+    const gbox=document.getElementById('gated-box');
+    if(!gbox) return;
+    const gs=(s.gated_notices)||[];
+    if(!gs.length){ gbox.innerHTML='<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'; return; }
+    gbox.innerHTML=gs.map(g=>{
+      const name=g.name||g.symbol;
+      const wr=g.win_rate!=null?(g.win_rate*100).toFixed(0)+'%':'?';
+      const oos=g.calibrated_oos!=null?(' / 校准OOS '+g.calibrated_oos):'';
+      return '<div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px;margin-bottom:8px">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+          '<span style="font-weight:600">'+g.symbol+'</span><span style="font-size:12px;color:var(--mut)">'+name+'</span>'+
+          '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--amber)22;color:var(--amber);border:0.5px solid var(--amber)55">门控·暂停发信号</span>'+
+        '</div>'+
+        '<div style="font-size:12px;color:var(--mut);line-height:1.6">'+
+          '模型判负向：期望R <b style="color:var(--amber)">'+g.expR+'</b> / 胜率 <b>'+wr+'</b>'+oos+'<br>'+
+          '<b style="color:var(--fg)">定性建议：</b>'+g.advice+
+        '</div>'+
+      '</div>';
+    }).join('');
+    _gatedRetry = 0;  // 成功后重置
+  }catch(e){
+    // 失败时重试（最多 10 次，间隔 1 秒）
+    if(_gatedRetry < 10){
+      _gatedRetry++;
+      setTimeout(refreshGatedNotices, 1000);
+    }
+  }
+}
+
+
+// 交易记录相关函数（从Script2移到Script1，确保可用）
+async function doJournalEntry(){
+  const sym=document.getElementById('j-sym').value;
+  const dir=document.getElementById('j-dir').value;
+  const lots=parseInt(document.getElementById('j-lots').value)||1;
+  const price=parseFloat(document.getElementById('j-price').value)||0;
+  const sigId=document.getElementById('j-sig').value;
+  const strat=document.getElementById('j-strat').value;
+  const acct=document.getElementById('j-acct').value;
+  if(!price){document.getElementById('j-msg').textContent='请填入价格';return;}
+  try{
+    const r=await fetch('/api/journal',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'entry',symbol:sym,direction:dir,lots:lots,price:price,signal_id:sigId,strategy:strat,account:acct})});
+    const j=await r.json();
+    document.getElementById('j-msg').textContent=(j.ok?'✅ ':'❌ ')+j.msg;
+    refreshAllAfterTrade();
+  }catch(e){document.getElementById('j-msg').textContent='错误: '+e;}
+}
+
+async function doJournalImport(){
+  const f=document.getElementById('j-import-file').files[0];
+  const msg=document.getElementById('j-import-msg');
+  if(!f){ msg.textContent='请选择 CSV 文件'; return; }
+  try{
+    const text=await f.text();
+    msg.textContent='导入中…';
+    const r=await fetch('/api/journal_import',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({csv:text})});
+    const j=await r.json();
+    msg.textContent=(j.ok?'✅ ':'❌ ')+(j.msg||j.error||'');
+    refreshAllAfterTrade();
+  }catch(e){ msg.textContent='错误: '+e; }
+}
 </script>
 <script>
 
@@ -3244,7 +3305,7 @@ function switchTab(name){
   if(name==='adv'){ refreshAdv(); }   // 切到「健康」页时拉取高级工具数据
   if(name==='cockpit'){ renderCockpit(); }
   if(name==='disc'){ refreshStrategy(); }   // 切到「复盘」页时拉取 F1 多策略/多账户表现
-  if(name==='paper'){ if(typeof refreshPaperSyms==='function') refreshPaperSyms(); if(typeof refreshPaper==='function') refreshPaper(); }   // 切到「模拟盘」页时拉取 F8 状态
+  if(name==='paper'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }   // 切到「模拟盘」页时拉取 F8 状态
   // 切书签即刷新对应数据（typeof 守卫，防函数不存在报错），消除"切回来数据旧"的体感
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
@@ -3299,7 +3360,8 @@ async function renderCockpit(){
     ckSet('ck-eq', eq!=null? fmt(eq,0):'—'); ckSet('ckc-eq', eq!=null? fmt(eq,0):'—');
     const flStr = (fl>=0?'+':'')+fmt(fl);
     ckSet('ck-float', flStr, fl>=0?'var(--red)':'var(--green)'); ckSet('ckc-float', flStr, fl>=0?'var(--red)':'var(--green)');
-    ckSet('ck-pos', positions.length); ckSet('ckc-pos', positions.length);
+    const openPosCount = positions.filter(p => (Number(p.lots) || 0) > 0).length;
+    ckSet('ck-pos', openPosCount); ckSet('ckc-pos', openPosCount);
     // 风控规则
     const grade = (rules && rules.grade)||'—';
     const gcolor = (rules && rules.grade_color)||'var(--mut)';
@@ -3586,6 +3648,23 @@ async function refreshAccount(){
       : '初始化中...';
     _se.style.color = 'var(--green)';
     _se.style.fontWeight = '';
+    // 系统自检状态
+    try {
+        const sc = await fetch('/api/self_check').then(r=>r.json());
+        const scEl = document.getElementById('a-selfcheck');
+        if (scEl) {
+            const passed = sc.summary ? sc.summary.passed : 0;
+            const total = sc.summary ? sc.summary.total : 0;
+            const failed = sc.summary ? sc.summary.failed : total - passed;
+            if (failed === 0) {
+                scEl.textContent = `✅ 全部通过 (${passed}/${total})`;
+                scEl.style.color = 'var(--green)';
+            } else {
+                scEl.textContent = `⚠ ${failed}项异常 (${passed}/${total})`;
+                scEl.style.color = 'var(--amber)';
+            }
+        }
+    } catch(e) { /* 自检失败不阻塞主流程 */ }
     // 数据源状态显示
     const dsEl = document.getElementById('a-datasource');
     if(dsEl){
@@ -4335,17 +4414,17 @@ async function refreshChatToday(){
   }catch(e){}
 }
 // initSyms() moved to after _symPicker definition to ensure picker is available
-refresh();setInterval(refresh,3000);
+setTimeout(() => { refresh(); }, 50); setInterval(refresh,3000);
 // 2026-08-15：账户总览补独立实时轮询（此前仅切tab/交易后刷新，停留该页不更新）
-refreshAccount(); setInterval(refreshAccount, 3000);
-refreshAccountSync(); setInterval(refreshAccountSync, 3000);
+setTimeout(() => { refreshAccount(); }, 200); setInterval(refreshAccount, 3000);
+setTimeout(() => { refreshAccountSync(); }, 400); setInterval(refreshAccountSync, 3000);
 // 2026-08-15：chat 今日消息独立定时器
-refreshChatToday(); setInterval(refreshChatToday, 15000);
-refreshSignalHistory();setInterval(refreshSignalHistory,3000);   // 当日触发历史：与信号卡同频(3s)
-refreshStrategy(); setInterval(refreshStrategy, 30000);   // 2026-08-15：disc 复盘页 F1 多策略表补自动轮询(30s，停留自动刷新)
-refreshAlertHistory(); setInterval(refreshAlertHistory, 15000);   // 2026-08-15：alerts 报警历史补自动轮询(15s，停留自动刷新)
-renderCockpit(); setInterval(renderCockpit, 15000);   // 总览驾驶舱（首页）启动即渲染 + 定期刷新
-if(typeof refreshPaperSyms==='function') refreshPaperSyms(); if(typeof refreshPaper==='function') setInterval(refreshPaper, 5000);   // F8 模拟盘状态刷新（含浮动盈亏）
+setTimeout(() => { refreshChatToday(); }, 600); setInterval(refreshChatToday, 15000);
+setTimeout(() => { refreshSignalHistory(); }, 300); setInterval(refreshSignalHistory,3000);   // 当日触发历史：与信号卡同频(3s)
+setTimeout(() => { refreshStrategy(); }, 800); setInterval(refreshStrategy, 30000);   // 2026-08-15：disc 复盘页 F1 多策略表补自动轮询(30s，停留自动刷新)
+setTimeout(() => { refreshAlertHistory(); }, 250); setInterval(refreshAlertHistory, 15000);   // 2026-08-15：alerts 报警历史补自动轮询(15s，停留自动刷新)
+setTimeout(() => { renderCockpit(); }, 100); setInterval(renderCockpit, 15000);   // 总览驾驶舱（首页）启动即渲染 + 定期刷新
+setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') setInterval(refreshPaper, 5000);   // F8 模拟盘状态刷新（含浮动盈亏）
 loadSymMeta(); setInterval(loadSymMeta, 60000);   // 2026-08-19：缩短至60s，主力合约切换后更快更新
 initNotify();
 // F5 PWA：注册 Service Worker（离线壳 + 可安装）
@@ -4355,11 +4434,11 @@ if('serviceWorker' in navigator){
   });
 }
 loadChatDays();setInterval(loadChatDays,60000);   // 复盘日期下拉定期刷新
-setInterval(refreshAdv,30000);                   // 健康页数据定期刷新（含数据质量/日历/体检）
-refreshMetrics(); setInterval(refreshMetrics, 30000);
-refreshFocus(); setInterval(refreshFocus, 3000);   // G5 我的品种：与账户总览同频(3s)实时刷新
-refreshJournalList(); setInterval(refreshJournalList, 3000);   // 与账户总览/我的品种同频(3s)，修正 journal 列表刷新滞后
-refreshJournalSession(); setInterval(refreshJournalSession, 15000);
+setTimeout(() => { refreshAdv(); }, 1000); setInterval(refreshAdv,30000);                   // 健康页数据定期刷新（含数据质量/日历/体检）
+setTimeout(() => { refreshMetrics(); }, 1100); setInterval(refreshMetrics, 30000);
+setTimeout(() => { refreshFocus(); }, 500); setInterval(refreshFocus, 3000);   // G5 我的品种：与账户总览同频(3s)实时刷新
+setTimeout(() => { refreshJournalList(); }, 350); setInterval(refreshJournalList, 3000);   // 与账户总览/我的品种同频(3s)，修正 journal 列表刷新滞后
+setTimeout(() => { refreshJournalSession(); }, 700); setInterval(refreshJournalSession, 15000);
 
 // ---- 风控状态机 + 异动扫描 + 通知开关（从 da龘 合并） ----
 async function refreshRisk(){
@@ -4612,9 +4691,9 @@ async function refreshJournal(){
     const r=await fetch('/api/journal');const j=await r.json();
     const s=j.summary||{};
     document.getElementById('j-sub').textContent=
-      `已平仓${s.total_trades||0}笔 · 盈亏${(s.total_pnl||0)>=0?'+':''}${fmt(s.total_pnl||0,0)} · 胜率${fmt(s.win_rate||0,1)}%`;
+      `总交易${s.total_trades||0}笔 · 盈亏${(s.total_pnl||0)>=0?'+':''}${fmt(s.total_pnl||0,0)} · 胜率${fmt(s.win_rate||0,1)}%`;
     document.getElementById('j-summary').textContent=
-      `期望${(s.expect_pnl||0)>=0?'+':''}${fmt(s.expect_pnl||0,0)} 元/笔 · 连胜${s.max_win_streak||0} · 连亏${s.max_loss_streak||0} · 未平仓${s.open_trades||0}笔 · 手续费${fmt(s.total_fee||0,0)}元`;
+      `期望${(s.expect_pnl||0)>=0?'+':''}${fmt(s.expect_pnl||0,0)} 元/笔 · 连胜${s.max_win_streak||0} · 连亏${s.max_loss_streak||0} · 未平仓${s.open_trades||0}笔 · 已平仓${(s.total_trades||0)-(s.open_trades||0)}笔 · 手续费${fmt(s.total_fee||0,0)}元`;
     if(j.compare) renderJournalCompare(j.compare);
   }catch(e){}
 }
@@ -4773,37 +4852,7 @@ function refreshSignalOptions(){
     sigSel.insertAdjacentHTML('beforeend','<option value="manual" disabled>该品种近期无信号（可手动记录）</option>');
   }
 }
-async function doJournalEntry(){
-  const sym=document.getElementById('j-sym').value;
-  const dir=document.getElementById('j-dir').value;
-  const lots=parseInt(document.getElementById('j-lots').value)||1;
-  const price=parseFloat(document.getElementById('j-price').value)||0;
-  const sigId=document.getElementById('j-sig').value;
-  const strat=document.getElementById('j-strat').value;
-  const acct=document.getElementById('j-acct').value;
-  if(!price){document.getElementById('j-msg').textContent='请填入价格';return;}
-  try{
-    const r=await fetch('/api/journal',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'entry',symbol:sym,direction:dir,lots:lots,price:price,signal_id:sigId,strategy:strat,account:acct})});
-    const j=await r.json();
-    document.getElementById('j-msg').textContent=(j.ok?'✅ ':'❌ ')+j.msg;
-    refreshAllAfterTrade();
-  }catch(e){document.getElementById('j-msg').textContent='错误: '+e;}
-}
-async function doJournalImport(){
-  const f=document.getElementById('j-import-file').files[0];
-  const msg=document.getElementById('j-import-msg');
-  if(!f){ msg.textContent='请选择 CSV 文件'; return; }
-  try{
-    const text=await f.text();
-    msg.textContent='导入中…';
-    const r=await fetch('/api/journal_import',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({csv:text})});
-    const j=await r.json();
-    msg.textContent=(j.ok?'✅ ':'❌ ')+(j.msg||j.error||'');
-    refreshAllAfterTrade();
-  }catch(e){ msg.textContent='错误: '+e; }
-}
+
 
 // ---- F8 模拟盘沙盒 ----
 function refreshPaperSyms(){
@@ -4995,10 +5044,10 @@ const RULE_COL={"info":"#3498db","notice":"#f1c40f","warning":"var(--amber)","da
 
 
 // initJournalSyms() moved to after _symPicker definition to ensure picker is available
-refreshJournal();setInterval(refreshJournal,6000);
+setTimeout(() => { refreshJournal(); }, 450); setInterval(refreshJournal,6000);
 // 信号下拉定时刷新（v6.0.0+ · 防错过新信号 · 保留已选 value 不打断录入）
-setInterval(refreshJournalSymsQuiet, 6000);
-refreshPerformance();setInterval(refreshPerformance,15000);
+setTimeout(() => { refreshJournalSymsQuiet(); }, 550); setInterval(refreshJournalSymsQuiet, 6000);
+setTimeout(() => { refreshPerformance(); }, 900); setInterval(refreshPerformance,15000);
 refreshCalibration();setInterval(refreshCalibration,60000);
 refreshCorrelation();setInterval(refreshCorrelation,30000);
 refreshSpread();setInterval(refreshSpread,30000);

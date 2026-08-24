@@ -7910,6 +7910,7 @@ def start_dashboard(state):
                 try:
                     s = tj.summary()
                     c = tj.compare_to_papertrack()
+                    all_trades = tj.get_all_trades()
                     prices = {}
                     if FEED:
                         for sym in SYMBOLS:
@@ -7917,12 +7918,12 @@ def start_dashboard(state):
                     perf = tj.performance_metrics(prices)
                     curve = tj.equity_curve(prices)
                     body = json.dumps({"summary": s, "compare": c, "performance": perf,
-                                       "equity_curve": curve}, ensure_ascii=False, default=str)
+                                       "equity_curve": curve, "trades": all_trades}, ensure_ascii=False, default=str)
                 except Exception as _e:
                     import traceback
                     traceback.print_exc()
                     body = json.dumps({"summary": tj.summary(), "compare": {"error": str(_e)},
-                                       "performance": {}, "equity_curve": [],
+                                       "performance": {}, "equity_curve": [], "trades": [],
                                        "error": f"journal partial failure: {_e}"},
                                       ensure_ascii=False, default=str)
                 self.send_response(200)
