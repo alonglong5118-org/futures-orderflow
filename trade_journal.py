@@ -183,12 +183,26 @@ def _validate_entry_stop(direction, entry_price, stop):
     return nv, f"；止损方向已自动修正为 {nv}"
 
 
+def _normalize_sym(sym):
+    """品种名标准化：支持大小写（AO/ao/jm/JM 均可）。"""
+    if sym in _MULTIPLIERS:
+        return sym
+    lower = sym.lower()
+    if lower in _MULTIPLIERS:
+        return lower
+    upper = sym.upper()
+    if upper in _MULTIPLIERS:
+        return upper
+    return sym  # 原样返回，让下游报错
+
+
 def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_dist=None,
                   strategy="", account="主账户"):
     """记录一笔按信号开仓。返回 (ok, msg, trade_id)。
     stop_dist: 该笔计划止损距离（点），用于后续 R 倍数追踪；缺则回退 risk_pct 风险预算推算。
     strategy: F1 多策略视图标签（如 趋势/波段/日内/套利/手动…），缺省空串→归入『未分类』。
     account : F1 多账户标签（默认『主账户』），为后续多账户视图预留维度。"""
+    symbol = _normalize_sym(symbol)
     if symbol not in _MULTIPLIERS:
         return False, f"未知品种 {symbol}", ""
     data = _load()
@@ -233,6 +247,7 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
       - close_lots <  trade["lots"]：部分平（拆分法）——原 trade 保持未平、仅减手数，
         同时追加一条新「已平记录」，保证 journal 与账户侧不再脱钩。
     """
+    symbol = _normalize_sym(symbol)
     if symbol not in _MULTIPLIERS:
         return False, f"未知品种 {symbol}", 0.0
     data = _load()
