@@ -7794,6 +7794,17 @@ def start_dashboard(state):
                 for _p in snap.get("positions", []):
                     if _p.get("contract"):
                         _p["contract"] = ml.normalize_contract_code(_p["contract"])
+                # CTP 数据源状态（是否连接到真实账户）
+                try:
+                    _ctp_acc = am.get_account()
+                    snap["ctp_connected"] = _ctp_acc is not None
+                    if _ctp_acc:
+                        snap["ctp_balance"] = _ctp_acc.get("balance", 0)
+                    else:
+                        snap["ctp_balance"] = None
+                except Exception:
+                    snap["ctp_connected"] = False
+                    snap["ctp_balance"] = None
                 # 行情健康指示
                 snap["feed_status"] = "正常" if FEED_AVAILABLE else "离线"
                 snap["feed_last"] = (datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S")

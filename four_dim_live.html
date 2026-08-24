@@ -1028,6 +1028,8 @@
         <div class="row"><span>已实现盈亏</span><span id="a-realized">—</span></div>
         <div class="row"><span>累计手续费</span><span id="a-fee">—</span></div>
         <div class="row"><span>权益同步基准</span><span id="a-synced" class="stamp">—</span></div>
+        <div class="row"><span>数据源状态</span><span id="a-datasource" class="stamp">—</span></div>
+        <div class="row"><span>CTP真实余额</span><span id="a-ctp-balance" class="stamp">—</span></div>
         <div class="row"><span>行情状态</span><span id="a-feed" class="stamp">—</span></div>
         <div class="row"><span>组合风险热度</span><span id="a-heat" class="stamp">—</span></div>
         <table class="postab">
@@ -3584,6 +3586,39 @@ async function refreshAccount(){
       : '初始化中...';
     _se.style.color = 'var(--green)';
     _se.style.fontWeight = '';
+    // 数据源状态显示
+    const dsEl = document.getElementById('a-datasource');
+    if(dsEl){
+      const ctpConnected = a.ctp_connected || false;
+      if(ctpConnected){
+        dsEl.textContent = '✓ CTP已连接 · 实时真实数据';
+        dsEl.style.color = 'var(--green)';
+      } else {
+        dsEl.textContent = '⚠ 手动记账模式 · 估算值';
+        dsEl.style.color = 'var(--amber)';
+      }
+    }
+    // CTP真实余额对比
+    const ctpEl = document.getElementById('a-ctp-balance');
+    if(ctpEl){
+      const ctpBal = a.ctp_balance;
+      const sysEq = Number(a.equity || 0);
+      if(ctpBal && sysEq > 0){
+        const diff = Number(ctpBal) - sysEq;
+        const diffStr = (diff >= 0 ? '+' : '') + fmt(diff, 0);
+        ctpEl.textContent = `CTP ${fmt(ctpBal, 0)} · 差异 ${diffStr}`;
+        if(Math.abs(diff) < 10){
+          ctpEl.style.color = 'var(--green)';
+        } else if(Math.abs(diff) < 100){
+          ctpEl.style.color = 'var(--amber)';
+        } else {
+          ctpEl.style.color = 'var(--red)';
+        }
+      } else {
+        ctpEl.textContent = 'CTP未连接';
+        ctpEl.style.color = 'var(--mut)';
+      }
+    }
     // 行情健康指示
     const feedEl=document.getElementById('a-feed');
     if(a.feed_status){
