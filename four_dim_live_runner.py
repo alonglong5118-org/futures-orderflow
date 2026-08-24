@@ -708,7 +708,8 @@ STRESS_BUFFER_MULT = 1.0         # 计提幅度系数：应力 = limit_pct × �
 # —— 交易时段 / 无夜盘品种 ——
 # 日盘 09:00-15:00（全品种）；夜盘 21:00-23:00（仅“有夜盘”品种）。
 # 无夜盘品种（仅日盘交易）：收盘后（尤其 21:00 起）不再推送信号。
-NO_NIGHT = {"jd", "lh", "AP", "CJ", "PK", "RS", "PM", "WH", "JR", "LR", "CS", "rr", "ss", "sp"}
+NO_NIGHT = {"jd", "lh", "AP", "CJ", "PK", "RS", "PM", "WH", "JR", "LR", "CS", "rr",
+                            "lc", "si", "UR", "RM", "OI", "c"}  # 与 four_dim_strategy.NO_NIGHT_DEFAULT 保持同步
 def _in_session(sym, now=None):
     """该品种当前是否处于交易时段（决定是否允许推送信号）。
     G4：夜盘资格由 SYMBOLS[sym]["night"] 统一真值源决定（替代旧的 NO_NIGHT 集合）。
@@ -8053,6 +8054,21 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/self_check":
+                # 系统自检：全链路数据一致性校验
+                try:
+                    import self_check as sc
+                    _report = sc.run_all_checks()
+                    body = json.dumps(_report, ensure_ascii=False, default=str)
+                except Exception as _e:
+                    import traceback
+                    traceback.print_exc()
+                    body = json.dumps({"ok": False, "error": str(_e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
             elif self.path.split("?")[0] == "/api/recalibrate":
                 # #3 漂移闭环：GET 查看漂移报告 + 已 staged 候选；?action=stage 后台异步跑扫描并 staging
                 try:
@@ -8917,6 +8933,7 @@ def start_dashboard(state):
                         t1 = body.get("t1"); t2 = body.get("t2")
                         stop_dist = body.get("stop_dist")
                         auto_note = ""
+                        a_tail = None  # ★ 修复：预初始化，防止 _auto_levels 失败/跳过 NameError
                         # 开仓未带止损止盈 → 自动按 30min ATR 算好（与账户总览表单一致，避免无止损裸奔）
                         if stop is None and target is None and t1 is None and t2 is None:
                             try:
@@ -8927,8 +8944,9 @@ def start_dashboard(state):
                                         price = used_px
                                     auto_note = (f"；已自动算止损/止盈(基准{a_src}ATR)："
                                                  f"止损{a_stop}/t1平半{a_t1}/t2全平{a_t2}")
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                print(f"[journal] _auto_levels 异常({sym}): {_e}")
+                                a_tail = None  # ★ 确保异常后也有默认值
                         ok, msg, tid = tj.record_entry(
                             sym, direction, lots, price,
                             body.get("signal_id", ""),
@@ -8943,10 +8961,11 @@ def start_dashboard(state):
                                     sym, "open", direction, lots, price,
                                     stop=stop, target=target, t1=t1, t2=t2,
                                     tail_enabled=a_tail)
+                                print(f"[journal] 账户同步: {sym} open ok={_ok2} msg={_msg2}")
                                 if not _ok2:  # 已有持仓 → 退化为加仓
                                     _ok3, _msg3, _ = at.record_trade(sym, "add", direction, lots, price)
                                     if not _ok3:
-                                        msg = f"{msg}（⚠️ 账户持仓未同步：{_msg2}）"
+                                        msg = f"{msg}（⚠️ 账户持仓未同步：{_msg3}）"
                             except Exception as e:
                                 msg = f"{msg}（⚠️ 账户持仓同步失败：{e}）"
                         # 记录开仓纪律事件（含当时状态机状态，供锁死判定）

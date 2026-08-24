@@ -123,7 +123,7 @@ SYMBOLS = {
 # 不逐个改 55 个字面量，用循环注入 night 字段：有夜盘=True，无夜盘=False。
 # 已知：鸡蛋(jd)/生猪(lh) 等无夜盘；玻璃(FG)/纯碱(SA)/焦煤(JM)/焦炭(J) 有夜盘 21:00–23:00。
 NO_NIGHT_DEFAULT = {"jd", "lh", "AP", "CJ", "PK", "RS", "PM", "WH", "JR", "LR", "CS", "rr",
-                    "lc", "si"}   # 2026-08-19 22:45 修复：广期所碳酸锂(lc)/工业硅(si) 无夜盘，此前漏标导致夜盘用冻结数据误发信号
+                    "lc", "si", "UR", "RM", "OI", "c"}   # 2026-08-19 22:45 修复：广期所碳酸锂(lc)/工业硅(si) 无夜盘，此前漏标导致夜盘用冻结数据误发信号
                                   # 2026-08-20 修正：ss(不锈钢)/sp(纸浆) 上期所有夜盘 21:00–23:00，误在集合内导致夜盘漏推，已移除
 for _s, _m in SYMBOLS.items():
     _m.setdefault("night", _s not in NO_NIGHT_DEFAULT)
