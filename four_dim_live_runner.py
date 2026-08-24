@@ -1826,6 +1826,25 @@ def check_position_alerts(positions):
                 _atr_val = _tp_init.get("atr", _tp_init.get("stop_dist", 0))
                 if (not _atr_val or float(_atr_val) <= 0) and _tp_init.get("stop") and _tp_init.get("avg"):
                     _atr_val = abs(float(_tp_init["stop"]) - float(_tp_init["avg"]))
+                # 兜底：全无风险数据时用 2% ATR 替代，保证 tp_targets 可计算
+                if (not _atr_val or float(_atr_val) <= 0) and _tp_init.get("avg"):
+                    _atr_val = float(_tp_init["avg"]) * 0.02  # 2% 作为默认 ATR
+                    # 同步补 stop 值，使后续推送/显示都能用上
+                    if not _tp_init.get("stop"):
+                        _avg_v = float(_tp_init["avg"])
+                        _stop_v = round(_avg_v - _atr_val, 2) if _dir == "long" else round(_avg_v + _atr_val, 2)
+                        _tp_init["stop"] = _stop_v
+                        # 回写持久化
+                        try:
+                            import account_tracker as _at_mod
+                            _st_tmp = _at_mod.load_state()
+                            _st_tmp["positions"][_tp_init.get("symbol","")] = {
+                                **_st_tmp["positions"].get(_tp_init.get("symbol",""), {}),
+                                "stop": _stop_v,
+                            }
+                            _at_mod.save_state(_st_tmp)
+                        except Exception:
+                            pass
                 if _atr_val and float(_atr_val) > 0:
                     _entry = float(_tp_init.get("avg") or _tp_init.get("price", 0))
                     if _entry > 0:
