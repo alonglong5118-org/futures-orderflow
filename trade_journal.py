@@ -460,7 +460,7 @@ def _compute_summary(data):
         b["win_rate"] = round(b["wins"] / b["count"] * 100, 1) if b["count"] else 0
 
     return {
-        "total_trades": len(closed),
+        "total_trades": len(trades),
         "open_trades": len(open_trades),
         "total_pnl": round(total_pnl, 2),
         "realized": round(total_pnl, 2),
@@ -547,7 +547,7 @@ def summary():
             r_dist["R<=0"] += 1
 
     return {
-        "total_trades": len(closed),
+        "total_trades": len(data.get("trades", [])),
         "open_trades": len(open_trades),
         "total_pnl": round(total_pnl, 2),
         # ★ 已实现盈亏（= 已平仓盈亏合计），供总览驾驶舱/绩效书签与账户总览 realized_pnl 联动
@@ -1175,8 +1175,9 @@ def compare_to_papertrack(window_min=120):
         return out
 
     def _mk(t, sig, method):
+        _safe_id = t.get("id") or f"legacy_{t.get('symbol','?')}_{t.get('time','')}"
         rec = {
-            "trade_id": t["id"], "symbol": t["symbol"], "direction": t["direction"],
+            "trade_id": _safe_id, "symbol": t["symbol"], "direction": t["direction"],
             "entry": t["entry_price"], "exit": t["exit_price"], "pnl": t["pnl"],
             "exit_reason": t["exit_reason"],
             "signal_time": sig.get("time"), "match_method": method,
@@ -1220,10 +1221,11 @@ def compare_to_papertrack(window_min=120):
     # 仍未匹配上的 = 真正手动/冲动交易
     unmatched = []
     for t in remain:
-        if any(m["trade_id"] == t["id"] for m in matched):
+        _tid2 = t.get("id") or ""
+        if any(m["trade_id"] == _tid2 for m in matched):
             continue
         unmatched.append({
-            "trade_id": t["id"], "symbol": t["symbol"], "direction": t["direction"],
+            "trade_id": t.get("id") or "", "symbol": t["symbol"], "direction": t["direction"],
             "entry": t["entry_price"], "exit": t["exit_price"], "pnl": t["pnl"],
             "exit_reason": t["exit_reason"],
             "note": "无匹配信号（可能为冲动/手动交易）",

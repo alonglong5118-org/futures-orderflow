@@ -7771,6 +7771,18 @@ def start_dashboard(state):
                     state["gated_notices"] = _build_gated_notices()
                 except Exception:
                     state["gated_notices"] = []
+                # ★ 注入账户实际持仓：确保 /api/state 的 positions 与 account_state.json 同步，
+                # 使所有书签页（基本面/F、风控/回撤、归因等）都能看到用户真实持仓
+                try:
+                    _acc_st = at.load_state()
+                    _acc_pos = _acc_st.get("positions", {})
+                    # 完全替换 state["positions"]（账户持仓为权威源）
+                    state["positions"] = {}
+                    for _sym, _pos in _acc_pos.items():
+                        if isinstance(_pos, dict) and _pos.get("lots", 0) > 0:
+                            state["positions"][_sym] = _pos
+                except Exception:
+                    pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
             elif self.path == "/api/account":
                 # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
@@ -7894,16 +7906,24 @@ def start_dashboard(state):
                 self.wfile.write(body.encode("utf-8"))
             elif self.path == "/api/journal":
                 # 成交记录器：返回 summary + compare_to_papertrack + 绩效(净值曲线/回撤/Sharpe) + R 倍数
-                s = tj.summary()
-                c = tj.compare_to_papertrack()
-                prices = {}
-                if FEED:
-                    for sym in SYMBOLS:
-                        prices[sym] = FEED.price(sym)
-                perf = tj.performance_metrics(prices)
-                curve = tj.equity_curve(prices)
-                body = json.dumps({"summary": s, "compare": c, "performance": perf,
-                                   "equity_curve": curve}, ensure_ascii=False, default=str)
+                try:
+                    s = tj.summary()
+                    c = tj.compare_to_papertrack()
+                    prices = {}
+                    if FEED:
+                        for sym in SYMBOLS:
+                            prices[sym] = FEED.price(sym)
+                    perf = tj.performance_metrics(prices)
+                    curve = tj.equity_curve(prices)
+                    body = json.dumps({"summary": s, "compare": c, "performance": perf,
+                                       "equity_curve": curve}, ensure_ascii=False, default=str)
+                except Exception as _e:
+                    import traceback
+                    traceback.print_exc()
+                    body = json.dumps({"summary": tj.summary(), "compare": {"error": str(_e)},
+                                       "performance": {}, "equity_curve": [],
+                                       "error": f"journal partial failure: {_e}"},
+                                      ensure_ascii=False, default=str)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -9372,6 +9392,17 @@ def _update_aux(feed, state):
         except Exception as _e:
             print(f"[自动对账] 异常: {repr(_e)[:80]}")
         _LAST_HEAL_TS = _now_ts
+    # ★ 每轮同步账户实际持仓到 runner state（确保所有书签页看到用户真实持仓）
+    try:
+        _acc_st = at.load_state()
+        _acc_pos = _acc_st.get("positions", {})
+        # 完全替换 state["positions"]（账户持仓为权威源）
+        state["positions"] = {}
+        for _sym, _pos in _acc_pos.items():
+            if isinstance(_pos, dict) and _pos.get("lots", 0) > 0:
+                state["positions"][_sym] = _pos
+    except Exception:
+        pass
     # 1) 异动扫描（基于 minishare 实时快照，全品种）
     try:
         snaps = {s: feed.last_snap[s] for s in SYMBOLS if feed.last_snap.get(s)}

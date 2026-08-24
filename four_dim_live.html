@@ -3691,7 +3691,7 @@ async function refreshAccount(){
     }
     if(shown===0){ tb.insertAdjacentHTML('beforeend','<tr><td colspan="12" style="text-align:center;color:var(--mut);padding:14px">当前无持仓</td></tr>'); }
     refreshAccountSync();
-  }catch(e){}
+  }catch(e){ console.error('refreshAccount failed:', e); }
 }
 async function refreshAccountSync(){
   let d;
@@ -3832,33 +3832,35 @@ async function initSyms(){
 }
 // ★ 任何书签发生成交（开仓/平仓/回灌）后，串行刷新所有相关视图，保证全面板数据联动
 async function refreshAllAfterTrade(){
-  try{
-    await refreshAccount();
-    await refreshAccountSync();
-    await refreshRisk();
-    await refreshJournal();
-    await refreshJournalList();
-    await refreshJournalSession();
-    await refreshJournalStrategy();
-    await refreshPerformance();
-    await refreshDiscipline();
-    await refreshRules();
-    await refreshAttribution();
-    await refreshVar();
-    await refreshStress();
-    await renderCockpit();
-    await refreshKill();
-    await refreshDrawdown();
-    await refreshFocus();          // G5 我的品种：成交/权益同步后即时刷新盯盘板
-    await refreshAdv();            // 系统健康/数据质量
-    await refreshMetrics();        // 利润·价差·比价
-    await refreshPlayback();       // 历史回放数据
-    await refreshSensitivity(false); // 参数敏感性地图
-    await refreshCorrelation();    // 组合相关性
-    await refreshSpread();        // 价差套利
-    await refreshCorrStress();    // 相关性崩溃
-    await refreshGbm();           // GBM/GARCH 前向情景
-  }catch(e){ console.error('refreshAllAfterTrade error', e); }
+  // ★ 每个刷新函数独立 try/catch，防止一个失败导致全部书签不联动
+  const _safe = async (name, fn) => {
+    try{ await fn(); }catch(e){ console.error(`[refreshAll] ${name} failed:`, e); }
+  };
+  await _safe('refreshAccount', refreshAccount);
+  await _safe('refreshAccountSync', refreshAccountSync);
+  await _safe('refreshRisk', refreshRisk);
+  await _safe('refreshJournal', refreshJournal);
+  await _safe('refreshJournalList', refreshJournalList);
+  await _safe('refreshJournalSession', refreshJournalSession);
+  await _safe('refreshJournalStrategy', refreshJournalStrategy);
+  await _safe('refreshPerformance', refreshPerformance);
+  await _safe('refreshDiscipline', refreshDiscipline);
+  await _safe('refreshRules', refreshRules);
+  await _safe('refreshAttribution', refreshAttribution);
+  await _safe('refreshVar', refreshVar);
+  await _safe('refreshStress', refreshStress);
+  await _safe('renderCockpit', renderCockpit);
+  await _safe('refreshKill', refreshKill);
+  await _safe('refreshDrawdown', refreshDrawdown);
+  await _safe('refreshFocus', refreshFocus);          // G5 我的品种：成交/权益同步后即时刷新盯盘板
+  await _safe('refreshAdv', refreshAdv);            // 系统健康/数据质量
+  await _safe('refreshMetrics', refreshMetrics);        // 利润·价差·比价
+  await _safe('refreshPlayback', refreshPlayback);       // 历史回放数据
+  await _safe('refreshSensitivity', () => refreshSensitivity(false)); // 参数敏感性地图
+  await _safe('refreshCorrelation', refreshCorrelation);    // 组合相关性
+  await _safe('refreshSpread', refreshSpread);        // 价差套利
+  await _safe('refreshCorrStress', refreshCorrStress);    // 相关性崩溃
+  await _safe('refreshGbm', refreshGbm);           // GBM/GARCH 前向情景
 }
 /* ===== 信号卡片：按商品大类分组（黑色系/建材化工/农产品/有色贵金属/能源） ===== */
 const SECTOR_ORDER = ["黑色系","建材化工","农产品","有色贵金属","能源","其他"];
