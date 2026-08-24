@@ -9338,34 +9338,38 @@ def _update_aux(feed, state):
     try:
         prices = {s: feed.price(s) for s in SYMBOLS}
         snap = at.snapshot(prices)
-        # 3.5) 持仓触价报警（止损/止盈）：复用 notify() 弹窗+语音
-        #      独立 try：报警路径（notify/语音/推送）任何异常都不得连累下方
-        #      回撤水位线(ddg.update)与仓位状态机(rsm.update_risk_state)，否则风控链整体失效。
-        try:
-            check_position_alerts(snap["positions"])
-            save_pos_alert_dedup()   # 持仓触价告警去重状态落盘（原子写，防止连环重发）
-        except Exception as e:
-            print(f"[持仓触价报警] 异常: {repr(e)[:80]}")
-        # 3.6) 移动止损自动管理（t1→保本 / 盈利跟踪上移 / t2→全平提示）
-        try:
-            manage_trailing_stops()
-        except Exception as e:
-            print(f"[移动止损] 异常: {repr(e)[:80]}")
-        # 3.7) 自选到价提醒（B1）：非持仓品种也能挂条件，触发即弹窗+语音+落报警历史
-        try:
-            check_watch_alerts()
-        except Exception as e:
-            print(f"[自选到价] 异常: {repr(e)[:80]}")
-        # 3.8) 跳空风险预警（B3）：仅收盘前窗口提醒一次，避免盘中反复打扰
-        try:
-            check_gap_alerts()
-        except Exception as e:
-            print(f"[跳空风险] 异常: {repr(e)[:80]}")
-        # 3.9) 风险预算硬上限（B4）：热度转为「超标」时提醒一次
-        try:
-            check_heat_alert(prices)
-        except Exception as e:
-            print(f"[风险热度] 异常: {repr(e)[:80]}")
+        # —— 非交易时段门控：以下推送逻辑仅在市场开盘时执行 ——
+        # 持仓触价/移动止损/到价提醒/跳空风险/风险热度均依赖实时行情，
+        # 非交易时段价格静止，推送只会造成误导与打扰。
+        if _market_open_now():
+            # 3.5) 持仓触价报警（止损/止盈）：复用 notify() 弹窗+语音
+            #      独立 try：报警路径（notify/语音/推送）任何异常都不得连累下方
+            #      回撤水位线(ddg.update)与仓位状态机(rsm.update_risk_state)，否则风控链整体失效。
+            try:
+                check_position_alerts(snap["positions"])
+                save_pos_alert_dedup()   # 持仓触价告警去重状态落盘（原子写，防止连环重发）
+            except Exception as e:
+                print(f"[持仓触价报警] 异常: {repr(e)[:80]}")
+            # 3.6) 移动止损自动管理（t1→保本 / 盈利跟踪上移 / t2→全平提示）
+            try:
+                manage_trailing_stops()
+            except Exception as e:
+                print(f"[移动止损] 异常: {repr(e)[:80]}")
+            # 3.7) 自选到价提醒（B1）：非持仓品种也能挂条件，触发即弹窗+语音+落报警历史
+            try:
+                check_watch_alerts()
+            except Exception as e:
+                print(f"[自选到价] 异常: {repr(e)[:80]}")
+            # 3.8) 跳空风险预警（B3）：仅收盘前窗口提醒一次，避免盘中反复打扰
+            try:
+                check_gap_alerts()
+            except Exception as e:
+                print(f"[跳空风险] 异常: {repr(e)[:80]}")
+            # 3.9) 风险预算硬上限（B4）：热度转为「超标」时提醒一次
+            try:
+                check_heat_alert(prices)
+            except Exception as e:
+                print(f"[风险热度] 异常: {repr(e)[:80]}")
         # 3.9.5) 组合预警规则引擎（#132）：每轮评估一次（内部 30s 缓存，成本极低），
         #        节流把「软预警」规则（>80% 热度 / 3% 日亏 / 连亏≥4 / 回撤≥5% / 集中度 等）
         #        写入报警历史；致命规则复用既有专用播报、此处不重复。

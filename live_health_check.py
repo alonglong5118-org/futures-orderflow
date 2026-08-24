@@ -14,6 +14,17 @@ CALIB = os.path.join(HERE, "calibration_params.json")
 TIMEOUT = 10
 
 
+def _market_open_now(now=None):
+    """全局是否处于任一期货交易时段（日盘 09-15 / 夜盘 21-23）。
+    午休 11:30-13:30 / 15:00-21:00 / 23:00-次日09:00 / 周末 视为非交易时段。
+    与 four_dim_live_runner._market_open_now 语义对齐。"""
+    now = now or datetime.now()
+    if now.weekday() >= 5:
+        return False
+    t = now.hour * 60 + now.minute
+    return (540 <= t <= 615) or (630 <= t <= 690) or (810 <= t <= 900) or (1260 <= t <= 1380)
+
+
 def get_json(url):
     with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
         return json.load(r)
@@ -194,21 +205,21 @@ def main():
     prev_roll = set(prev.get("rollover_symbols", []))
     cur_roll = set(summary.get("rollover_symbols", []))
     new_roll = cur_roll - prev_roll
-    if new_roll and has_ch:
+    if new_roll and has_ch and _market_open_now():
         try:
             pn.push("⚠️ 换月预警(新触发): " + ", ".join(sorted(new_roll)), title="换月前瞻")
         except Exception:
             pass
 
     if cur_ok:
-        if transition_to_ok and has_ch:
+        if transition_to_ok and has_ch and _market_open_now():
             pn.push("✅ 四维 live 自检已恢复", title="四维自检恢复")
         print(f"OK @ {now} | {json.dumps(summary, ensure_ascii=False)}")
         return 0
     else:
         detail = "\n".join("- " + f for f in fails)
         print(f"FAIL @ {now}\n{detail}\n| summary: {json.dumps(summary, ensure_ascii=False)}")
-        if transition_to_fail and has_ch:
+        if transition_to_fail and has_ch and _market_open_now():
             pn.push("❌ 四维 live 自检失败:\n" + detail, title="四维自检告警")
         return 1
 
