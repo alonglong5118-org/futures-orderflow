@@ -349,6 +349,52 @@ def set_equity(equity, prices=None):
         return True, "ok", st
 
 
+
+def _auto_tp_targets(sym, pos):
+    """为无 tp_targets 的持仓自动计算分级止盈目标价。
+    优先级：stop_dist → stop 反推 → 2% ATR 默认。
+    与 four_dim_live_runner.calc_take_profit_targets 保持一致：T1=ATR×3, T2=ATR×5, T3(跟踪)=ATR×2。
+    注意：不导入 runner，避免触发实时模块副作用。"""
+    try:
+        avg = float(pos.get("avg", 0))
+        if avg <= 0:
+            return None
+        direction = pos.get("direction", "多")
+        _dir = "long" if direction in ("多", "long") else "short"
+        
+        # 1) 用 stop 反推 ATR（最可靠）
+        atr_val = 0
+        if pos.get("stop"):
+            atr_val = abs(float(pos["stop"]) - avg)
+        # 2) 兜底：2% ATR
+        if atr_val <= 0:
+            atr_val = avg * 0.02
+        if atr_val <= 0:
+            return None
+        
+        # 常量与 runner 保持一致
+        TP_T1 = 3.0
+        TP_T2 = 5.0
+        TP_T3 = 2.0
+        
+        if _dir == "long":
+            t1_price = avg + atr_val * TP_T1
+            t2_price = avg + atr_val * TP_T2
+        else:
+            t1_price = avg - atr_val * TP_T1
+            t2_price = avg - atr_val * TP_T2
+        
+        return {
+            "t1_price": round(t1_price, 4),
+            "t2_price": round(t2_price, 4),
+            "t1_atr_mult": TP_T1,
+            "t2_atr_mult": TP_T2,
+            "t3_trailing_atr_mult": TP_T3,
+            "skip_t3": False,
+        }
+    except Exception:
+        return None
+
 def _heal_position_levels(sym, pos, jlv, changes):
     """根据 journal 记录和 exit_plan 规则修正持仓的 stop/t1/t2。
 
@@ -472,6 +518,14 @@ def heal_from_journal():
                 pos["avg"] = round(je, 2)
             # 修正止损止盈位，防止方向错误/移动止损污染
             _heal_position_levels(sym, pos, jlevels.get(k), changes)
+            # 补齐 tp_targets（分级止盈目标价）：journal 有 stop/stop_dist → 反推；无则用 2% ATR 默认
+            if (pos.get("lots") or 0) > 0 and pos.get("tp_targets") is None and pos.get("avg"):
+                _tp_tgt = _auto_tp_targets(sym, pos)
+                if _tp_tgt:
+                    pos["tp_targets"] = _tp_tgt
+                    pos.setdefault("tp_level", "tp_none")
+                    pos.setdefault("init_qty", int(pos.get("lots", 0)))
+                    changes.append(f"{sym} 自动补齐 tp_targets: T1={_tp_tgt.get('t1_price')}, T2={_tp_tgt.get('t2_price')}")
         if changes:
             st["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             save_state(st)
