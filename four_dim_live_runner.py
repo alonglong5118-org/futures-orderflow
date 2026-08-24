@@ -302,6 +302,8 @@ FEED_AVAILABLE = False    # 行情源是否可用（minishare 接口可达）
 # —— #16 进程看门狗心跳 ——
 START_TIME = time.time()   # 进程启动时刻（/api/health 用）
 LAST_CYCLE_TS = 0.0        # 主循环最近一次完成的时间戳（卡死检测用）
+_LAST_HEAL_TS = 0.0         # 上次自动对账时间戳（确保数据实时同步）
+_HEAL_INTERVAL = 30         # 自动对账间隔（秒）
 
 def _poll_feed(feed):
     """轮询行情并刷新健康时间戳/可用标志（行情健康指示用）。"""
@@ -9345,7 +9347,20 @@ def rollover_mismatch_check():
 
 def _update_aux(feed, state):
     """每轮更新：异动扫描 + 账户监控自动 papertrack + 仓位状态机。"""
-    global DAY_OPEN_EQUITY, DAY_OPEN_LABEL   # 修 UnboundLocalError：函数内赋值会令 Python 视为局部
+    global DAY_OPEN_EQUITY, DAY_OPEN_LABEL, _LAST_HEAL_TS   # 修 UnboundLocalError：函数内赋值会令 Python 视为局部
+    # —— 周期性自动对账（每 30 秒一次，确保 tp_targets 等数据实时同步）——
+    global _LAST_HEAL_TS
+    _now_ts = time.time()
+    if _now_ts - _LAST_HEAL_TS >= _HEAL_INTERVAL:
+        try:
+            _ok, _healed, _ = at.heal_from_journal()
+            if _healed:
+                print(f"[自动对账] 修正 {len(_healed)} 项: {_healed[0][:80]}...")
+            else:
+                pass  # 无变化，静默
+        except Exception as _e:
+            print(f"[自动对账] 异常: {repr(_e)[:80]}")
+        _LAST_HEAL_TS = _now_ts
     # 1) 异动扫描（基于 minishare 实时快照，全品种）
     try:
         snaps = {s: feed.last_snap[s] for s in SYMBOLS if feed.last_snap.get(s)}
