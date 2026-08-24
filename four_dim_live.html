@@ -4332,7 +4332,8 @@ async function refreshChatToday(){
     if(chatViewDate==='__today__') renderChatFeed(LAST_CHAT);
   }catch(e){}
 }
-initSyms();refresh();setInterval(refresh,3000);
+// initSyms() moved to after _symPicker definition to ensure picker is available
+refresh();setInterval(refresh,3000);
 // 2026-08-15：账户总览补独立实时轮询（此前仅切tab/交易后刷新，停留该页不更新）
 refreshAccount(); setInterval(refreshAccount, 3000);
 refreshAccountSync(); setInterval(refreshAccountSync, 3000);
@@ -4991,7 +4992,8 @@ function exportCsv(type,kind){
 const RULE_COL={"info":"#3498db","notice":"#f1c40f","warning":"var(--amber)","danger":"var(--amber)"};
 
 
-initJournalSyms();refreshJournal();setInterval(refreshJournal,6000);
+// initJournalSyms() moved to after _symPicker definition to ensure picker is available
+refreshJournal();setInterval(refreshJournal,6000);
 // 信号下拉定时刷新（v6.0.0+ · 防错过新信号 · 保留已选 value 不打断录入）
 setInterval(refreshJournalSymsQuiet, 6000);
 refreshPerformance();setInterval(refreshPerformance,15000);
@@ -5414,6 +5416,7 @@ function downloadReport(){
   window._symPicker = { initPicker, setOptions, setValue };
 })();
 // ---- End Enhanced Symbol Picker ----
+initSyms();initJournalSyms();  // 2026-08-24: moved here to ensure _symPicker is available
 
 
     // v5.1 信号质量等级样式
