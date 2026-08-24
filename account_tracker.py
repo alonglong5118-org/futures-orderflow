@@ -505,6 +505,31 @@ def heal_from_journal():
         changes = []
         if fee_changes:
             changes.extend(fee_changes)
+        # ★ 从 journal 恢复缺失持仓：journal 有未平仓但 account_state 没有时自动补回
+        for (sym, direction), entry_price in javg.items():
+            if sym not in st["positions"] or st["positions"][sym].get("direction") != direction:
+                # 查找 journal 中该品种/方向的最新未平仓记录
+                for t in jdata.get("trades", []):
+                    if t.get("symbol") == sym and t.get("direction") == direction and t.get("pnl") is None:
+                        pos_data = {
+                            "direction": direction,
+                            "lots": int(t.get("lots", 0)),
+                            "avg": float(entry_price),
+                            "open_time": t.get("time", ""),
+                            "stop": t.get("stop"),
+                            "target": None,
+                            "t1": t.get("t1"),
+                            "t2": t.get("t2"),
+                            "tail_enabled": False,
+                            "levels_updated": t.get("time", ""),
+                        }
+                        # 自动补齐分级止盈
+                        _tp_tgt = _auto_tp_targets(sym, pos_data)
+                        if _tp_tgt:
+                            pos_data["tp_targets"] = _tp_tgt
+                        st["positions"][sym] = pos_data
+                        changes.append(f"从 journal 恢复持仓: {sym} {direction} {t.get('lots')}手 @{entry_price}")
+                        break
         rp = st.get("realized_pnl", 0.0)
         if abs(rp - jrealized) > 0.01:
             changes.append(f"realized_pnl {rp} → {jrealized}（journal 已平仓盈亏合计）")
