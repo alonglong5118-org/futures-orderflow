@@ -3190,9 +3190,13 @@ function tpProgressBar(p){
   const t3Dot=t3Done?'done':(t3Current?'current':(skipT3?'skip':''));
   const t1Line=t1Done?'active':'';
   const t2Line=t2Done?'active':'';
-  const t1Label=t1Done?'T1 ✓':(t1Current?'T1(ATR×3)':'T1');
-  const t2Label=t2Done?'T2 ✓':(t2Current?'T2(ATR×5)':'T2');
-  const t3Label=skipT3?'T3(跳过)':(t3Done?'T3 ✓':(t3Current?'T3(追踪)':'T3'));
+  // 分级止盈标签：显示具体价格数字（有 tp_targets 时）
+  const _tp1 = targets.t1_price != null ? fmt(targets.t1_price) : '';
+  const _tp2 = targets.t2_price != null ? fmt(targets.t2_price) : '';
+  const _ts = p.trailing_stop != null ? fmt(p.trailing_stop) : '';
+  const t1Label=t1Done?'T1 ✓':(t1Current?'T1'+(_tp1?':'+_tp1:''):'T1'+(_tp1?':'+_tp1:''));
+  const t2Label=t2Done?'T2 ✓':(t2Current?'T2'+(_tp2?':'+_tp2:''):'T2'+(_tp2?':'+_tp2:''));
+  const t3Label=skipT3?'T3(跳过)':(t3Done?'T3 ✓':(t3Current?'T3'+(_ts?':'+_ts:'(追踪)'):'T3'+(_ts?':'+_ts:'')));
   const trailStop=p.trailing_stop!=null?fmt(p.trailing_stop):'—';
   const curStop=p.stop!=null?fmt(p.stop):'—';
   const detailParts=[];
@@ -3200,6 +3204,10 @@ function tpProgressBar(p){
   detailParts.push('余'+curQty+'手');
   if(level==='tp_t3')detailParts.push('追踪@'+trailStop);
   else if(level==='tp_t1'||level==='tp_t2')detailParts.push('止损'+curStop);
+  // 附加分级止盈目标价摘要
+  if(_tp1)detailParts.push('T1='+_tp1);
+  if(_tp2)detailParts.push('T2='+_tp2);
+  if(_ts)detailParts.push('跟踪线='+_ts);
   var t3Node;
   if(skipT3){t3Node=dot('skip')+'<div class="tp-label">T3</div>';}
   else{t3Node=dot(t3Dot)+'<div class="tp-label '+(t3Current?'current':'')+' '+(t3Done?'active':'')+'">'+t3Label+'</div>';}

@@ -1822,7 +1822,10 @@ def check_position_alerts(positions):
         if _tp_init.get("tp_targets") is None:
             try:
                 _dir = "long" if _tp_init.get("direction") in ("多", "long") else "short"
+                # ATR 缺失时从 stop 反推 stop_dist（保留旧持仓风险等级时无 atr）
                 _atr_val = _tp_init.get("atr", _tp_init.get("stop_dist", 0))
+                if (not _atr_val or float(_atr_val) <= 0) and _tp_init.get("stop") and _tp_init.get("avg"):
+                    _atr_val = abs(float(_tp_init["stop"]) - float(_tp_init["avg"]))
                 if _atr_val and float(_atr_val) > 0:
                     _entry = float(_tp_init.get("avg") or _tp_init.get("price", 0))
                     if _entry > 0:
@@ -5055,18 +5058,22 @@ def positions_reconcile(positions):
             at.record_trade(sym, "close", p["direction"], p["lots"], px)
             tj.record_exit(sym, p["direction"], p["lots"], px, reason="CTP 手动平仓对账")
             removed.append({"symbol": sym, "direction": p["direction"], "lots": p["lots"], "exit_price": px})
-        # 2) 开仓/调整
+        # 2) 开仓/调整：保留旧持仓的 stop/t1/t2/tp_targets 等风险控制字段
         for sym, w in want.items():
             p = cur.get(sym)
             if p is None:
+                # 全新持仓（旧账户没有）：无历史风险等级可保留
                 at.record_trade(sym, "open", w["direction"], w["lots"], w["avg"])
                 tj.record_entry(sym, w["direction"], w["lots"], w["avg"], signal_id="对账")
                 added.append({"symbol": sym, "direction": w["direction"], "lots": w["lots"], "avg": w["avg"]})
             elif p["lots"] != w["lots"] or p["direction"] != w["direction"]:
+                # 同品种但手数/方向变了：先平后开，保留旧 stop/t1/t2
                 px = _feed_price(sym, p.get("avg"))
+                _old_stop = p.get("stop"); _old_t1 = p.get("t1"); _old_t2 = p.get("t2")
                 at.record_trade(sym, "close", p["direction"], p["lots"], px)
                 tj.record_exit(sym, p["direction"], p["lots"], px, reason="CTP 手动平仓对账")
-                at.record_trade(sym, "open", w["direction"], w["lots"], w["avg"])
+                at.record_trade(sym, "open", w["direction"], w["lots"], w["avg"],
+                                stop=_old_stop, t1=_old_t1, t2=_old_t2)
                 tj.record_entry(sym, w["direction"], w["lots"], w["avg"], signal_id="对账")
                 adjusted.append({"symbol": sym, "from": [p["direction"], p["lots"]],
                                  "to": [w["direction"], w["lots"]]})
@@ -9338,18 +9345,18 @@ def _update_aux(feed, state):
     try:
         prices = {s: feed.price(s) for s in SYMBOLS}
         snap = at.snapshot(prices)
-        # —— 非交易时段门控：以下推送逻辑仅在市场开盘时执行 ——
-        # 持仓触价/移动止损/到价提醒/跳空风险/风险热度均依赖实时行情，
+        # 3.5) 持仓触价报警（止损/止盈）：复用 notify() 弹窗+语音
+        #      全天候运行：tp_targets 计算（分级止盈目标价）不依赖交易时段；
+        #      推送层面由 check_position_alerts 内部 _should_suppress 自门控。
+        try:
+            check_position_alerts(snap["positions"])
+            save_pos_alert_dedup()   # 持仓触价告警去重状态落盘（原子写，防止连环重发）
+        except Exception as e:
+            print(f"[持仓触价报警] 异常: {repr(e)[:80]}")
+        # —— 以下推送逻辑仅在市场开盘时执行 ——
+        # 移动止损/到价提醒/跳空风险/风险热度均依赖实时行情，
         # 非交易时段价格静止，推送只会造成误导与打扰。
         if _market_open_now():
-            # 3.5) 持仓触价报警（止损/止盈）：复用 notify() 弹窗+语音
-            #      独立 try：报警路径（notify/语音/推送）任何异常都不得连累下方
-            #      回撤水位线(ddg.update)与仓位状态机(rsm.update_risk_state)，否则风控链整体失效。
-            try:
-                check_position_alerts(snap["positions"])
-                save_pos_alert_dedup()   # 持仓触价告警去重状态落盘（原子写，防止连环重发）
-            except Exception as e:
-                print(f"[持仓触价报警] 异常: {repr(e)[:80]}")
             # 3.6) 移动止损自动管理（t1→保本 / 盈利跟踪上移 / t2→全平提示）
             try:
                 manage_trailing_stops()
