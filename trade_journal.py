@@ -144,8 +144,11 @@ def _load():
 
 
 def _save(data):
+    """保存成交记录；自动重算 summary 确保统计实时准确。"""
     data["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _LOCK:
+        # ★ 自动重算 summary（避免 record_entry/record_exit 后 summary 过期）
+        data["summary"] = _compute_summary(data)
         json.dump(data, open(JOURNAL_FILE, "w"), ensure_ascii=False, indent=2)
 
 
@@ -397,6 +400,65 @@ def update_trade(trade_id, fields):
                 _save(data)
                 return True, "ok"
     return False, "未找到成交"
+
+
+def _compute_summary(data):
+    """从 data dict 直接计算 summary（供 _save 内部使用，避免重复 I/O）。"""
+    trades = data.get("trades", [])
+    closed = [t for t in trades if t["pnl"] is not None]
+    open_trades = [t for t in trades if t["pnl"] is None]
+    wins = [t for t in closed if t["pnl"] > 0]
+    losses = [t for t in closed if t["pnl"] <= 0]
+
+    total_pnl = sum(t["pnl"] for t in closed)
+    total_fee = sum((t.get("fee_total") or 0) for t in closed)
+    gross_pnl = sum((t.get("gross_pnl") if t.get("gross_pnl") is not None else t["pnl"]) for t in closed)
+    win_rate = len(wins) / len(closed) * 100 if closed else 0
+    avg_win = sum(t["pnl"] for t in wins) / len(wins) if wins else 0
+    avg_loss = sum(t["pnl"] for t in losses) / len(losses) if losses else 0
+    expect_pnl = total_pnl / len(closed) if closed else 0
+
+    # 最大连胜/连亏
+    max_streak = {"win": 0, "loss": 0}
+    cur_win = cur_loss = 0
+    for t in sorted(closed, key=lambda t: t["time"]):
+        if t["pnl"] > 0:
+            cur_win += 1; cur_loss = 0
+            max_streak["win"] = max(max_streak["win"], cur_win)
+        else:
+            cur_loss += 1; cur_win = 0
+            max_streak["loss"] = max(max_streak["loss"], cur_loss)
+
+    # 按品种统计
+    by_symbol = {}
+    for t in closed:
+        s = t["symbol"]
+        if s not in by_symbol:
+            by_symbol[s] = {"count": 0, "wins": 0, "pnl": 0.0, "fee": 0.0}
+        by_symbol[s]["count"] += 1
+        by_symbol[s]["pnl"] += t["pnl"]
+        by_symbol[s]["fee"] += (t.get("fee_total") or 0)
+        if t["pnl"] > 0:
+            by_symbol[s]["wins"] += 1
+    for s in by_symbol:
+        b = by_symbol[s]
+        b["win_rate"] = round(b["wins"] / b["count"] * 100, 1) if b["count"] else 0
+
+    return {
+        "total_trades": len(closed),
+        "open_trades": len(open_trades),
+        "total_pnl": round(total_pnl, 2),
+        "realized": round(total_pnl, 2),
+        "gross_pnl": round(gross_pnl, 2),
+        "total_fee": round(total_fee, 2),
+        "win_rate": round(win_rate, 1),
+        "avg_win": round(avg_win, 2),
+        "avg_loss": round(avg_loss, 2),
+        "expect_pnl": round(expect_pnl, 2),
+        "max_win_streak": max_streak["win"],
+        "max_loss_streak": max_streak["loss"],
+        "by_symbol": by_symbol,
+    }
 
 
 def summary():

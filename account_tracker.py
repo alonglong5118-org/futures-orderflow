@@ -213,13 +213,18 @@ def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1
             if action == "add" and not pos:
                 return False, f"{sym} 无持仓，不能 add，请先 open", st
             if action == "open":
-                st["positions"][sym] = {
+                _new_pos = {
                     "direction": direction, "lots": lots,
                     "avg": float(price), "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "stop": _to_float(stop), "target": _to_float(target),
                     "t1": _to_float(t1), "t2": _to_float(t2),
                     "tail_enabled": bool(tail_enabled),
                     "levels_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                # ★ 自动计算分级止盈目标价（确保 tp_targets 立即可用）
+                _tp = _auto_tp_targets(sym, _new_pos)
+                if _tp:
+                    _new_pos["tp_targets"] = _tp
+                st["positions"][sym] = _new_pos
                 _, fix_note = _validate_levels(st["positions"][sym])
             else:  # add：加权均价（保留原止损止盈，不覆盖）
                 old = pos["lots"]; new_avg = (old * pos["avg"] + lots * float(price)) / (old + lots)
@@ -227,6 +232,10 @@ def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1
                 pos["avg"] = round(new_avg, 2)
                 if direction != pos["direction"]:
                     return False, f"{sym} 持仓方向({pos['direction']})与新开({direction})冲突", st
+                # ★ 加权后重新计算 tp_targets（均价变化影响 ATR 反推）
+                _tp = _auto_tp_targets(sym, pos)
+                if _tp:
+                    pos["tp_targets"] = _tp
                 _, fix_note = _validate_levels(pos)
         elif action in ("close", "reduce"):
             if not pos:
