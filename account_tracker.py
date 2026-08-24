@@ -196,10 +196,22 @@ def _leg_fee_tj(symbol, price, lots, side="open", same_day=False):
 
 def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1=None, t2=None, tail_enabled=None):
     """action: open / add / close / reduce。stop/target 可选（开仓时记录你的止损/止盈位）。返回 (ok, msg, state)。"""
+    # ★ 品种名标准化：支持大小写输入（AO/ao 均可）
+    orig_sym = sym
     cfg = load_config()
     specs = cfg.get("contract_specs", {})
     if sym not in specs:
-        return False, f"未知品种 {sym}", load_state()
+        # 尝试小写匹配
+        lower_sym = sym.lower()
+        if lower_sym in specs:
+            sym = lower_sym
+        else:
+            # 尝试大写匹配（如用户输入 'jm'，配置中为 'JM'）
+            upper_sym = sym.upper()
+            if upper_sym in specs:
+                sym = upper_sym
+            else:
+                return False, f"未知品种 {orig_sym}（已尝试大小写转换）", load_state()
     lots = int(lots)
     if lots <= 0:
         return False, "手数必须>0", load_state()
@@ -516,7 +528,9 @@ def heal_from_journal():
             changes.extend(fee_changes)
         # ★ 从 journal 恢复缺失持仓：journal 有未平仓但 account_state 没有时自动补回
         for (sym, direction), entry_price in javg.items():
-            if sym not in st["positions"] or st["positions"][sym].get("direction") != direction:
+            # ★ 大小写标准化
+            _sym = sym.lower() if sym.lower() in specs else sym.upper() if sym.upper() in specs else sym
+            if _sym not in st["positions"] or st["positions"][_sym].get("direction") != direction:
                 # 查找 journal 中该品种/方向的最新未平仓记录
                 for t in jdata.get("trades", []):
                     if t.get("symbol") == sym and t.get("direction") == direction and t.get("pnl") is None:
