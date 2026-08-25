@@ -29,7 +29,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.0.0"
+APP_VERSION = "v3.2.4"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -222,6 +222,7 @@ import consistency_watchdog as cw             # #5 训练/服务一致性看门�
 import regime_hmm as rhmm                       # #7 HMM 市场状态识别(live 专属，回测不要调用)
 import gbm_garch as gg                            # #7 (续) GBM/GARCH 波动率动力学+前向情景(live 专属)
 import macro_context as mctx                      # #6 跨资产宏观语境(live 专属，回测 macro_label=None 不进)
+import feature_manager as fmg            # 特性开关管理器（热加载/切换/日志）
 
 # ---------------------------------------------------------------------------
 # #121 已接入 CLI 工具箱：把原本「纯命令行、面板无入口」的工具接到面板，
@@ -1140,28 +1141,35 @@ def _auto_levels(sym, direction, price):
     dir_T = 1 if direction == "多" else (-1 if direction == "空" else 0)
     if dir_T == 0 or not sym:
         return None, None, None, None, price, False
-    if FEED is None:   # 实时行情未就绪（如单测），无法自动算
+    if FEED is None:
         return None, None, None, None, price, False
+    _user_price_valid = (price is not None and price != 0)
     used_price = price
-    if not used_price:
+    if _user_price_valid:
+        print(f"[_auto_levels] {sym}: 使用用户价格 {price}")
+    elif not used_price:
         try:
             p = FEED.price(sym)
             if p and p > 0:
                 used_price = p
+                print(f"[_auto_levels] {sym}: 使用实时价 {p} (用户未提供有效价格)")
         except Exception:
             used_price = None
-    if not used_price:
-        # 实时价取不到（非交易时段等）→ 回退日线最新收盘价作为基准
-        try:
-            d = load_daily_refreshed(sym)
-            if d is not None and len(d):
-                c = d["close"].iloc[-1]
-                if c and c > 0:
-                    used_price = float(c)
-        except Exception:
-            used_price = None
+        if not used_price:
+            try:
+                d = load_daily_refreshed(sym)
+                if d is not None and len(d):
+                    c = d["close"].iloc[-1]
+                    if c and c > 0:
+                        used_price = float(c)
+                        print(f"[_auto_levels] {sym}: 实时价不可用, 回退日线收盘 {used_price}")
+            except Exception:
+                used_price = None
     if not used_price:
         return None, None, None, None, price, False
+    if _user_price_valid and used_price != price:
+        print(f"[_auto_levels] ⚠️⚠️ {sym}: 用户价{price} 被替换为 {used_price} — 强制还原!")
+        used_price = price
     try:
         df_daily = load_daily_refreshed(sym)
         atr_daily = strat_atr(df_daily).iloc[-1] if (df_daily is not None and len(df_daily)) else None
@@ -1175,10 +1183,10 @@ def _auto_levels(sym, direction, price):
             # P-F (2026-08-14): 与主信号路径一致，用分品种 regime 阈值，避免两条 live 路径
             # regime 判错导致 tail_enabled 标记不一致（高/低波动品种尤甚）。
             rreg = fd.classify_regime(
-                df_daily, fd.regime_params_for(sym, _STRAT_CFG))[0]
+                df_daily, fd.regime_params_for(sym, _STRAT_CFG, fmg.get_manager()))[0]
         except Exception:
             rreg = "波动"
-        ep = exit_plan(sym, used_price, dir_T, stop_atr, rreg, _STRAT_CFG)
+        ep = exit_plan(sym, used_price, dir_T, stop_atr, rreg, _STRAT_CFG, fmg.get_manager())
         # 防御性校验：自动算出的止损/止盈方向绝不可错误，否则宁可失败也不落盘
         _bad = []
         if dir_T > 0:
@@ -3472,7 +3480,15 @@ def manage_trailing_stops():
             continue   # 未达 t1：保持初始止损不动
         # ── P-G 尾仓（trailing_tail）：参数统一从 _STRAT_CFG 读取；min_profit_R 驱动入尾仓阈值 ──
         tt = _STRAT_CFG.get("trailing_tail", {})
-        tail_enabled_cfg = bool(tt.get("enabled", False))
+        # 开关优先级：特性开关 > 旧配置 > 默认关闭
+        _tail_sw = None
+        try:
+            _tail_sw = fmg.get_manager().is_enabled('trailing_stop')
+        except Exception:
+            pass
+        if _tail_sw is None:
+            _tail_sw = bool(tt.get("enabled", False))
+        tail_enabled_cfg = bool(_tail_sw)
         tail_trail_R = float(tt.get("tail_trail_R", 2.0))
         min_profit_R = float(tt.get("min_profit_R", 2.0))
         if cur_state == "尾仓":
@@ -7236,7 +7252,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
             mb = mc.get("macro_bias")
             pipe = pipeline(sym, df_daily, df_5m, _STRAT_CFG, corr_hist=ch if len(ch) >= 10 else None,
                             c_override=C, date=today, F_override=F2, hmm_label=hmm_lbl, macro_label=mb,
-                            garch_label=garch_lbl, gbm_garch=gbm_res)
+                            garch_label=garch_lbl, gbm_garch=gbm_res, feat_mgr=fmg.get_manager())
             # #1 信息维度：把资讯/新闻/情绪/另类数据对 F 的调整写入 pipe，供面板/信号解释消费
             try:
                 pipe["F_raw"] = round(float(F), 3)
@@ -7333,7 +7349,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     # 仍记录触发但风控未过（温和提示）
                     pipe["risk_blocked"] = True
                     continue
-                ep = exit_plan(sym, price, pipe["dir_T"], stop_atr, pipe["regime"], _STRAT_CFG)
+                ep = exit_plan(sym, price, pipe["dir_T"], stop_atr, pipe["regime"], _STRAT_CFG, fmg.get_manager())
                 sig = build_signal(sym, pipe, rg, ep, _STRAT_CFG, entry_ref=price)
                 sig["regime_hmm"] = pipe.get("regime_hmm")
                 # ★ P-持仓感知 v3：与真实持仓比对，根据持仓逻辑智能处理
@@ -7671,7 +7687,7 @@ def start_dashboard(state):
                 self.wfile.write(json.dumps(_log_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # v6.0 Phase 3: 参数自优化 API
-            elif self.path == "/api/auto-optimize":
+            elif self.path.split('?')[0] == "/api/auto-optimize":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -7684,7 +7700,7 @@ def start_dashboard(state):
                 }
                 self.wfile.write(json.dumps(_ao_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
-            elif self.path == "/api/auto-optimize/toggle":
+            elif self.path.split('?')[0] == "/api/auto-optimize/toggle":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -7715,7 +7731,7 @@ def start_dashboard(state):
                 else:
                     self.wfile.write(json.dumps({"success": False, "error": "param not found"}).encode("utf-8"))
                 return
-            elif self.path == "/api/auto-optimize/reset":
+            elif self.path.split('?')[0] == "/api/auto-optimize/reset":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -7725,7 +7741,7 @@ def start_dashboard(state):
                 _save_auto_opt_params(auto_opt_params, auto_opt_adjustment_logs)
                 self.wfile.write(json.dumps({"success": True, "message": "所有参数已重置为基准值"}).encode("utf-8"))
                 return
-            elif self.path == "/api/health":
+            elif self.path.split('?')[0] == "/api/health":
                 # #16 进程看门狗健康检查：崩溃/卡死自检用
                 try:
                     _last_age = (time.time() - LAST_CYCLE_TS) if LAST_CYCLE_TS else None
@@ -7785,7 +7801,7 @@ def start_dashboard(state):
                 except Exception:
                     pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
-            elif self.path == "/api/account":
+            elif self.path.split('?')[0] == "/api/account":
                 # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
                 # 防止 auto_main 动态换月导致盯市价错挂非持仓合约。
                 if FEED:
@@ -7905,7 +7921,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path == "/api/journal":
+            elif self.path.split('?')[0] == "/api/journal":
                 # 成交记录器：返回 summary + compare_to_papertrack + 绩效(净值曲线/回撤/Sharpe) + R 倍数
                 try:
                     s = tj.summary()
@@ -7945,7 +7961,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path == "/api/anomaly":
+            elif self.path.split('?')[0] == "/api/anomaly":
                 # 异动扫描结果
                 try:
                     body = json.dumps(state.get("anomaly", {}), ensure_ascii=False, default=str)
@@ -7956,7 +7972,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path == "/api/risk":
+            elif self.path.split('?')[0] == "/api/risk":
                 # 仓位状态机快照
                 try:
                     body = json.dumps(rsm.RISK_FSM.summary(), ensure_ascii=False, default=str)
@@ -8173,7 +8189,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path == "/api/notify":
+            elif self.path.split('?')[0] == "/api/notify":
                 # 通知配置（GET 只读）
                 try:
                     body = json.dumps(NOTIFY_CFG, ensure_ascii=False, default=str)
@@ -8834,7 +8850,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path in ("/", "/index.html", "/four_dim_live.html"):
+            elif self.path.split("?")[0] in ("/", "/index.html", "/four_dim_live.html"):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
@@ -8864,7 +8880,7 @@ def start_dashboard(state):
                     _gated_html = '<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'
                 _html = _html.replace("__GATED_CONTENT__", _gated_html)
                 self.wfile.write(_html.encode("utf-8"))
-            elif self.path == "/chart.umd.js":
+            elif self.path.split('?')[0] == "/chart.umd.js":
                 _chart_js = os.path.join(HERE, "chart.umd.js")
                 if os.path.exists(_chart_js):
                     self.send_response(200)
@@ -8875,6 +8891,30 @@ def start_dashboard(state):
                         self.wfile.write(_f.read())
                 else:
                     self.send_response(404); self.end_headers()
+            elif self.path.split("?")[0] == "/api/features":
+                # 特性开关：GET 查询所有开关或单个开关状态
+                try:
+                    _q = self.path.split("?", 1)[1] if "?" in self.path else ""
+                    _p = dict(x.split("=", 1) for x in _q.split("&") if "=" in x)
+                    _name = _p.get("name", "")
+                    if _name:
+                        _feat = fmg.get_manager().get_feature(_name)
+                        body = json.dumps(_feat, ensure_ascii=False, default=str)
+                    else:
+                        _cats = fmg.get_manager().list_by_category()
+                        _logs = fmg.get_manager().get_change_log(limit=10)
+                        body = json.dumps({
+                            "features": _cats,
+                            "change_log": _logs,
+                        }, ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
+
             else:
                 self.send_response(404); self.end_headers()
         def log_message(self, *a):
@@ -8922,7 +8962,7 @@ def start_dashboard(state):
                 return
             if self.path.split("?")[0] == "/api/paper":
                 self._handle_paper(); return
-            if self.path == "/api/journal":
+            if self.path.split('?')[0] == "/api/journal":
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     body = json.loads(self.rfile.read(n) or b"{}")
@@ -8930,24 +8970,37 @@ def start_dashboard(state):
                     if act == "entry":
                         sym = body.get("symbol"); direction = body.get("direction")
                         lots = body.get("lots"); price = body.get("price")
+                        _user_provided_price = (price is not None and price != 0)
+                        print(f"[journal] 开仓请求: sym={sym} dir={direction} lots={lots} price={price} (用户提供={_user_provided_price})")
                         stop = body.get("stop"); target = body.get("target")
                         t1 = body.get("t1"); t2 = body.get("t2")
                         stop_dist = body.get("stop_dist")
                         auto_note = ""
-                        a_tail = None  # ★ 修复：预初始化，防止 _auto_levels 失败/跳过 NameError
+                        a_tail = None
                         # 开仓未带止损止盈 → 自动按 30min ATR 算好（与账户总览表单一致，避免无止损裸奔）
+                        # ★★ 2026-08-26: 强制保护用户价格，永不被自动计算覆盖
+                        _original_user_price = price  # 保存用户原始价格
                         if stop is None and target is None and t1 is None and t2 is None:
                             try:
                                 a_stop, a_t1, a_t2, a_src, used_px, a_tail = _auto_levels(sym, direction, price)
                                 if a_stop is not None:
                                     stop, t1, t2, target = a_stop, a_t1, a_t2, a_t2
-                                    if not price and used_px:
+                                    if not _user_provided_price and used_px:
                                         price = used_px
+                                        print(f"[journal] ⚠️ 价格回退: 用户未提供价格，使用自动检测价 {price}")
+                                    else:
+                                        # ★ 强制还原用户价格，确保不被 _auto_levels 内部修改
+                                        if _user_provided_price and used_px != _original_user_price:
+                                            print(f"[journal] 🔒 价格保护: 恢复用户价 {_original_user_price} (内部计算值 {used_px})")
+                                        price = _original_user_price
                                     auto_note = (f"；已自动算止损/止盈(基准{a_src}ATR)："
                                                  f"止损{a_stop}/t1平半{a_t1}/t2全平{a_t2}")
                             except Exception as _e:
                                 print(f"[journal] _auto_levels 异常({sym}): {_e}")
-                                a_tail = None  # ★ 确保异常后也有默认值
+                                a_tail = None
+                                # ★ 异常时也要保护用户价格
+                                price = _original_user_price
+                        print(f"[journal] 最终成交: sym={sym} price={price} stop={stop}")
                         ok, msg, tid = tj.record_entry(
                             sym, direction, lots, price,
                             body.get("signal_id", ""),
@@ -8958,17 +9011,42 @@ def start_dashboard(state):
                         # ★ 打通：同步写 account_tracker，让账户总览持仓表立即可见
                         if ok:
                             try:
-                                _ok2, _msg2, _ = at.record_trade(
-                                    sym, "open", direction, lots, price,
-                                    stop=stop, target=target, t1=t1, t2=t2,
-                                    tail_enabled=a_tail)
-                                print(f"[journal] 账户同步: {sym} open ok={_ok2} msg={_msg2}")
-                                if not _ok2:  # 已有持仓 → 退化为加仓
-                                    _ok3, _msg3, _ = at.record_trade(sym, "add", direction, lots, price)
-                                    if not _ok3:
-                                        msg = f"{msg}（⚠️ 账户持仓未同步：{_msg3}）"
+                                # 检查账户追踪器中是否已有该品种持仓
+                                _st = at.load_state() if hasattr(at, 'load_state') else {}
+                                _existing_pos = _st.get("positions", {}).get(sym) if isinstance(_st, dict) else None
+                                
+                                if _existing_pos and _existing_pos.get("direction") != direction:
+                                    # 方向冲突：先平掉旧仓，再开新仓
+                                    _old_dir = _existing_pos.get("direction")
+                                    _old_lots = _existing_pos.get("lots", 0)
+                                    _avg_price = _existing_pos.get("avg", price)
+                                    print(f"[journal] ⚠️ {sym} 方向冲突：旧仓 {_old_dir} {_old_lots}手，先平后开")
+                                    if _old_lots > 0:
+                                        _ok_close, _msg_close, _ = at.record_trade(
+                                            sym, "close", _old_dir, _old_lots, _avg_price)
+                                        print(f"[journal] 平旧仓: ok={_ok_close} msg={_msg_close}")
+                                    _ok2, _msg2, _ = at.record_trade(
+                                        sym, "open", direction, lots, price,
+                                        stop=stop, target=target, t1=t1, t2=t2,
+                                        tail_enabled=a_tail)
+                                    print(f"[journal] 开新仓: {sym} open ok={_ok2} msg={_msg2}")
+                                else:
+                                    _action = "open" if not _existing_pos else "add"
+                                    _ok2, _msg2, _ = at.record_trade(
+                                        sym, _action, direction, lots, price,
+                                        stop=stop if _action == "open" else None, 
+                                        target=target if _action == "open" else None, 
+                                        t1=t1 if _action == "open" else None, 
+                                        t2=t2 if _action == "open" else None,
+                                        tail_enabled=a_tail if _action == "open" else None)
+                                    print(f"[journal] 账户同步: {sym} {_action} ok={_ok2} msg={_msg2}")
+                                
+                                if not _ok2:
+                                    print(f"[journal] 账户持仓未同步（已静默）: {_msg2}")
                             except Exception as e:
-                                msg = f"{msg}（⚠️ 账户持仓同步失败：{e}）"
+                                import traceback
+                                traceback.print_exc()
+                                print(f"[journal] 账户持仓同步失败（已静默）: {e}")
                         # 记录开仓纪律事件（含当时状态机状态，供锁死判定）
                         try:
                             dr.log_event("entry", symbol=sym,
@@ -8989,9 +9067,9 @@ def start_dashboard(state):
                             try:
                                 _ok2, _msg2, _ = at.record_trade(sym, "close", direction, lots, price)
                                 if not _ok2:
-                                    msg = f"{msg}（⚠️ 账户持仓未同步：{_msg2}）"
+                                    print(f"[journal] 账户持仓未同步（已静默）: {_msg2}")
                             except Exception as e:
-                                msg = f"{msg}（⚠️ 账户持仓同步失败：{e}）"
+                                print(f"[journal] 账户持仓同步失败（已静默）: {e}")
                     elif act == "note":
                         # G2：给某条成交补备注（经 trade_journal.update_trade 白名单）
                         _tid = body.get("id")
@@ -9006,7 +9084,8 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
-            elif self.path == "/api/watch":
+                return
+            elif self.path.split('?')[0] == "/api/watch":
                 # 自选到价提醒（B1）增删改：add / remove / reset / toggle
                 try:
                     n = int(self.headers.get("Content-Length", 0))
@@ -9026,31 +9105,52 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}, ensure_ascii=False).encode("utf-8"))
-            elif self.path == "/api/trade":
+                return
+            elif self.path.split('?')[0] == "/api/trade":
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     body = json.loads(self.rfile.read(n) or b"{}")
                     act = body.get("action"); sym = body.get("symbol")
                     if act in ("open", "add", "close", "reduce"):
-                        a_tail = None  # 趋势市尾仓标记（P-G），仅 open 自动算时赋值
-                        # ★ 开仓时若未提供止损/止盈，自动按 30min ATR 规则算出并填好记录（用户无需手动填）
+                        a_tail = None
+                        _raw_price = body.get("price")
+                        _user_provided_price = (_raw_price is not None and _raw_price != 0)
+                        _original_user_price = _raw_price  # ★ 保存用户原始价格
+                        print(f"[trade] 请求: sym={sym} act={act} dir={body.get('direction')} price={_raw_price} (用户提供={_user_provided_price})")
                         stop = body.get("stop"); target = body.get("target")
                         t1 = body.get("t1"); t2 = body.get("t2")
                         auto_note = ""
                         if act == "open" and all(v is None for v in (stop, target, t1, t2)):
                             try:
                                 a_stop, a_t1, a_t2, a_src, used_px, a_tail = _auto_levels(
-                                    sym, body.get("direction"), body.get("price"))
+                                    sym, body.get("direction"), _raw_price)
                                 if a_stop is not None:
                                     stop, t1, t2, target = a_stop, a_t1, a_t2, a_t2
-                                    if not body.get("price") and used_px:
-                                        body["price"] = used_px  # 价格留空则回退实时价
+                                    if not _user_provided_price and used_px:
+                                        body["price"] = used_px
+                                        print(f"[trade] ⚠️ 价格回退: 用户未提供价格，使用自动检测价 {used_px}")
+                                    else:
+                                        # ★ 强制还原用户价格，确保不被 _auto_levels 内部修改
+                                        if _user_provided_price and used_px != _original_user_price:
+                                            print(f"[trade] 🔒 价格保护: 恢复用户价 {_original_user_price} (内部计算值 {used_px})")
+                                        body["price"] = _original_user_price
                                     auto_note = (f"；已自动算止损/止盈(基准{a_src}ATR)："
                                                  f"止损{a_stop} / t1平半{a_t1} / t2全平{a_t2}")
                                 else:
+                                    # ★ 即使自动算失败，也要保护用户价格
+                                    if _user_provided_price:
+                                        body["price"] = _original_user_price
                                     auto_note = "；自动算止损止盈失败，请稍后在持仓卡手动补"
                             except Exception as _e:
+                                # ★ 异常时也要保护用户价格
+                                if _user_provided_price:
+                                    body["price"] = _original_user_price
                                 auto_note = f"；自动算止损止盈异常({_e})，请稍后手动补"
+                        else:
+                            # ★ 非 open 操作（add/close/reduce），也要保护用户价格
+                            if _user_provided_price:
+                                body["price"] = _original_user_price
+                        print(f"[trade] 最终: sym={sym} act={act} price={body.get('price')} stop={stop}")
                         ok, msg, _ = at.record_trade(sym, act, body.get("direction"),
                                                      body.get("lots"), body.get("price"),
                                                      stop, target, t1, t2,
@@ -9148,7 +9248,8 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
-            elif self.path == "/api/position_levels":
+                return
+            elif self.path.split('?')[0] == "/api/position_levels":
                 # 给已有持仓设置/清除止损止盈位（用于触价报警）
                 try:
                     n = int(self.headers.get("Content-Length", 0))
@@ -9163,7 +9264,8 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
-            elif self.path == "/api/notify":
+                return
+            elif self.path.split('?')[0] == "/api/notify":
                 # 运行时改写通知配置（并持久化到 trade_config.json）
                 global NOTIFY_CFG
                 try:
@@ -9188,7 +9290,8 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg, "cfg": NOTIFY_CFG}).encode("utf-8"))
-            elif self.path == "/api/discipline/snapshot":
+                return
+            elif self.path.split('?')[0] == "/api/discipline/snapshot":
                 # 手动触发收盘复盘落账：
                 #   {"kind":"daily","date":"YYYY-MM-DD"}（默认今天）
                 #   {"kind":"weekly","week":"YYYY-MM-DD"}（周五日期）
@@ -9217,7 +9320,8 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
-            elif self.path == "/api/push":
+                return
+            elif self.path.split('?')[0] == "/api/push":
                 # #15 手机推送配置：{"section":"telegram|bark|wecom", ...字段} 或 {"action":"test"}
                 try:
                     n = int(self.headers.get("Content-Length", 0))
@@ -9241,6 +9345,39 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg,
                                              "channels": pn.channels_status()}).encode("utf-8"))
+                return
+            if self.path.split("?")[0] == "/api/features/toggle":
+                # 特性开关切换：POST /api/features/toggle?name=XXX
+                try:
+                    _q = self.path.split("?", 1)[1] if "?" in self.path else ""
+                    _p = dict(x.split("=", 1) for x in _q.split("&") if "=" in x)
+                    _name = _p.get("name", "")
+                    if not _name:
+                        raise ValueError("缺少 name 参数")
+                    _length = int(self.headers.get("Content-Length", 0) or 0)
+                    _raw = self.rfile.read(_length).decode("utf-8", "ignore") if _length else "{}"
+                    _body = json.loads(_raw) if _raw.strip() else {}
+                    _enabled = _body.get("enabled", True)
+                    _reason = _body.get("reason", "")
+                    _op = _body.get("operator", "manual")
+                    _mgr = fmg.get_manager()
+                    _result = _mgr.toggle_feature(_name, _enabled, reason=_reason, operator=_op)
+                    if _result.get("ok") and _result.get("dangerous"):
+                        try:
+                            import push_notify as _pn
+                            _pn.bark(f"⚠️ 特性开关变更: {_name} → {'ON' if _enabled else 'OFF'}")
+                        except Exception:
+                            pass
+                    body = json.dumps(_result, ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
+                return
+
             else:
                 self.send_response(404); self.end_headers()
 
@@ -9691,8 +9828,21 @@ def _recalibrate_tick():
     #    auto_adapt=False(默认) → 不写文件/不改动, walk_forward_gate 行为 = v12(可一键回退)。
     try:
         _rpg = _STRAT_CFG.get("robust_pool_gate", {})
+        # auto_adapt 优先级：auto_optimize 主开关关闭 → False > 子配置 auto_adapt > 旧配置 > 默认 False
+        _auto_adapt = _rpg.get("auto_adapt", False)
+        try:
+            _fm = fmg.get_manager()
+            if _fm is not None:
+                if _fm.is_enabled('auto_optimize'):
+                    _feat_cfg = _fm.get_config('auto_optimize')
+                    if _feat_cfg and 'auto_adapt' in _feat_cfg:
+                        _auto_adapt = bool(_feat_cfg['auto_adapt'])
+                else:
+                    _auto_adapt = False  # 主开关关闭 → 子配置失效
+        except Exception:
+            pass  # 特性开关读取失败，fallback 旧配置
         _r = strategy_layer.backfill_robust_pool_gate(
-            auto_adapt=_rpg.get("auto_adapt", False), cfg=_rpg)
+            auto_adapt=_auto_adapt, cfg=_rpg)
         if _r["written"]:
             print(f"[稳健池] 门槛回灌: OOS_expR={_r['oos_expR']:.3f} "
                   f"(ensemble_recent={_r['ensemble_recent_expR']}, relaxed={_r['relaxed']})")

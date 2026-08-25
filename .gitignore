@@ -61,3 +61,5 @@ c2wave*.txt
 probe_*.txt
 # 凭据：绝不入库
 tushare_token.txt
+
+tq_config.json

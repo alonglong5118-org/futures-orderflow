@@ -89,8 +89,18 @@ def in_trading_session():
 # ─────────────────────────── TqSdk 主线程行情循环（CZCE 真 tick） ───────────────────────────
 def run_tqsdk():
     from tqsdk import TqApi, TqAuth
-    cfg = json.load(open(os.path.join(HERE, "tq_config.json"), encoding="utf-8"))
-    api = TqApi(auth=TqAuth(cfg["tq_username"], cfg["tq_password"]))
+    # P0-17 fix: 优先使用环境变量，回退到配置文件
+    _tq_user = os.environ.get("TQ_USERNAME", "")
+    _tq_pass = os.environ.get("TQ_PASSWORD", "")
+    if not _tq_user or not _tq_pass:
+        _cfg_path = os.path.join(HERE, "tq_config.json")
+        if os.path.exists(_cfg_path):
+            _cfg = json.load(open(_cfg_path, encoding="utf-8"))
+            _tq_user = _tq_user or _cfg.get("tq_username", "")
+            _tq_pass = _tq_pass or _cfg.get("tq_password", "")
+    if not _tq_user or not _tq_pass:
+        raise RuntimeError("天勤账号未配置：请设置环境变量 TQ_USERNAME/TQ_PASSWORD 或编辑 tq_config.json")
+    api = TqApi(auth=TqAuth(_tq_user, _tq_pass))
     quotes = {}          # sym -> (code, quote)
     prev_vol = {}
     for sym, m in SYMBOL_MAP.items():

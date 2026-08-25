@@ -196,6 +196,19 @@ def _leg_fee_tj(symbol, price, lots, side="open", same_day=False):
 
 def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1=None, t2=None, tail_enabled=None):
     """action: open / add / close / reduce。stop/target 可选（开仓时记录你的止损/止盈位）。返回 (ok, msg, state)。"""
+    # P1-22: 方向校验前移 —— 避免无效数据进入下游(双写/风控/统计)
+    VALID_DIR = ("long", "short", "多", "空", 1, -1)
+    if isinstance(direction, str):
+        _d = direction.strip().lower()
+        _map = {"long": "long", "short": "short", "多": "long", "空": "short",
+                "buy": "long", "sell": "short", "bull": "long", "bear": "short"}
+        if _d not in _map and direction not in ("多", "空"):
+            return False, f"非法方向 {direction!r}，合法值: long/short/多/空", None
+    elif isinstance(direction, int):
+        if direction not in (1, -1):
+            return False, f"非法方向 int={direction!r}，合法值: 1(多) / -1(空)", None
+    else:
+        return False, f"方向类型非法 {type(direction).__name__}: {direction!r}", None
     # ★ 品种名标准化：支持大小写输入（AO/ao 均可）
     orig_sym = sym
     cfg = load_config()
@@ -215,6 +228,11 @@ def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1
     lots = int(lots)
     if lots <= 0:
         return False, "手数必须>0", load_state()
+    # ★★ 2026-08-26: 价格保护 - 验证用户价格
+    _verified_price = float(price) if price is not None and price != 0 else 0
+    if _verified_price <= 0:
+        return False, f"非法价格 {price}，必须大于0", load_state()
+    print(f"[record_trade] 品种={sym} 动作={action} 价格={_verified_price} (原始: {price})")
     fix_note = ""
     with _LOCK:
         st = load_state()
@@ -227,7 +245,7 @@ def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1
             if action == "open":
                 _new_pos = {
                     "direction": direction, "lots": lots,
-                    "avg": float(price), "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "avg": _verified_price, "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "stop": _to_float(stop), "target": _to_float(target),
                     "t1": _to_float(t1), "t2": _to_float(t2),
                     "tail_enabled": bool(tail_enabled),
@@ -239,7 +257,7 @@ def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1
                 st["positions"][sym] = _new_pos
                 _, fix_note = _validate_levels(st["positions"][sym])
             else:  # add：加权均价（保留原止损止盈，不覆盖）
-                old = pos["lots"]; new_avg = (old * pos["avg"] + lots * float(price)) / (old + lots)
+                old = pos["lots"]; new_avg = (old * pos["avg"] + lots * _verified_price) / (old + lots)  # ★ 使用验证后的价格
                 pos["lots"] = old + lots
                 pos["avg"] = round(new_avg, 2)
                 if direction != pos["direction"]:
@@ -282,14 +300,7 @@ def record_trade(sym, action, direction, lots, price, stop=None, target=None, t1
         return True, ("ok" + fix_note), st
 
 
-def _to_float(v):
-    """空串/None → None，否则 float。用于止损止盈可选字段。"""
-    if v is None or v == "":
-        return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
+# P1-7 fix: _to_float 已在上方定义（line ~129），此处删除重复定义
 
 
 def set_levels(sym, stop=None, target=None, t1=None, t2=None, tail_enabled=None):
@@ -484,20 +495,38 @@ def _heal_position_levels(sym, pos, jlv, changes):
 
 def heal_from_journal():
     """以 trade_journal.json 为真相源，修正 account_state 的「已实现盈亏 + 开仓均价 + 止损止盈位」漂移。
-
-    此前 #124 对账只比对持仓数量/手数/方向，**漏掉了已实现盈亏与开仓均价**，
+    此前 #124 对账只比对持仓数量/手数/方向，漏掉了已实现盈亏与开仓均价，
     导致 account_state 这份可手动维护的副本与成交记录静默漂移、面板长期显示错误数据。
     本函数把这三项对齐到 journal（交易记录的权威源）：
       - realized_pnl   应 = journal 所有已平仓成交 pnl 之和
-      - 每未平仓持仓 avg 应 = journal 对应开仓记录的 entry_price
-      - 每未平仓持仓 stop/t1/t2 应 = journal 开仓记录的 stop/stop_dist 推导（方向错误时修正）
+      - 每未平仓持仓 avg 应 = journal 对应开仓记录的 entry_price（P2-C: 加仓按手数加权）
+      - 每未平仓持仓 stop/t1/t2 应 = journal 开仓记录的 stop/stop_dist 推导
     仅当存在偏差时才写盘，幂等、安全；绝不删除持仓或改动方向/手数。
     返回 (ok, changes, state)。
     """
+    # P1-11 fix: 品种名标准化辅助函数（统一 journal ↔ account 命名）
+    def _normalize_sym_for_heal(sym, specs_dict):
+        sym = str(sym).strip() if sym else ""
+        if not sym:
+            return sym
+        if sym in specs_dict:
+            return sym
+        low = sym.lower()
+        if low in specs_dict:
+            return low
+        up = sym.upper()
+        if up in specs_dict:
+            return up
+        return sym
+
     try:
         import trade_journal as tj
     except Exception:
         return False, ["无法导入 trade_journal（跳过自愈）"], load_state()
+    # ★ 加载品种规格表（供品种名大小写标准化使用，与 record_trade 保持一致）
+    _cfg = load_config()
+    specs = _cfg.get("contract_specs", {})
+
     # 先修复 journal 自身缺失/不一致的手续费与净盈亏，使后续对比基于已治愈数据
     fee_changes = []
     try:
@@ -507,20 +536,27 @@ def heal_from_journal():
     jdata = tj._load()
     jrealized = round(sum((t.get("pnl") or 0) for t in jdata.get("trades", [])
                           if t.get("pnl") is not None), 2)
-    javg = {}
-    jlevels = {}  # (sym, direction) -> {"stop":..., "stop_dist":...}
+    # P2-C fix: 按手数加权计算开仓均价（忽略加仓只取首笔会低估/高估均价，影响浮盈亏与止损位）
+    javg_acc = {}  # (sym, direction) -> {"sum": 价格*手数, "qty": 手数}
+    jlevels = {}   # (sym, direction) -> {"stop":..., "stop_dist":...}
     for t in jdata.get("trades", []):
         if t.get("pnl") is not None:
             continue
         k = (t.get("symbol"), t.get("direction"))
-        if k not in javg:
-            javg[k] = t.get("entry_price")
+        qty = abs(t.get("quantity") or t.get("lots") or 0) or 1
+        _ep = float(t.get("entry_price") or 0)
+        if k not in javg_acc:
+            javg_acc[k] = {"sum": 0.0, "qty": 0.0}
             jlevels[k] = {
                 "stop": t.get("stop"),
                 "stop_dist": t.get("stop_dist"),
                 "t1": t.get("t1"),
                 "t2": t.get("t2"),
             }
+        javg_acc[k]["sum"] += _ep * qty
+        javg_acc[k]["qty"] += qty
+    javg = {k: round(v["sum"] / v["qty"], 2) if v["qty"] else 0.0
+            for k, v in javg_acc.items()}
     with _LOCK:
         st = load_state()
         changes = []
@@ -528,12 +564,13 @@ def heal_from_journal():
             changes.extend(fee_changes)
         # ★ 从 journal 恢复缺失持仓：journal 有未平仓但 account_state 没有时自动补回
         for (sym, direction), entry_price in javg.items():
-            # ★ 大小写标准化
-            _sym = sym.lower() if sym.lower() in specs else sym.upper() if sym.upper() in specs else sym
+            # ★ P1-11 fix: 大小写标准化 —— 用 _normalize_sym() 统一 journal ↔ account 品种名
+            _sym = _normalize_sym_for_heal(sym, specs)
             if _sym not in st["positions"] or st["positions"][_sym].get("direction") != direction:
-                # 查找 journal 中该品种/方向的最新未平仓记录
+                # 查找 journal 中该品种/方向的最新未平仓记录（用标准化后的 sym 匹配）
                 for t in jdata.get("trades", []):
-                    if t.get("symbol") == sym and t.get("direction") == direction and t.get("pnl") is None:
+                    _t_sym = _normalize_sym_for_heal(t.get("symbol", ""), specs)
+                    if _t_sym == _sym and t.get("direction") == direction and t.get("pnl") is None:
                         pos_data = {
                             "direction": direction,
                             "lots": int(t.get("lots", 0)),
@@ -550,7 +587,7 @@ def heal_from_journal():
                         _tp_tgt = _auto_tp_targets(sym, pos_data)
                         if _tp_tgt:
                             pos_data["tp_targets"] = _tp_tgt
-                        st["positions"][sym] = pos_data
+                        st["positions"][_sym] = pos_data
                         changes.append(f"从 journal 恢复持仓: {sym} {direction} {t.get('lots')}手 @{entry_price}")
                         break
         rp = st.get("realized_pnl", 0.0)
@@ -558,7 +595,25 @@ def heal_from_journal():
             changes.append(f"realized_pnl {rp} → {jrealized}（journal 已平仓盈亏合计）")
             st["realized_pnl"] = jrealized
             st["realized_pnl_at_sync"] = jrealized
-        for sym, pos in st["positions"].items():
+        # ★ 清除 journal 中已平仓的僵尸持仓（防止 account_state 残留过期持仓）
+        _closed_syms = set()
+        for t in jdata.get("trades", []):
+            if t.get("pnl") is not None:  # 已平仓
+                _closed_syms.add((t.get("symbol"), t.get("direction")))
+        for _csym, _cdir in _closed_syms:
+            _csym_norm = _normalize_sym_for_heal(_csym, specs)
+            if _csym_norm in st["positions"]:
+                _cpos = st["positions"][_csym_norm]
+                if _cpos.get("direction") == _cdir and (_cpos.get("lots") or 0) > 0:
+                    # 检查 journal 中该品种/方向是否还有未平仓记录（P1-11 fix: 标准化匹配）
+                    _has_open = any(
+                        _normalize_sym_for_heal(t.get("symbol", ""), specs) == _csym_norm
+                        and t.get("direction") == _cdir and t.get("pnl") is None
+                        for t in jdata.get("trades", []))
+                    if not _has_open:
+                        del st["positions"][_csym_norm]
+                        changes.append(f"清除僵尸持仓: {_csym_norm} {_cdir}（journal 已平仓无剩余）")
+        for sym, pos in list(st["positions"].items()):  # list() 防止迭代时修改
             k = (sym, pos.get("direction"))
             je = javg.get(k)
             if je is not None and abs((pos.get("avg") or 0) - je) > 0.01:

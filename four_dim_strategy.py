@@ -46,6 +46,37 @@ sys.path.insert(0, HERE)
 from strategy_layer import (STRATS, TREND_STRATS, MEAN_STRATS,
                             classify_regime, atr as strat_atr)
 import fundamental_feed as ff  # 基本面 F 数据源（基差/库存）
+# P1-16: 实时风控状态注入 —— 由 four_dim_live_runner 在每轮评估前设置
+# 策略层在 live 模式下读取此状态，前置否决被锁定/熔断的信号生成
+# 回测模式下 _LIVE_RISK_STATE 为 None，不影响回测逻辑
+_LIVE_RISK_STATE = None  # None=回测/未设置；dict=live 实时状态
+
+def set_live_risk_state(state_dict):
+    """P1-16: runner 设置实时风控状态（每轮 update_risk_state 后调用）。"""
+    global _LIVE_RISK_STATE
+    _LIVE_RISK_STATE = state_dict if isinstance(state_dict, dict) else None
+
+def get_live_risk_state():
+    """P1-16: 获取当前实时风控状态（供 pipeline/risk_gate 读取）。"""
+    return _LIVE_RISK_STATE
+
+def _is_risk_locked(risk_state=None):
+    """P1-16: 检查风控是否锁定/熔断。
+    
+    返回 (locked, reason) tuple。locked=True 表示禁止开仓。
+    """
+    rs = risk_state if risk_state is not None else _LIVE_RISK_STATE
+    if rs is None:
+        return False, ""
+    state = rs.get("state", "")
+    if state in ("HALTED", "LOCKED"):
+        reason = rs.get("lock_reason", "") or rs.get("reason", "") or f"状态={state}"
+        return True, reason
+    scale = rs.get("scale", 1.0)
+    if scale is not None and float(scale) <= 0.0:
+        return True, f"风控 scale=0 (state={state})"
+    return False, ""
+
 
 # ----------------------------------------------------------------------------
 # 路径与常量
@@ -540,47 +571,52 @@ def _fetch_daily_robust(code):
 
 
 def load_daily_refreshed(symbol, ttl=1800):
-    """load_daily + akshare 近期日线追加（minishare 无 fut_daily 权限，按分工走免费源兜底）。
+    """P1-5 重构：load_daily + akshare 近期日线追加（minishare 无 fut_daily 权限，按分工走免费源兜底）。
     仅用于实盘/纸面追踪，绝不在 walk_forward_backtest 中使用（避免前视）。ttl 秒缓存。
 
     具体交割合约（_CONTRACT_AKSHARE 内，如 SA01）：直接拉 akshare 该合约日线，
-    不走主连缓存 CSV（主连 _XX0_daily.csv 与该合约日线不同）。"""
+    不走主连缓存 CSV（主连 _XX0_daily.csv 与该合约日线不同）。
+    深度重审修复：
+      - B3 fall-through bug：具体合约条数不足60时不再落到主连 load_daily() 混用数据源
+      - 消除重复 import time as _t
+      - 缓存检查仅保留一处（函数开头），不再在中间重复判断"""
     import time as _t
     cached = _DAILY_CACHE.get(symbol)
     if cached and (_t.time() - cached[1]) < ttl:
         return cached[0]
-    # 具体交割合约：多源兜底拉该合约日线
+
+    # 分支 1: 具体交割合约（如 SA01）—— 只走 akshare 单源，fall-through 被根治
     if symbol in _CONTRACT_AKSHARE:
         try:
             code = _CONTRACT_AKSHARE[symbol]
             raw = _fetch_daily_robust(code)
             if len(raw) >= 60:
                 _DAILY_CACHE[symbol] = (raw, _t.time())
-                return raw
-            print(f"  [daily refresh] {symbol}({code}) 日线条数不足: {len(raw)}")
-            return raw if len(raw) else None
+            elif len(raw) > 0:
+                print(f"  [daily refresh] {symbol}({code}) 条数偏少({len(raw)}<60)，仍返回部分数据")
+            else:
+                print(f"  [daily refresh] {symbol}({code}) akshare 返回空数据")
+            return raw if len(raw) > 0 else None
         except Exception as e:
-            print(f"  [daily refresh] {symbol}({_CONTRACT_AKSHARE[symbol]}) 全部源失败: {e}")
+            print(f"  [daily refresh] {symbol}({code}) 全部源失败: {e}")
             return None
+
+    # 分支 2: 常规品种 —— load_daily 本地主连 + akshare 近期追加
     df = load_daily(symbol)
-    # 修复：本地不足/缺失不再提前 return，交给下方 akshare 兜底
-    import time as _t
-    cached = _DAILY_CACHE.get(symbol)
-    if cached and (_t.time() - cached[1]) < ttl:
-        return cached[0]
     try:
         # akshare sina 主力连续代码（symbol → sina code）
         code = _AKSHARE_MAP.get(symbol, symbol.upper() + "0")
         raw = _fetch_daily_robust(code)
-        if df is not None and len(df) >= 1:
-            new = raw[raw.index > df.index[-1]]
-            if len(new):
-                df = pd.concat([df, new])
-        else:
-            df = raw
+        if raw is not None and len(raw) >= 1:
+            if df is not None and len(df) >= 1:
+                new = raw[raw.index > df.index[-1]]
+                if len(new):
+                    df = pd.concat([df, new])
+            else:
+                df = raw
         _DAILY_CACHE[symbol] = (df, _t.time())
     except Exception as e:
-        print(f"  [daily refresh] {symbol} 全部源失败: {e}")
+        print(f"  [daily refresh] {symbol} akshare 兜底失败: {e}")
     return df
 
 
@@ -657,22 +693,25 @@ def score_F(symbol, date_str=None):
 def score_C(symbol, date_str=None):
     """资金面 C ∈ [-100,100]；龙虎榜历史代理（缺 cpos_cache.json 时中性 0）。
     实时 C_flow 另由 compute_C_flow 提供（minishare 差分 + da龘 tick），不在本函数。
-    若给定 date_str 且该日历史存在则取该日 C_score（回测用），否则取最新可用值。"""
-    if os.path.exists(CPOS_JSON):
-        try:
-            d = json.load(open(CPOS_JSON))
-            ckey = _CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper())
-            sym = d.get(ckey)
-            if sym:
-                if date_str:
-                    for h in sym.get("history", []):
-                        if h.get("date") == date_str and h.get("C_score") is not None:
-                            return float(h["C_score"])
-                v = sym.get("C_score")
-                if v is not None:
-                    return float(v)
-        except Exception:
-            pass
+    若给定 date_str 且该日历史存在则取该日 C_score（回测用），否则取最新可用值。
+    B4 加固：json.load(open(CPOS_JSON)) 置于 try 内部 + 用 with 上下文管理器防止句柄泄漏。"""
+    if not os.path.exists(CPOS_JSON):
+        return 0.0
+    try:
+        with open(CPOS_JSON, encoding="utf-8") as _f:
+            d = json.load(_f)
+        ckey = _CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper())
+        sym = d.get(ckey) if isinstance(d, dict) else None
+        if sym:
+            if date_str:
+                for h in sym.get("history", []):
+                    if h.get("date") == date_str and h.get("C_score") is not None:
+                        return float(h["C_score"])
+            v = sym.get("C_score")
+            if v is not None:
+                return float(v)
+    except (json.JSONDecodeError, OSError, ValueError):
+        pass
     return 0.0
 
 
@@ -764,7 +803,7 @@ def regime_weights(regime):
     return w
 
 
-def cluster_weights(regime, cfg=None, group=None):
+def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
     """簇级权重（P-A 去相关核心 + P-D 季节性分组加权）：
     同簇策略高度共线，视为「一个代表信号」而非各自累加 —— 故每簇只取 ONE 代表权重
     （取该簇成员在 regime 下的权重均值；同簇成员权重通常一致），而非 Σ各成员权重。
@@ -784,7 +823,16 @@ def cluster_weights(regime, cfg=None, group=None):
         cw[cname] = sum(rw.get(m, 0.0) for m in members) / len(members)
     # P-D：seasonal 簇按品种分组加权提升
     sb = (cfg or {}).get("seasonal_boost", {})
-    if sb.get("enabled", False) and group is not None:
+    # 开关优先级：特性开关 > 旧配置 > 默认关闭
+    sb_enabled = None
+    if feat_mgr is not None:
+        try:
+            sb_enabled = feat_mgr.is_enabled('seasonal_boost')
+        except Exception:
+            sb_enabled = None
+    if sb_enabled is None:
+        sb_enabled = bool(sb.get("enabled", False))
+    if sb_enabled and group is not None:
         mult = float(sb.get("global_mult", 1.0))
         mult *= float(sb.get("by_group", {}).get(group, 1.0))
         cw["seasonal"] = cw.get("seasonal", 0.0) * mult
@@ -793,7 +841,7 @@ def cluster_weights(regime, cfg=None, group=None):
 
 _DECORR_OFF_WARNED = [False]   # P2a 守卫：decorrelate.enabled=False 时一次性告警
 
-def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None):
+def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
     """8 策略 → regime 加权 → 去相关合成 → T_score ∈ [-100,100]（P-A 整改，2026-08-14）。
 
     去相关设计（对照 P-A 三条建议）：
@@ -815,10 +863,18 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None):
     if df is None or len(df) < 60:
         return 0.0, "未知", "数据不足"
     # P-F：分品种 regime 阈值（波动大的品种放大阈值，避免长期被分错 regime）
-    regime_rp = regime_params_for(symbol, cfg) if symbol else {}
+    regime_rp = regime_params_for(symbol, cfg, feat_mgr) if symbol else {}
     regime, rdesc = classify_regime(df, regime_rp)
     dc = (cfg or DEFAULT_CONFIG).get("decorrelate", {})
-    enabled = bool(dc.get("enabled", True))
+    # 开关优先级：特性开关 > 旧配置 > 默认开启
+    enabled = None
+    if feat_mgr is not None:
+        try:
+            enabled = feat_mgr.is_enabled('decorrelate')
+        except Exception:
+            enabled = None
+    if enabled is None:
+        enabled = bool(dc.get("enabled", True))
 
     # 1) 各策略信号（与旧逻辑一致，异常防御）
     sig = {}
@@ -846,7 +902,7 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None):
         return round(T, 1), regime, rdesc
 
     # 2) 簇投票（坍缩共线）+ 簇内一致度
-    cw = cluster_weights(regime, cfg, group)
+    cw = cluster_weights(regime, cfg, group, feat_mgr)
     cluster_vote, cluster_consensus = {}, {}
     for cname, members in STRAT_CLUSTERS.items():
         votes = [sig[m] for m in members]
@@ -884,7 +940,7 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None):
     # 5) 归一化到 [-100,100]
     #    分母用【未加权】簇权重之和（seasonal_boost 仅放大 seasonal 簇的"发言权"，不膨胀分母），
     #    保证：seasonal 不触发时 T 分布与未加权一致（不被稀释）；触发时 T 被抬升 —— 加法语义。
-    cw_base = cluster_weights(regime, None, None)
+    cw_base = cluster_weights(regime, None, None, feat_mgr)
     maxw = cw_base["trend"] + cw_base["mean"] + cw_base["seasonal"]
     if maxw <= 0:
         return 0.0, regime, rdesc
@@ -918,15 +974,33 @@ def effective_params(symbol, cfg=DEFAULT_CONFIG):
     return T_base, bhd
 
 
-def regime_params_for(symbol, cfg=DEFAULT_CONFIG):
+def regime_params_for(symbol, cfg=DEFAULT_CONFIG, feat_mgr=None):
     """解析某品种生效的 regime 分类阈值（P-F，2026-08-14）。
 
     覆盖层级：default → by_group[group] → by_symbol[sym]（后者优先）。
     返回 dict（含 atr_thresh/flat_dev/flat_atr/trend_slope/trend_dev），可直接喂 classify_regime(params=...)。
-    regime_params.enabled=False 时一律回落 default（=旧全局阈值行为，便于 A-B 对照）。
+    
+    开关优先级（从高到低）：
+      1. feature_flags.market_state_engine （特性开关，新）
+      2. regime_params.enabled （trade_config 旧位置，向后兼容）
+      3. 默认启用（True）
+    任一关闭 → 回落 default（=旧全局阈值行为，便于 A-B 对照）。
     """
     rp = (cfg or DEFAULT_CONFIG).get("regime_params", {})
-    if not bool(rp.get("enabled", True)):
+    
+    # 优先级1：特性开关（新）
+    enabled = None
+    if feat_mgr is not None:
+        try:
+            enabled = feat_mgr.is_enabled('market_state_engine')
+        except Exception:
+            enabled = None
+    
+    # 优先级2：旧配置（向后兼容）
+    if enabled is None:
+        enabled = bool(rp.get("enabled", True))
+    
+    if not enabled:
         # 关闭分品种：全部回落 default（即 classify_regime 旧全局行为）
         return dict(rp.get("default", {"atr_thresh": 0.025, "flat_dev": 0.008,
                                         "flat_atr": 0.012, "trend_slope": 0.003, "trend_dev": 0.010}))
@@ -1017,7 +1091,7 @@ def recompute_liquidity_tiers(tail: int = 60, top_n: int = 12):
     return out
 
 
-def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, date=None, c_override=None, ablate=None, F_override=None, hmm_label=None, macro_label=None, garch_label=None, gbm_garch=None):
+def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, date=None, c_override=None, ablate=None, F_override=None, hmm_label=None, macro_label=None, garch_label=None, gbm_garch=None, risk_state=None, feat_mgr=None):
     """算三维修分 + 流水线合成，返回触发判定与中间量。
     date: 当前交易日(YYYYMMDD)，用于查真实基本面 F（缺失→中性）。
     c_override: 实盘可传实时 C_flow 评分覆盖 score_C（默认 None=用 score_C）。
@@ -1027,7 +1101,23 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
              （trend_up/down×0.90、choppy×1.15、high_vol×1.25）。默认 None，回测三处调用不传参，
              HMM 永不进入回测路径（无前视偏差红线）。"""
     group = SYMBOLS.get(symbol, {}).get("group")   # 用于 P-D seasonal_boost 分组加权
-    T_D, regime, rdesc = compute_T(df_daily, cfg, group, symbol=symbol)
+    
+    # P1-16: 实时风控前置检查 —— live 模式下若已锁定/熔断，直接返回空信号
+    _locked, _lock_reason = _is_risk_locked(risk_state)
+    if _locked:
+        return {
+            "F": 0.0, "T_D": 0.0, "T_5m": 0.0, "C": 0.0,
+            "bias_G": 0.0, "bias_FC": 0.0, "dir_T": 0, "dir_T_raw": 0,
+            "regime": "", "rdesc": "", "regime_hmm": None,
+            "garch_label": None, "gbm_garch": None,
+            "risk_scale": 1.0, "macro_bias": None,
+            "triggered": False, "T_thresh_eff": 0, "T_thresh_used": 0,
+            "conv": "风控锁定", "used_5m": False, "hard_veto": True,
+            "bs_mode": "", "corr_action": "",
+            "risk_blocked": True, "risk_block_reason": _lock_reason,
+        }
+    
+    T_D, regime, rdesc = compute_T(df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
     if date is None:
         date = df_daily.index[-1].strftime("%Y%m%d") if len(df_daily) else None
     F = F_override if F_override is not None else score_F(symbol, date)
@@ -1051,7 +1141,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
 
     # 小周期触发：有 5m 用 5m，否则 T@D 降频代理
     if df_5m is not None and len(df_5m) >= 60:
-        T_5m, _, _ = compute_T(df_5m, cfg, group, symbol=symbol)
+        T_5m, _, _ = compute_T(df_5m, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
         used_5m = True
     else:
         T_5m, used_5m = T_D, False
@@ -1098,6 +1188,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
 
     triggered = False
     hard_veto = False
+    _thr = T_thresh_eff  # P0-1 fix: ensure _thr always defined
     if dir_T != 0:
         # P-C：硬否决基于 F/C 反向强度（bias_FC 上限 40，阈值 25 可达；原 bias_G≥60 几乎不可达）
         hard_veto = (abs(bias_FC) >= fc_hard) and (math.copysign(1, bias_FC) != dir_T)
@@ -1125,13 +1216,24 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
         conv = "资金反向(打折)"
 
     # 相关性闸门（§1.4）：滚动 corr(T,C) 降权低置信维
+    # P1-2 深度重审加固：原修复只写文本描述但未实际降权，属空转。
+    # 现改为：|corr(T,C)|>gate 时，把 T 和 C 中绝对值较小的一维强制降为中性(0)，
+    # 避免冗余维度在同向/反向贡献中加权，提高信号熵纯度。
     corr_action = "无冗余,正常计权"
     if corr_hist is not None and len(corr_hist) >= 10:
         arr = np.array(corr_hist)
         if np.ptp(arr.std(0)) > 0:
             ctc = np.corrcoef(arr[:, 0], arr[:, 1])[0, 1]
             if not math.isnan(ctc) and abs(ctc) > cfg["corr_gate"]:
-                corr_action = f"corr(T,C)={ctc:.2f}>阈值,降权低置信维"
+                # 选取绝对值较小的一维降权至 0（保留更强的一维）
+                if abs(T_D) <= abs(C):
+                    T_D_orig = T_D
+                    T_D = 0.0
+                    corr_action = f"corr(T,C)={ctc:.2f}>gate,降权T(|T|={abs(T_D_orig):.1f}≤|C|={abs(C):.1f})"
+                else:
+                    C_orig = C
+                    C = 0.0
+                    corr_action = f"corr(T,C)={ctc:.2f}>gate,降权C(|C|={abs(C_orig):.1f}<|T|={abs(T_D):.1f})"
 
     return {
         "F": F, "T_D": T_D, "T_5m": T_5m, "C": C,
@@ -1205,12 +1307,16 @@ def compute_kelly_factor(symbol, cfg=DEFAULT_CONFIG):
         edge = calib.get("full_expR")
     if edge is None:
         return 1.0
-    slope = rg.get("kelly_slope", 2.0)
-    mult = 0.6 + slope * max(float(edge), 0.0)   # mean_oos=0→0.6x；0.5→1.6x
-    # ③ 阈值全参数化：kelly_min/kelly_max 由 trade_config.json 顶层覆盖（缺则回退 DEFAULT_CONFIG）
+    # P1-4 深度重审：改用线性映射替代原 0.6 + slope*edge 公式
+    # 原公式 edge=0.5 → 1.6x（过度自信），靠 max/min 截断到 1.2x，未根治弱 edge 加杠杆问题。
+    # 新公式：mult = kelly_min + (kelly_max - kelly_min) * clip(edge / target_edge, 0, 1)
+    # target_edge 来自 trade_config.json（默认 0.5 即历史平均优良 edge），超线性封顶。
     kelly_min_eff = _tc_num("kelly_min", rg.get("kelly_min", 0.6))
     kelly_max_eff = _tc_num("kelly_max", rg.get("kelly_max", 1.2))
-    mult = max(kelly_min_eff, min(kelly_max_eff, mult))
+    target_edge = _tc_num("kelly_target_edge", rg.get("kelly_target_edge", 0.5))
+    _edge_pos = max(float(edge), 0.0)
+    _ratio = min(_edge_pos / target_edge, 1.0) if target_edge > 0 else 1.0
+    mult = kelly_min_eff + (kelly_max_eff - kelly_min_eff) * _ratio
     # 近景 edge 门槛：cur_full_expR(近景期望收益) 需 >0 才放杠杆；缺近景数据则退回远 edge 符号
     near = calib.get("cur_full_expR")
     near_pos = (float(near) > 0) if near is not None else (float(edge) > 0)
@@ -1218,7 +1324,18 @@ def compute_kelly_factor(symbol, cfg=DEFAULT_CONFIG):
         mult = min(mult, 1.0)
     return mult
 
-def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thresh=None, held_lots=0):
+def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thresh=None, held_lots=0, risk_state=None):
+    # P1-16: 实时风控前置检查 —— 锁定/熔断时直接否决
+    _locked, _lock_reason = _is_risk_locked(risk_state)
+    if _locked:
+        return {
+            "passed": False, "N_risk": 0, "N_margin": 0,
+            "N_plan": 0, "stop_pts": 0, "limit_pts": 0,
+            "gate3_ok": False, "over_risk": False,
+            "kelly_mult": 0.0, "t_scale": None,
+            "risk_blocked": True, "risk_block_reason": _lock_reason,
+        }
+    
     ac, sp = cfg["account"], cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
     # 逐品种覆盖：命中 per_symbol_risk 则改写 stop_atr_mult / rr_ratio
     rg = dict(cfg["risk_gate"])
@@ -1271,7 +1388,7 @@ def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thr
 # ----------------------------------------------------------------------------
 # 出场计划（§1.8）
 # ----------------------------------------------------------------------------
-def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG):
+def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mgr=None):
     rg = dict(cfg["risk_gate"])
     for _k in ("stop_atr_mult", "rr_ratio"):
         if _k in cfg.get("per_symbol_risk", {}).get(symbol, {}):
@@ -1284,7 +1401,15 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG):
     else:
         stop, t1, t2 = entry + stop_dist, entry - stop_dist, entry - rg["rr_ratio"] * stop_dist
     tt = dict(cfg.get("trailing_tail", {}))
-    tail_on = bool(tt.get("enabled", False))
+    # 开关优先级：特性开关 > 旧配置 > 默认关闭
+    tail_on = None
+    if feat_mgr is not None:
+        try:
+            tail_on = feat_mgr.is_enabled('trailing_stop')
+        except Exception:
+            tail_on = None
+    if tail_on is None:
+        tail_on = bool(tt.get("enabled", False))
     trend_only = bool(tt.get("trend_only", True))
     tail_enabled = tail_on and (not trend_only or regime == "趋势")
     tail_trail_R = float(tt.get("tail_trail_R", 2.0))
@@ -1476,7 +1601,9 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
 
 
 def _sim_exit_5m(df5_seg, dir_T, entry, ep, sd):
-    """在 5m 序列上逐 bar 做 stop / t2 / 尾仓(P-G) 出场，返回 (exit_price, reason)。"""
+    """在 5m 序列上逐 bar 做 stop / t2 / 尾仓(P-G) 出场，返回 (exit_price, reason, exit_idx)。
+    
+    P0-2 fix: 额外返回退出 bar 索引，使回测可正确跳过持仓期内的日线。"""
     tail_active, tail_stop = False, None
     for j in range(len(df5_seg)):
         hi = float(df5_seg["high"].iloc[j])
@@ -1484,30 +1611,31 @@ def _sim_exit_5m(df5_seg, dir_T, entry, ep, sd):
         if tail_active:
             if dir_T > 0:
                 if lo <= tail_stop:
-                    return tail_stop, "尾仓离场"
+                    return tail_stop, "尾仓离场", j
                 tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
             else:
                 if hi >= tail_stop:
-                    return tail_stop, "尾仓离场"
+                    return tail_stop, "尾仓离场", j
                 tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
             continue
         if dir_T > 0:
             if lo <= ep["stop"]:
-                return ep["stop"], "止损"
+                return ep["stop"], "止损", j
             if hi >= ep["t2"]:
                 if ep["tail_enabled"]:
                     tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
                     continue
-                return ep["t2"], "止盈2R"
+                return ep["t2"], "止盈2R", j
         else:
             if hi >= ep["stop"]:
-                return ep["stop"], "止损"
+                return ep["stop"], "止损", j
             if lo <= ep["t2"]:
                 if ep["tail_enabled"]:
                     tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
                     continue
-                return ep["t2"], "止盈2R"
-    return float(df5_seg["close"].iloc[-1]), "期末平"
+                return ep["t2"], "止盈2R", j
+    # P0-2 fix: 返回最后一个 bar 的索引
+    return float(df5_seg["close"].iloc[-1]), "期末平", len(df5_seg) - 1
 
 
 def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, cooldown_bars=5, ablate=None, tf="5m"):
@@ -1566,7 +1694,8 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
             if len(seg) < 3:
                 i += 1
                 continue
-            exit_price, reason = _sim_exit_5m(seg, dir_T, entry, ep, sd)
+            # P0-2 fix: 接收 exit_idx 以正确跳过持仓期
+            exit_price, reason, exit_idx = _sim_exit_5m(seg, dir_T, entry, ep, sd)
             if exit_price is None:
                 i += 1
                 continue
@@ -1574,11 +1703,25 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
+            # P0-2 fix: 计算退出日期，将 i 推进到至少退出日的下一天
+            exit_date = seg.index[min(exit_idx, len(seg)-1)]
             trades.append({"dir": dir_T, "R": round(R, 3), "R_adj": round(R_adj, 3),
                            "reason": reason, "regime": pipe["regime"],
-                           "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"]})
+                           "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"],
+                           "entry_date": entry_date.strftime("%Y-%m-%d"),
+                           "exit_date": exit_date.strftime("%Y-%m-%d")})
             last_trade_i = i
-            i += 1
+            # P0-2 fix (强化): 用 bisect 精确定位退出日，跳过持仓期内所有日线
+            # 原 Bug: range(i+1, min(i+30, n)) 上限 30 天，持仓>30天的趋势单漏跳
+            exit_day = exit_date.normalize()
+            # 用 bisect 找到日线中 >= exit_day 的第一个位置，确保不超范围
+            _di = df.index.normalize()
+            pos = bisect.bisect_left(_di, exit_day)
+            if pos < n:
+                i = pos + 1  # 退出日的下一天
+            else:
+                i = n - 1   # 兜底：退出日在日线窗口外，跳到末尾
+            roll_skipped += max(0, pos - i) if pos > i else 0
             continue
         i += 1
     if not trades:

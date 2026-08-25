@@ -21,6 +21,7 @@ import math
 from datetime import datetime
 import numpy as np
 import pandas as pd
+import feature_manager as _fmg
 
 
 # ----------------------------------------------------------------------------
@@ -245,9 +246,20 @@ def configure_robust_gate(enabled=None, auto_adapt=None, relax_pp=None,
     if default_oos_expR is not None: _ROBUST_GATE_CFG["default_oos_expR"] = float(default_oos_expR)
 
 
+def _robust_gate_enabled():
+    """稳健池门控总开关：特性开关优先，fallback 旧配置。"""
+    try:
+        mgr = _fmg.get_manager()
+        if mgr is not None:
+            return mgr.is_enabled('robust_pool_gate')
+    except Exception:
+        pass
+    return bool(_ROBUST_GATE_CFG.get("enabled", True))
+
+
 def get_robust_gate():
     """返回当前生效的 (stability, oos_expR) 门槛。"""
-    if not _ROBUST_GATE_CFG["enabled"]:
+    if not _robust_gate_enabled():
         return STABILITY_THRESHOLD, OOS_EXPR_THRESHOLD
     return _ROBUST_GATE["stability"], _ROBUST_GATE["oos_expR"]
 
@@ -260,7 +272,7 @@ def set_robust_gate(stability=None, oos_expR=None):
 
 def load_robust_gate_file(path=None):
     """进程启动/重载时读回灌文件进内存。"""
-    if not _ROBUST_GATE_CFG["enabled"]:
+    if not _robust_gate_enabled():
         return False
     path = path or ROBUST_GATE_FILE
     try:

@@ -25,8 +25,14 @@ def tq_code(sym):
 
 def _fetch_df(code):
     from tqsdk import TqApi, TqAuth
-    cfg = json.load(open(os.path.join(HERE, "tq_config.json")))
-    api = TqApi(auth=TqAuth(cfg["tq_username"], cfg["tq_password"]))
+    # P0-17 fix: 优先使用环境变量，回退到配置文件
+    _tq_user = os.environ.get("TQ_USERNAME", "")
+    _tq_pass = os.environ.get("TQ_PASSWORD", "")
+    if not _tq_user or not _tq_pass:
+        _cfg = json.load(open(os.path.join(HERE, "tq_config.json")))
+        _tq_user = _tq_user or _cfg.get("tq_username", "")
+        _tq_pass = _tq_pass or _cfg.get("tq_password", "")
+    api = TqApi(auth=TqAuth(_tq_user, _tq_pass))
     k = api.get_kline_serial(code, 300, COUNT)
     for _ in range(10):
         api.wait_update(deadline=time.time() + 3)

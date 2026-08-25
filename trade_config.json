@@ -25,12 +25,14 @@
     "bias_g_min": 50
   },
   "decorrelate": {
+    "_deprecated_note": "[已废弃] enabled 已迁移到 feature_flags.json → decorrelate，此字段保留作 fallback，2026-08-25",
     "enabled": true,
     "crowd_penalty": 0.35,
     "crowd_thresh": 0.8,
     "contrarian_damp": 0.25
   },
   "seasonal_boost": {
+    "_deprecated_note": "[已废弃] enabled 已迁移到 feature_flags.json → seasonal_boost，此字段保留作 fallback，2026-08-25",
     "enabled": true,
     "global_mult": 1.5,
     "by_group": {
@@ -39,6 +41,7 @@
     }
   },
   "trailing_tail": {
+    "_deprecated_note": "[已废弃] enabled 已迁移到 feature_flags.json → trailing_stop，此字段保留作 fallback，2026-08-25",
     "enabled": true,
     "trend_only": true,
     "tail_pct": 0.25,
@@ -46,6 +49,7 @@
     "min_profit_R": 2.0
   },
   "regime_params": {
+    "_deprecated_note": "[已废弃] enabled 已迁移到 feature_flags.json → market_state_engine，此字段保留作 fallback，2026-08-25",
     "enabled": true,
     "default": {
       "atr_thresh": 0.025,
@@ -108,7 +112,9 @@
     "by_symbol": {}
   },
   "robust_pool_gate": {
+    "_deprecated_note_enabled": "[已废弃] enabled 已迁移到 feature_flags.json → robust_pool_gate，此字段保留作 fallback，2026-08-25",
     "enabled": true,
+    "_deprecated_note_auto_adapt": "[已废弃] auto_adapt 已迁移到 feature_flags.json → auto_optimize.config.auto_adapt，此字段保留作 fallback，2026-08-25",
     "auto_adapt": false,
     "relax_pp": 0.5,
     "max_relax": 0.05,
@@ -435,7 +441,7 @@
     },
     "SH": {
       "multiplier": 30,
-      "margin_rate": 0.12,
+      "margin_rate": 0.1495,
       "limit_pct": 0.06,
       "name": "烧碱",
       "contract": "SH2611"

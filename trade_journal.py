@@ -44,7 +44,7 @@ _MULTIPLIERS = {
     "m": 10, "y": 10, "a": 10, "b": 10, "p": 10,
     "c": 10, "cs": 10, "jd": 10, "lh": 16, "rr": 10,
     # 郑商所 CZCE
-    "FG": 20, "SA": 20, "MA": 10, "TA": 5, "PF": 5,
+    "FG": 20, "SA": 20, "SA01": 20, "MA": 10, "TA": 5, "PF": 5,
     "PX": 5, "SH": 30, "UR": 20, "PR": 5,
     "SR": 10, "CF": 5, "RM": 10, "OI": 10, "PK": 5, "AP": 10,
     # 广期所 GFEX
@@ -88,6 +88,7 @@ _FEE_SCHEDULE = {
     # 郑商所
     "FG": {"mode": "fixed", "open": 18.0, "close": 18.0},                    # 玻璃 18 元/手（交易所基础）
     "SA": {"mode": "pct", "open": 0.0006, "close": 0.0006},                  # 纯碱 万分之6
+    "SA01": {"mode": "pct", "open": 0.0006, "close": 0.0006},                # P1-6 fix: 纯碱连续合约(SA01) 万分之6
     "OI": {"mode": "fixed", "open": 6.0, "close": 6.0},                     # 菜油 6 元/手（固定，开平今均收）
     "CF": {"mode": "fixed", "open": 12.9, "close": 12.9, "close_today": 0.0}, # 棉花 12.9 元/手（固定，平今免收）
     "AP": {"mode": "fixed", "open": 15.0, "close": 15.0, "close_today": 60.0},  # 苹果 开平15 / 平今60
@@ -137,19 +138,92 @@ def _leg_fee(symbol, price, lots, side="open", same_day=False):
 
 
 def _load():
+    """P0-3 加固：读取 journal，损坏时自动回退 .bak，都损坏则返回空结构。
+
+    读取链路（优先级）：JOURNAL_FILE → JOURNAL_FILE.bak → 空结构
+    杜绝 JSONDecodeError 导致系统无法启动、已实现盈亏/连亏计数清零的问题。"""
+    _default = {"trades": [], "updated": ""}
     if not os.path.exists(JOURNAL_FILE):
-        return {"trades": [], "updated": ""}
+        return dict(_default)
     with _LOCK:
-        return json.load(open(JOURNAL_FILE, encoding="utf-8"))
+        # 1. 先试主文件
+        try:
+            with open(JOURNAL_FILE, encoding="utf-8") as _f:
+                return json.load(_f)
+        except (json.JSONDecodeError, OSError) as _e:
+            print(f"[trade_journal] 主文件损坏，尝试恢复 .bak: {_e}")
+        # 2. 主文件损坏，试 .bak 备份
+        _bak = JOURNAL_FILE + ".bak"
+        if os.path.exists(_bak):
+            try:
+                with open(_bak, encoding="utf-8") as _f:
+                    _res = json.load(_f)
+                # 恢复成功：把 .bak 复制回主文件（下次直接读主文件）
+                try:
+                    import shutil as _su
+                    _su.copy2(_bak, JOURNAL_FILE)
+                    print(f"[trade_journal] 已从 .bak 恢复主文件")
+                except Exception:
+                    pass
+                return _res
+            except (json.JSONDecodeError, OSError) as _e2:
+                print(f"[trade_journal] .bak 也损坏: {_e2}")
+        # 3. 全部失败，返回空结构 + 留档备查
+        try:
+            _bad = JOURNAL_FILE + ".corrupt"
+            if os.path.exists(JOURNAL_FILE):
+                import shutil as _su
+                _su.copy2(JOURNAL_FILE, _bad)
+                print(f"[trade_journal] 损坏副本已另存为 {_bad}")
+        except Exception:
+            pass
+        return dict(_default)
 
 
 def _save(data):
-    """保存成交记录；自动重算 summary 确保统计实时准确。"""
+    """保存成交记录；自动重算 summary 确保统计实时准确。
+    P0-3 fix: 原子写盘 + .bak 备份，防止进程崩溃导致文件丢失。"""
     data["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _LOCK:
         # ★ 自动重算 summary（避免 record_entry/record_exit 后 summary 过期）
         data["summary"] = _compute_summary(data)
-        json.dump(data, open(JOURNAL_FILE, "w"), ensure_ascii=False, indent=2)
+        # 备份当前好状态
+        if os.path.exists(JOURNAL_FILE):
+            try:
+                with open(JOURNAL_FILE, encoding="utf-8") as _f:
+                    _cur = _f.read()
+                if _cur.strip():
+                    with open(JOURNAL_FILE + ".bak", "w", encoding="utf-8") as _f:
+                        _f.write(_cur)
+            except Exception:
+                pass
+        # 原子写：先写临时文件再 os.replace
+        import tempfile as _tmp
+        _fd, _tmp_path = _tmp.mkstemp(dir=os.path.dirname(JOURNAL_FILE), suffix=".tmp")
+        try:
+            with os.fdopen(_fd, "w", encoding="utf-8") as _f:
+                json.dump(data, _f, ensure_ascii=False, indent=2)
+                _f.flush()
+                os.fsync(_f.fileno())
+            os.replace(_tmp_path, JOURNAL_FILE)
+        except Exception:
+            try:
+                os.unlink(_tmp_path)
+            except Exception:
+                pass
+            raise
+
+
+
+def _safe_read_json(path, default):
+    """P0-3 加固：安全读取任意 JSON 文件，不抛异常、不泄漏句柄。"""
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, encoding="utf-8") as _f:
+            return json.load(_f)
+    except (json.JSONDecodeError, OSError):
+        return default
 
 
 def get_all_trades():
@@ -211,15 +285,20 @@ def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_d
         _sd = float(stop_dist) if stop_dist is not None else None
     except Exception:
         _sd = None
+    # ★★ 2026-08-26: 价格保护 - 验证用户价格不被篡改
+    _original_price = float(price) if price is not None and price != 0 else 0
+    if _original_price <= 0:
+        return False, f"非法价格 {price}，必须大于0", ""
+    print(f"[record_entry] 保存价格: {_original_price} (原始输入: {price}, 类型: {type(price).__name__})")
     # 止损方向校验：防止空单止损落在开仓价下方等错误配置落盘
-    stop, fix_note = _validate_entry_stop(direction, price, stop)
+    stop, fix_note = _validate_entry_stop(direction, _original_price, stop)
     trade = {
         "id": tid,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "symbol": symbol,
         "direction": direction,
         "lots": int(lots),
-        "entry_price": float(price),
+        "entry_price": _original_price,  # ★ 使用验证后的价格，防止篡改
         "signal_id": str(signal_id),
         "strategy": (str(strategy).strip() or ""),   # F1：策略标签
         "account": (str(account).strip() or "主账户"),  # F1：账户标签
@@ -236,7 +315,7 @@ def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_d
     }
     data["trades"].append(trade)
     _save(data)
-    return True, f"已记录 {symbol} {direction} {lots}手 @{price}{fix_note}", tid
+    return True, f"已记录 {symbol} {direction} {lots}手 @{_original_price}{fix_note}", tid  # ★ 返回验证后的价格
 
 
 def record_exit(symbol, direction, lots, price, reason="手动"):
@@ -296,15 +375,8 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
         gross = round((float(price) - trade["entry_price"]) * mult * trade_lots * ds, 2)
         close_fee = _leg_fee(symbol, price, trade_lots, "close", same_day)
         # 该部分对应的开仓手续费（按开仓价 + 平掉手数），与整笔平口径一致（fee_total = open_fee + close_fee）
-        open_fee = trade.get("open_fee")
-        if open_fee is None:
-            open_fee = _leg_fee(symbol, trade["entry_price"], trade_lots)
-        else:
-            # 原开仓费按整笔记录，部分平仅取对应手数比例（避免重复计入整笔开仓费）
-            try:
-                open_fee = round(float(open_fee) * trade_lots / max(1, trade["lots"]), 2)
-            except Exception:
-                open_fee = _leg_fee(symbol, trade["entry_price"], trade_lots)
+        # P1-10 fix: 直接按平仓手数重算开仓手续费，避免比例分摊舍入误差累积
+        open_fee = _leg_fee(symbol, trade["entry_price"], trade_lots)
         fee_total = round(float(open_fee) + float(close_fee), 2)
         partial_pnl = round(gross - fee_total, 2)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -546,14 +618,69 @@ def summary():
         else:
             r_dist["R<=0"] += 1
 
+    # ★ 今日统计（按开仓日期过滤），供总览驾驶舱「交易执行」板块联动
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_trades_list = [t for t in data.get("trades", []) if (t.get("time") or "")[:10] == today]
+    today_closed = [t for t in today_trades_list if t.get("pnl") is not None]
+    today_pnl = sum(t["pnl"] for t in today_closed)
+    today_fee = sum((t.get("fee_total") or 0) for t in today_closed)
+
+    # ★ 2026-08-26: 添加持仓浮动盈亏和风险统计
+    # 加载账户状态用于计算持仓风险
+    _acct_file = os.path.join(HERE, "account_state.json")
+    _positions = {}
+    if os.path.exists(_acct_file):
+        try:
+            with open(_acct_file, "r") as _f:
+                _acct = json.load(_f)
+                _positions = _acct.get("positions", {})
+        except:
+            pass
+    
+    # 计算持仓最大风险（基于止损价）
+    _total_risk = 0.0
+    _floating_details = []
+    for _t in open_trades:
+        _sym = _t["symbol"]
+        _dir = _t["direction"]
+        _lots = _t["lots"]
+        _entry = _t["entry_price"]
+        _stop = _t.get("stop")
+        _mult = _MULTIPLIERS.get(_sym, 10)
+        
+        # 计算单笔风险
+        if _stop and _dir == "多":
+            _risk = (_entry - _stop) * _lots * _mult
+        elif _stop and _dir == "空":
+            _risk = (_stop - _entry) * _lots * _mult
+        else:
+            _risk = 0
+        
+        _total_risk += _risk
+        _floating_details.append({
+            "symbol": _sym,
+            "direction": _dir,
+            "lots": _lots,
+            "entry": _entry,
+            "stop": _stop,
+            "risk": round(_risk, 2),
+        })
+    
     return {
         "total_trades": len(data.get("trades", [])),
         "open_trades": len(open_trades),
+        "closed_trades": len(closed),
+        "today_trades": len(today_trades_list),
+        "today_pnl": round(today_pnl, 2),
+        "today_fee": round(today_fee, 2),
+        # 已实现盈亏
         "total_pnl": round(total_pnl, 2),
-        # ★ 已实现盈亏（= 已平仓盈亏合计），供总览驾驶舱/绩效书签与账户总览 realized_pnl 联动
         "realized": round(total_pnl, 2),
         "gross_pnl": round(gross_pnl, 2),
-        "total_fee": round(total_fee, 2),
+        # 持仓风险统计
+        "total_risk": round(_total_risk, 2),
+        "floating_count": len(open_trades),
+        # 胜率统计
         "win_rate": round(win_rate, 1),
         "avg_win": round(avg_win, 2),
         "avg_loss": round(avg_loss, 2),
@@ -565,6 +692,7 @@ def summary():
         "r_list": [round(x, 2) for x in r_list],
         "by_symbol": by_symbol,
         "session_split": session_split(),
+        "floating_details": _floating_details,
         "updated": data.get("updated", ""),
     }
 
@@ -792,11 +920,7 @@ def _attrib_match_signal(t, signals=None, sig_by_time=None, window_min=180):
     """把一笔成交绑定到引擎信号（精确 id 或 品种+方向+时间窗模糊）。回 (sig, method)。"""
     if signals is None:
         signals = []
-        if os.path.exists(SIGNAL_LOG):
-            try:
-                signals = json.load(open(SIGNAL_LOG, encoding="utf-8"))
-            except Exception:
-                signals = []
+        signals = _safe_read_json(SIGNAL_LOG, [])
     if sig_by_time is None:
         sig_by_time = {s.get("time", ""): s for s in signals}
     sid = (t.get("signal_id") or "")
@@ -829,12 +953,7 @@ def pnl_attribution(strong_thresh=20):
     """实盘盈亏 F/T/C 维度归因（#127）。详见模块顶部说明。"""
     data = _load()
     closed = [t for t in data["trades"] if t.get("pnl") is not None]
-    signals = []
-    if os.path.exists(SIGNAL_LOG):
-        try:
-            signals = json.load(open(SIGNAL_LOG, encoding="utf-8"))
-        except Exception:
-            signals = []
+    signals = _safe_read_json(SIGNAL_LOG, [])
     sig_by_time = {s.get("time", ""): s for s in signals}
 
     buckets = {k: {"label": L, "count": 0, "wins": 0, "pnl": 0.0}
@@ -1095,12 +1214,7 @@ def compare_to_papertrack(window_min=120):
     closed = [t for t in data["trades"] if t["pnl"] is not None]
 
     # 读信号日志
-    signals = []
-    if os.path.exists(SIGNAL_LOG):
-        try:
-            signals = json.load(open(SIGNAL_LOG, encoding="utf-8"))
-        except Exception:
-            pass
+    signals = _safe_read_json(SIGNAL_LOG, [])
 
     def _tt(s):
         try:
