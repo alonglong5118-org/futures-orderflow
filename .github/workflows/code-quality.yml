@@ -11,15 +11,29 @@
 
 name: Code Quality
 
+run-name: "Code Quality · ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.message || 'manual' }}"
+
 on:
   pull_request:
     branches:
       - main
       - master
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.rst"
+      - "docs/**"
+      - "LICENSE*"
+      - ".gitignore"
   push:
     branches:
       - main
       - master
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.rst"
+      - "docs/**"
+      - "LICENSE*"
+      - ".gitignore"
 
   workflow_dispatch:
 
@@ -41,6 +55,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -100,6 +116,16 @@ jobs:
           echo "💡 提示：如果新增了测试文件但忘记注册，运行："
           echo "   python scripts/discover_tests.py --update"
 
+      - name: Quick checks summary
+        if: always()
+        run: |
+          echo "### ⚡ 快速检查完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Python 语法检查" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 测试文件命名规范" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 基准文件完整性" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 测试发现一致性" >> $GITHUB_STEP_SUMMARY
+
   # ── Ruff 阻塞级检查（critical lint + format） ───────────────────────────
   #  合并为一个 job，共享依赖安装和 Ruff 缓存
   #  关键 lint 规则（会导致 bug 的）：
@@ -113,6 +139,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
@@ -154,6 +182,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
@@ -168,7 +198,7 @@ jobs:
           restore-keys: |
             ruff-${{ runner.os }}-
 
-      - name: Run style lint
+      - name: Run Ruff style lint
         run: |
           echo "=== Ruff 风格检查（建议级，不阻塞合并）==="
           echo "包含：代码风格、导入排序、未使用导入、pathlib 建议等"
@@ -188,6 +218,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps

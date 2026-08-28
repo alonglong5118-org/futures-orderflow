@@ -15,6 +15,8 @@
 
 name: Benchmark
 
+run-name: "Benchmark · ${{ github.event_name == 'push' && github.event.head_commit.message || github.event_name }}"
+
 on:
   push:
     branches:
@@ -45,6 +47,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps

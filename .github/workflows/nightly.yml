@@ -45,6 +45,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
@@ -87,6 +89,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps

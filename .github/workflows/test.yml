@@ -9,15 +9,29 @@
 
 name: Test
 
+run-name: "Test · ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.message || 'manual' }}"
+
 on:
   push:
     branches:
       - main
       - master
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.rst"
+      - "docs/**"
+      - "LICENSE*"
+      - ".gitignore"
   pull_request:
     branches:
       - main
       - master
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.rst"
+      - "docs/**"
+      - "LICENSE*"
+      - ".gitignore"
 
   # 支持手动触发
   workflow_dispatch:
@@ -58,6 +72,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
@@ -82,10 +98,24 @@ jobs:
           fi
 
       - name: Run tests
+        id: run-tests
         run: |
           python run_tests.py ${{ steps.scope.outputs.scope }} \
             --junit test-results/${{ matrix.python-version }}-${{ matrix.scope }}.xml \
             --slow 1000
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "### ✅ 测试完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Python 版本 | ${{ matrix.python-version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 测试范围 | ${{ steps.scope.outputs.scope }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 操作系统 | ${{ runner.os }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> JUnit 报告已上传为 artifact，可在「Summary」页面查看详细结果" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload test results
         if: always()
@@ -107,6 +137,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
@@ -140,6 +172,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
