@@ -1,0 +1,495 @@
+{
+  "cu": {
+    "T_thresh": 28,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1954,
+    "full_expR": 0.3252,
+    "cur_full_expR": 0.161,
+    "folds": 38,
+    "total_trades": 80,
+    "pos_rate": 0.263,
+    "robust": true,
+    "note": ""
+  },
+  "al": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.264,
+    "full_expR": 0.264,
+    "cur_full_expR": 0.264,
+    "folds": 38,
+    "total_trades": 229,
+    "pos_rate": 0.632,
+    "robust": true,
+    "note": "🔧2026-08-13重校准: T 28→12 放宽后样本充足且正期望(+0.26/胜40%)→解除门控"
+  },
+  "zn": {
+    "T_thresh": 34,
+    "bias_hard_base": 50,
+    "mean_oos": 0.007,
+    "full_expR": 0.007,
+    "cur_full_expR": 0.007,
+    "folds": 34,
+    "total_trades": 265,
+    "pos_rate": 0.618,
+    "robust": true,
+    "note": "🔧2026-08-13重校准: T 12→34 严格化后近期walk-forward转正(+0.007/胜40%)，可恢复"
+  },
+  "ni": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.2291,
+    "full_expR": 0.1344,
+    "cur_full_expR": 0.1062,
+    "folds": 17,
+    "total_trades": 109,
+    "pos_rate": 0.824,
+    "robust": true,
+    "note": ""
+  },
+  "sn": {
+    "note": "无候选(交易数不足)"
+  },
+  "ao": {
+    "note": "无候选(交易数不足)"
+  },
+  "au": {
+    "T_thresh": 22,
+    "bias_hard_base": 50,
+    "mean_oos": -0.302,
+    "folds": 32,
+    "total_trades": 86,
+    "pos_rate": 0.156,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "ag": {
+    "T_thresh": 16,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0588,
+    "folds": 23,
+    "total_trades": 159,
+    "pos_rate": 0.435,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "rb": {
+    "T_thresh": 22,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1228,
+    "full_expR": 0.1503,
+    "cur_full_expR": 0.1503,
+    "folds": 30,
+    "total_trades": 177,
+    "pos_rate": 0.567,
+    "robust": true,
+    "note": ""
+  },
+  "hc": {
+    "T_thresh": 14,
+    "bias_hard_base": 50,
+    "mean_oos": -0.615,
+    "full_expR": -0.615,
+    "cur_full_expR": -0.615,
+    "folds": 20,
+    "total_trades": 139,
+    "pos_rate": 0.45,
+    "robust": false,
+    "note": "🔧2026-08-13重校准: 近期walk-forward全阈值负(-0.62/胜25%)，模型+实盘双确认衰减→维持门控/建议剔除"
+  },
+  "ss": {
+    "T_thresh": 14,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0998,
+    "folds": 8,
+    "total_trades": 61,
+    "pos_rate": 0.625,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "bu": {
+    "T_thresh": 22,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0082,
+    "folds": 20,
+    "total_trades": 129,
+    "pos_rate": 0.5,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "fu": {
+    "T_thresh": 14,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1486,
+    "full_expR": 0.0899,
+    "cur_full_expR": 0.0104,
+    "folds": 38,
+    "total_trades": 249,
+    "pos_rate": 0.605,
+    "robust": true,
+    "note": ""
+  },
+  "ru": {
+    "T_thresh": 28,
+    "bias_hard_base": 50,
+    "mean_oos": 0.2479,
+    "full_expR": 0.2674,
+    "cur_full_expR": 0.2014,
+    "folds": 38,
+    "total_trades": 178,
+    "pos_rate": 0.605,
+    "robust": true,
+    "note": ""
+  },
+  "sp": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0583,
+    "full_expR": 0.047,
+    "cur_full_expR": 0.0557,
+    "folds": 10,
+    "total_trades": 90,
+    "pos_rate": 0.6,
+    "robust": true,
+    "note": ""
+  },
+  "sc": {
+    "note": "无候选(交易数不足)"
+  },
+  "ec": {
+    "note": "无候选(交易数不足)"
+  },
+  "i": {
+    "T_thresh": 14,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0162,
+    "folds": 20,
+    "total_trades": 129,
+    "pos_rate": 0.35,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "J": {
+    "T_thresh": 22,
+    "bias_hard_base": 50,
+    "mean_oos": 0.2731,
+    "full_expR": 0.2061,
+    "cur_full_expR": 0.2061,
+    "folds": 25,
+    "total_trades": 108,
+    "pos_rate": 0.44,
+    "robust": true,
+    "note": ""
+  },
+  "JM": {
+    "T_thresh": 8,
+    "bias_hard_base": 50,
+    "mean_oos": -0.967,
+    "full_expR": -0.967,
+    "cur_full_expR": -0.967,
+    "folds": 21,
+    "total_trades": 124,
+    "pos_rate": 0.667,
+    "robust": false,
+    "note": "🔧2026-08-13重校准: 近期walk-forward全阈值负(-0.97/胜0%)，模型+实盘双确认衰减→维持门控/建议剔除 | 漂移重校apply:T_thresh=8",
+    "recalibrated_at": "2026-08-18 08:42:25"
+  },
+  "eb": {
+    "T_thresh": 16,
+    "bias_hard_base": 50,
+    "mean_oos": 0.625,
+    "full_expR": 0.625,
+    "cur_full_expR": 0.625,
+    "folds": 8,
+    "total_trades": 60,
+    "pos_rate": 0.75,
+    "robust": true,
+    "note": "🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控"
+  },
+  "eg": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": -0.1804,
+    "folds": 10,
+    "total_trades": 61,
+    "pos_rate": 0.4,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "l": {
+    "T_thresh": 22,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0637,
+    "full_expR": 0.0515,
+    "cur_full_expR": 0.0515,
+    "folds": 33,
+    "total_trades": 208,
+    "pos_rate": 0.485,
+    "robust": true,
+    "note": ""
+  },
+  "pp": {
+    "T_thresh": 28,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0294,
+    "full_expR": 0.1565,
+    "cur_full_expR": 0.1718,
+    "folds": 20,
+    "total_trades": 102,
+    "pos_rate": 0.6,
+    "robust": true,
+    "note": ""
+  },
+  "v": {
+    "T_thresh": 28,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1891,
+    "full_expR": 0.1872,
+    "cur_full_expR": 0.0985,
+    "folds": 29,
+    "total_trades": 153,
+    "pos_rate": 0.655,
+    "robust": true,
+    "note": ""
+  },
+  "pg": {
+    "note": "无候选(交易数不足)"
+  },
+  "m": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0287,
+    "folds": 38,
+    "total_trades": 350,
+    "pos_rate": 0.474,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "y": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1536,
+    "full_expR": 0.2078,
+    "cur_full_expR": 0.1369,
+    "folds": 36,
+    "total_trades": 293,
+    "pos_rate": 0.583,
+    "robust": true,
+    "note": ""
+  },
+  "a": {
+    "T_thresh": 14,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0835,
+    "folds": 38,
+    "total_trades": 305,
+    "pos_rate": 0.316,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "b": {
+    "T_thresh": 16,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0992,
+    "folds": 32,
+    "total_trades": 218,
+    "pos_rate": 0.438,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "p": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0893,
+    "full_expR": 0.1465,
+    "cur_full_expR": 0.0804,
+    "folds": 32,
+    "total_trades": 280,
+    "pos_rate": 0.625,
+    "robust": true,
+    "note": ""
+  },
+  "c": {
+    "T_thresh": 26,
+    "bias_hard_base": 50,
+    "mean_oos": 0.2265,
+    "full_expR": 0.2235,
+    "cur_full_expR": 0.1952,
+    "folds": 38,
+    "total_trades": 211,
+    "pos_rate": 0.684,
+    "robust": true,
+    "note": ""
+  },
+  "cs": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1447,
+    "full_expR": 0.0502,
+    "cur_full_expR": 0.0222,
+    "folds": 18,
+    "total_trades": 150,
+    "pos_rate": 0.611,
+    "robust": true,
+    "note": ""
+  },
+  "jd": {
+    "T_thresh": 30,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0665,
+    "full_expR": -0.0124,
+    "cur_full_expR": -0.0135,
+    "folds": 20,
+    "total_trades": 111,
+    "pos_rate": 0.5,
+    "robust": true,
+    "note": ""
+  },
+  "lh": {
+    "note": "无候选(交易数不足) | OOS校验(2026-08-18,源自oos_compare_result.json日线整改后): expR=+0.3854(25笔),已校验;近期真实papertrack偏弱靠动态门控",
+    "mean_oos": 0.3854,
+    "oos_validated_at": "2026-08-18"
+  },
+  "rr": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": -0.261,
+    "folds": 9,
+    "total_trades": 61,
+    "pos_rate": 0.222,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "FG": {
+    "T_thresh": 18,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1053,
+    "full_expR": -0.1192,
+    "cur_full_expR": -0.0946,
+    "folds": 22,
+    "total_trades": 65,
+    "pos_rate": 0.318,
+    "robust": true,
+    "note": ""
+  },
+  "SA": {
+    "note": "无候选(交易数不足) | OOS校验(2026-08-18,源自oos_compare_result.json日线整改后): expR=+0.6284(18笔),已校验",
+    "mean_oos": 0.6284,
+    "oos_validated_at": "2026-08-18"
+  },
+  "MA": {
+    "T_thresh": 16,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1606,
+    "full_expR": 0.1772,
+    "cur_full_expR": 0.1668,
+    "folds": 18,
+    "total_trades": 118,
+    "pos_rate": 0.722,
+    "robust": true,
+    "note": ""
+  },
+  "TA": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.2084,
+    "full_expR": 0.1311,
+    "cur_full_expR": 0.0843,
+    "folds": 34,
+    "total_trades": 267,
+    "pos_rate": 0.588,
+    "robust": true,
+    "note": ""
+  },
+  "PF": {
+    "note": "无候选(交易数不足)"
+  },
+  "PX": {
+    "note": "无候选(交易数不足)"
+  },
+  "SH": {
+    "note": "无候选(交易数不足)"
+  },
+  "UR": {
+    "T_thresh": 12,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0182,
+    "full_expR": 0.129,
+    "cur_full_expR": -0.1496,
+    "folds": 9,
+    "total_trades": 60,
+    "pos_rate": 0.444,
+    "robust": true,
+    "note": ""
+  },
+  "PR": {
+    "note": "无候选(交易数不足)"
+  },
+  "SR": {
+    "T_thresh": 30,
+    "bias_hard_base": 50,
+    "mean_oos": 0.1095,
+    "full_expR": 0.1344,
+    "cur_full_expR": 0.1009,
+    "folds": 36,
+    "total_trades": 196,
+    "pos_rate": 0.5,
+    "robust": true,
+    "note": ""
+  },
+  "CF": {
+    "T_thresh": 30,
+    "bias_hard_base": 50,
+    "mean_oos": 0.2314,
+    "full_expR": 0.2974,
+    "cur_full_expR": 0.2327,
+    "folds": 38,
+    "total_trades": 191,
+    "pos_rate": 0.684,
+    "robust": true,
+    "note": ""
+  },
+  "RM": {
+    "T_thresh": 28,
+    "bias_hard_base": 50,
+    "mean_oos": -0.0729,
+    "folds": 22,
+    "total_trades": 111,
+    "pos_rate": 0.455,
+    "robust": false,
+    "note": "无稳健正期望，池内最优供参考"
+  },
+  "OI": {
+    "T_thresh": 20,
+    "bias_hard_base": 50,
+    "mean_oos": 0.0727,
+    "full_expR": 0.0417,
+    "cur_full_expR": 0.0055,
+    "folds": 33,
+    "total_trades": 227,
+    "pos_rate": 0.515,
+    "robust": true,
+    "note": ""
+  },
+  "PK": {
+    "note": "无候选(交易数不足)"
+  },
+  "AP": {
+    "T_thresh": 14,
+    "bias_hard_base": 50,
+    "mean_oos": 0.08,
+    "full_expR": 0.1364,
+    "cur_full_expR": -0.0176,
+    "folds": 12,
+    "total_trades": 68,
+    "pos_rate": 0.5,
+    "robust": true,
+    "note": ""
+  },
+  "si": {
+    "note": "无候选(交易数不足)"
+  },
+  "lc": {
+    "note": "无候选(交易数不足)"
+  }
+}

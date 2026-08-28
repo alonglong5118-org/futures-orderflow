@@ -1,0 +1,189 @@
+{
+  "_version": "1.0",
+  "_last_updated": "2026-08-25T17:18:16",
+  "_note": "特性开关配置文件。修改后系统自动热加载（60s内），无需重启。",
+  "market_state_engine": {
+    "name": "市场状态引擎",
+    "description": "识别当前市场状态（趋势初/中/末/震荡），用于动态调整参数",
+    "category": "核心功能",
+    "enabled": true,
+    "version": "v6.0",
+    "introduced": "2026-08-22",
+    "dangerous": false,
+    "config": {
+      "dynamic_params_enabled": false,
+      "confirmation_periods": 3
+    },
+    "_last_changed": "2026-08-25T15:38:46",
+    "_last_operator": "migration"
+  },
+  "take_profit_state_machine": {
+    "name": "分级止盈状态机",
+    "description": "T1/T2/T3 三级止盈 + 移动止盈追踪",
+    "category": "持仓管理",
+    "enabled": true,
+    "version": "v6.0",
+    "introduced": "2026-08-22",
+    "dangerous": false,
+    "config": {
+      "t1_atr_mult": 3.0,
+      "t2_atr_mult": 5.0,
+      "t3_trail_atr_mult": 2.0
+    }
+  },
+  "auto_optimize": {
+    "name": "参数自优化",
+    "description": "基于近期表现自动微调参数（胜率/盈亏比/止损倍数等）",
+    "category": "高级功能",
+    "enabled": false,
+    "version": "v6.0",
+    "introduced": "2026-08-22",
+    "dangerous": true,
+    "config": {
+      "adjust_params": [
+        "signal_quality_thresh"
+      ],
+      "cooldown_hours": 24,
+      "max_adjust_pct": 10,
+      "auto_adapt": false
+    },
+    "_last_changed": "2026-08-25T17:18:16",
+    "_last_operator": "migration"
+  },
+  "corr_gate": {
+    "name": "相关性门控",
+    "description": "T/C维度高相关时自动降权，减少信号冗余",
+    "category": "信号过滤",
+    "enabled": true,
+    "version": "v3.1.0",
+    "introduced": "2026-08-25",
+    "dangerous": false,
+    "config": {
+      "gate_threshold": 0.8
+    },
+    "_last_changed": "2026-08-25T15:21:35",
+    "_last_operator": "e2e-test"
+  },
+  "drawdown_guard": {
+    "name": "回撤保护",
+    "description": "回撤达到阈值时自动降低仓位",
+    "category": "风控",
+    "enabled": true,
+    "version": "v3.1.0",
+    "introduced": "2026-08-25",
+    "dangerous": false,
+    "config": {
+      "dd_warn_pct": 5,
+      "dd_lock_pct": 10
+    }
+  },
+  "kill_switch": {
+    "name": "熔断机制",
+    "description": "极端情况下熔断停止交易",
+    "category": "风控",
+    "enabled": true,
+    "version": "v5.0",
+    "introduced": "2026-08-20",
+    "dangerous": true,
+    "config": {
+      "daily_loss_pct": 8,
+      "consec_losses": 6,
+      "cool_down_hours": 24
+    }
+  },
+  "signal_explain_llm": {
+    "name": "LLM信号解释",
+    "description": "用DeepSeek大模型解释信号生成原因",
+    "category": "辅助功能",
+    "enabled": true,
+    "version": "v3.0.0",
+    "introduced": "2026-08-23",
+    "dangerous": false,
+    "config": {
+      "model": "deepseek-chat",
+      "max_tokens": 500
+    }
+  },
+  "trailing_stop": {
+    "name": "分级止损",
+    "description": "初始→保本→移动→硬止损，四级分级止损",
+    "category": "持仓管理",
+    "enabled": true,
+    "version": "v5.1",
+    "introduced": "2026-08-21",
+    "dangerous": false,
+    "config": {},
+    "_last_changed": "2026-08-25T16:01:57",
+    "_last_operator": "migration"
+  },
+  "seasonal_boost": {
+    "name": "季节性增强",
+    "description": "基于季节性规律的信号增强",
+    "category": "信号增强",
+    "enabled": true,
+    "version": "v5.0",
+    "introduced": "2026-08-20",
+    "dangerous": false,
+    "config": {
+      "global_mult": 1.5
+    },
+    "_last_changed": "2026-08-25T16:28:32",
+    "_last_operator": "migration"
+  },
+  "decorrelate": {
+    "name": "去相关性",
+    "description": "高相关品种仓位惩罚",
+    "category": "组合风控",
+    "enabled": true,
+    "version": "v5.0",
+    "introduced": "2026-08-20",
+    "dangerous": false,
+    "config": {
+      "crowd_penalty": 0.35,
+      "crowd_thresh": 0.8
+    },
+    "_last_changed": "2026-08-25T16:07:32",
+    "_last_operator": "migration"
+  },
+  "robust_pool_gate": {
+    "name": "稳健池子门控",
+    "description": "基于OOS表现的品种动态纳入/排除",
+    "category": "品种选择",
+    "enabled": true,
+    "version": "v5.1",
+    "introduced": "2026-08-21",
+    "dangerous": false,
+    "config": {
+      "auto_adapt": false,
+      "floor_oos": 0.1
+    },
+    "_last_changed": "2026-08-25T17:08:13",
+    "_last_operator": "migration"
+  },
+  "notify": {
+    "name": "消息推送",
+    "description": "交易信号、预警等推送通知（macOS横幅+微信/Telegram）",
+    "category": "辅助功能",
+    "enabled": true,
+    "version": "v5.0",
+    "introduced": "2026-08-20",
+    "dangerous": false,
+    "config": {
+      "telegram_enabled": true,
+      "wechat_enabled": true
+    }
+  },
+  "tick_connector": {
+    "name": "盘口订单流",
+    "description": "Level-2盘口级订单流连接器（默认关闭，需TICK_FEED_ENABLED=1）",
+    "category": "数据源",
+    "enabled": false,
+    "version": "v3.0.0",
+    "introduced": "2026-08-23",
+    "dangerous": false,
+    "config": {
+      "source": "minishare",
+      "websocket_url": ""
+    }
+  }
+}

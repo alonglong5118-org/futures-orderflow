@@ -42,7 +42,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from strategy_layer import compute_strategy, STRATS, set_robust_gate, get_robust_gate
+from strategy_layer import (
+    compute_strategy, STRATS, set_robust_gate, get_robust_gate,
+    _ROBUST_GATE, _ROBUST_GATE_CFG, configure_robust_gate,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -255,10 +258,16 @@ class TestComputeStrategyWfGate(unittest.TestCase):
     """walk-forward 稳健池闸门集成。"""
 
     def setUp(self):
-        self._orig_stab, self._orig_oos = get_robust_gate()
+        """保存完整的闸门状态（阈值 + 配置），测试后恢复。"""
+        self._orig_gate = dict(_ROBUST_GATE)
+        self._orig_cfg = dict(_ROBUST_GATE_CFG)
 
     def tearDown(self):
-        set_robust_gate(stability=self._orig_stab, oos_expR=self._orig_oos)
+        """完整恢复闸门状态，避免污染其他测试。"""
+        _ROBUST_GATE.clear()
+        _ROBUST_GATE.update(self._orig_gate)
+        _ROBUST_GATE_CFG.clear()
+        _ROBUST_GATE_CFG.update(self._orig_cfg)
 
     def test_gated_symbol_zero_size_and_direction(self):
         """未入池品种 + wf_gate=True → direction=0, size=0"""

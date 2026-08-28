@@ -1,0 +1,149 @@
+{
+  "AP": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 2.0,
+    "expR": 0.4772,
+    "win_rate": 0.533,
+    "trades": 15
+  },
+  "CF": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 3.0,
+    "expR": 0.6461,
+    "win_rate": 0.417,
+    "trades": 12
+  },
+  "MA": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 3.0,
+    "expR": 0.1726,
+    "win_rate": 0.3,
+    "trades": 10
+  },
+  "OI": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 1.5,
+    "expR": 0.1432,
+    "win_rate": 0.462,
+    "trades": 13
+  },
+  "PF": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 3.0,
+    "expR": 0.7799,
+    "win_rate": 0.455,
+    "trades": 11
+  },
+  "SH": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 3.0,
+    "expR": 0.9523,
+    "win_rate": 0.556,
+    "trades": 9
+  },
+  "TA": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 3.0,
+    "expR": 0.581,
+    "win_rate": 0.4,
+    "trades": 10
+  },
+  "al": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 3.0,
+    "expR": 0.8904,
+    "win_rate": 0.556,
+    "trades": 9
+  },
+  "ao": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 1.5,
+    "expR": 0.0148,
+    "win_rate": 0.462,
+    "trades": 13
+  },
+  "c": {
+    "stop_atr_mult": 2.0,
+    "rr_ratio": 1.5,
+    "expR": 0.4306,
+    "win_rate": 0.625,
+    "trades": 8
+  },
+  "eb": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 3.0,
+    "expR": 0.9864,
+    "win_rate": 0.5,
+    "trades": 8
+  },
+  "fu": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 2.5,
+    "expR": 0.1262,
+    "win_rate": 0.333,
+    "trades": 12
+  },
+  "jd": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 1.5,
+    "expR": 0.081,
+    "win_rate": 0.444,
+    "trades": 9
+  },
+  "lc": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 3.0,
+    "expR": 0.7624,
+    "win_rate": 0.462,
+    "trades": 13
+  },
+  "ni": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 1.5,
+    "expR": 0.0271,
+    "win_rate": 0.412,
+    "trades": 17
+  },
+  "p": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 3.0,
+    "expR": 0.1612,
+    "win_rate": 0.294,
+    "trades": 17
+  },
+  "pp": {
+    "stop_atr_mult": 2.0,
+    "rr_ratio": 2.0,
+    "expR": 0.9856,
+    "win_rate": 0.667,
+    "trades": 9
+  },
+  "sp": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 2.5,
+    "expR": 0.4576,
+    "win_rate": 0.5,
+    "trades": 8
+  },
+  "v": {
+    "stop_atr_mult": 2.0,
+    "rr_ratio": 1.5,
+    "expR": 0.857,
+    "win_rate": 0.75,
+    "trades": 8
+  },
+  "y": {
+    "stop_atr_mult": 1.5,
+    "rr_ratio": 1.5,
+    "expR": 0.406,
+    "win_rate": 0.625,
+    "trades": 8
+  },
+  "zn": {
+    "stop_atr_mult": 1.0,
+    "rr_ratio": 2.0,
+    "expR": 0.3455,
+    "win_rate": 0.455,
+    "trades": 11
+  }
+}

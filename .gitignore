@@ -65,6 +65,11 @@ tushare_token.txt
 
 tq_config.json
 
+# ---- 核心配置文件（必须入库，系统依赖）----
+!feature_flags.json
+!calibration_params.json
+!stop_rr_overrides.json
+
 # ---- CI/CD 基础设施（必须入库）----
 !.github/
 !Makefile

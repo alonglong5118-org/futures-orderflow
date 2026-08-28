@@ -39,6 +39,8 @@ from strategy_layer import (
     OOS_EXPR_THRESHOLD,
     get_robust_gate,
     set_robust_gate,
+    _ROBUST_GATE,
+    _ROBUST_GATE_CFG,
 )
 
 
@@ -145,12 +147,16 @@ class TestWalkForwardGate(unittest.TestCase):
     """walk_forward_gate — 稳健池准入判定。"""
 
     def setUp(self):
-        """保存当前闸门阈值，测试后恢复。"""
-        self._orig_stab, self._orig_oos = get_robust_gate()
+        """保存完整的闸门状态（阈值 + 配置），测试后恢复。"""
+        self._orig_gate = dict(_ROBUST_GATE)
+        self._orig_cfg = dict(_ROBUST_GATE_CFG)
 
     def tearDown(self):
-        """恢复原始阈值。"""
-        set_robust_gate(stability=self._orig_stab, oos_expR=self._orig_oos)
+        """完整恢复闸门状态，避免污染其他测试。"""
+        _ROBUST_GATE.clear()
+        _ROBUST_GATE.update(self._orig_gate)
+        _ROBUST_GATE_CFG.clear()
+        _ROBUST_GATE_CFG.update(self._orig_cfg)
 
     def test_not_in_pool_returns_observation(self):
         """未入池品种 → 观察池，不通过"""
