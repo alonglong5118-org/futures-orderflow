@@ -32,6 +32,12 @@ concurrency:
   group: security-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
+permissions:
+  contents: read      # 代码检出（gitleaks 需要 full history 但仍是 read）
+  actions: read       # 只读缓存（python-security 不写缓存）
+  security-events: write  # gitleaks 上报安全事件
+
 jobs:
   # ── 密钥泄露检测 ────────────────────────────────────────────────────
   #  最高优先级：防止 API Key、Token、密码等敏感信息被提交到代码库

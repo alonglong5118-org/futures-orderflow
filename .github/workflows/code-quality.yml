@@ -42,6 +42,11 @@ concurrency:
   group: code-quality-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
+permissions:
+  contents: read      # 代码检出
+  actions: write      # 缓存读写（Ruff cache）
+
 jobs:
   # ── 快速检查（语法 + 命名规范 + 可发现性） ────────────────────────────────
   #  合并为一个 job，减少 runner 启动开销
@@ -225,6 +230,14 @@ jobs:
         uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
+
+      - name: Restore mypy cache
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'mypy.ini', '.mypy.ini') }}
+          restore-keys: |
+            mypy-${{ runner.os }}-
 
       - name: Run mypy
         run: |

@@ -30,6 +30,16 @@ on:
         default: false
         type: boolean
 
+# 并发控制：同一分支只保留最新一次夜间运行
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
+permissions:
+  contents: read      # 代码检出
+  actions: write      # 缓存读写（pip cache）
+
 jobs:
   # ── 全量测试 ────────────────────────────────────────────────────────────
   full-test:

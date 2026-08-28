@@ -52,6 +52,12 @@ concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
+permissions:
+  contents: read      # 代码检出
+  actions: write      # 缓存读写（pytest cache save 需要 write）
+  pull-requests: write  # coverage-gate 评论 PR
+
 jobs:
   # ── 单元测试（多版本 Python） ────────────────────────────────────────────
   test:
@@ -62,12 +68,9 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        # PR 只跑 3.11（快速反馈），push 到 main 跑全矩阵（兼容性保障）
+        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.11"]' || '["3.10", "3.11", "3.12"]') }}
         scope: ["unit"]
-        include:
-          # main 分支多跑一组集成测试（用 3.11）
-          - python-version: "3.11"
-            scope: "integration"
 
     steps:
       - name: Checkout code
@@ -122,6 +125,61 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-py${{ matrix.python-version }}-${{ matrix.scope }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ── 集成测试（仅 main 分支） ───────────────────────────────────────────
+  #  PR 阶段不跑（慢），只在 push 到 main 时跑，保障集成层质量
+  # ========================================================================
+  integration-test:
+    name: "Py 3.11 · integration"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # 浅克隆，加速拉取
+
+      - name: Setup Python and deps
+        uses: ./.github/actions/setup-python-deps
+        with:
+          python-version: "3.11"
+
+      - name: Restore pytest cache
+        uses: actions/cache@v4
+        with:
+          path: .pytest_cache
+          key: pytest-${{ runner.os }}-py3.11-integration-${{ github.sha }}
+          restore-keys: |
+            pytest-${{ runner.os }}-py3.11-integration-
+
+      - name: Run integration tests
+        run: |
+          python run_tests.py integration \
+            --junit test-results/3.11-integration.xml \
+            --slow 2000
+
+      - name: Integration test summary
+        if: always()
+        run: |
+          echo "### 🧩 集成测试完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Python 版本 | 3.11 |" >> $GITHUB_STEP_SUMMARY
+          echo "| 测试范围 | integration |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 仅在 push 到 main 时运行，保障集成层质量" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-py3.11-integration
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7

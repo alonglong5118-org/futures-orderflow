@@ -39,6 +39,10 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      env:
+        PIP_DISABLE_PIP_VERSION_CHECK: "1"  # 跳过 pip 版本检查（省一次网络请求）
+        PIP_PREFER_BINARY: "1"  # 优先使用二进制 wheel，更快安装
+        PIP_PROGRESS_BAR: "off"  # 关闭进度条，减少输出
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements-dev.txt
+        python -m pip install --upgrade pip --quiet
+        pip install -r requirements-dev.txt --prefer-binary

@@ -38,6 +38,11 @@ concurrency:
   group: benchmark-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
+permissions:
+  contents: read      # 代码检出
+  actions: write      # 缓存读写（性能基线缓存）
+
 jobs:
   benchmark:
     name: "Performance Benchmark"

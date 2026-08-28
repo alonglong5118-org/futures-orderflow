@@ -18,6 +18,12 @@ concurrency:
   group: pr-automation-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
+permissions:
+  contents: read      # 只读代码
+  pull-requests: write  # 操作 PR 标签
+  issues: write       # 标签管理走 issues API
+
 jobs:
   # ── PR 大小标签 ─────────────────────────────────────────────────────────
   size-label:
