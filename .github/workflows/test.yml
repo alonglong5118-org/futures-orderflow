@@ -1,0 +1,162 @@
+# ==============================================================================
+#  CI：单元测试 + 冒烟测试
+# ==============================================================================
+#  触发时机：
+#    · PR 到 main/master → 跑全量单元测试
+#    · push 到 main/master → 跑全量单元测试 + 覆盖率
+#    · push 到其他分支 → 跑冒烟测试（快速反馈）
+# ==============================================================================
+
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+  # 支持手动触发
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: "测试范围"
+        required: false
+        default: "unit"
+        type: choice
+        options:
+          - smoke
+          - unit
+          - integration
+          - all
+
+jobs:
+  # ── 单元测试（多版本 Python） ────────────────────────────────────────────
+  test:
+    name: "Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        scope: ["unit"]
+        include:
+          # main 分支多跑一组集成测试（用 3.11）
+          - python-version: "3.11"
+            scope: "integration"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Determine test scope
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "scope=${{ github.event.inputs.test_scope }}" >> $GITHUB_OUTPUT
+          else
+            echo "scope=${{ matrix.scope }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        run: |
+          python run_tests.py ${{ steps.scope.outputs.scope }} --py-only \
+            --junit test-results/${{ matrix.python-version }}-${{ matrix.scope }}.xml \
+            --slow 1000
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-py${{ matrix.python-version }}-${{ matrix.scope }}
+          path: test-results/
+          if-no-files-found: ignore
+
+  # ── 覆盖率（main 分支） ─────────────────────────────────────────────────
+  coverage:
+    name: "Coverage report"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: |
+          python run_tests.py unit --py-only --coverage
+
+      - name: Generate coverage HTML
+        run: |
+          coverage html -d coverage-html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-html/
+          if-no-files-found: ignore
+
+  # ── 测试结果汇总（PR 评论用） ───────────────────────────────────────────
+  summary:
+    name: "Test summary"
+    runs-on: ubuntu-latest
+    if: always()
+    needs: test
+
+    steps:
+      - name: Check test status
+        id: check
+        run: |
+          if [ "${{ needs.test.result }}" = "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "icon=✅" >> $GITHUB_OUTPUT
+            echo "message=全部测试通过" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.test.result }}" = "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "icon=❌" >> $GITHUB_OUTPUT
+            echo "message=有测试失败" >> $GITHUB_OUTPUT
+          else
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "icon=⏭" >> $GITHUB_OUTPUT
+            echo "message=测试被跳过" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add job summary
+        run: |
+          echo "# ${{ steps.check.outputs.icon }} 测试结果：${{ steps.check.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **触发方式**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **提交**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "查看详情：Actions → 对应 job → Artifacts" >> $GITHUB_STEP_SUMMARY

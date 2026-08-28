@@ -63,3 +63,24 @@ probe_*.txt
 tushare_token.txt
 
 tq_config.json
+
+# ---- CI/CD 基础设施（必须入库）----
+!.github/
+!Makefile
+!requirements*.txt
+!.coveragerc
+!docs/*.md
+
+# ---- 测试基准（必须入库，防退化黄金标准）----
+!tests/_baseline_values.json
+!tests/_perf_baseline.json
+
+# ---- 覆盖率（不入库）----
+.coverage
+htmlcov/
+coverage-html/
+.coverage.*
+
+# ---- 测试产物（不入库）----
+test-results/
+junit*.xml

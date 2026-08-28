@@ -1,0 +1,52 @@
+# coverage.py 配置文件
+# 用法: python run_tests.py --coverage
+
+[run]
+source = .
+omit =
+    # 测试文件本身
+    tests/*
+    test_*.py
+    */__pycache__/*
+    *.pyc
+
+    # 入口脚本
+    run_tests.py
+
+    # 工具脚本（非核心库代码）
+    scripts/*
+    verify_*.py
+    *_backtest.py
+    *_simulate.py
+    *_sweep.py
+    *_compare.py
+    *upgrade*.py
+
+    # 第三方
+    node_modules/*
+    .venv/*
+    venv/*
+
+[report]
+# 显示精度
+precision = 1
+# 跳过 100% 覆盖的文件，只看需要改进的
+skip_covered = false
+# 按覆盖率排序
+sort = Cover
+# 排除的文件模式
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __debug__:
+    pass
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

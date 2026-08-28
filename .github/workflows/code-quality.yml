@@ -1,0 +1,119 @@
+# ==============================================================================
+#  CI：代码质量检查
+# ==============================================================================
+#  触发时机：PR 到 main/master
+#  检查内容：
+#    · 语法检查（py_compile）
+#    · 测试文件命名规范
+#    · 基准文件完整性
+#    · 预提交钩子一致性
+# ==============================================================================
+
+name: Code Quality
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+  workflow_dispatch:
+
+jobs:
+  # ── 语法检查 ────────────────────────────────────────────────────────────
+  syntax:
+    name: "Syntax check"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile all Python files
+        run: |
+          echo "=== Python 语法检查 ==="
+          find . -name "*.py" -not -path "./.git/*" -not -path "./node_modules/*" \
+            -not -path "./ponytail/*" | xargs python -m py_compile 2>&1
+          echo "✅ 语法检查通过"
+
+  # ── 测试规范检查 ────────────────────────────────────────────────────────
+  test-standards:
+    name: "Test standards"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check test file naming
+        run: |
+          echo "=== 测试文件命名规范 ==="
+          # 测试文件应以 test_ 开头
+          mismatched=$(find tests/ -name "*.py" -not -name "test_*" -not -name "_*" 2>/dev/null || true)
+          if [ -n "$mismatched" ]; then
+            echo "❌ 以下测试文件命名不规范（应以 test_ 开头）："
+            echo "$mismatched"
+            exit 1
+          fi
+          echo "✅ 命名规范通过"
+
+      - name: Verify baseline file integrity
+        run: |
+          echo "=== 基准文件完整性 ==="
+          if [ ! -f "tests/_baseline_values.json" ]; then
+            echo "⚠️  基准文件不存在（首次添加时正常）"
+            exit 0
+          fi
+          python -c "
+          import json
+          with open('tests/_baseline_values.json') as f:
+              data = json.load(f)
+          print(f'✅ 基准文件有效，包含 {len(data)} 个基准项')
+          for k in list(data.keys())[:5]:
+              print(f'   · {k}')
+          if len(data) > 5:
+              print(f'   ... 还有 {len(data)-5} 项')
+          "
+
+  # ── 测试可发现性检查 ────────────────────────────────────────────────────
+  discover-check:
+    name: "Test discovery sync"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run discover and compare
+        run: |
+          echo "=== 测试发现一致性检查 ==="
+          # 生成当前发现结果
+          python scripts/discover_tests.py > /tmp/discovered.txt
+          echo ""
+          echo "检查 run_tests.py 中的 TEST_MODULES 是否与实际文件一致..."
+          
+          # 简单验证：discover_tests.py 能正常运行且输出非空
+          count=$(grep -c "→ tests.test_" /tmp/discovered.txt || true)
+          if [ "$count" -lt 10 ]; then
+            echo "❌ 发现的测试模块太少（$count 个），可能有问题"
+            exit 1
+          fi
+          echo "✅ 发现 $count 个测试模块，自动发现正常"
+          echo ""
+          echo "💡 提示：如果新增了测试文件但忘记注册，运行："
+          echo "   python scripts/discover_tests.py --update"

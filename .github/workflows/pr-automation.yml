@@ -1,0 +1,69 @@
+# ==============================================================================
+#  CI：PR 自动化
+# ==============================================================================
+#  功能：
+#    · 自动给 PR 打 size 标签（XS/S/M/L/XL）
+#    · 自动分配审查者
+#    · PR 描述模板检查
+# ==============================================================================
+
+name: PR Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  # ── PR 大小标签 ─────────────────────────────────────────────────────────
+  size-label:
+    name: "Size label"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Calculate PR size
+        id: size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            const total = additions + deletions;
+            
+            let label;
+            if (total < 30) label = "size/XS";
+            else if (total < 100) label = "size/S";
+            else if (total < 500) label = "size/M";
+            else if (total < 2000) label = "size/L";
+            else label = "size/XL";
+            
+            console.log(`Total changes: +${additions} -${deletions} = ${total}`);
+            console.log(`Label: ${label}`);
+            
+            // 添加标签
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [label],
+            });
+            
+            return label;
+
+      - name: PR size summary
+        run: |
+          echo "### PR 大小：${{ steps.size.outputs.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 级别 | 变更行数 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| XS | < 30 行 |" >> $GITHUB_STEP_SUMMARY
+          echo "| S | 30 - 100 行 |" >> $GITHUB_STEP_SUMMARY
+          echo "| M | 100 - 500 行 |" >> $GITHUB_STEP_SUMMARY
+          echo "| L | 500 - 2000 行 |" >> $GITHUB_STEP_SUMMARY
+          echo "| XL | > 2000 行 |" >> $GITHUB_STEP_SUMMARY

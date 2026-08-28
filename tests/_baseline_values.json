@@ -1,0 +1,127 @@
+{
+  "dq_frozen_rb_7obs": {
+    "status": "冻结",
+    "frozen_n": 6,
+    "health_pct": 0.0
+  },
+  "dq_mixed_3symbols": {
+    "rb_status": "陈旧",
+    "hc_status": "陈旧",
+    "fg_status": "陈旧",
+    "health_pct": 0.0,
+    "ok": true
+  },
+  "dq_normal_3symbols": {
+    "health_pct": 100.0,
+    "ok": true,
+    "tracked_count": 3,
+    "normal_count": 3
+  },
+  "kelly_boundary_negative_edge": 0.6,
+  "kelly_boundary_huge_edge": 1.2,
+  "kelly_none_edge": 1.0,
+  "kelly_zero_edge": 0.5,
+  "kelly_half_target": 1.5,
+  "kelly_full_target": 1.5,
+  "kelly_double_target": 1.5,
+  "kelly_with_near_pos": 1.5,
+  "kelly_with_near_neg": 1.0,
+  "month_jan_to_feb": 202502,
+  "month_dec_to_jan": 202601,
+  "month_jan_to_prev_dec": 202412,
+  "month_plus_12_months": 202606,
+  "month_minus_12_months": 202406,
+  "month_plus_18_months": 202607,
+  "tanh_zero": 0.0,
+  "tanh_x1_s1": 0.7615941559557649,
+  "tanh_neg_x1_s1": -0.7615941559557649,
+  "tanh_x2_s0.5": 0.999329299739067,
+  "tanh_x10_s5": 0.9640275800758169,
+  "tanh_saturation_pos": 1.0,
+  "tanh_saturation_neg": -1.0,
+  "parse_side_BUY": "买",
+  "parse_side_sell": "卖",
+  "parse_offset_开仓": "开",
+  "parse_offset_平仓": "平",
+  "parse_to_num_1234.56": 1234.56,
+  "parse_to_num___99.9__": 99.9,
+  "parse_norm_key_Signal_123": "signal123",
+  "seasonal_jd_jan": 0.0,
+  "seasonal_jd_jul": 35,
+  "seasonal_lh_mar": -15,
+  "seasonal_lh_sep": 0.0,
+  "seasonal_rb_may": 0.0,
+  "seasonal_rb_nov": 0.0,
+  "risk_gate_rb_3500.0_80.0": {
+    "passed": true,
+    "N_risk": 1,
+    "N_margin": 8,
+    "N_plan": 1,
+    "stop_pts": 120.0,
+    "kelly_mult": 0.747
+  },
+  "risk_gate_FG_300.0_10.0": {
+    "passed": false,
+    "N_plan": 4,
+    "N_risk": 4,
+    "N_margin": 38
+  },
+  "backtest_FG_tail500": {
+    "symbol": "FG",
+    "trades": 4,
+    "expR": -0.1392,
+    "win_rate": 0.25,
+    "roll_skipped": 0,
+    "exit_reasons": {
+      "止损": 3,
+      "期末平": 1
+    },
+    "by_regime_keys": [
+      "趋势"
+    ]
+  },
+  "backtest_rb_cooldown5": {
+    "trades": 12,
+    "expR": -0.427,
+    "win_rate": 0.25
+  },
+  "backtest_hc_tail500": {
+    "symbol": "hc",
+    "trades": 19,
+    "expR": -0.0589,
+    "win_rate": 0.421,
+    "roll_skipped": 0,
+    "exit_reasons": {
+      "止损": 11,
+      "尾仓离场": 5,
+      "止盈2R": 2,
+      "期末平": 1
+    },
+    "by_regime_keys": [
+      "趋势",
+      "过渡"
+    ]
+  },
+  "backtest_rb_tail500": {
+    "symbol": "rb",
+    "trades": 12,
+    "expR": -0.427,
+    "win_rate": 0.25,
+    "roll_skipped": 2,
+    "exit_reasons": {
+      "止损": 9,
+      "尾仓离场": 3
+    },
+    "by_regime_keys": [
+      "趋势",
+      "过渡"
+    ]
+  },
+  "risk_gate_rb_3500.0_80.0_held3": {
+    "passed": true,
+    "N_plan": 1,
+    "N_risk": 1,
+    "N_margin": 8,
+    "kelly_mult": 0.747
+  }
+}

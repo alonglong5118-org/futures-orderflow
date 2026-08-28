@@ -1,0 +1,9 @@
+# 开发/测试依赖
+-r requirements.txt
+
+# 测试
+coverage>=7.0
+
+# 代码质量（可选）
+# ruff>=0.1
+# mypy>=1.0

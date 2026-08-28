@@ -1,0 +1,136 @@
+# ==============================================================================
+#  Nightly：夜间全量测试 + 性能基准
+# ==============================================================================
+#  触发时机：
+#    · 每天凌晨 3 点（北京时间）自动运行
+#    · 手动触发
+#  覆盖范围：
+#    · 全量测试（含集成、属性、基准）
+#    · 性能基准测试（与历史基线对比）
+#    · 不稳定测试检测（--retry）
+# ==============================================================================
+
+name: Nightly Full Test
+
+on:
+  schedule:
+    # 每天北京时间 03:00 = UTC 19:00（前一天）
+    - cron: "0 19 * * *"
+
+  workflow_dispatch:
+    inputs:
+      run_perf:
+        description: "运行性能基准"
+        required: false
+        default: true
+        type: boolean
+      flake_check:
+        description: "不稳定测试检测（重跑2次）"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # ── 全量测试 ────────────────────────────────────────────────────────────
+  full-test:
+    name: "Full test · Py ${{ matrix.python-version }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Determine retry count
+        id: retry
+        run: |
+          if [ "${{ github.event.inputs.flake_check }}" = "true" ]; then
+            echo "count=2" >> $GITHUB_OUTPUT
+          else
+            echo "count=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run all tests
+        run: |
+          python run_tests.py all --py-only \
+            --junit test-results/full-py${{ matrix.python-version }}.xml \
+            --slow 2000 \
+            --retry ${{ steps.retry.outputs.count }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-test-py${{ matrix.python-version }}
+          path: test-results/
+          if-no-files-found: ignore
+
+  # ── 性能基准 ────────────────────────────────────────────────────────────
+  performance:
+    name: "Performance baseline"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.run_perf == 'true'
+    needs: full-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run performance benchmarks
+        id: perf
+        run: |
+          echo "=== 性能基准测试 ==="
+          python run_tests.py performance --py-only
+          echo ""
+          echo "perf_done=true" >> $GITHUB_OUTPUT
+
+      - name: Upload perf data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-performance
+          path: tests/_perf_baseline.json
+          if-no-files-found: ignore
+
+  # ── 汇总报告 ────────────────────────────────────────────────────────────
+  summary:
+    name: "Nightly summary"
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [full-test, performance]
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# 🌙 夜间测试报告" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **日期**: $(date '+%Y-%m-%d')" >> $GITHUB_STEP_SUMMARY
+          echo "- **全量测试**: ${{ needs.full-test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **性能基准**: ${{ needs.performance.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "详细结果见各 job 的 Artifacts。" >> $GITHUB_STEP_SUMMARY

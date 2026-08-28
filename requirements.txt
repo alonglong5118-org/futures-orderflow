@@ -1,0 +1,14 @@
+# 核心依赖（生产/回测必需）
+numpy>=1.21
+pandas>=1.3
+scipy>=1.7
+hmmlearn>=0.2.7
+plotly>=5.0
+tqdm>=4.60
+
+# 可选数据源（按需安装）
+# akshare>=1.10
+# tqsdk>=2.0
+
+# 遗传算法优化
+# deap>=1.3
