@@ -111,18 +111,9 @@ def generate_report(
         diff_str = "— 无基线"
         baseline_str = "—"
 
-    lines.append(
-        f"| **总覆盖率** | **{current_total:.2f}%** "
-        f"| {baseline_str} | {diff_str} |"
-    )
-    lines.append(
-        f"| 可执行行数 | {current_data['totals']['num_statements']:,} "
-        f"| — | — |"
-    )
-    lines.append(
-        f"| 已覆盖行数 | {current_data['totals']['covered_lines']:,} "
-        f"| — | — |"
-    )
+    lines.append(f"| **总覆盖率** | **{current_total:.2f}%** | {baseline_str} | {diff_str} |")
+    lines.append(f"| 可执行行数 | {current_data['totals']['num_statements']:,} | — | — |")
+    lines.append(f"| 已覆盖行数 | {current_data['totals']['covered_lines']:,} | — | — |")
     lines.append("")
 
     # ── 门禁判断 ──────────────────────────────────────────────
@@ -132,13 +123,11 @@ def generate_report(
         if current_total < threshold:
             passed = False
             lines.append(f"> ❌ **覆盖率门禁不通过**")
-            lines.append(f"> 当前 {current_total:.2f}% 低于基线 {baseline_total:.2f}% "
-                        f"（容忍度 ±{tolerance:.2f}%）")
+            lines.append(f"> 当前 {current_total:.2f}% 低于基线 {baseline_total:.2f}% （容忍度 ±{tolerance:.2f}%）")
             lines.append(f"> 请为新增代码补充测试，或更新基线（`make coverage-update-baseline`）")
         else:
             lines.append(f"> ✅ **覆盖率门禁通过**")
-            lines.append(f"> 当前 {current_total:.2f}% ≥ 基线 {baseline_total:.2f}% "
-                        f"（容忍度 ±{tolerance:.2f}%）")
+            lines.append(f"> 当前 {current_total:.2f}% ≥ 基线 {baseline_total:.2f}% （容忍度 ±{tolerance:.2f}%）")
     else:
         lines.append(f"> ⚠️ 未找到基线文件，跳过门禁检查")
         lines.append(f"> 运行 `make coverage-update-baseline` 创建初始基线")
@@ -157,17 +146,10 @@ def generate_report(
             file_changes.append((filename, current_info["percent_covered"], diff))
 
         # 覆盖率下降最多的文件
-        declined = sorted(
-            [(f, c, d) for f, c, d in file_changes if d < -0.5],
-            key=lambda x: x[2]
-        )[:5]
+        declined = sorted([(f, c, d) for f, c, d in file_changes if d < -0.5], key=lambda x: x[2])[:5]
 
         # 覆盖率上升最多的文件
-        improved = sorted(
-            [(f, c, d) for f, c, d in file_changes if d > 0.5],
-            key=lambda x: x[2],
-            reverse=True
-        )[:5]
+        improved = sorted([(f, c, d) for f, c, d in file_changes if d > 0.5], key=lambda x: x[2], reverse=True)[:5]
 
         if declined:
             lines.append("#### ⚠️ 覆盖率下降 Top 5")
@@ -189,10 +171,12 @@ def generate_report(
 
     # ── 覆盖率最低的文件（Top 10）────────────────────────────
     low_coverage = sorted(
-        [(f, info["percent_covered"], info["num_statements"])
-         for f, info in current_files.items()
-         if info["num_statements"] >= 20],  # 只看有一定规模的文件
-        key=lambda x: x[1]
+        [
+            (f, info["percent_covered"], info["num_statements"])
+            for f, info in current_files.items()
+            if info["num_statements"] >= 20
+        ],  # 只看有一定规模的文件
+        key=lambda x: x[1],
     )[:10]
 
     if low_coverage:
@@ -213,23 +197,29 @@ def generate_report(
 def main() -> int:
     parser = argparse.ArgumentParser(description="覆盖率门禁检查")
     parser.add_argument(
-        "--json", default="coverage.json",
+        "--json",
+        default="coverage.json",
         help="coverage.json 路径（默认：coverage.json）",
     )
     parser.add_argument(
-        "--baseline", default="tests/_coverage_baseline.json",
+        "--baseline",
+        default="tests/_coverage_baseline.json",
         help="基线文件路径（默认：tests/_coverage_baseline.json）",
     )
     parser.add_argument(
-        "--tolerance", type=float, default=0.5,
+        "--tolerance",
+        type=float,
+        default=0.5,
         help="覆盖率下降容忍度（百分点，默认 0.5）",
     )
     parser.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help="将报告写入文件（同时输出到 stdout）",
     )
     parser.add_argument(
-        "--update-baseline", action="store_true",
+        "--update-baseline",
+        action="store_true",
         help="用当前覆盖率更新基线文件",
     )
     args = parser.parse_args()

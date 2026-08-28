@@ -1,10 +1,11 @@
 # ==============================================================================
-#  Bandit 安全扫描配置
+#  Bandit 安全扫描配置（YAML 格式）
 # ==============================================================================
 #  扫描 Python 代码中的常见安全问题
 #  文档：https://bandit.readthedocs.io/
 # ==============================================================================
 
+---
 # 排除的目录
 exclude_dirs:
   - .git
@@ -15,22 +16,7 @@ exclude_dirs:
   - coverage-html
   - test-results
   - benchmark-results
-  - ga_v*_result
-  - "*_backtest_result"
 
-# 排除的文件模式（glob 匹配）
-exclude:
-  - "*.bak"
-  - "*.bak_*"
-  - "_*.py"
-  - "run_tests.py"
-
-# 只报告 High 严重级别为阻塞级
-# Medium 级别作为建议级在 CI 中单独跑
-severity: high
-
-# 置信度要求
-confidence: medium
-
-# 输出格式
-format: txt
+# 排除的测试（跳过特定的安全检查）
+# B324: MD5 用于非安全用途（缓存 key 等）
+skips: []

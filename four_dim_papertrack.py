@@ -100,7 +100,7 @@ def sig_id(s: dict) -> str:
         s.get("lots"),
     )
     raw = json.dumps(key, ensure_ascii=False, sort_keys=True, default=str)
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]  # nosec B324 - 非安全用途，仅生成缓存 key
 
 
 def parse_signal(s: dict) -> dict | None:
