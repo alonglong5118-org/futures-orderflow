@@ -29,8 +29,8 @@ HOOKS_DIR="$ROOT_DIR/.git/hooks"
 
 # ── Hook 定义 ────────────────────────────────────────────────────────────────
 # 两个平行数组（兼容 bash 3.x，即 macOS 默认 bash）
-HOOK_NAMES=("pre-commit" "pre-push")
-HOOK_SCRIPTS=("pre-commit-unittest.sh" "pre-push-regression.sh")
+HOOK_NAMES=("pre-commit" "pre-push" "commit-msg")
+HOOK_SCRIPTS=("pre-commit-unittest.sh" "pre-push-regression.sh" "commit-msg-lint.sh")
 
 # 根据 hook 名找脚本路径
 get_hook_script() {
@@ -128,8 +128,13 @@ install_single_hook() {
             ;;
         pre-push)
             echo -e "${DIM}       触发时机: git push 之前${RESET}"
-            echo -e "${DIM}       测试内容: 全量测试（Python + JS，249 个）${RESET}"
+            echo -e "${DIM}       测试内容: 全量测试（Python + JS）${RESET}"
             echo -e "${DIM}       跳过方式: git push --no-verify${RESET}"
+            ;;
+        commit-msg)
+            echo -e "${DIM}       触发时机: git commit 提交信息编写后${RESET}"
+            echo -e "${DIM}       检查内容: 提交信息是否符合 Conventional Commits 规范${RESET}"
+            echo -e "${DIM}       跳过方式: git commit --no-verify${RESET}"
             ;;
     esac
 }
@@ -255,9 +260,10 @@ show_status() {
         echo ""
     done
 
-    echo -e "  测试体系总览："
-    echo -e "    ${DIM}· pre-commit → Python 单元测试（改动相关文件时触发，<1秒）${RESET}"
-    echo -e "    ${DIM}· pre-push   → 全量测试（Python + JS，249 个，推送前必跑）${RESET}"
+    echo -e "  Git Hook 体系总览："
+    echo -e "    ${DIM}· commit-msg  → 提交信息规范检查（Conventional Commits）${RESET}"
+    echo -e "    ${DIM}· pre-commit  → 格式化检查 + 冒烟测试（< 5s）${RESET}"
+    echo -e "    ${DIM}· pre-push    → 全量测试（Python + JS，推送前必跑）${RESET}"
     echo ""
     echo -e "  手动运行全部测试：${CYAN}python run_tests.py${RESET}"
     echo ""

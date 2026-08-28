@@ -76,6 +76,67 @@ staged=$(git diff --cached --name-only 2>/dev/null || true)
 unstaged=$(git diff --name-only 2>/dev/null || true)
 all_changed=$(echo -e "$staged\n$unstaged" | sort -u | sed '/^$/d')
 
+# 收集暂存区的 Python 文件（用于格式化检查）
+py_staged=""
+py_count=0
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    case "$file" in
+        *.py)
+            if ! matches_any "$file" "${EXCLUDE_PATTERNS[@]}"; then
+                py_staged="$py_staged
+$file"
+                py_count=$((py_count + 1))
+            fi
+            ;;
+    esac
+done <<< "$staged"
+
+# ── 格式化检查（只检查暂存的 Python 文件） ───────────────────────────────────
+if [ "$py_count" -gt 0 ]; then
+    if command -v ruff &> /dev/null; then
+        echo ""
+        echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
+        echo -e "${BOLD}${CYAN}  🎨  格式化检查${RESET}"
+        echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
+        echo ""
+        echo -e "${DIM}   检查 $py_count 个暂存 Python 文件的格式...${RESET}"
+        echo ""
+
+        set +e
+        format_failed=false
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            git show ":$file" 2>/dev/null | ruff format --check --stdin-filename "$file" - > /dev/null 2>&1
+            if [ $? -ne 0 ]; then
+                format_failed=true
+                echo -e "   ${RED}✗${RESET} $file"
+            fi
+        done <<< "$py_staged"
+        set -e
+
+        echo ""
+
+        if [ "$format_failed" = true ]; then
+            echo -e "${RED}${BOLD}❌  格式化检查未通过${RESET}"
+            echo ""
+            echo -e "${YELLOW}   修复方式：${RESET}"
+            echo -e "   ${CYAN}make format${RESET}              # 自动格式化所有 Python 文件"
+            echo -e "   ${CYAN}ruff format <file>${RESET}      # 只格式化单个文件"
+            echo ""
+            echo -e "${DIM}   格式化后重新 git add 再提交${RESET}"
+            echo -e "${DIM}   跳过检查：git commit --no-verify${RESET}"
+            echo ""
+            exit 1
+        else
+            echo -e "${GREEN}${BOLD}✅  格式化检查通过${RESET}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  未找到 ruff，跳过格式化检查${RESET}"
+        echo -e "${DIM}   安装：pip install ruff${RESET}"
+    fi
+fi
+
 # ── 检查是否需要跑测试 ────────────────────────────────────────────────────────
 need_test=false
 changed_count=0
