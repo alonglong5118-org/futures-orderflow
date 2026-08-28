@@ -23,6 +23,7 @@ jobs:
   size-label:
     name: "Size label"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.event_name == 'pull_request'
 
     steps:
@@ -106,6 +107,7 @@ jobs:
   title-check:
     name: "Title check"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.event_name == 'pull_request'
 
     steps:

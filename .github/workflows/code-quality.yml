@@ -36,6 +36,7 @@ jobs:
   quick-checks:
     name: "Quick checks"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -107,6 +108,7 @@ jobs:
   ruff:
     name: "Ruff · lint + format"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -146,6 +148,8 @@ jobs:
     name: "Ruff · Style lint (advisory)"
     runs-on: ubuntu-latest
     continue-on-error: true
+    # 草稿 PR 跳过建议级检查，节省 CI 时间
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
 
     steps:
       - name: Checkout code
@@ -178,6 +182,8 @@ jobs:
     name: "mypy · Type check (advisory)"
     runs-on: ubuntu-latest
     continue-on-error: true
+    # 草稿 PR 跳过建议级检查，节省 CI 时间
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
 
     steps:
       - name: Checkout code

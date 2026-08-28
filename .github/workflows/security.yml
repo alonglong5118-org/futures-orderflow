@@ -38,6 +38,7 @@ jobs:
   gitleaks:
     name: "Secret scan (gitleaks)"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -60,6 +61,7 @@ jobs:
   python-security:
     name: "Python security scan"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code

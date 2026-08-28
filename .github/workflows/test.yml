@@ -43,8 +43,10 @@ jobs:
   test:
     name: "Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
+      max-parallel: 6
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
         scope: ["unit"]
@@ -92,11 +94,13 @@ jobs:
           name: test-results-py${{ matrix.python-version }}-${{ matrix.scope }}
           path: test-results/
           if-no-files-found: ignore
+          retention-days: 7
 
   # ── 覆盖率（main 分支） ─────────────────────────────────────────────────
   coverage:
     name: "Coverage report"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     needs: test
 
@@ -123,11 +127,13 @@ jobs:
           name: coverage-report
           path: coverage-html/
           if-no-files-found: ignore
+          retention-days: 30
 
   # ── 覆盖率门禁（PR 中对比基线） ──────────────────────────────────────────
   coverage-gate:
     name: "Coverage gate"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     needs: test
 
