@@ -129,8 +129,10 @@ jobs:
   #    F701  — break/continue 在循环外（语法错误）
   #    F821  — 未定义的名字（NameError）
   #    F823  — 赋值前引用局部变量（UnboundLocalError）
+  #    B023  — 闭包/函数引用循环变量（晚绑定导致所有调用都用最后一个值）
   #    B904  — except 内 raise 不带 from（丢失异常链，调试困难）
   #    E722  — 裸 except（会吞掉 KeyboardInterrupt/SystemExit 等）
+  #    E712  — 与 True/False 做等值比较（应使用 is / not）
   # ========================================================================
   ruff-critical:
     name: "Ruff · Critical lint"
@@ -159,7 +161,7 @@ jobs:
           echo "=== Ruff 关键检查（阻塞级）==="
           echo "检查会导致运行时报错或调试困难的代码问题..."
           ruff check . \
-            --select F601,F701,F821,F823,B904,E722 \
+            --select F601,F701,F821,F823,B023,B904,E722,E712 \
             --output-format=github
           echo "✅ 关键检查通过，未发现严重问题"
 

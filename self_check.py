@@ -176,7 +176,7 @@ def check_night_session_eligibility():
     # 检查3：不在NO_NIGHT_DEFAULT中的品种应有夜盘（如果有night=False）
     should_have_night = []
     for sym, cfg in SYMBOLS.items():
-        if sym not in NO_NIGHT_DEFAULT and cfg.get("night") == False:
+        if sym not in NO_NIGHT_DEFAULT and cfg.get("night") is False:
             should_have_night.append(sym)
     if should_have_night:
         issues.append(f"未标记为无夜盘但night=False: {should_have_night}")

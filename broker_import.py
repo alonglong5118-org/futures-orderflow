@@ -164,9 +164,9 @@ def parse_file(path):
     for r in rows[hdr_i + 1:]:
         if not r or all(not str(x).strip() for x in r):
             continue
-        def g(f):
+        def g(f, row=r):
             j = idx.get(f)
-            return r[j] if (j is not None and j < len(r)) else ""
+            return row[j] if (j is not None and j < len(row)) else ""
         contract = str(g("contract")).strip()
         if not contract or not re.search(r"[A-Za-z]", contract):
             continue      # 合计行/分隔行

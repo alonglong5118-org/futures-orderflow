@@ -87,7 +87,7 @@ def main():
 
     # 1) 沪深300 / 中证500 日线（风险偏好代理）
     for sym, key in (("sh000300", "hs300"), ("sh000905", "zz500")):
-        df = _safe(lambda: __import__("akshare").stock_zh_index_daily(symbol=sym))
+        df = _safe(lambda s=sym: __import__("akshare").stock_zh_index_daily(symbol=s))
         if df is not None and len(df):
             col = "close" if "close" in df.columns else df.columns[-1]
             vals = [float(x) for x in df[col].dropna().tolist()[-N_TAIL:]]
