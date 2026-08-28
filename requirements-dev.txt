@@ -10,3 +10,7 @@ deap>=1.3
 # 代码质量
 ruff>=0.6
 mypy>=1.11
+
+# 安全扫描
+bandit>=1.7
+pip-audit>=2.7

@@ -30,6 +30,13 @@
 #   make typecheck         # Mypy 静态类型检查
 #   make quality           # 一次性跑所有质量检查（lint + format + type）
 #
+# ── 安全扫描 ────────────────────────────────────────────────────────
+#   make secretscan        # 密钥泄露检测（gitleaks）
+#   make bandit            # Python 代码安全扫描（High 级别 · 阻塞级）
+#   make bandit-advisory   # Python 代码安全扫描（Medium 级别 · 建议级）
+#   make depscan           # 依赖漏洞扫描（pip-audit）
+#   make security          # 全部安全检查（密钥 + 高危代码扫描）
+#
 # ── 管理 ────────────────────────────────────────────────────────────
 #   make list              # 列出所有测试模块
 #   make discover          # 自动发现新测试模块
@@ -42,6 +49,7 @@
 .PHONY: help test smoke unit integration advanced perf all \
         coverage slow junit random flake \
         lint lint-critical lint-style format format-check typecheck quality \
+        secretscan bandit bandit-advisory depscan security \
         list discover watch hooks deps deps-update clean \
         bench bench-strict bench-update
 
@@ -190,6 +198,38 @@ quality: lint-critical format-check
 	@echo ""
 	@echo "══════════════════════════════════════════════════════════════"
 	@echo "  ✅  所有质量检查通过"
+	@echo "══════════════════════════════════════════════════════════════"
+
+# ── 安全扫描 ──────────────────────────────────────────────────────────
+
+secretscan:
+	@echo "=== 密钥泄露检测（gitleaks）==="
+	@gitleaks detect --source . -v --config .gitleaks.toml
+	@echo "✅ 密钥扫描通过，无泄露"
+
+bandit:
+	@echo "=== Python 代码安全扫描（High 级别 · 阻塞级）==="
+	@bandit -r . -c .bandit -lll
+	@echo "✅ 高危安全扫描通过"
+
+bandit-advisory:
+	@echo "=== Python 代码安全扫描（Medium 级别 · 建议级）==="
+	@-bandit -r . -ll 2>&1 || true
+	@echo ""
+	@echo "📊 以上为中危安全问题建议（不阻塞）"
+
+depscan:
+	@echo "=== 依赖漏洞扫描（pip-audit）==="
+	@pip-audit --desc on --format columns || true
+	@echo ""
+	@echo "📊 以上为依赖漏洞扫描结果（建议级）"
+
+security: secretscan bandit
+	@echo ""
+	@echo "══════════════════════════════════════════════════════════════"
+	@echo "  🔒  安全检查完成（密钥扫描 + 高危代码扫描通过）"
+	@echo "  💡 中危建议: make bandit-advisory"
+	@echo "  💡 依赖漏洞: make depscan"
 	@echo "══════════════════════════════════════════════════════════════"
 
 # ── 管理 ──────────────────────────────────────────────────────────────
