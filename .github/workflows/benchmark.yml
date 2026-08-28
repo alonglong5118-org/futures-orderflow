@@ -10,7 +10,7 @@
 #    · 运行 15 项性能基准
 #    · 与历史基线对比，检测性能退化
 #    · 生成 JSON + Markdown 报告，上传为 artifact
-#    · 退化超过 50% 标记为失败
+#    · 退化超过 50% 标记为失败（严格模式）
 # ==============================================================================
 
 name: Benchmark
@@ -67,14 +67,7 @@ jobs:
         run: |
           if [ -f tests/_perf_baseline.json ]; then
             echo "✅ 已加载性能基线"
-            python -c "
-import json
-with open('tests/_perf_baseline.json') as f:
-    data = json.load(f)
-print(f'  共 {len(data)} 项基线')
-for k, v in sorted(data.items()):
-    print(f'  {k:30s} {v:10.4f}ms')
-"
+            python -c "import json; d=json.load(open('tests/_perf_baseline.json')); print(f'  共 {len(d)} 项基线')"
           else
             echo "⚠️  无历史基线，本次运行将建立初始基线"
           fi
@@ -83,88 +76,15 @@ for k, v in sorted(data.items()):
         id: bench
         env:
           PERF_CHECK: ${{ github.event.inputs.strict || 'true' }}
+          PERF_RESULTS_FILE: benchmark-results/results.json
         run: |
-          python run_tests.py performance --py-only --junit test-results/benchmark.xml
-        continue-on-error: false
+          mkdir -p benchmark-results
+          python -m tests.test_performance
 
       - name: Generate benchmark report
         if: always()
         run: |
-          python - <<'PYEOF'
-import json
-import os
-import sys
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = HERE
-sys.path.insert(0, ROOT)
-
-# 从测试输出中提取性能数据（从 _perf_results 和 _perf_baselines）
-# 这里直接从 baseline 文件和测试结果构建报告
-baseline_file = os.path.join(ROOT, "tests", "_perf_baseline.json")
-result_file = os.path.join(ROOT, "tests", "_perf_baseline.json")  # 当前结果已写入
-
-# 尝试导入测试模块获取最新结果
-sys.path.insert(0, os.path.join(ROOT, "tests"))
-try:
-    from test_performance import _perf_results, _perf_baselines, PERF_REGRESSION_THRESHOLD
-except ImportError:
-    _perf_results = {}
-    _perf_baselines = {}
-    PERF_REGRESSION_THRESHOLD = 0.5
-
-# 加载基线
-if os.path.exists(baseline_file):
-    with open(baseline_file) as f:
-        _perf_baselines = json.load(f)
-
-# 生成 Markdown 报告
-lines = []
-lines.append("# 性能基准测试报告")
-lines.append("")
-lines.append(f"| 指标 | 当前 (ms) | 基线 (ms) | 变化 | 状态 |")
-lines.append(f"|------|-----------|-----------|------|------|")
-
-regressions = 0
-improvements = 0
-total = len(_perf_results)
-
-for name in sorted(_perf_results.keys()):
-    avg_ms = _perf_results[name]
-    baseline = _perf_baselines.get(name)
-
-    if baseline and baseline > 0:
-        delta_pct = (avg_ms / baseline - 1) * 100
-        delta_str = f"{delta_pct:+.1f}%"
-        if delta_pct > PERF_REGRESSION_THRESHOLD * 100:
-            status = "🔴 退化"
-            regressions += 1
-        elif delta_pct < -PERF_REGRESSION_THRESHOLD * 100:
-            status = "🟢 提升"
-            improvements += 1
-        else:
-            status = "✅ 正常"
-    else:
-        delta_str = "—"
-        status = "🆕 新增"
-
-    lines.append(f"| {name} | {avg_ms:.4f} | {baseline:.4f}" if baseline else f"| {name} | {avg_ms:.4f} | —")
-    lines[-1] += f" | {delta_str} | {status} |"
-
-lines.append("")
-lines.append(f"**共 {total} 项基准** · 🔴 退化 {regressions} 项 · 🟢 提升 {improvements} 项")
-
-# 保存报告
-os.makedirs("benchmark-results", exist_ok=True)
-with open("benchmark-results/report.md", "w") as f:
-    f.write("\n".join(lines))
-
-# 保存 JSON 结果
-with open("benchmark-results/results.json", "w") as f:
-    json.dump(_perf_results, f, indent=2)
-
-print(f"\n报告已生成：{total} 项基准，{regressions} 项退化，{improvements} 项提升")
-PYEOF
+          python scripts/gen_benchmark_report.py
 
       - name: Save baseline to cache
         if: success() && github.event_name == 'push'

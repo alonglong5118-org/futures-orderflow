@@ -90,6 +90,7 @@ coverage-html/
 # ---- 测试产物（不入库）----
 test-results/
 junit*.xml
+benchmark-results/
 
 # ---- 回测结果目录（不入库，体积大且是产物）----
 ga_v*_result/

@@ -430,4 +430,15 @@ def run_all_perf_tests():
 
 if __name__ == "__main__":
     success = run_all_perf_tests()
+
+    # 保存结果到 JSON（供 CI 报告脚本使用）
+    results_file = os.environ.get("PERF_RESULTS_FILE", "")
+    if results_file:
+        import json
+
+        os.makedirs(os.path.dirname(results_file) or ".", exist_ok=True)
+        with open(results_file, "w") as f:
+            json.dump(_perf_results, f, indent=2, ensure_ascii=False)
+        print(f"📊 性能结果已保存到: {results_file}")
+
     sys.exit(0 if success else 1)
