@@ -1,0 +1,436 @@
+{
+  "files": {
+    "account_monitor.py": {
+      "covered_lines": 18,
+      "num_statements": 118,
+      "percent_covered": 15.254237288135593,
+      "missing_lines": 100,
+      "excluded_lines": 9
+    },
+    "account_tracker.py": {
+      "covered_lines": 38,
+      "num_statements": 716,
+      "percent_covered": 5.307262569832402,
+      "missing_lines": 678,
+      "excluded_lines": 10
+    },
+    "anomaly_scan.py": {
+      "covered_lines": 30,
+      "num_statements": 36,
+      "percent_covered": 83.33333333333333,
+      "missing_lines": 6,
+      "excluded_lines": 6
+    },
+    "apply_blended_weights.py": {
+      "covered_lines": 1,
+      "num_statements": 92,
+      "percent_covered": 1.0869565217391304,
+      "missing_lines": 91,
+      "excluded_lines": 2
+    },
+    "blunder_check.py": {
+      "covered_lines": 20,
+      "num_statements": 110,
+      "percent_covered": 18.181818181818183,
+      "missing_lines": 90,
+      "excluded_lines": 4
+    },
+    "broker_import.py": {
+      "covered_lines": 40,
+      "num_statements": 233,
+      "percent_covered": 17.167381974248926,
+      "missing_lines": 193,
+      "excluded_lines": 13
+    },
+    "bump_version.py": {
+      "covered_lines": 0,
+      "num_statements": 60,
+      "percent_covered": 0.0,
+      "missing_lines": 60,
+      "excluded_lines": 16
+    },
+    "calibration.py": {
+      "covered_lines": 10,
+      "num_statements": 122,
+      "percent_covered": 8.19672131147541,
+      "missing_lines": 112,
+      "excluded_lines": 6
+    },
+    "consistency_watchdog.py": {
+      "covered_lines": 0,
+      "num_statements": 71,
+      "percent_covered": 0.0,
+      "missing_lines": 71,
+      "excluded_lines": 2
+    },
+    "continue_tail_tq.py": {
+      "covered_lines": 0,
+      "num_statements": 96,
+      "percent_covered": 0.0,
+      "missing_lines": 96,
+      "excluded_lines": 8
+    },
+    "convert_min5_cache.py": {
+      "covered_lines": 11,
+      "num_statements": 98,
+      "percent_covered": 11.224489795918368,
+      "missing_lines": 87,
+      "excluded_lines": 0
+    },
+    "corr_gate_utils.py": {
+      "covered_lines": 45,
+      "num_statements": 50,
+      "percent_covered": 90.0,
+      "missing_lines": 5,
+      "excluded_lines": 0
+    },
+    "data_quality.py": {
+      "covered_lines": 54,
+      "num_statements": 86,
+      "percent_covered": 62.7906976744186,
+      "missing_lines": 32,
+      "excluded_lines": 12
+    },
+    "diag_p02_gaps.py": {
+      "covered_lines": 0,
+      "num_statements": 65,
+      "percent_covered": 0.0,
+      "missing_lines": 65,
+      "excluded_lines": 0
+    },
+    "diagnose_t_seasonal.py": {
+      "covered_lines": 0,
+      "num_statements": 109,
+      "percent_covered": 0.0,
+      "missing_lines": 109,
+      "excluded_lines": 2
+    },
+    "direction_source_monitor.py": {
+      "covered_lines": 32,
+      "num_statements": 55,
+      "percent_covered": 58.18181818181818,
+      "missing_lines": 23,
+      "excluded_lines": 9
+    },
+    "discipline_review.py": {
+      "covered_lines": 65,
+      "num_statements": 601,
+      "percent_covered": 10.8153078202995,
+      "missing_lines": 536,
+      "excluded_lines": 27
+    },
+    "drawdown_guard.py": {
+      "covered_lines": 0,
+      "num_statements": 119,
+      "percent_covered": 0.0,
+      "missing_lines": 119,
+      "excluded_lines": 21
+    },
+    "event_calendar.py": {
+      "covered_lines": 50,
+      "num_statements": 67,
+      "percent_covered": 74.6268656716418,
+      "missing_lines": 17,
+      "excluded_lines": 2
+    },
+    "execution_planner.py": {
+      "covered_lines": 0,
+      "num_statements": 100,
+      "percent_covered": 0.0,
+      "missing_lines": 100,
+      "excluded_lines": 9
+    },
+    "feature_manager.py": {
+      "covered_lines": 28,
+      "num_statements": 139,
+      "percent_covered": 20.14388489208633,
+      "missing_lines": 111,
+      "excluded_lines": 0
+    },
+    "fix_cpos.py": {
+      "covered_lines": 0,
+      "num_statements": 0,
+      "percent_covered": 100.0,
+      "missing_lines": 0,
+      "excluded_lines": 0
+    },
+    "four_dim_papertrack.py": {
+      "covered_lines": 67,
+      "num_statements": 428,
+      "percent_covered": 15.654205607476635,
+      "missing_lines": 361,
+      "excluded_lines": 4
+    },
+    "four_dim_strategy.py": {
+      "covered_lines": 511,
+      "num_statements": 1129,
+      "percent_covered": 45.261293179805136,
+      "missing_lines": 618,
+      "excluded_lines": 20
+    },
+    "fundamental_feed.py": {
+      "covered_lines": 61,
+      "num_statements": 169,
+      "percent_covered": 36.094674556213015,
+      "missing_lines": 108,
+      "excluded_lines": 8
+    },
+    "fundamental_metrics.py": {
+      "covered_lines": 40,
+      "num_statements": 117,
+      "percent_covered": 34.18803418803419,
+      "missing_lines": 77,
+      "excluded_lines": 2
+    },
+    "gap_stop_utils.py": {
+      "covered_lines": 21,
+      "num_statements": 22,
+      "percent_covered": 95.45454545454545,
+      "missing_lines": 1,
+      "excluded_lines": 0
+    },
+    "gbm_garch.py": {
+      "covered_lines": 41,
+      "num_statements": 148,
+      "percent_covered": 27.7027027027027,
+      "missing_lines": 107,
+      "excluded_lines": 0
+    },
+    "hidden_pivot.py": {
+      "covered_lines": 47,
+      "num_statements": 59,
+      "percent_covered": 79.66101694915254,
+      "missing_lines": 12,
+      "excluded_lines": 12
+    },
+    "info_dimension.py": {
+      "covered_lines": 16,
+      "num_statements": 104,
+      "percent_covered": 15.384615384615385,
+      "missing_lines": 88,
+      "excluded_lines": 5
+    },
+    "kelly_utils.py": {
+      "covered_lines": 28,
+      "num_statements": 29,
+      "percent_covered": 96.55172413793103,
+      "missing_lines": 1,
+      "excluded_lines": 0
+    },
+    "live_health_check.py": {
+      "covered_lines": 13,
+      "num_statements": 178,
+      "percent_covered": 7.303370786516854,
+      "missing_lines": 165,
+      "excluded_lines": 4
+    },
+    "long_hu_bang.py": {
+      "covered_lines": 22,
+      "num_statements": 243,
+      "percent_covered": 9.053497942386832,
+      "missing_lines": 221,
+      "excluded_lines": 12
+    },
+    "macro_context.py": {
+      "covered_lines": 4,
+      "num_statements": 49,
+      "percent_covered": 8.16326530612245,
+      "missing_lines": 45,
+      "excluded_lines": 2
+    },
+    "market_scanner.py": {
+      "covered_lines": 0,
+      "num_statements": 82,
+      "percent_covered": 0.0,
+      "missing_lines": 82,
+      "excluded_lines": 0
+    },
+    "minishare_permission_check.py": {
+      "covered_lines": 0,
+      "num_statements": 25,
+      "percent_covered": 0.0,
+      "missing_lines": 25,
+      "excluded_lines": 1
+    },
+    "montecarlo.py": {
+      "covered_lines": 49,
+      "num_statements": 117,
+      "percent_covered": 41.88034188034188,
+      "missing_lines": 68,
+      "excluded_lines": 4
+    },
+    "new_factor_explorer.py": {
+      "covered_lines": 0,
+      "num_statements": 318,
+      "percent_covered": 0.0,
+      "missing_lines": 318,
+      "excluded_lines": 3
+    },
+    "patch_sym_picker.py": {
+      "covered_lines": 0,
+      "num_statements": 0,
+      "percent_covered": 100.0,
+      "missing_lines": 0,
+      "excluded_lines": 0
+    },
+    "perf_breakdown.py": {
+      "covered_lines": 32,
+      "num_statements": 167,
+      "percent_covered": 19.161676646706585,
+      "missing_lines": 135,
+      "excluded_lines": 4
+    },
+    "preflight_check.py": {
+      "covered_lines": 15,
+      "num_statements": 183,
+      "percent_covered": 8.19672131147541,
+      "missing_lines": 168,
+      "excluded_lines": 2
+    },
+    "price_protection.py": {
+      "covered_lines": 83,
+      "num_statements": 90,
+      "percent_covered": 92.22222222222223,
+      "missing_lines": 7,
+      "excluded_lines": 0
+    },
+    "push_notify.py": {
+      "covered_lines": 0,
+      "num_statements": 127,
+      "percent_covered": 0.0,
+      "missing_lines": 127,
+      "excluded_lines": 7
+    },
+    "quant_dir_src_45.py": {
+      "covered_lines": 0,
+      "num_statements": 58,
+      "percent_covered": 0.0,
+      "missing_lines": 58,
+      "excluded_lines": 0
+    },
+    "refresh_main_contracts.py": {
+      "covered_lines": 20,
+      "num_statements": 281,
+      "percent_covered": 7.117437722419929,
+      "missing_lines": 261,
+      "excluded_lines": 7
+    },
+    "regime_hmm.py": {
+      "covered_lines": 27,
+      "num_statements": 99,
+      "percent_covered": 27.272727272727273,
+      "missing_lines": 72,
+      "excluded_lines": 0
+    },
+    "risk_gate_utils.py": {
+      "covered_lines": 41,
+      "num_statements": 50,
+      "percent_covered": 82.0,
+      "missing_lines": 9,
+      "excluded_lines": 3
+    },
+    "risk_state_machine.py": {
+      "covered_lines": 135,
+      "num_statements": 407,
+      "percent_covered": 33.16953316953317,
+      "missing_lines": 272,
+      "excluded_lines": 49
+    },
+    "self_check.py": {
+      "covered_lines": 7,
+      "num_statements": 200,
+      "percent_covered": 3.5,
+      "missing_lines": 193,
+      "excluded_lines": 5
+    },
+    "sentiment_engine.py": {
+      "covered_lines": 98,
+      "num_statements": 256,
+      "percent_covered": 38.28125,
+      "missing_lines": 158,
+      "excluded_lines": 4
+    },
+    "sentiment_sr_combined_bt.py": {
+      "covered_lines": 19,
+      "num_statements": 232,
+      "percent_covered": 8.189655172413794,
+      "missing_lines": 213,
+      "excluded_lines": 6
+    },
+    "signal_explain.py": {
+      "covered_lines": 1,
+      "num_statements": 132,
+      "percent_covered": 0.7575757575757576,
+      "missing_lines": 131,
+      "excluded_lines": 2
+    },
+    "signal_trigger_utils.py": {
+      "covered_lines": 39,
+      "num_statements": 47,
+      "percent_covered": 82.97872340425532,
+      "missing_lines": 8,
+      "excluded_lines": 0
+    },
+    "sr_analyzer.py": {
+      "covered_lines": 156,
+      "num_statements": 242,
+      "percent_covered": 64.46280991735537,
+      "missing_lines": 86,
+      "excluded_lines": 0
+    },
+    "sr_exit_ablation.py": {
+      "covered_lines": 0,
+      "num_statements": 215,
+      "percent_covered": 0.0,
+      "missing_lines": 215,
+      "excluded_lines": 5
+    },
+    "strategy_layer.py": {
+      "covered_lines": 177,
+      "num_statements": 276,
+      "percent_covered": 64.1304347826087,
+      "missing_lines": 99,
+      "excluded_lines": 18
+    },
+    "symbol_screener.py": {
+      "covered_lines": 34,
+      "num_statements": 88,
+      "percent_covered": 38.63636363636363,
+      "missing_lines": 54,
+      "excluded_lines": 10
+    },
+    "t_score_utils.py": {
+      "covered_lines": 54,
+      "num_statements": 61,
+      "percent_covered": 88.52459016393442,
+      "missing_lines": 7,
+      "excluded_lines": 0
+    },
+    "take_profit_utils.py": {
+      "covered_lines": 47,
+      "num_statements": 50,
+      "percent_covered": 94.0,
+      "missing_lines": 3,
+      "excluded_lines": 0
+    },
+    "tick_orderflow.py": {
+      "covered_lines": 9,
+      "num_statements": 89,
+      "percent_covered": 10.112359550561798,
+      "missing_lines": 80,
+      "excluded_lines": 12
+    },
+    "trade_journal.py": {
+      "covered_lines": 59,
+      "num_statements": 931,
+      "percent_covered": 6.337271750805585,
+      "missing_lines": 872,
+      "excluded_lines": 35
+    }
+  },
+  "totals": {
+    "covered_lines": 2415,
+    "num_statements": 10641,
+    "percent_covered": 22.7
+  }
+}

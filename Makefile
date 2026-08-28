@@ -16,6 +16,8 @@
 #
 # ── 分析工具 ────────────────────────────────────────────────────────
 #   make coverage          # 覆盖率报告
+#   make coverage-check    # 覆盖率门禁检查（对比基线）
+#   make coverage-update-baseline  # 更新覆盖率基线
 #   make slow              # 列出慢测试（>500ms）
 #   make junit             # 生成 JUnit XML 报告
 #   make random            # 随机顺序运行（发现测试依赖）
@@ -44,13 +46,16 @@
 #   make hooks             # 安装 Git 钩子
 #   make deps              # 安装开发依赖
 #   make deps-update       # 更新开发依赖
+#   make deps-outdated     # 列出过期依赖
+#   make deps-check        # 检查过期依赖 + 安全漏洞
 #   make clean             # 清理缓存和临时文件
 
 .PHONY: help test smoke unit integration advanced perf all \
-        coverage slow junit random flake \
+        coverage coverage-check coverage-update-baseline \
+        slow junit random flake \
         lint lint-critical lint-style format format-check typecheck quality \
         secretscan bandit bandit-advisory depscan security \
-        list discover watch hooks deps deps-update clean \
+        list discover watch hooks deps deps-update deps-outdated deps-check clean \
         bench bench-strict bench-update
 
 # Python 命令（优先 python3）
@@ -140,6 +145,15 @@ coverage:
 	@coverage html -d coverage-html
 	@echo ""
 	@echo "✅ 覆盖率报告已生成: coverage-html/index.html"
+
+coverage-check:
+	@echo "=== 覆盖率门禁检查 ==="
+	@$(PYTHON) scripts/check_coverage.py --baseline tests/_coverage_baseline.json --tolerance 0.5
+
+coverage-update-baseline:
+	@echo "=== 更新覆盖率基线 ==="
+	@$(PYTHON) run_tests.py --py-only --coverage > /dev/null
+	@$(PYTHON) scripts/check_coverage.py --baseline tests/_coverage_baseline.json --update
 
 slow:
 	@$(PYTHON) run_tests.py --py-only --slow 500
@@ -263,6 +277,18 @@ deps-update:
 	@$(PYTHON) -m pip install --upgrade pip
 	@$(PYTHON) -m pip install --upgrade -r requirements-dev.txt
 	@echo "✅ 依赖更新完成"
+
+deps-outdated:
+	@echo "=== 过期依赖检查 ==="
+	@$(PYTHON) -m pip list --outdated --format=columns || true
+	@echo ""
+	@echo "📊 以上为过期依赖列表"
+
+deps-check: deps-outdated
+	@echo "=== 依赖安全漏洞扫描 ==="
+	@pip-audit --desc on --format columns || true
+	@echo ""
+	@echo "📊 以上为依赖漏洞扫描结果（建议级）"
 
 clean:
 	@echo "清理缓存和临时文件..."

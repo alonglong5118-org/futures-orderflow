@@ -80,6 +80,7 @@ tq_config.json
 # ---- 测试基准（必须入库，防退化黄金标准）----
 !tests/_baseline_values.json
 !tests/_perf_baseline.json
+!tests/_coverage_baseline.json
 
 # ---- 覆盖率（不入库）----
 .coverage
