@@ -124,10 +124,11 @@ jobs:
           echo "   python scripts/discover_tests.py --update"
 
   # ── Ruff 关键 lint（阻塞级） ────────────────────────────────────────────
-  #  只抓确定性 bug（无需人工判断的硬错误）：
-  #    F601  — 字典重复 key（后面的值会覆盖前面的，几乎一定是 bug）
-  #    F701  — break/continue 在循环外（语法就通不过）
-  #  注：F821/F823/B023 等放在建议级，需逐个确认后再收紧
+  #  抓确定性 bug（会导致运行时报错的硬错误）：
+  #    F601  — 字典重复 key（后面的值覆盖前面的，几乎一定是 bug）
+  #    F701  — break/continue 在循环外（语法错误）
+  #    F821  — 未定义的名字（NameError）
+  #    F823  — 赋值前引用局部变量（UnboundLocalError）
   # ========================================================================
   ruff-critical:
     name: "Ruff · Critical lint"
@@ -154,9 +155,9 @@ jobs:
       - name: Run critical lint
         run: |
           echo "=== Ruff 关键检查（阻塞级）==="
-          echo "检查确定性代码错误..."
+          echo "检查会导致运行时报错的代码问题..."
           ruff check . \
-            --select F601,F701 \
+            --select F601,F701,F821,F823 \
             --output-format=github
           echo "✅ 关键检查通过，未发现严重问题"
 
