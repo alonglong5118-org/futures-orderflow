@@ -31,6 +31,11 @@ on:
           - "true"
           - "false"
 
+# 并发控制：同一分支只保留最新一次基准测试
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   benchmark:
     name: "Performance Benchmark"
@@ -40,19 +45,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python and deps
+        uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
 
       - name: Restore baseline cache
         id: baseline-cache

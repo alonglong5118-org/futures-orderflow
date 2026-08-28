@@ -1,0 +1,44 @@
+# ==============================================================================
+#  Composite Action：Setup Python + Install Dependencies
+# ==============================================================================
+#  统一 Python 环境搭建流程，避免每个 workflow 重复写 setup-python + pip install
+#
+#  功能：
+#    · 设置指定版本的 Python
+#    · 配置 pip 缓存（基于 requirements 文件 hash）
+#    · 升级 pip
+#    · 安装开发依赖（requirements-dev.txt）
+#
+#  用法：
+#    - name: Setup Python and deps
+#      uses: ./.github/actions/setup-python-deps
+#      with:
+#        python-version: "3.11"
+# ==============================================================================
+
+name: "Setup Python + Dependencies"
+description: "Setup Python and install project dependencies with caching"
+
+inputs:
+  python-version:
+    description: "Python 版本"
+    required: true
+    default: "3.11"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: "pip"
+        cache-dependency-path: |
+          requirements.txt
+          requirements-dev.txt
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt

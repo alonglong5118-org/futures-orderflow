@@ -3,13 +3,9 @@
 # ==============================================================================
 #  触发时机：PR 到 main/master、手动触发
 #  检查内容：
-#    · 语法检查（py_compile）
-#    · 测试文件命名规范
-#    · 基准文件完整性
-#    · 预提交钩子一致性
-#    · Ruff 关键 lint（阻塞级 — 抓真 bug）
-#    · Ruff 风格 lint（建议级 — 只报告）
-#    · Ruff 格式化检查（建议级）
+#    · 快速检查（语法/命名规范/可发现性）
+#    · Ruff 关键 lint + 格式检查（阻塞级）
+#    · Ruff 风格 lint（建议级）
 #    · mypy 类型检查（建议级）
 # ==============================================================================
 
@@ -27,10 +23,18 @@ on:
 
   workflow_dispatch:
 
+# 并发控制：同一分支/PR 只保留最新一次运行，旧的自动取消
+concurrency:
+  group: code-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # ── 语法检查 ────────────────────────────────────────────────────────────
-  syntax:
-    name: "Syntax check"
+  # ── 快速检查（语法 + 命名规范 + 可发现性） ────────────────────────────────
+  #  合并为一个 job，减少 runner 启动开销
+  #  不需要安装 requirements-dev.txt，只用 Python 标准库
+  # ========================================================================
+  quick-checks:
+    name: "Quick checks"
     runs-on: ubuntu-latest
 
     steps:
@@ -42,28 +46,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Compile all Python files
+      - name: Syntax check
         run: |
           echo "=== Python 语法检查 ==="
           find . -name "*.py" -not -path "./.git/*" -not -path "./node_modules/*" \
             -not -path "./ponytail/*" | xargs python -m py_compile 2>&1
           echo "✅ 语法检查通过"
 
-  # ── 测试规范检查 ────────────────────────────────────────────────────────
-  test-standards:
-    name: "Test standards"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Check test file naming
+      - name: Test file naming
         run: |
           echo "=== 测试文件命名规范 ==="
           mismatched=$(find tests/ -name "*.py" -not -name "test_*" -not -name "_*" 2>/dev/null || true)
@@ -74,7 +64,7 @@ jobs:
           fi
           echo "✅ 命名规范通过"
 
-      - name: Verify baseline file integrity
+      - name: Baseline integrity
         run: |
           echo "=== 基准文件完整性 ==="
           if [ ! -f "tests/_baseline_values.json" ]; then
@@ -92,21 +82,7 @@ jobs:
               print(f'   ... 还有 {len(data)-5} 项')
           "
 
-  # ── 测试可发现性检查 ────────────────────────────────────────────────────
-  discover-check:
-    name: "Test discovery sync"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Run discover and compare
+      - name: Test discovery
         run: |
           echo "=== 测试发现一致性检查 ==="
           python scripts/discover_tests.py > /tmp/discovered.txt
@@ -123,42 +99,33 @@ jobs:
           echo "💡 提示：如果新增了测试文件但忘记注册，运行："
           echo "   python scripts/discover_tests.py --update"
 
-  # ── Ruff 关键 lint（阻塞级） ────────────────────────────────────────────
-  #  抓确定性 bug + 代码质量硬约束（会导致问题或明确是坏味道的）：
-  #    F401  — 未使用的导入（代码异味，增加误导性）
-  #    F601  — 字典重复 key（后面的值覆盖前面的，几乎一定是 bug）
-  #    F701  — break/continue 在循环外（语法错误）
-  #    F821  — 未定义的名字（NameError）
-  #    F823  — 赋值前引用局部变量（UnboundLocalError）
-  #    I001  — 导入排序不规范（可读性 + 减少合并冲突）
-  #    B023  — 闭包/函数引用循环变量（晚绑定导致所有调用都用最后一个值）
-  #    B904  — except 内 raise 不带 from（丢失异常链，调试困难）
-  #    E722  — 裸 except（会吞掉 KeyboardInterrupt/SystemExit 等）
-  #    E712  — 与 True/False 做等值比较（应使用 is / not）
+  # ── Ruff 阻塞级检查（critical lint + format） ───────────────────────────
+  #  合并为一个 job，共享依赖安装和 Ruff 缓存
+  #  关键 lint 规则（会导致 bug 的）：
+  #    F401/F601/F701/F821/F823/I001/B023/B904/E722/E712
   # ========================================================================
-  ruff-critical:
-    name: "Ruff · Critical lint"
+  ruff:
+    name: "Ruff · lint + format"
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python and deps
+        uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+      - name: Restore Ruff cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ruff
+          key: ruff-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'ruff.toml', '.ruff.toml') }}
+          restore-keys: |
+            ruff-${{ runner.os }}-
 
-      - name: Run critical lint
+      - name: Critical lint
         run: |
           echo "=== Ruff 关键检查（阻塞级）==="
           echo "检查会导致运行时报错或代码质量硬约束..."
@@ -166,6 +133,13 @@ jobs:
             --select F401,F601,F701,F821,F823,I001,B023,B904,E722,E712 \
             --output-format=github
           echo "✅ 关键检查通过"
+
+      - name: Format check
+        run: |
+          echo "=== Ruff 格式化检查（阻塞级）==="
+          echo "检查代码格式是否符合规范..."
+          ruff format --check .
+          echo "✅ 格式检查通过"
 
   # ── Ruff 风格 lint（建议级 · 不阻塞） ──────────────────────────────────
   ruff-style:
@@ -177,19 +151,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python and deps
+        uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+      - name: Restore Ruff cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ruff
+          key: ruff-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'ruff.toml', '.ruff.toml') }}
+          restore-keys: |
+            ruff-${{ runner.os }}-
 
       - name: Run style lint
         run: |
@@ -199,42 +172,6 @@ jobs:
           ruff check . --statistics --exit-zero
           echo ""
           echo "📊 以上为建议改进项，不阻塞 PR 合并"
-
-  # ── Ruff 格式化检查（阻塞级） ──────────────────────────────────────────
-  #  代码格式不统一会导致：
-  #    · 阅读困难（每个人风格不一样）
-  #    · Git 合并冲突多（格式改动混入业务改动）
-  #    · Code Review 时噪音大（diff 里全是格式变化）
-  #  用 ruff format --check 保证全仓库代码风格一致
-  # ========================================================================
-  ruff-format:
-    name: "Ruff · Format check"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: Check formatting
-        run: |
-          echo "=== Ruff 格式化检查（阻塞级）==="
-          echo "检查代码格式是否符合规范..."
-          ruff format --check .
-          echo "✅ 格式检查通过"
 
   # ── mypy 类型检查（建议级 · 不阻塞） ───────────────────────────────────
   mypy:
@@ -246,19 +183,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python and deps
+        uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
 
       - name: Run mypy
         run: |
