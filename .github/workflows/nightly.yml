@@ -66,7 +66,7 @@ jobs:
 
       - name: Run all tests
         run: |
-          python run_tests.py all --py-only \
+          python run_tests.py all \
             --junit test-results/full-py${{ matrix.python-version }}.xml \
             --slow 2000 \
             --retry ${{ steps.retry.outputs.count }}
@@ -105,7 +105,7 @@ jobs:
         id: perf
         run: |
           echo "=== 性能基准测试 ==="
-          python run_tests.py performance --py-only
+          python run_tests.py performance
           echo ""
           echo "perf_done=true" >> $GITHUB_OUTPUT
 
