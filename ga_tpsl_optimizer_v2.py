@@ -23,6 +23,12 @@ import time
 import argparse
 import random
 import math
+
+# 防止 numpy/pandas 内部多线程与 multiprocessing 争抢 CPU
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +63,9 @@ PM_ETA = 15  # 降低，变异更离散
 CALMAR_CAP = 10.0  # Calmar 上限，防止极端值主导进化
 IMMIGRANT_RATE = 0.10  # 每 5 代注入的随机移民比例
 IMMIGRANT_INTERVAL = 5  # 移民注入间隔（代）
+EARLY_STOP_PATIENCE = 8  # 早停：连续多少代 best_expR 提升不足则终止
+EARLY_STOP_MIN_IMPROVE = 0.001  # 早停：最小提升阈值
+DEFAULT_N_JOBS = 8  # 并行评估进程数
 
 # 约束
 MIN_TRADES = 10          # 最低交易笔数
@@ -77,6 +86,36 @@ ROBUST_POINTS = 11      # 每个参数的扰动点数
 
 # 结果缓存
 _eval_cache = {}
+
+# Worker 进程全局数据（用于并行评估，避免重复序列化大对象）
+_worker_data = {}
+
+
+def _init_worker(symbol, df_is, train_bars, valid_bars, step_bars, data_slice_id):
+    """Pool initializer：在每个 worker 进程中设置全局数据。"""
+    global _worker_data
+    _worker_data = {
+        "symbol": symbol,
+        "df_is": df_is,
+        "train_bars": train_bars,
+        "valid_bars": valid_bars,
+        "step_bars": step_bars,
+        "data_slice_id": data_slice_id,
+    }
+
+
+def _worker_evaluate(individual):
+    """Worker 进程中的评估函数（使用全局数据，避免重复 pickle）。"""
+    global _worker_data
+    return wf_evaluate(
+        individual,
+        _worker_data["symbol"],
+        _worker_data["df_is"],
+        _worker_data["train_bars"],
+        _worker_data["valid_bars"],
+        _worker_data["step_bars"],
+        _worker_data["data_slice_id"],
+    )
 
 
 def _cache_key(params_tuple, symbol, data_slice_id):
@@ -391,14 +430,14 @@ def select_candidates(pareto_front):
 # OOS 验证
 # ============================================================================
 
-def oos_validate(individual_list, symbol, df_oos):
+def oos_validate(individual_list, symbol, df_oos, df_is=None):
     """在纯 OOS 数据上验证一组参数。
 
     返回 [{params, metrics, degradation}, ...]
     """
     results = []
     for ind in individual_list:
-        metrics_is = single_evaluate(ind, symbol, df_is) if 'df_is' in dir() else None
+        metrics_is = single_evaluate(ind, symbol, df_is) if df_is is not None else None
         metrics_oos = single_evaluate(ind, symbol, df_oos)
 
         # 计算退化率
@@ -477,7 +516,8 @@ def robustness_test(individual, symbol, df, perturb=ROBUST_PERTURB, n_points=ROB
 
 def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_COUNT,
                      train_bars=DEFAULT_TRAIN_BARS, valid_bars=DEFAULT_VALID_BARS,
-                     step_bars=DEFAULT_STEP_BARS, full_data=False, seed=42):
+                     step_bars=DEFAULT_STEP_BARS, full_data=False, seed=42,
+                     n_jobs=DEFAULT_N_JOBS, early_stop_patience=EARLY_STOP_PATIENCE):
     """运行完整的 Phase 2 GA 优化。
 
     返回完整的结果字典。
@@ -548,6 +588,17 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
     # 初始化 DEAP
     toolbox = setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size)
 
+    # 并行评估（multiprocessing + initializer，避免重复序列化 DataFrame）
+    from multiprocessing import Pool
+    pool = Pool(
+        processes=n_jobs,
+        initializer=_init_worker,
+        initargs=(symbol, df_is, train_bars, valid_bars, step_bars, "IS_WF"),
+    )
+    # 用 worker 版本的 evaluate（从全局读数据，更快）
+    toolbox.register("evaluate", _worker_evaluate)
+    toolbox.register("map", pool.map)
+
     # 创建种群
     pop = toolbox.population(n=pop_size)
 
@@ -586,6 +637,10 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         "avg_calmar": float(np.mean(f2_vals)),
         "pareto_size": len(tools.sortNondominated(pop, len(pop), first_front_only=True)),
     })
+
+    # 早停机制初始化
+    best_expR_so_far = max(f1_vals)
+    early_stop_counter = 0
 
     # 进化主循环
     for gen in range(1, gen_count + 1):
@@ -650,6 +705,18 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
             "avg_calmar": float(np.mean(f2_vals)),
             "pareto_size": len(pareto_front),
         })
+
+        # 早停检查
+        current_best_expR = max(f1_vals)
+        if current_best_expR - best_expR_so_far >= EARLY_STOP_MIN_IMPROVE:
+            best_expR_so_far = current_best_expR
+            early_stop_counter = 0
+        else:
+            early_stop_counter += 1
+            if early_stop_counter >= early_stop_patience:
+                print(f"\n⏹️  早停触发：连续 {early_stop_patience} 代 best_expR 提升不足 {EARLY_STOP_MIN_IMPROVE}")
+                print(f"   当前 best_expR = {current_best_expR:.4f}")
+                break
 
     runtime = time.time() - start_time
     print(f"\n✅ 优化完成，用时 {runtime:.1f} 秒")
@@ -768,6 +835,10 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         },
     }
 
+    # 关闭进程池
+    pool.close()
+    pool.join()
+
     return result
 
 
@@ -806,7 +877,16 @@ def main():
     parser.add_argument("--full", action="store_true", help="使用全量IS数据（否则限制800根加速）")
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--output", type=str, default=None, help="输出目录")
+    parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="并行评估进程数")
+    parser.add_argument("--early-stop-patience", type=int, default=EARLY_STOP_PATIENCE,
+                        help="早停耐心值（连续多少代无提升则终止）")
+    parser.add_argument("--fast", action="store_true", help="快速模式：步长翻倍，窗口减半，适合快速探索")
     args = parser.parse_args()
+
+    # 快速模式：步长翻倍 → 窗口减半 → 速度翻倍
+    if args.fast:
+        args.step_bars *= 2
+        print("⚡ 快速模式已启用（step_bars 翻倍）")
 
     print("=" * 60)
     print("🧬 止盈止损参数 GA 联合优化器（Phase 2 · NSGA-II 多目标）")
@@ -821,6 +901,8 @@ def main():
         step_bars=args.step_bars,
         full_data=args.full,
         seed=args.seed,
+        n_jobs=args.n_jobs,
+        early_stop_patience=args.early_stop_patience,
     )
 
     if "error" in result:

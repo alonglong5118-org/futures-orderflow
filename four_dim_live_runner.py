@@ -4360,7 +4360,7 @@ def playback_kline(symbol, asof=None):
         return {"ok": False, "reason": repr(e)[:80]}
 
 
-def _pb_load_events(symbol, asof):
+def _pb_load_events(symbol, asof, state=None):
     """F7 事件驱动标记：聚合与某品种相关的事件（消息流 / 异动 / 信号）按日对齐 K 线。
     best-effort，单项缺数据不崩。返回 [{date, symbol, type, label, detail}]。"""
     events = []
@@ -4393,19 +4393,20 @@ def _pb_load_events(symbol, asof):
                                "label": str(label), "detail": it.get("reason") or ""})
     except Exception:
         pass
-    try:
-        _an = state.get("anomaly", {}) or {}
-        for a in (_an.get("anomalies") or []):
-            if symbol and (a.get("symbol") or "") != symbol:
-                continue
-            t = (a.get("time") or a.get("date") or "")[:10]
-            if not t or (asof and t > asof):
-                continue
-            events.append({"date": t, "symbol": a.get("symbol") or symbol,
-                           "type": "anomaly", "label": a.get("type") or "异动",
-                           "detail": a.get("detail") or ""})
-    except Exception:
-        pass
+    if state is not None:
+        try:
+            _an = state.get("anomaly", {}) or {}
+            for a in (_an.get("anomalies") or []):
+                if symbol and (a.get("symbol") or "") != symbol:
+                    continue
+                t = (a.get("time") or a.get("date") or "")[:10]
+                if not t or (asof and t > asof):
+                    continue
+                events.append({"date": t, "symbol": a.get("symbol") or symbol,
+                               "type": "anomaly", "label": a.get("type") or "异动",
+                               "detail": a.get("detail") or ""})
+        except Exception:
+            pass
     # 按日期去重（同日同标签只留一条）
     seen = set(); uniq = []
     for e in events:
@@ -6916,7 +6917,7 @@ def _update_market_states(feed, state):
     """v6.0: 遍历所有品种更新市场状态"""
     # Phase 4: 更新共识状态
     update_consensus_state(market_state_cache)
-    for sym in CONFIG.get("symbols", {}).keys():
+    for sym in SYMBOLS.keys():
         try:
             # 获取K线数据
             klines_data = state.get("klines_data", {})
@@ -8046,6 +8047,8 @@ def start_dashboard(state):
             self.wfile.write(body.encode("utf-8"))
 
         def do_GET(self):
+            # v6.0: 声明全局变量（避免赋值前引用导致 F823 / UnboundLocalError）
+            global AUTO_OPTIMIZE_ENABLED, auto_opt_params, auto_opt_adjustment_logs
             # F5 PWA 静态资源：manifest / service worker / 图标（不走 /api/）
             _asset = self.path.split("?")[0].lstrip("/")
             if _asset in ("manifest.webmanifest", "sw.js", "icon-192.png", "icon-512.png"):

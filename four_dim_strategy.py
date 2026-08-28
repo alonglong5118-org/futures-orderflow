@@ -21,7 +21,7 @@
 详见 四维策略_规格草案.md (v1.1)。
 """
 from __future__ import annotations
-import os, sys, json, math, time
+import os, sys, json, math, time, bisect
 from datetime import datetime
 import numpy as np
 
