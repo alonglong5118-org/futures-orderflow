@@ -42,7 +42,8 @@
 .PHONY: help test smoke unit integration advanced perf all \
         coverage slow junit random flake \
         lint lint-critical lint-style format format-check typecheck quality \
-        list discover watch hooks deps deps-update clean
+        list discover watch hooks deps deps-update clean \
+        bench bench-strict bench-update
 
 # Python 命令（优先 python3）
 PYTHON := python3
@@ -110,6 +111,16 @@ advanced:
 
 perf:
 	@$(PYTHON) run_tests.py performance --py-only
+
+bench:
+	@$(PYTHON) run_tests.py performance --py-only
+
+bench-strict:
+	@PERF_CHECK=1 $(PYTHON) run_tests.py performance --py-only
+
+bench-update:
+	@PERF_SAVE=1 $(PYTHON) -m tests.test_performance
+	@echo "✅ 性能基线已更新: tests/_perf_baseline.json"
 
 all:
 	@$(PYTHON) run_tests.py all --py-only
