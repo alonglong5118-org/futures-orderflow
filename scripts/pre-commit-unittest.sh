@@ -65,8 +65,9 @@ matches_any() {
 }
 
 # ── 获取项目根目录 ────────────────────────────────────────────────────────────
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT_DIR"
+# 用 git rev-parse 找根目录，兼容软链接钩子和直接运行两种情况
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/.." && pwd))"
+cd "$ROOT_DIR" || exit 1
 
 # ── 收集改动文件 ──────────────────────────────────────────────────────────────
 # 暂存区的改动（即将 commit 的）
@@ -155,7 +156,7 @@ else
     echo -e "${DIM}   3. 如果是预期变更，更新测试用例${RESET}"
     echo ""
     echo -e "${DIM}   跑全量测试：${RESET}"
-    echo -e "${CYAN}   python run_tests.py --py-only${RESET}"
+    echo -e "${CYAN}   python run_tests.py${RESET}"
     echo ""
     echo -e "${DIM}   强行提交（跳过检查）：${RESET}"
     echo -e "${CYAN}   git commit --no-verify${RESET}"
