@@ -295,6 +295,17 @@ def compute_F(symbol, date_str, cache_file=CACHE_FILE):
     return max(-100.0, min(100.0, F))
 
 
+def compute_F_subfactors(symbol, date_str, cache_file=CACHE_FILE):
+    """返回 F 维度的子因子分解：(basis_score, seasonal_score)
+    每个子因子范围 [-100, 100]，独立计算。缺失则返回 0。"""
+    rate = basis_rate_on(symbol, date_str, cache_file)
+    basis_s = 0.0
+    if rate is not None:
+        basis_s = max(-100.0, min(100.0, rate / 0.10 * 100))
+    seas_s = seasonal_f(symbol, date_str)
+    return round(basis_s, 1), round(seas_s, 1)
+
+
 if __name__ == "__main__":
     # 默认刷新
     refresh()

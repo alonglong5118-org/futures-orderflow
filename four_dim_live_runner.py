@@ -29,7 +29,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.2.4"
+APP_VERSION = "v3.4.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -187,6 +187,9 @@ try:
 except Exception:
     pass
 import minishare_live as ml
+import akshare_live as al
+import tushare_live as tl   # 保留兼容（降级用）
+# ★ 2026-08-28: 主数据源切换为 minishare rt_fut_k（不限次快照、实时性更好）
 import fundamental_feed as ff
 import account_tracker as at
 import trade_journal as tj
@@ -222,6 +225,12 @@ import consistency_watchdog as cw             # #5 训练/服务一致性看门�
 import regime_hmm as rhmm                       # #7 HMM 市场状态识别(live 专属，回测不要调用)
 import gbm_garch as gg                            # #7 (续) GBM/GARCH 波动率动力学+前向情景(live 专属)
 import macro_context as mctx                      # #6 跨资产宏观语境(live 专属，回测 macro_label=None 不进)
+import sentiment_engine as senteng                    # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
+import sr_analyzer as sra                                # #9 支撑压力位识别(live 专属，回测 sr_result=None 不进)
+import ga_factor_miner as gfm                            # #10 GA 因子挖掘+权重优化(live 专属)
+import viz_upgrade as viz                                 # #11 回测可视化增强(Plotly)
+import market_scanner as mscan                            # #11 全市场批量扫描(并行)
+import symbol_screener as sscreener                       # #11 品种筛选引擎
 import feature_manager as fmg            # 特性开关管理器（热加载/切换/日志）
 
 # ---------------------------------------------------------------------------
@@ -299,6 +308,162 @@ GATE_CACHE = {"ts": 0.0, "gates": {}}
 FEED = None  # 全局实时行情实例，main 启动时赋值，供 Web 接口算浮动盈亏
 FEED_LAST_UPDATE = 0.0   # 最近一次成功 poll 的时间戳（行情健康指示用）
 FEED_AVAILABLE = False    # 行情源是否可用（minishare 接口可达）
+
+# ★ 2026-08-27: akshare 实时行情（分钟级，新浪数据源）
+_AK_PRICES = {}          # {symbol: price} 最新 akshare 价格
+_AK_PRICE_TS = 0.0       # akshare 最近更新时间戳
+_AK_AVAILABLE = False    # akshare 数据源是否可用
+_AK_SYMBOLS = []         # 需要监控的品种列表
+_AK_LOCK = threading.Lock()
+
+# ★ 2026-08-28: Tushare Pro 主数据源（Tushare → akshare 自动降级）
+_TS_PRICES = {}          # {symbol: price} 最新 Tushare 价格
+_TS_PRICE_TS = 0.0       # Tushare 最近更新时间戳
+_TS_AVAILABLE = False    # Tushare 数据源是否可用
+_TS_SYMBOLS = []         # 需要监控的品种列表
+_TS_LOCK = threading.Lock()
+
+def _ak_poller():
+    """后台线程：每 5 秒轮询 akshare 实时行情（分钟级，新浪数据源）。"""
+    global _AK_PRICES, _AK_PRICE_TS, _AK_AVAILABLE, _AK_SYMBOLS
+    print("[akshare_live] 后台轮询线程启动（5秒/次）")
+    _AK_FEED = None
+    _ak_errors = 0
+    while True:
+        try:
+            if _AK_FEED is None:
+                _AK_FEED = al.feed()
+                _AK_FEED.set_symbols(_AK_SYMBOLS or list(al.ALL_CONTRACTS.keys()))
+            snap = _AK_FEED.poll()
+            if snap:
+                with _AK_LOCK:
+                    _AK_PRICES = {s: d.get('close', 0) for s, d in snap.items() if d and d.get('close', 0) > 0}
+                    _AK_PRICE_TS = time.time()
+                    _AK_AVAILABLE = True
+                _ak_errors = 0
+            else:
+                _ak_errors += 1
+                if _ak_errors >= 5:
+                    _AK_AVAILABLE = False
+        except Exception as e:
+            _ak_errors += 1
+            if _ak_errors >= 5:
+                _AK_AVAILABLE = False
+        time.sleep(5)
+
+def _ts_poller():
+    """后台线程：每 5 秒轮询 minishare rt_fut_k 快照（非交易时段回退源）。
+    
+    ⚠️ 2026-08-28 修复：minishare rt_fut_k 仅在收盘时更新数据，盘中返回的是
+    上一收盘价（stale）。因此本线程不再覆盖 _AK_PRICES（新浪实时缓存），
+    只维护 _TS_PRICES 供非交易时段回退使用。
+    盘中实时价由 _ak_poller（新浪财经）提供。"""
+    global _TS_PRICES, _TS_PRICE_TS, _TS_AVAILABLE, _TS_SYMBOLS
+    print("[minishare_live] rt_fut_k 后台轮询线程启动（5秒/次，非交易时段回退源）")
+    _ms_feed = None
+    _ts_errors = 0
+    while True:
+        try:
+            if _ms_feed is None:
+                _ms_feed = ml.feed()  # minishare_live.rt_fut_k 单例
+                if not _ms_feed.available():
+                    print("[minishare_live] rt_fut_k 不可用，等待恢复...")
+                    time.sleep(10)
+                    continue
+            # 调用 rt_fut_k 获取全市场快照
+            snap = _ms_feed.poll()
+            if snap:
+                with _TS_LOCK:
+                    _TS_PRICES = {s: d.get('close', 0) for s, d in snap.items() if d and d.get('close', 0) > 0}
+                    _TS_PRICE_TS = time.time()
+                    _TS_AVAILABLE = True
+                _ts_errors = 0
+            else:
+                _ts_errors += 1
+                if _ts_errors >= 5:
+                    _TS_AVAILABLE = False
+        except Exception as e:
+            _ts_errors += 1
+            if _ts_errors >= 5:
+                _TS_AVAILABLE = False
+        time.sleep(5)
+
+def _is_trading_hours():
+    """判断当前是否在期货交易时段（夜盘 21:00-23:00/02:30，日盘 9:00-15:00）。"""
+    from datetime import datetime as _dt
+    now = _dt.now()
+    h, m = now.hour, now.minute
+    t = h * 60 + m
+    # 夜盘 21:00 - 23:00 (部分品种到 02:30)
+    if t >= 21 * 60 or t <= 2 * 60 + 30:
+        return True
+    # 日盘 9:00 - 15:00
+    if 9 * 60 <= t <= 15 * 60:
+        return True
+    return False
+
+def get_realtime_price(sym):
+    """获取实时价格。
+    
+    ⚠️ 2026-08-28 修复：minishare rt_fut_k 盘中返回上一收盘价（stale），
+    而 akshare（新浪财经）提供盘中实时数据。因此盘中优先 akshare，
+    非交易时段或 akshare 不可用时回退 minishare。
+    
+    优先级：
+    1) 交易时段：akshare（新浪实时）→ minishare → account_state
+    2) 非交易时段：minishare → akshare → account_state
+    """
+    sym_lower = sym.lower()
+    trading = _is_trading_hours()
+    
+    if trading:
+        # 交易时段：优先 akshare（新浪实时）
+        if _AK_AVAILABLE and _AK_PRICE_TS > 0 and (time.time() - _AK_PRICE_TS) < 60:
+            if sym_lower in _AK_PRICES and _AK_PRICES[sym_lower] > 0:
+                return _AK_PRICES[sym_lower]
+        # 按需从 akshare 拉取（缓存未命中时）
+        try:
+            import akshare_live as _al_on_demand
+            _f = _al_on_demand.feed()
+            if _f.available():
+                _code = _al_on_demand.ALL_CONTRACTS.get(sym_lower, _al_on_demand.ALL_CONTRACTS.get(sym.upper()))
+                if _code:
+                    _snap = _f.poll([sym_lower])
+                    if _snap and sym_lower in _snap:
+                        _px = _snap[sym_lower].get('close', 0)
+                        if _px and _px > 0:
+                            return _px
+        except Exception:
+            pass
+        # 回退 minishare（虽过时但总比没有好）
+        if FEED is not None:
+            px = FEED.price(sym)
+            if px and px > 0:
+                return px
+        if _TS_AVAILABLE and _TS_PRICE_TS > 0:
+            if sym_lower in _TS_PRICES and _TS_PRICES[sym_lower] > 0:
+                return _TS_PRICES[sym_lower]
+    else:
+        # 非交易时段：优先 minishare（收盘快照价）
+        if FEED is not None:
+            px = FEED.price(sym)
+            if px and px > 0:
+                return px
+        if _TS_AVAILABLE and _TS_PRICE_TS > 0:
+            if sym_lower in _TS_PRICES and _TS_PRICES[sym_lower] > 0:
+                return _TS_PRICES[sym_lower]
+        # 回退 akshare
+        if _AK_AVAILABLE and _AK_PRICE_TS > 0:
+            if sym_lower in _AK_PRICES and _AK_PRICES[sym_lower] > 0:
+                return _AK_PRICES[sym_lower]
+    
+    # 最终回退：account_state 存储价
+    try:
+        st = at.load_state()
+        pos = st['positions'].get(sym_lower, st['positions'].get(sym.upper(), {}))
+        return pos.get('price', 0) or 0
+    except Exception:
+        return 0
 
 # —— #16 进程看门狗心跳 ——
 START_TIME = time.time()   # 进程启动时刻（/api/health 用）
@@ -799,6 +964,9 @@ def load_pos_alert_dedup():
                     _POS_ALERT_GUARD[sym][kind] = {"fired": bool(state["fired"]), "ts": float(state.get("ts", 0))}
                 else:
                     _POS_ALERT_GUARD[sym][kind] = {"fired": bool(state), "ts": 0}
+            # ★ 2026-08-27: 确保从旧文件加载时也有 gap_stop 字段
+            if "gap_stop" not in _POS_ALERT_GUARD[sym]:
+                _POS_ALERT_GUARD[sym]["gap_stop"] = {"fired": False, "ts": 0.0}
     except Exception:
         pass
 
@@ -1186,7 +1354,8 @@ def _auto_levels(sym, direction, price):
                 df_daily, fd.regime_params_for(sym, _STRAT_CFG, fmg.get_manager()))[0]
         except Exception:
             rreg = "波动"
-        ep = exit_plan(sym, used_price, dir_T, stop_atr, rreg, _STRAT_CFG, fmg.get_manager())
+        ep = exit_plan(sym, used_price, dir_T, stop_atr, rreg, _STRAT_CFG, fmg.get_manager(),
+                       sr_result=sra.get_cached(sym))
         # 防御性校验：自动算出的止损/止盈方向绝不可错误，否则宁可失败也不落盘
         _bad = []
         if dir_T > 0:
@@ -1602,9 +1771,10 @@ def log_signal(sig):
 # ---------------------------------------------------------------------------
 # 持仓触价报警（止损 / t1 平半 / t2 全平）：每轮 _update_aux 调用，复用 notify() 弹窗+语音
 # ---------------------------------------------------------------------------
-_POS_ALERT_GUARD = {}   # sym -> {"stop":{"fired":bool,"ts":float}, "t1":{...}, "t2":{...}}
+_POS_ALERT_GUARD = {}   # sym -> {"stop":{"fired":bool,"ts":float}, "t1":{...}, "t2":{...}, "gap_stop":{...}}
                                         # 时间窗口+持久化去重：30min 内同 level 不重推，跨进程/重启保留记忆
-                                        # 缺口击穿告警（_fire_gap_stop_alert）属紧急硬规则，不受此去重影响
+                                        # 缺口击穿告警（gap_stop）：5分钟冷却期，价格返回安全区后允许再次告警
+                                        # 用户修改止盈止损时自动重置守卫
 _POS_LEVEL_GUARD = {}   # sym -> True，止损/止盈「方向配置异常」提醒每品种每轮持仓只发一次
 _POS_INSURE_GUARD = {}  # sym -> True，浮盈保险拦截落盘去抖（持续期间只落一次，回安全区复位）
 _SIG_PREV_DIR = {}       # sym -> 上一轮 dir_T（持续性去抖用，单轮临界抖动不触发）
@@ -1751,11 +1921,22 @@ WHIPSAW_WINDOW_SEC = 600      # 同一品种方向反转检测窗口（10分钟�
 MAX_SIGNALS_PER_HOUR = 3      # 单品种每小时最大信号数（防轰炸）
 MAX_SIGNALS_PER_DAY = 12      # 单品种每日最大信号数（防疲劳推送）
 SIGNAL_DEDUP_WINDOW_SEC = 180 # 同向信号去重窗口（3分钟内同向重复=去重）
+SIGNAL_CROSS_DIR_LOCK_SEC = 1800  # 跨方向信号锁定窗口（30分钟内同品种不推反向信号）
 MIN_SUGGESTED_LOTS = 1        # 最小建议手数（低于此值不推信号）
+
+# 跨方向信号锁定记录：sym -> {direction, timestamp}
+_SIGNAL_DIR_LOCK = {}  # 记录每个品种最近一次推送的信号方向和时间
+
+def _check_gap_stop_triggered(ds, px, stop, entry_price):
+    """[DEPRECATED] 请使用 gap_stop_utils.check_gap_stop_triggered
+    保留此包装函数以兼容旧代码，实际逻辑已迁移到 gap_stop_utils 模块。"""
+    from gap_stop_utils import check_gap_stop_triggered
+    return check_gap_stop_triggered(ds, px, stop, entry_price)
+
 
 def _fire_gap_stop_alert(p, px, stop, pen, oneR):
     """P0-2：缺口/滑点击穿止损的硬规则告警。半自动系统不代下单，改发最高优先级
-    “必须立即市价平仓”告警，并明确提示：若开盘封同向停板平不掉，须承认敞口仍在并
+    "必须立即市价平仓"告警，并明确提示：若开盘封同向停板平不掉，须承认敞口仍在并
     挂停板价排队，不可假装已离场（risk-manager 校验结论）。"""
     sym = p.get("symbol"); name = p.get("name", sym)
     text = (f"⚠️ 缺口/滑点击穿止损：{name} {p['direction']} {p['lots']}手，"
@@ -1927,6 +2108,33 @@ def check_position_alerts(positions):
                       f"止损{'上移' if _tp_result['new_stop_price'] else '不变'}",
                       {"tp_level": _tp_result["new_level"], "action": _tp_result["action"],
                        "reduce_qty": _tp_result["reduce_qty"]})
+            # ★ 2026-08-28: TP state machine fires alerts AND sets guard
+            #   This connects the TP state machine with the alert guard:
+            #   when a TP level transition is detected, fire the alert ONCE
+            #   and mark the guard as fired to prevent duplicate raw-price alerts below.
+            _tp_g = _POS_ALERT_GUARD.setdefault(_sym, {
+                "stop": {"fired": False, "ts": 0.0},
+                "t1": {"fired": False, "ts": 0.0},
+                "t2": {"fired": False, "ts": 0.0},
+                "gap_stop": {"fired": False, "ts": 0.0},
+            })
+            _tp_now = time.time()
+            _tp_px = float(_tp.get("price") or _px)
+            _tp_t1v = _tp.get("t1")
+            _tp_t2v = _tp.get("t2")
+            _tp_act = _tp_result["action"]
+            if _tp_act in ("reduce_t1", "close_t1_full"):
+                _tp_g["t1"] = {"fired": True, "ts": _tp_now}
+                _fire_position_alert(_tp, _tp_px, "t1", _tp_t1v)
+                save_pos_alert_dedup()
+            elif _tp_act in ("reduce_t2", "close_t2_full"):
+                _tp_g["t2"] = {"fired": True, "ts": _tp_now}
+                _fire_position_alert(_tp, _tp_px, "t2", _tp_t2v)
+                save_pos_alert_dedup()
+            elif _tp_act == "close_t3":
+                _tp_g["t2"] = {"fired": True, "ts": _tp_now}
+                _fire_position_alert(_tp, _tp_px, "t2", _tp_t2v)
+                save_pos_alert_dedup()
 
     cur_syms = {p.get("symbol") for p in positions if p.get("lots")}
     for guard in (_POS_ALERT_GUARD, _POS_LEVEL_GUARD, _POS_INSURE_GUARD):
@@ -1961,7 +2169,12 @@ def check_position_alerts(positions):
         "stop": {"fired": False, "ts": 0.0},
         "t1": {"fired": False, "ts": 0.0},
         "t2": {"fired": False, "ts": 0.0},
+        "gap_stop": {"fired": False, "ts": 0.0},  # ★ 缺口击穿去重守卫
     })
+        # ★ 2026-08-27: 确保已有守卫（从磁盘加载的旧版本）也包含 gap_stop 字段
+        #   否则 get("gap_stop", default) 每次都返回默认值，去重机制完全失效
+        if "gap_stop" not in g:
+            g["gap_stop"] = {"fired": False, "ts": 0.0}
         # ── 方向一致性校验：stop/t1/t2 落在错误一侧 → 尝试自动重算修正并落盘；
         # 修正成功后静默（不弹窗），修正失败或无法重算才弹窗通知用户。──
         sane = _levels_sane(p)
@@ -1982,6 +2195,9 @@ def check_position_alerts(positions):
                     # 持久化到 account_state，避免下次轮询再次命中同一错误
                     try:
                         at.set_levels(sym, stop=stop, t1=t1, t2=t2)
+                        # ★ 2026-08-27: 自动修正价位后重置告警守卫，防止旧价位告警
+                        _POS_ALERT_GUARD.pop(sym, None)
+                        save_pos_alert_dedup()
                     except Exception:
                         pass
             except Exception:
@@ -2054,53 +2270,105 @@ def check_position_alerts(positions):
             _POS_INSURE_GUARD.pop(sym, None)
         # 去重复位（收紧）：仅当价格明显远离该 level（>0.5R）才复位 fired，防震荡反复触发
         # 单纯 not hit 不复位——仍在警戒区就保持 fired 锁，防止小幅反复触发刷屏
+        # ★ 2026-08-28: For TP-managed positions (tp_targets exists), DON'T reset
+        #   the guard based on price movement alone. The TP state machine manages
+        #   transitions, and guard reset only happens when user modifies levels
+        #   or executes a trade. This prevents whip-saw re-firing.
         now_ts = time.time()
+        _has_tp = bool(p.get("tp_targets"))
         if stop is not None and not stop_hit:
             stop_oneR = abs(avg_f - stop) if avg_f is not None else 0.0
             if stop_oneR > 0 and abs(px - stop) > 0.5 * stop_oneR:
                 g["stop"] = {"fired": False, "ts": 0.0}
         if t1 is not None and not t1_hit:
             t1_oneR = abs(avg_f - t1) if avg_f is not None else 0.0
-            if t1_oneR > 0 and abs(px - t1) > 0.5 * t1_oneR:
+            # For TP-managed positions, use 1.5R threshold (3x more conservative)
+            # This prevents whip-saw re-firing around T1
+            _reset_threshold = 0.5 if not _has_tp else 1.5
+            if t1_oneR > 0 and abs(px - t1) > _reset_threshold * t1_oneR:
                 g["t1"] = {"fired": False, "ts": 0.0}
         if t2 is not None and not t2_hit:
             t2_oneR = abs(avg_f - t2) if avg_f is not None else 0.0
-            if t2_oneR > 0 and abs(px - t2) > 0.5 * t2_oneR:
+            _reset_threshold2 = 0.5 if not _has_tp else 1.5
+            if t2_oneR > 0 and abs(px - t2) > _reset_threshold2 * t2_oneR:
                 g["t2"] = {"fired": False, "ts": 0.0}
+        # ★ 2026-08-27: 缺口击穿去重策略——彻底修复反复推送问题
+        #   之前的"pen < 0.2R 自动复位"逻辑存在竞态：minishare 快照价精度不足，
+        #   每轮轮询计算的 pen 值随机波动，导致守卫被反复复位 → 冷却期失效 → 反复推送。
+        #
+        #   新策略：gap_stop 采用"锁死式去重"——
+        #   1. 一旦击穿告警推送，30 分钟内（或直到止损价被修改前）绝不重复推送
+        #   2. 不再使用 pen < 0.2R 自动复位（避免竞态）
+        #   3. 仅在以下情况复位：用户手动修改止损价 / 品种平仓 / 服务器启动后首次检测
         # 优先报止损，再 t2（全平），最后 t1（平半）——同一轮若多个同时触发，最紧急的先报
-        # 时间窗口去重：同 sym+同 level 在 ALERT_REFIRE_SEC 内只推一次；缺口击穿告警不受此限
         stop_alerted = g.get("stop", {"fired": False, "ts": 0.0})
         t2_alerted = g.get("t2", {"fired": False, "ts": 0.0})
         t1_alerted = g.get("t1", {"fired": False, "ts": 0.0})
 
-        # 止损：触发条件 = hit AND (未触发 OR 已过 30min 窗口)
+        # 止损：★ 一次性告警机制 —— 同 t1/t2
         if stop_hit:
-            can_fire = not stop_alerted.get("fired", False) or (now_ts - stop_alerted.get("ts", 0)) > ALERT_REFIRE_SEC
+            can_fire = not stop_alerted.get("fired", False)
             if can_fire:
                 g["stop"] = {"fired": True, "ts": now_ts}
                 _fire_position_alert(p, px, "stop", stop)
                 # P1-3：记录止损离场时刻，触发同品种冷静期（防震荡市反复止损）
                 _LAST_STOP_EXIT[sym] = time.time()
+        else:
+            if stop_alerted.get("fired", False):
+                g["stop"] = {"fired": False, "ts": 0.0}
             # P0-2：缺口/滑点击穿硬规则——穿破>0.5R 视为跳空/滑点击穿，发最高优先级平仓告警
-            # ⚠️ 缺口击穿告警不受去重影响，始终推送（硬规则）
-            entry = avg_f; oneR = abs(entry - stop) if entry is not None else 0.0
-            pen = abs(px - stop) if stop is not None else 0.0
-            if oneR > 0 and pen > 0.5 * oneR:
-                _fire_gap_stop_alert(p, px, stop, pen, oneR)
+            # ★ 去重改为 30 分钟锁死式：一次推送后 30 分钟内绝不重复，无论价格如何波动
+            #   不再使用 pen 阈值自动复位，彻底杜绝反复推送竞态
+            # ★ 2026-08-28: 增加方向检查——价格必须在不利方向才触发（多单price<stop/空单price>stop）
+            #   修复价格在有利方向时错误触发"缺口击穿"的假阳性告警
+            # ★ 2026-08-28: 核心逻辑提取为 _check_gap_stop_triggered 纯函数，便于单元测试
+            _gap_result = _check_gap_stop_triggered(ds, px, stop, avg_f)
+            if _gap_result["triggered"]:
+                oneR = _gap_result["oneR"]
+                pen = _gap_result["pen"]
+                _gap_alerted = g.get("gap_stop", {"fired": False, "ts": 0.0})
+                _gap_cooldown = 1800  # 30 分钟冷却期
+                if not _gap_alerted.get("fired", False) or (now_ts - _gap_alerted.get("ts", 0)) > _gap_cooldown:
+                    g["gap_stop"] = {"fired": True, "ts": now_ts}
+                    _fire_gap_stop_alert(p, px, stop, pen, oneR)
 
-        # t2（全平）：同窗口去重
+        # ★ 2026-08-28: Check if TP state machine manages this position
+        _has_tp_targets = bool(p.get("tp_targets"))
+        # t2（全平）：★ 一次性告警机制 —— 同 t1
+        # ★ 2026-08-28: Skip raw alert for positions with tp_targets where
+        #   the TP state machine already fired the alert.
+        _tp_t2_handled = bool(p.get("t2_hit", False)) or (p.get("tp_level", "") in (TAKE_PROFIT_LEVEL_T2, TAKE_PROFIT_LEVEL_T3, TAKE_PROFIT_LEVEL_DONE))
         if t2_hit:
-            can_fire = not t2_alerted.get("fired", False) or (now_ts - t2_alerted.get("ts", 0)) > ALERT_REFIRE_SEC
+            can_fire = not t2_alerted.get("fired", False)
+            if _has_tp_targets and _tp_t2_handled:
+                can_fire = False
             if can_fire:
                 g["t2"] = {"fired": True, "ts": now_ts}
                 _fire_position_alert(p, px, "t2", t2)
+        else:
+            if not (_has_tp_targets and _tp_t2_handled):
+                if t2_alerted.get("fired", False):
+                    g["t2"] = {"fired": False, "ts": 0.0}
 
-        # t1（平半）：同窗口去重
+        # t1（平半）：★ 一次性告警机制 —— 推过一次后，价格仍在警戒区就不再推。
+        # 只有当价格离开警戒区（t1_hit=False）后才允许下次重新触发。
+        # ★ 2026-08-28: Skip raw alert for positions with tp_targets where
+        #   the TP state machine already fired the alert (t1_hit flag or guard fired).
+        _tp_t1_handled = bool(p.get("t1_hit", False)) or (p.get("tp_level", "") not in (TAKE_PROFIT_LEVEL_NONE, ""))
         if t1_hit:
-            can_fire = not t1_alerted.get("fired", False) or (now_ts - t1_alerted.get("ts", 0)) > ALERT_REFIRE_SEC
+            can_fire = not t1_alerted.get("fired", False)
+            # Don't re-fire if TP state machine already handled this transition
+            if _has_tp_targets and _tp_t1_handled:
+                can_fire = False
             if can_fire:
                 g["t1"] = {"fired": True, "ts": now_ts}
                 _fire_position_alert(p, px, "t1", t1)
+        else:
+            # 价格离开警戒区，允许下次重新触发
+            # But if TP state machine handled it, keep the guard locked
+            if not (_has_tp_targets and _tp_t1_handled):
+                if t1_alerted.get("fired", False):
+                    g["t1"] = {"fired": False, "ts": 0.0}
 
 
 # ---------------------------------------------------------------------------
@@ -6763,6 +7031,20 @@ def _position_aware_advice(sig, open_positions, price):
     # ── 清理结束 ──
 
     
+    # 保护8：跨方向信号锁定（30分钟内同品种只推一个方向，避免矛盾信号）
+    _dir_lock = _SIGNAL_DIR_LOCK.get(sym)
+    if _dir_lock and (now - _dir_lock.get("time", 0)) < SIGNAL_CROSS_DIR_LOCK_SEC:
+        _locked_dir = _dir_lock.get("direction", "?")
+        if _locked_dir != sig_dir:
+            _lock_remain = int((SIGNAL_CROSS_DIR_LOCK_SEC - (now - _dir_lock["time"])) // 60)
+            sig["hold_context"] = {"cross_dir_locked": True, "locked_dir": _locked_dir}
+            sig["signal_type"] = "信号整合·方向锁定"
+            sig["push_suppressed"] = True
+            sig["action_advice"] = f"{sym} 30分钟内已推{_locked_dir}方向信号，当前{sig_dir}方向锁定中({_lock_remain}分钟后解锁)，不推矛盾信号。"
+            sig["advice_type"] = "cross_dir_locked"
+            sig["reason"] += f"【整合·方向锁定】{sym} 近期已推{_locked_dir}方向信号，不推反向{sig_dir}信号。"
+            return "blocked"
+    
     # 保护7：信号去重（3分钟内同向重复→抑制）
     _sig_log = _SIGNAL_PUSH_LOG.get(sym, {"timestamps": [], "daily_count": {}, "last_dir": None, "last_sig_time": 0})
     if _sig_log.get("last_dir") == sig_dir and (now - _sig_log.get("last_sig_time", 0)) < SIGNAL_DEDUP_WINDOW_SEC:
@@ -6819,6 +7101,8 @@ def _position_aware_advice(sig, open_positions, price):
         "last_dir": sig_dir,
         "last_sig_time": now,
     }
+    # 记录跨方向锁定：该品种30分钟内不再推反向信号
+    _SIGNAL_DIR_LOCK[sym] = {"direction": sig_dir, "time": now}
 
     total_positions = len(open_positions)
     total_lots = sum(int(p.get("lots") or 0) for p in open_positions)
@@ -7183,8 +7467,107 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
             "dir_risk": round(same_dir_risk, 1)}
 
 
+def _portfolio_recommend(signals, open_positions, state):
+    """组合级智能推荐：收集所有信号后，只推最优的1-2个。
+    
+    排名依据：
+    1. 信号质量分（quality_score）— 越高越好
+    2. 盈亏比（rr_ratio）— 越高越好  
+    3. 持仓相关性 — 有持仓的品种优先（加仓/管理优于新开）
+    4. 板块分散 — 避免同板块重复推荐
+    
+    推送规则：
+    - 0个信号：不推送
+    - 1个信号：直接推送
+    - 2+个信号：只推排名第1的，其余标记为"暂缓"
+    """
+    if not signals:
+        return
+    
+    _MAX_PUSH = 1  # 每轮回最多推送1个信号（避免轰炸）
+    
+    # 排序：综合评分 = 质量分*0.4 + 盈亏比*0.3 + 持仓相关*0.3
+    def _rank_score(sig):
+        qs = sig.get("quality_score", 50) or 50
+        rr = float(sig.get("rr_ratio", 2.0) or 2.0)
+        rr_norm = min(rr / 3.0, 1.0)  # 归一化到0-1
+        
+        # 持仓相关加分：有持仓的品种信号优先
+        hc = sig.get("hold_context") or {}
+        pos_bonus = 0
+        if hc.get("held"):
+            pos_bonus = 1.0  # 有持仓的品种加满分
+        elif hc.get("total_positions", 0) > 0:
+            pos_bonus = 0.5  # 组合有持仓但非本品种
+        
+        score = qs * 0.4 + rr_norm * 100 * 0.3 + pos_bonus * 100 * 0.3
+        return score
+    
+    # 按综合评分排序
+    ranked = sorted(signals, key=_rank_score, reverse=True)
+    
+    # 选出要推送的信号
+    to_push = ranked[:_MAX_PUSH]
+    to_suppress = ranked[_MAX_PUSH:]
+    
+    # 推送选中的信号
+    for sig in to_push:
+        sym = sig.get("symbol", "?")
+        qs = sig.get("quality_score", "?")
+        rr = sig.get("rr_ratio", "?")
+        
+        # 构建组合推荐上下文
+        total_pos = len(open_positions)
+        pos_info = ""
+        if total_pos > 0:
+            held = [p for p in open_positions if p.get("sym") == sym]
+            if held:
+                p = held[0]
+                pos_info = f"（当前持有{p.get('direction')} {p.get('lots')}手@{p.get('avg')}）"
+            else:
+                pos_info = f"（当前组合有{total_pos}笔持仓，本品种为新开仓）"
+        else:
+            pos_info = "（当前空仓，建议新开仓）"
+        
+        sig["portfolio_context"] = {
+            "total_positions": total_pos,
+            "pos_info": pos_info,
+            "rank_score": round(_rank_score(sig), 1),
+            "is_top_pick": True,
+        }
+        
+        # 在action_advice中补充组合建议
+        _orig_advice = sig.get("action_advice", "") or ""
+        sig["action_advice"] = (
+            f"📊 组合智能推荐 · {sym} {sig.get('direction','')} | "
+            f"质量{qs}分 · 盈亏比{rr} | {pos_info}\n"
+            f"{_orig_advice}"
+        )
+        
+        notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
+        append_chat(sig)
+        print(f"\n🎯 [组合推荐] 最优信号: {sym} {sig.get('direction','')} "
+              f"质量{qs} 盈亏比{rr} → 已推送")
+    
+    # 暂缓的信号
+    for sig in to_suppress:
+        sym = sig.get("symbol", "?")
+        sig["portfolio_deprioritized"] = True
+        sig["push_suppressed"] = True
+        sig["hold_context"] = sig.get("hold_context", {})
+        sig["hold_context"]["deprioritized"] = True
+        sig["action_advice"] = (
+            f"本轮回优先推荐其他品种，{sym}信号暂缓推送。"
+            f"（质量{sig.get('quality_score','?')} 盈亏比{sig.get('rr_ratio','?')}）"
+        )
+        # 仍记录到前端，但标记为已抑制
+        append_chat(sig)
+        print(f"   📋 [组合推荐·暂缓] {sym} {sig.get('direction','')} → 优先级不足")
+
+
 def evaluate(feed, today, last_fire, state, corr_histories):
     fired = []
+    _round_signal_buffer = []  # 组合级智能推荐：收集本轮回所有可推送信号，延迟notify
     open_positions = _load_open_positions()   # 组合层：当前真实持仓敞口（整轮不变）
     # P1-4：组合 VaR 预交易闸（risk-manager 校验：1日95% VaR≤3.3%）——当前组合 VaR 已超上限则本轮回禁止新增信号
     _var_hot = False
@@ -7201,6 +7584,22 @@ def evaluate(feed, today, last_fire, state, corr_histories):
     load_dedup_state(last_fire)   # 载入磁盘去重记忆（重启/多进程共享，杜绝连环重发）
     load_pos_alert_dedup()       # 载入持仓触价告警去重记忆（跨重启保留 30min 窗口）
     state["cpos_trade_date"] = get_cpos_cache().get("_meta", {}).get("trade_date", "")
+    # #8 市场情绪系统：用上一轮全品种快照计算综合情绪 → 本轮 pipeline 调制
+    _sent_band = None
+    try:
+        _snaps = senteng.build_snapshots_from_runner(
+            state.get("symbols", {}), feed, SYMBOLS)
+        _sent_res = senteng.compute(_snaps)
+        _sent_band = _sent_res.get("band")
+        state["sentiment"] = {
+            "score": _sent_res["score"], "label": _sent_res["label"],
+            "band": _sent_band, "bias": _sent_res["bias"],
+            "scale": _sent_res["scale"], "factors": _sent_res["factors"],
+        }
+        if _sent_band not in ("neutral",):
+            print(f"[#8 情绪] score={_sent_res['score']} label={_sent_res['label']} scale={_sent_res['scale']}")
+    except Exception as _e:
+        print(f"[#8 情绪] 计算异常(忽略): {repr(_e)[:80]}")
     for sym in SYMBOLS:
         if sym in RUNTIME_DISABLED:   # 自适应恢复：硬禁或待恢复品种，禁止出信号（保留卡片占位）
             recoverable = sym in AUTO_RECOVER_SYMBOLS
@@ -7250,9 +7649,19 @@ def evaluate(feed, today, last_fire, state, corr_histories):
             # #6 跨资产宏观语境（全局，独立于品种；无数据→0.0 不影响信号）
             mc = mctx.compute()
             mb = mc.get("macro_bias")
+            # #9 支撑压力位识别（从日线算结构位，缓存供 pipeline + exit_plan 消费）
+            _sr_res = None
+            try:
+                _cur_px = feed.price(sym)
+                _sr_res = sra.compute_and_cache(sym, df_daily, _cur_px)
+            except Exception as _e:
+                _sr_res = None
+            # #10 GA 权重加载（每品种设置优化权重，无缓存则用默认）
+            fd.set_ga_weights_for_symbol(sym)
             pipe = pipeline(sym, df_daily, df_5m, _STRAT_CFG, corr_hist=ch if len(ch) >= 10 else None,
                             c_override=C, date=today, F_override=F2, hmm_label=hmm_lbl, macro_label=mb,
-                            garch_label=garch_lbl, gbm_garch=gbm_res, feat_mgr=fmg.get_manager())
+                            garch_label=garch_lbl, gbm_garch=gbm_res, feat_mgr=fmg.get_manager(),
+                            sentiment_label=_sent_band, sr_result=_sr_res)
             # #1 信息维度：把资讯/新闻/情绪/另类数据对 F 的调整写入 pipe，供面板/信号解释消费
             try:
                 pipe["F_raw"] = round(float(F), 3)
@@ -7349,7 +7758,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     # 仍记录触发但风控未过（温和提示）
                     pipe["risk_blocked"] = True
                     continue
-                ep = exit_plan(sym, price, pipe["dir_T"], stop_atr, pipe["regime"], _STRAT_CFG, fmg.get_manager())
+                ep = exit_plan(sym, price, pipe["dir_T"], stop_atr, pipe["regime"], _STRAT_CFG, fmg.get_manager(),
+                               sr_result=sra.get_cached(sym))
                 sig = build_signal(sym, pipe, rg, ep, _STRAT_CFG, entry_ref=price)
                 sig["regime_hmm"] = pipe.get("regime_hmm")
                 # ★ P-持仓感知 v3：与真实持仓比对，根据持仓逻辑智能处理
@@ -7529,9 +7939,12 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 except Exception as _e:
                     sig["explanation"] = {"summary": sig.get("reason", ""),
                                           "bullets": [sig.get("reason", "")], "llm_prompt": ""}
-                notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
                 sig["kind"] = "signal"
-                append_chat(sig)
+                _hc = sig.get("hold_context") or {}
+                if not _hc.get("cross_dir_locked"):
+                    _round_signal_buffer.append(sig)
+                else:
+                    print(f"   📌 {sym} 方向锁定中({_hc.get('locked_dir')}向)，信号静默不展示")
                 log_signal(sig)
                 state["signals"].insert(0, {k: sig.get(k) for k in
                     ("time", "created_at", "name", "direction", "signal_type", "lots", "price",
@@ -7557,6 +7970,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 import traceback; traceback.print_exc()
                 continue
             fired.append(sym)
+    # ── 组合级智能推荐：收集所有信号后，只推最优的1-2个 ──
+    _portfolio_recommend(_round_signal_buffer, open_positions, state)
     save_dedup_state(last_fire)   # 写回磁盘去重记忆（重启/多进程共享）
     save_pos_alert_dedup()        # 写回持仓触价告警去重记忆
     return fired
@@ -7686,6 +8101,111 @@ def start_dashboard(state):
                 _log_payload = {"logs": _logs, "total": len(_logs), "symbol": _symbol_param or "all"}
                 self.wfile.write(json.dumps(_log_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
+            # #8 市场情绪系统 API
+            elif self.path.split('?')[0] == "/api/sentiment":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _sent_payload = senteng.get_snapshot()
+                self.wfile.write(json.dumps(_sent_payload, ensure_ascii=False, default=str).encode("utf-8"))
+                return
+            # #9 支撑压力位 API
+            elif self.path.split('?')[0] == "/api/sr":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _sr_payload = {}
+                for _sym in sra._CACHE:
+                    _r = sra._CACHE[_sym]
+                    _levels = _r.get("levels", [])
+                    _sr_payload[_sym] = {
+                        "current_price": _r.get("current_price"),
+                        "nearest_support": _r.get("nearest_support"),
+                        "nearest_resistance": _r.get("nearest_resistance"),
+                        "at_support": _r.get("at_support", False),
+                        "at_resistance": _r.get("at_resistance", False),
+                        "zone": _r.get("zone", "far"),
+                        "zone_label": _r.get("zone_label", "无数据"),
+                        "nearest_dist_pct": _r.get("nearest_dist_pct", 99.0),
+                        "levels": [{"price": l["price"], "role": l["role"],
+                                    "strength": l["strength"], "touches": l["touches"],
+                                    "distance_pct": l["distance_pct"]}
+                                   for l in _levels[:5]],
+                    }
+                self.wfile.write(json.dumps(_sr_payload, ensure_ascii=False, default=str).encode("utf-8"))
+                return
+            # #10 GA 因子挖掘/权重优化 API
+            elif self.path.split('?')[0] == "/api/ga_weights":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _ga_payload = {}
+                try:
+                    _cache = gfm.load_weights("") or {}
+                    # load_weights 按 symbol 查；这里全部返回
+                    if os.path.exists(gfm.WEIGHTS_FILE):
+                        _cache = json.load(open(gfm.WEIGHTS_FILE, encoding="utf-8"))
+                    for _sym, _data in _cache.items():
+                        _ga_payload[_sym] = {
+                            "best_weights": _data.get("best_weights", {}),
+                            "best_expR": _data.get("best_expR", 0),
+                            "best_calmar": _data.get("best_calmar", 0),
+                            "robust_score": _data.get("robust_score", 1.0),
+                        }
+                except Exception:
+                    pass
+                self.wfile.write(json.dumps(_ga_payload, ensure_ascii=False, default=str).encode("utf-8"))
+                return
+            # #11 全市场扫描 API
+            elif self.path.split('?')[0] == "/api/scan":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _scan = mscan.scan_all(SYMBOLS, use_cache=True)
+                _scan_out = {
+                    "summary": _scan.get("summary", {}),
+                    "results": _scan.get("results", [])[:20],
+                    "elapsed": _scan.get("elapsed", 0),
+                }
+                self.wfile.write(json.dumps(_scan_out, ensure_ascii=False, default=str).encode("utf-8"))
+                return
+            # #11 品种筛选 API
+            elif self.path.split('?')[0] == "/api/screener":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                try:
+                    _pos = state.get("positions", []) if state else []
+                    _held = []
+                    for _p in _pos:
+                        if isinstance(_p, dict):
+                            _held.append(_p.get("symbol"))
+                        elif isinstance(_p, str):
+                            _held.append(_p)
+                    _screen = sscreener.screen(SYMBOLS, held_symbols=_held if _held else None)
+                    _payload = json.dumps(_screen, ensure_ascii=False, default=str).encode("utf-8")
+                    self.wfile.write(_payload)
+                except Exception as _e:
+                    import traceback
+                    _tb = traceback.format_exc()
+                    print(f"[screener error] {_tb}", flush=True)
+                    _err = json.dumps({"error": str(_e), "tb": _tb, "passed": [], "summary": {"n_passed": 0, "n_total": 0}}, ensure_ascii=False).encode("utf-8")
+                    self.wfile.write(_err)
+                return
+            # #11 回测可视化 API
+            elif self.path.split('?')[0] == "/api/backtest_viz":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                _viz = viz.data()
+                self.wfile.write(json.dumps(_viz, ensure_ascii=False, default=str).encode("utf-8"))
+                return
             # v6.0 Phase 3: 参数自优化 API
             elif self.path.split('?')[0] == "/api/auto-optimize":
                 self.send_response(200)
@@ -7802,63 +8322,75 @@ def start_dashboard(state):
                     pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
             elif self.path.split('?')[0] == "/api/account":
-                # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
-                # 防止 auto_main 动态换月导致盯市价错挂非持仓合约。
-                if FEED:
+                try:
+                    # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
+                    # 防止 auto_main 动态换月导致盯市价错挂非持仓合约。
+                    if FEED:
+                        try:
+                            FEED._pin_account_positions()
+                        except Exception:
+                            pass
+                    # 以 journal 为真相源自愈 account_state（已实现盈亏/开仓均价），幂等、仅偏差时写盘
                     try:
-                        FEED._pin_account_positions()
+                        at.heal_from_journal()
                     except Exception:
                         pass
-                # 以 journal 为真相源自愈 account_state（已实现盈亏/开仓均价），幂等、仅偏差时写盘
-                try:
-                    at.heal_from_journal()
-                except Exception:
-                    pass
-                prices = {}
-                if FEED:
-                    for sym in SYMBOLS:
-                        prices[sym] = FEED.price(sym)
-                snap = at.snapshot(prices)
-                # 规范化持仓合约代码显示（FG609 -> FG2609）
-                for _p in snap.get("positions", []):
-                    if _p.get("contract"):
-                        _p["contract"] = ml.normalize_contract_code(_p["contract"])
-                # CTP 数据源状态（是否连接到真实账户）
-                try:
-                    _ctp_acc = am.get_account()
-                    snap["ctp_connected"] = _ctp_acc is not None
-                    if _ctp_acc:
-                        snap["ctp_balance"] = _ctp_acc.get("balance", 0)
-                    else:
-                        snap["ctp_balance"] = None
-                except Exception:
-                    snap["ctp_connected"] = False
-                    snap["ctp_balance"] = None
-                # 行情健康指示
-                snap["feed_status"] = "正常" if FEED_AVAILABLE else "离线"
-                snap["feed_last"] = (datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S")
-                                     if FEED_LAST_UPDATE else "")
-                _age = (datetime.now().timestamp() - FEED_LAST_UPDATE) / 60.0 if FEED_LAST_UPDATE else None
-                snap["data_age_min"] = round(_age, 1) if _age is not None else None
-                # 组合风险热度（A1/B4）
-                snap["heat"] = compute_heat(prices)
-                # 累计手续费（交易所基础费率重算后的全量已平仓手续费合计，与 /api/journal 同源）
-                try:
-                    snap["total_fee"] = tj.summary().get("total_fee", 0)
-                except Exception:
-                    snap["total_fee"] = 0
-                # 换月预警（B2）：给每个持仓挂上距交割月天数与等级，持仓表内联显示
-                try:
+                    prices = {}
+                    if FEED:
+                        for sym in SYMBOLS:
+                            prices[sym] = FEED.price(sym)
+                    snap = at.snapshot(prices)
+                    # 规范化持仓合约代码显示（FG609 -> FG2609）
                     for _p in snap.get("positions", []):
-                        if _p.get("lots"):
-                            _p["rollover"] = rollover_info(_p.get("symbol"), _p.get("contract"))
-                except Exception:
-                    pass
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps(snap, ensure_ascii=False, default=str).encode("utf-8"))
+                        if _p.get("contract"):
+                            _p["contract"] = ml.normalize_contract_code(_p["contract"])
+                    # CTP 数据源状态（是否连接到真实账户）
+                    try:
+                        _ctp_acc = am.get_account()
+                        snap["ctp_connected"] = _ctp_acc is not None
+                        if _ctp_acc:
+                            snap["ctp_balance"] = _ctp_acc.get("balance", 0)
+                        else:
+                            snap["ctp_balance"] = None
+                    except Exception:
+                        snap["ctp_connected"] = False
+                        snap["ctp_balance"] = None
+                    # 行情健康指示
+                    snap["feed_status"] = "正常" if FEED_AVAILABLE else "离线"
+                    snap["feed_last"] = (datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S")
+                                         if FEED_LAST_UPDATE else "")
+                    _age = (datetime.now().timestamp() - FEED_LAST_UPDATE) / 60.0 if FEED_LAST_UPDATE else None
+                    snap["data_age_min"] = round(_age, 1) if _age is not None else None
+                    # 组合风险热度（A1/B4）
+                    snap["heat"] = compute_heat(prices)
+                    # 累计手续费（交易所基础费率重算后的全量已平仓手续费合计，与 /api/journal 同源）
+                    try:
+                        snap["total_fee"] = tj.summary().get("total_fee", 0)
+                    except Exception:
+                        snap["total_fee"] = 0
+                    # 换月预警（B2）：给每个持仓挂上距交割月天数与等级，持仓表内联显示
+                    try:
+                        for _p in snap.get("positions", []):
+                            if _p.get("lots"):
+                                _p["rollover"] = rollover_info(_p.get("symbol"), _p.get("contract"))
+                    except Exception:
+                        pass
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(snap, ensure_ascii=False, default=str).encode("utf-8"))
+                except Exception as _e:
+                    import traceback
+                    print(f"[/api/account] ERROR: {type(_e).__name__}: {_e}")
+                    traceback.print_exc()
+                    # 出错时返回空账户数据，而不是让框架吞掉响应
+                    _empty = {"equity": 0, "positions": [], "error": str(_e)}
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(_empty, ensure_ascii=False).encode("utf-8"))
             elif self.path.split("?")[0] == "/api/account_sync":
                 # 只读账户同步（minishare 实时盯市 + 对账漂移检测 + 自愈，不接券商 API）
                 force = "force=1" in self.path
@@ -7933,8 +8465,10 @@ def start_dashboard(state):
                             prices[sym] = FEED.price(sym)
                     perf = tj.performance_metrics(prices)
                     curve = tj.equity_curve(prices)
+                    intraday = tj.intraday_equity()
                     body = json.dumps({"summary": s, "compare": c, "performance": perf,
-                                       "equity_curve": curve, "trades": all_trades}, ensure_ascii=False, default=str)
+                                       "equity_curve": curve, "intraday": intraday,
+                                       "trades": all_trades}, ensure_ascii=False, default=str)
                 except Exception as _e:
                     import traceback
                     traceback.print_exc()
@@ -8427,6 +8961,24 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/paper":
                 self._handle_paper()
                 return
+            elif self.path.split("?")[0] == "/api/holdings_kline":
+                # 持仓K线 + SR位 + 止损止盈标注
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    q = parse_qs(urlparse(self.path).query)
+                    sym = q.get("sym", [None])[0]
+                    if not sym or sym not in SYMBOLS:
+                        body = json.dumps({"ok": False, "error": "无效品种"}, ensure_ascii=False)
+                    else:
+                        body = json.dumps(_holdings_kline(sym), ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
+                return
             elif self.path.split("?")[0] == "/api/correlation":
                 # 组合相关性矩阵（持仓品种日收益率相关系数）
                 try:
@@ -8487,6 +9039,22 @@ def start_dashboard(state):
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/signal_feed":
+                # 信号瀑布流：最近 N 条信号时间线
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    _q = parse_qs(urlparse(self.path).query)
+                    limit = int((_q.get("limit", ["30"]))[0])
+                    since = _q.get("since", [None])[0]  # 增量拉取：只返回此时间之后的
+                    body = json.dumps(_signal_feed(limit=limit, since=since),
+                                      ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
             elif self.path.split("?")[0] == "/api/vol_target":
@@ -8853,6 +9421,9 @@ def start_dashboard(state):
             elif self.path.split("?")[0] in ("/", "/index.html", "/four_dim_live.html"):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
                 self.end_headers()
                 # P1-② 注入门控卡片内容（服务端渲染，首屏可见）
                 _html = open(HTML_FILE, "rb").read().decode("utf-8")
@@ -8886,6 +9457,7 @@ def start_dashboard(state):
                     self.send_response(200)
                     self.send_header("Content-Type", "application/javascript; charset=utf-8")
                     self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
                     self.end_headers()
                     with open(_chart_js, "rb") as _f:
                         self.wfile.write(_f.read())
@@ -8917,6 +9489,22 @@ def start_dashboard(state):
 
             else:
                 self.send_response(404); self.end_headers()
+        # 全局异常保护：任何 handler 抛异常都返回 500 JSON，不让框架吞掉响应
+        def handle_one_request(self):
+            try:
+                super().handle_one_request()
+            except Exception as _e:
+                import traceback
+                print(f"[HTTP] handle_one_request ERROR: {type(_e).__name__}: {_e}")
+                traceback.print_exc()
+                try:
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(_e)}, ensure_ascii=False).encode("utf-8"))
+                except Exception:
+                    pass
         def log_message(self, *a):
             pass
 
@@ -8972,6 +9560,29 @@ def start_dashboard(state):
                         lots = body.get("lots"); price = body.get("price")
                         _user_provided_price = (price is not None and price != 0)
                         print(f"[journal] 开仓请求: sym={sym} dir={direction} lots={lots} price={price} (用户提供={_user_provided_price})")
+                        
+                        # ★★ 2026-08-26: 开仓前风控检查 - 熔断/锁定时禁止开仓
+                        try:
+                            _lock_info = rsm.get_combined_risk_scale()
+                            if _lock_info.get("locked") or _lock_info.get("halted"):
+                                _reason = _lock_info.get("reasons", ["风控锁定中"])[0] if _lock_info.get("reasons") else "风控锁定中"
+                                print(f"[journal] 🚫 开仓被风控拦截: {_reason}")
+                                body = json.dumps({"ok": False, "msg": f"开仓被风控拦截: {_reason}", "risk": _lock_info}, ensure_ascii=False)
+                                self.send_response(200)
+                                self.send_header("Content-Type", "application/json; charset=utf-8")
+                                self.send_header("Access-Control-Allow-Origin", "*")
+                                self.end_headers()
+                                self.wfile.write(body.encode("utf-8"))
+                                return
+                            # 风控缩放：手数按风控系数缩放
+                            _scale = _lock_info.get("combined", 1.0)
+                            if _scale < 1.0:
+                                _orig_lots = lots
+                                lots = max(1, int(lots * _scale))
+                                print(f"[journal] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {lots} (系数={_scale})")
+                        except Exception as _risk_e:
+                            print(f"[journal] ⚠️ 风控检查异常(放行): {_risk_e}")
+                        
                         stop = body.get("stop"); target = body.get("target")
                         t1 = body.get("t1"); t2 = body.get("t2")
                         stop_dist = body.get("stop_dist")
@@ -9058,8 +9669,12 @@ def start_dashboard(state):
                     elif act == "exit":
                         sym = body.get("symbol"); direction = body.get("direction")
                         lots = body.get("lots"); price = body.get("price")
+                        # ★ 2026-08-27: 价格保护 - 记录用户提交的价格
+                        print(f"[journal] 平仓请求: sym={sym} dir={direction} lots={lots} price={price} (type={type(price).__name__})")
+                        _user_price = float(price) if price is not None and price != 0 else 0
+                        print(f"[journal] 平仓价格验证: 用户价={price} 转换后={_user_price}")
                         ok, msg, pnl = tj.record_exit(
-                            sym, direction, lots, price,
+                            sym, direction, lots, _user_price,
                             body.get("reason", "手动"))
                         msg = f"{msg} (pnl={pnl})"
                         # ★ 打通：同步写 account_tracker（自动判平仓/减仓）
@@ -9070,6 +9685,15 @@ def start_dashboard(state):
                                     print(f"[journal] 账户持仓未同步（已静默）: {_msg2}")
                             except Exception as e:
                                 print(f"[journal] 账户持仓同步失败（已静默）: {e}")
+                            # ★ 2026-08-28: Reset alert guard after user executes a trade
+                            #   This ensures the system recognizes the new position state
+                            #   and doesn't keep pushing alerts for already-executed levels
+                            if sym:
+                                _POS_ALERT_GUARD.pop(sym, None)
+                                _POS_LEVEL_GUARD.pop(sym, None)
+                                _POS_INSURE_GUARD.pop(sym, None)
+                                save_pos_alert_dedup()
+                                print(f"[journal] 平仓后重置告警守卫: sym={sym}")
                     elif act == "note":
                         # G2：给某条成交补备注（经 trade_journal.update_trade 白名单）
                         _tid = body.get("id")
@@ -9112,6 +9736,29 @@ def start_dashboard(state):
                     body = json.loads(self.rfile.read(n) or b"{}")
                     act = body.get("action"); sym = body.get("symbol")
                     if act in ("open", "add", "close", "reduce"):
+                        # ★★ 2026-08-26: 开仓前风控检查 - 仅 open/add 需要检查，close/reduce 不受限
+                        if act in ("open", "add"):
+                            try:
+                                _lock_info = rsm.get_combined_risk_scale()
+                                if _lock_info.get("locked") or _lock_info.get("halted"):
+                                    _reason = _lock_info.get("reasons", ["风控锁定中"])[0] if _lock_info.get("reasons") else "风控锁定中"
+                                    print(f"[trade] 🚫 开仓被风控拦截: {_reason}")
+                                    body = json.dumps({"ok": False, "msg": f"开仓被风控拦截: {_reason}", "risk": _lock_info}, ensure_ascii=False)
+                                    self.send_response(200)
+                                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                                    self.send_header("Access-Control-Allow-Origin", "*")
+                                    self.end_headers()
+                                    self.wfile.write(body.encode("utf-8"))
+                                    return
+                                # 风控缩放：手数按风控系数缩放
+                                _scale = _lock_info.get("combined", 1.0)
+                                if _scale < 1.0:
+                                    _orig_lots = body.get("lots")
+                                    body["lots"] = max(1, int(int(_orig_lots) * _scale))
+                                    print(f"[trade] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {body['lots']} (系数={_scale})")
+                            except Exception as _risk_e:
+                                print(f"[trade] ⚠️ 风控检查异常(放行): {_risk_e}")
+                        
                         a_tail = None
                         _raw_price = body.get("price")
                         _user_provided_price = (_raw_price is not None and _raw_price != 0)
@@ -9257,6 +9904,13 @@ def start_dashboard(state):
                     sym = body.get("symbol")
                     ok, msg, _ = at.set_levels(sym, body.get("stop"), body.get("target"),
                                                 body.get("t1"), body.get("t2"))
+                    # ★ 2026-08-27: 用户修改止盈止损后，立即重置告警守卫
+                    #   防止基于旧价位的告警持续触发
+                    if ok and sym:
+                        _POS_ALERT_GUARD.pop(sym, None)
+                        _POS_LEVEL_GUARD.pop(sym, None)
+                        _POS_INSURE_GUARD.pop(sym, None)
+                        save_pos_alert_dedup()
                 except Exception as e:
                     ok, msg = False, str(e)
                 self.send_response(200)
@@ -9562,8 +10216,17 @@ def _update_aux(feed, state):
         pass
     # 1) 异动扫描（基于 minishare 实时快照，全品种）
     try:
-        snaps = {s: feed.last_snap[s] for s in SYMBOLS if feed.last_snap.get(s)}
-        state["anomaly"] = asc.compute(snaps)
+        snaps = {}
+        pre_close_map = {}
+        for s in SYMBOLS:
+            snap = feed.last_snap.get(s)
+            if snap:
+                snaps[s] = snap
+                # 提取昨收价供异动扫描使用
+                pc = snap.get("pre_close")
+                if pc:
+                    pre_close_map[s] = float(pc)
+        state["anomaly"] = asc.compute(snaps, pre_close_map=pre_close_map)
     except Exception as e:
         print(f"[异动扫描] 异常: {repr(e)[:80]}")
     # 2) 账户监控 → 自动驱动 papertrack（无接口则优雅降级为手动）
@@ -10320,6 +10983,131 @@ def _paper_realize(d, symbol, price, lots=None):
     d["cash"] = round(d["cash"] + pnl, 2)
 
 
+def _holdings_kline(sym, bars=30):
+    """获取持仓品种K线 + SR位 + 止损止盈线。
+    返回 {ok, symbol, name, klines:[{date,open,high,low,close}],
+           supports:[...], resistances:[...], entry_price, direction,
+           stop_loss, take_profit_1, take_profit_2, current_price, atr}"""
+    import sr_analyzer as sra
+    from four_dim_strategy import exit_plan, risk_gate, strat_atr
+
+    df = load_daily_refreshed(sym)
+    if df is None or len(df) < 20:
+        return {"ok": False, "error": "数据不足"}
+
+    # 取最近 N 根K线
+    tail = df.tail(bars)
+    klines = []
+    for idx, row in tail.iterrows():
+        klines.append({
+            "date": idx.strftime("%m-%d"),
+            "open": round(float(row["open"]), 2),
+            "high": round(float(row["high"]), 2),
+            "low": round(float(row["low"]), 2),
+            "close": round(float(row["close"]), 2),
+        })
+
+    # SR 位
+    sr = sra.analyze(df.tail(80))
+    levels = sr.get("levels", [])
+    supports = [lv for lv in levels if lv["role"] == "support"][-5:]
+    resistances = [lv for lv in levels if lv["role"] == "resistance"][-5:]
+
+    # 当前价
+    cur_price = float(df["close"].iloc[-1])
+    if FEED:
+        px = FEED.price(sym)
+        if px and px > 0:
+            cur_price = px
+
+    # ATR
+    atr_val = float(strat_atr(df).iloc[-1])
+
+    # 查持仓信息（从 paper trading）
+    entry_price = None
+    direction = None
+    stop_loss = None
+    take_profit_1 = None
+    take_profit_2 = None
+    try:
+        ps = paper_state()
+        pos = (ps.get("positions") or {}).get(sym)
+        if pos:
+            entry_price = pos.get("avg")
+            direction = pos.get("direction")
+            dir_sign = 1 if direction == "多" else -1
+            rg = risk_gate(sym, entry_price, atr_val, DEFAULT_CONFIG)
+            if rg.get("passed"):
+                ep = exit_plan(sym, entry_price, dir_sign, atr_val, "neutral", DEFAULT_CONFIG)
+                stop_loss = round(ep.get("stop", 0), 2)
+                take_profit_1 = round(ep.get("t1", 0), 2)
+                take_profit_2 = round(ep.get("t2", 0), 2)
+    except Exception:
+        pass
+
+    sp = DEFAULT_CONFIG["contract_specs"].get(sym, {})
+    name = SYMBOLS.get(sym, {}).get("name", sym)
+
+    return {
+        "ok": True,
+        "symbol": sym,
+        "name": name,
+        "klines": klines,
+        "supports": [round(s["price"], 2) for s in supports],
+        "resistances": [round(r["price"], 2) for r in resistances],
+        "entry_price": entry_price,
+        "direction": direction,
+        "stop_loss": stop_loss,
+        "take_profit_1": take_profit_1,
+        "take_profit_2": take_profit_2,
+        "current_price": round(cur_price, 2),
+        "atr": round(atr_val, 2),
+        "multiplier": sp.get("multiplier", 1),
+    }
+
+
+def _signal_feed(limit=30, since=None):
+    """信号瀑布流：返回最近 N 条精简后的信号。
+    since: 只返回时间严格大于此值的信号（用于增量拉取）"""
+    try:
+        if not os.path.exists(SIGNAL_LOG):
+            return {"ok": True, "signals": [], "total": 0}
+        with open(SIGNAL_LOG, encoding="utf-8") as f:
+            all_sigs = json.load(f)
+    except Exception:
+        return {"ok": False, "error": "读取信号日志失败"}
+
+    # 按时间过滤（增量）
+    if since:
+        all_sigs = [s for s in all_sigs if s.get("time", "") > since]
+
+    # 精简字段
+    feed = []
+    for s in all_sigs[:limit]:
+        pipe = s.get("pipeline", {})
+        risk = s.get("risk_gate", {})
+        feed.append({
+            "time": s.get("time", ""),
+            "symbol": s.get("symbol", ""),
+            "name": s.get("name", s.get("symbol", "")),
+            "direction": s.get("direction", ""),
+            "price": s.get("price", s.get("entry_ref")),
+            "stop": s.get("stop"),
+            "t1": s.get("t1"),
+            "t2": s.get("t2"),
+            "rr_ratio": s.get("rr_ratio"),
+            "regime": s.get("regime_hmm"),
+            "T_5m": pipe.get("T_5m"),
+            "F": pipe.get("F"),
+            "C": pipe.get("C"),
+            "sentiment_filter": pipe.get("sentiment_filter_note"),
+            "sr_note": pipe.get("sr_note"),
+            "signal_type": s.get("signal_type", ""),
+            "reason": s.get("reason", ""),
+        })
+    return {"ok": True, "signals": feed, "total": len(all_sigs)}
+
+
 def refresh_gates():
     """刷新动态表现门控：增量重算 papertrack 真实回测 → 各品种近期表现门槛。
     某品种近期真实回测转负则暂停其信号，恢复正数后自动解除（自适应、不永久禁用）。"""
@@ -10377,6 +11165,13 @@ def main():
         _load_tools_state()
     except Exception:
         pass
+    # #10 GA 权重缓存：启动时加载（combine_bias 会自动读取）
+    try:
+        _ga_data = fd._load_ga_weights()
+        if _ga_data:
+            print(f"[#10 GA权重] 已加载 {len(_ga_data)} 个品种的优化权重")
+    except Exception:
+        pass
 
     # —— #3 盘口级订单流连接器（默认关闭，TICK_FEED_ENABLED=1 才启；无源时静默降级）——
     if TICK_FEED_ENABLED:
@@ -10427,6 +11222,21 @@ def main():
                       f"自杀退出交看门狗重启")
                 os._exit(3)
     threading.Thread(target=_stall_watchdog, daemon=True).start()
+    # ★ 启动 minishare rt_fut_k 主数据源轮询线程（5秒/次，不限次快照）
+    # rt_fut_k 返回全市场 948 个期货品种实时行情，系统自动筛选持仓品种
+    global _TS_SYMBOLS, _AK_SYMBOLS
+    _TS_SYMBOLS = list(tl._TUSHARE_CONTRACTS.keys())  # 保留用于品种集合
+    _AK_SYMBOLS = _TS_SYMBOLS  # 同步兼容（akshare 新浪实时监控品种）
+    print(f"[行情] 监控品种数: _TS={len(_TS_SYMBOLS)}, _AK={len(_AK_SYMBOLS)}")
+    # ★ 启动 akshare 新浪实时行情轮询线程（盘中实时数据源）
+    # minishare rt_fut_k 仅在收盘更新，盘中需依赖新浪财经实时数据
+    threading.Thread(target=_ak_poller, daemon=True).start()
+    threading.Thread(target=_ts_poller, daemon=True).start()
+    # ★ 2026-08-28: 启动 account_tracker 的 akshare 批量轮询（持仓品种实时价缓存）
+    try:
+        at.start_ak_poller(interval=5)
+    except Exception as _e:
+        print(f"[account_tracker] ak_poller 启动失败: {_e}")
     last_gate = time.time()
     global LAST_CYCLE_TS  # #16 心跳：main 内给模块全局赋值必须声明 global，否则只更新局部、看门狗读到永远 0.0
     global last_recover   # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
@@ -10454,6 +11264,16 @@ def main():
                 pass
         # —— 从 da龘 合并进来的三件事（每轮）——
         _update_aux(feed, state)
+        # 日内权益采样（每轮都跑，内部按分钟去重）
+        try:
+            prices = {}
+            if feed_ok:
+                for sym in SYMBOLS:
+                    px = feed.price(sym)
+                    if px: prices[sym] = px
+            tj.sample_equity(prices)
+        except Exception:
+            pass
         state["updated"] = now.strftime("%Y-%m-%d %H:%M:%S")
         state["session"] = session_label(now)
         json.dump(state, open(STATE_FILE, "w"), ensure_ascii=False, default=str)

@@ -948,15 +948,98 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
     return round(T, 1), regime, rdesc
 
 
+def compute_T_subfactors(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
+    """从 K 线提取 T 维度的 3 个簇子因子（趋势/均值回归/季节性）。
+    返回 (T_trend, T_mean, T_seasonal, regime, rdesc)
+    每个子因子范围 [-100, 100]，独立归一化。"""
+    if df is None or len(df) < 60:
+        return 0.0, 0.0, 0.0, "未知", "数据不足"
+    regime_rp = regime_params_for(symbol, cfg, feat_mgr) if symbol else {}
+    regime, rdesc = classify_regime(df, regime_rp)
+    dc = (cfg or DEFAULT_CONFIG).get("decorrelate", {})
+    enabled = bool(dc.get("enabled", True))
+
+    # 各策略信号
+    sig = {}
+    for name, fn in STRATS.items():
+        try:
+            s, _ = fn(df)
+        except Exception:
+            s = 0
+        sig[name] = int(s)
+
+    if not enabled:
+        # 退化成旧逻辑：trend 拿全部权重，mean/seasonal 给 0
+        w = regime_weights(regime)
+        score = sum(sig[k] * w[k] for k in STRATS)
+        maxw = sum(abs(w[k]) for k in STRATS)
+        T = math.copysign(min(100.0, abs(score) / maxw * 100.0), score) if maxw > 0 else 0.0
+        return round(T, 1), 0.0, 0.0, regime, rdesc
+
+    # 簇投票（[-1, 1]）
+    cluster_vote = {}
+    for cname, members in STRAT_CLUSTERS.items():
+        votes = [sig[m] for m in members]
+        cluster_vote[cname] = sum(votes) / len(votes) if votes else 0.0
+
+    # 每个簇独立归一化到 [-100, 100]
+    # cluster_vote 范围 [-1, 1]，直接 ×100
+    T_trend = round(cluster_vote.get("trend", 0.0) * 100, 1)
+    T_mean = round(cluster_vote.get("mean", 0.0) * 100, 1)
+    T_seasonal = round(cluster_vote.get("seasonal", 0.0) * 100, 1)
+
+    return T_trend, T_mean, T_seasonal, regime, rdesc
+
+
 # ----------------------------------------------------------------------------
 # 流水线：F(背景) → T(触发) → C(确认) → 风控
 # ----------------------------------------------------------------------------
 def combine_bias(F, T, C, cfg=DEFAULT_CONFIG):
     """背景偏置合成（§1.5）。F/C 中性时退化为 T 主导。
     P2-④：权重改读 cfg["combine_weights"]（默认 0.6/0.25/0.15，与原硬编码一致），
-    使 OOS harness 可扫参验证，向后兼容。"""
+    使 OOS harness 可扫参验证，向后兼容。
+    #10 GA 权重优化（2026-08-26）：若 ga_weights_cache.json 有该品种的优化权重，
+    则用 GA 权重覆盖默认权重（仅 live 路径；回测走 cfg 不受影响）。"""
     w = (cfg or DEFAULT_CONFIG).get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
+    # #10: GA 权重覆盖（live 路径，set_ga_weights_for_symbol 设置当前品种权重）
+    _ga_current = getattr(combine_bias, '_ga_current', None)
+    if _ga_current:
+        ga_w = _ga_current.get("best_weights", {})
+        base = ga_w.get("base", {})
+        if base:
+            w = base
     return round(w["T"] * T + w["F"] * F + w["C"] * C, 1)
+
+
+# #10 GA 权重缓存（live runner 启动时加载 ga_weights_cache.json）
+def _load_ga_weights():
+    """加载 GA 权重缓存到 combine_bias._ga_cache。"""
+    try:
+        _path = os.path.join(HERE, "ga_weights_cache.json")
+        if os.path.exists(_path):
+            with open(_path, "r", encoding="utf-8") as f:
+                _data = json.load(f)
+            combine_bias._ga_cache = _data
+            return _data
+    except Exception:
+        pass
+    return None
+
+
+def set_ga_weights_for_symbol(symbol):
+    """为指定品种设置 GA 优化权重（live runner 每轮 evaluate 调用）。
+    自动检测 ga_weights_cache.json 文件变化并重新加载。"""
+    _path = os.path.join(HERE, "ga_weights_cache.json")
+    _mtime = os.path.getmtime(_path) if os.path.exists(_path) else 0
+    _last_mtime = getattr(combine_bias, '_ga_mtime', 0)
+    if _mtime > _last_mtime or not hasattr(combine_bias, '_ga_cache'):
+        _load_ga_weights()
+        combine_bias._ga_mtime = _mtime
+    _cache = getattr(combine_bias, '_ga_cache', {})
+    if symbol in _cache:
+        combine_bias._ga_current = _cache[symbol]
+    else:
+        combine_bias._ga_current = None
 
 
 def effective_params(symbol, cfg=DEFAULT_CONFIG):
@@ -1091,7 +1174,7 @@ def recompute_liquidity_tiers(tail: int = 60, top_n: int = 12):
     return out
 
 
-def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, date=None, c_override=None, ablate=None, F_override=None, hmm_label=None, macro_label=None, garch_label=None, gbm_garch=None, risk_state=None, feat_mgr=None):
+def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, date=None, c_override=None, ablate=None, F_override=None, hmm_label=None, macro_label=None, garch_label=None, gbm_garch=None, risk_state=None, feat_mgr=None, sentiment_label=None, sr_result=None):
     """算三维修分 + 流水线合成，返回触发判定与中间量。
     date: 当前交易日(YYYYMMDD)，用于查真实基本面 F（缺失→中性）。
     c_override: 实盘可传实时 C_flow 评分覆盖 score_C（默认 None=用 score_C）。
@@ -1115,6 +1198,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
             "conv": "风控锁定", "used_5m": False, "hard_veto": True,
             "bs_mode": "", "corr_action": "",
             "risk_blocked": True, "risk_block_reason": _lock_reason,
+            "sentiment_label": None, "sr_quality_note": "",
         }
     
     T_D, regime, rdesc = compute_T(df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
@@ -1129,6 +1213,57 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
     elif ablate == "T":
         T_D = 0.0
     bias_G = combine_bias(F, T_D, C, cfg)
+
+    # ── #11 GA 6 因子挖掘模式（可选，默认关闭） ──
+    # 子因子：T_trend / T_mean / T_seasonal / F_basis / F_seasonal / C
+    # 可选扩展：SR_breakout（突破强度因子，靠近压力位=正）
+    # 配置了 subfactor_weights 时用子因子加权覆盖原 bias_G
+    _sf_w = (cfg or {}).get("subfactor_weights", {})
+    if _sf_w:
+        try:
+            _t_trend, _t_mean, _t_seas, _, _ = compute_T_subfactors(
+                df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
+            import fundamental_feed as _ff
+            _f_basis, _f_seas = _ff.compute_F_subfactors(symbol, date)
+            # ablate 兼容
+            if ablate == "T":
+                _t_trend, _t_mean, _t_seas = 0.0, 0.0, 0.0
+            if ablate == "F":
+                _f_basis, _f_seas = 0.0, 0.0
+            if ablate == "C":
+                C_sf = 0.0
+            else:
+                C_sf = C
+
+            # SR_breakout 因子（可选）：近压力位 → 正（即将突破），近支撑位 → 负（即将跌破）
+            _sr_breakout = 0.0
+            if "SR_breakout" in _sf_w:
+                try:
+                    import sr_analyzer as _sra
+                    _sr_res = _sra.find_sr_levels(df_daily, symbol=symbol)
+                    if _sr_res and _sr_res.get("levels"):
+                        _cur = float(df_daily["close"].iloc[-1])
+                        _nr = _sr_res.get("nearest_resistance")
+                        _ns = _sr_res.get("nearest_support")
+                        _rd = _nr["distance_pct"] if _nr else 999.0
+                        _sd = _ns["distance_pct"] if _ns else 999.0
+                        # 压力近 = 正分（突破潜力），支撑近 = 负分（跌破风险）
+                        _res_score = max(0.0, 1.0 - _rd / 5.0) * 100
+                        _sup_score = max(0.0, 1.0 - _sd / 5.0) * 100
+                        _sr_breakout = round(max(-100.0, min(100.0, _res_score - _sup_score)), 1)
+                except Exception:
+                    _sr_breakout = 0.0
+
+            _bias = (_sf_w.get("T_trend", 0) * _t_trend
+                     + _sf_w.get("T_mean", 0) * _t_mean
+                     + _sf_w.get("T_seasonal", 0) * _t_seas
+                     + _sf_w.get("F_basis", 0) * _f_basis
+                     + _sf_w.get("F_seasonal", 0) * _f_seas
+                     + _sf_w.get("C", 0) * C_sf
+                     + _sf_w.get("SR_breakout", 0) * _sr_breakout)
+            bias_G = round(max(-100.0, min(100.0, _bias)), 1)
+        except Exception:
+            pass  # 子因子计算失败时回退到原 bias_G
 
     # ── #6 跨资产宏观语境调制（live 专属，回测 macro_label=None 不进，零前视污染）──
     # macro_bias∈[-1,1]（股/债/汇跨资产语境）。bias_G 量程≈[-100,100]（0.6*T+0.25*F+0.15*C），
@@ -1162,6 +1297,25 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
         _g_mult = {"low": 0.97, "normal": 1.00, "high": 1.06, "extreme": 1.12}
         T_thresh_eff = round(T_thresh_eff * _g_mult.get(garch_label, 1.0), 1)
 
+    # ── #8 市场情绪调制（live 专属；回测默认 sentiment_label=None 不进）──
+    # 方向感知：极端贪婪时做多门槛↑（防追涨）、做空门槛↓；极端恐惧反之。
+    # sentiment_label 是 sentiment_engine.compute() 返回的 band 字符串。
+    if sentiment_label is not None:
+        import sentiment_engine as _se
+        _s_mult = _se.get_thr_mult(dir_T_raw)  # dir_T_raw 此时已由 T_5m 决定
+        T_thresh_eff = round(T_thresh_eff * _s_mult, 1)
+
+    # ── #9 支撑压力位信号质量过滤（live 专属；回测默认 sr_result=None 不进）──
+    # 价格在支撑位附近做多 / 压力位附近做空 → 信号质量提升（T 阈值降低）
+    # 价格在压力位附近做多 / 支撑位附近做空 → 信号质量降低（T 阈值升高）
+    sr_quality_note = ""
+    if sr_result is not None:
+        import sr_analyzer as _sra
+        _sr_boost, _sr_reason = _sra.signal_quality_boost(sr_result, dir_T_raw)
+        if _sr_boost != 0.0:
+            T_thresh_eff = round(T_thresh_eff * (1.0 - _sr_boost), 1)
+            sr_quality_note = _sr_reason
+
     # ── P-B / P-C（2026-08-14）：让 F/C 真正参与方向/触发决策 ──
     bs = cfg.get("bias_synthesis", {})
     direction_mode = bs.get("direction_mode", "threshold")
@@ -1188,10 +1342,23 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
 
     triggered = False
     hard_veto = False
+    hard_veto_reason = ""
+    sentiment_filter_note = ""
     _thr = T_thresh_eff  # P0-1 fix: ensure _thr always defined
     if dir_T != 0:
         # P-C：硬否决基于 F/C 反向强度（bias_FC 上限 40，阈值 25 可达；原 bias_G≥60 几乎不可达）
         hard_veto = (abs(bias_FC) >= fc_hard) and (math.copysign(1, bias_FC) != dir_T)
+        if hard_veto:
+            hard_veto_reason = f"F/C反向硬否决(|bias_FC|={abs(bias_FC):.1f}≥{fc_hard:.0f})"
+
+        # #8 情绪硬过滤：极端情绪期直接禁止某个方向
+        if not hard_veto and sentiment_label is not None:
+            import sentiment_engine as _se
+            _sf, _sf_reason = _se.is_hard_filtered(sentiment_label, dir_T)
+            if _sf:
+                hard_veto = True
+                hard_veto_reason = _sf_reason
+                sentiment_filter_note = _sf_reason
         if not hard_veto:
             if direction_mode == "combined":
                 # F/C 可定方向：T_5m 强 或 bias_G 强同向 → 触发
@@ -1245,8 +1412,12 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
         "triggered": triggered, "T_thresh_eff": round(T_thresh_eff, 1),
         "T_thresh_used": round(_thr, 1),
         "conv": conv, "used_5m": used_5m, "hard_veto": hard_veto,
+        "hard_veto_reason": hard_veto_reason,
         "bs_mode": direction_mode,
         "corr_action": corr_action,
+        "sentiment_label": sentiment_label,
+        "sentiment_filter_note": sentiment_filter_note,
+        "sr_quality_note": sr_quality_note,
     }
 
 
@@ -1388,7 +1559,7 @@ def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thr
 # ----------------------------------------------------------------------------
 # 出场计划（§1.8）
 # ----------------------------------------------------------------------------
-def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mgr=None):
+def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mgr=None, sr_result=None):
     rg = dict(cfg["risk_gate"])
     for _k in ("stop_atr_mult", "rr_ratio"):
         if _k in cfg.get("per_symbol_risk", {}).get(symbol, {}):
@@ -1400,6 +1571,29 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
         stop, t1, t2 = entry - stop_dist, entry + stop_dist, entry + rg["rr_ratio"] * stop_dist
     else:
         stop, t1, t2 = entry + stop_dist, entry - stop_dist, entry - rg["rr_ratio"] * stop_dist
+    # ── #9 SR 位动态止损（v2：分板块放宽止损）──
+    # 回测验证：收紧止损有害(-4.5%)，放宽止损整体+18.2%，板块差异大
+    # 用分板块差异化配置替代旧的收紧止损方案
+    sr_note = ""
+    if sr_result is not None and sr_result.get("levels"):
+        import sr_analyzer as _sra
+        _sym_meta = SYMBOLS.get(symbol, {})
+        _widen_mult = _sra.get_widen_stop_mult(symbol, _sym_meta)
+        if _widen_mult is not None:
+            _orig = {"stop": stop, "t1": t1, "t2": t2, "stop_dist": stop_dist}
+            _adj = _sra.widen_stop_with_sr(_orig, sr_result, dir_T, entry, max_mult=_widen_mult)
+            if _adj.get("sr_stop_widen"):
+                stop = _adj.get("stop", stop)
+                stop_dist = _adj.get("stop_dist", stop_dist)
+                # t1/t2 按比例跟随止损调整（保持 R 倍数不变）
+                _ratio = _adj["stop_dist"] / _orig["stop_dist"] if _orig["stop_dist"] > 0 else 1.0
+                if dir_T > 0:
+                    t1 = round(entry + _ratio * (t1 - entry), 2)
+                    t2 = round(entry + _ratio * (t2 - entry), 2)
+                else:
+                    t1 = round(entry - _ratio * (entry - t1), 2)
+                    t2 = round(entry - _ratio * (entry - t2), 2)
+                sr_note += f"SR放宽止损至{stop}({_widen_mult}R上限); "
     tt = dict(cfg.get("trailing_tail", {}))
     # 开关优先级：特性开关 > 旧配置 > 默认关闭
     tail_on = None
@@ -1423,6 +1617,7 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
         "tail_enabled": tail_enabled,
         "tail_stop_dist": round(tail_stop_dist, 2),
         "tail_pct": tail_pct,
+        "sr_note": sr_note,
     }
 
 
@@ -1574,6 +1769,7 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
             R_adj = R - slip_R - fee_R
             trades.append({"dir": dir_T, "R": round(R, 3), "R_adj": round(R_adj, 3),
                            "reason": reason, "regime": pipe["regime"],
+                           "entry_date": df.index[i + 1],
                            "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"]})
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1

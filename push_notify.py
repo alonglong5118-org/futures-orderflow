@@ -156,6 +156,7 @@ def push_alert(sig):
     if sig.get("push_suppressed"):
         hc = sig.get("hold_context") or {}
         reason_map = {
+            "cross_dir_locked": "方向锁定",
             "dedup": "信号去重",
             "whipsaw": "Whipsaw噪声",
             "rate_limited": "频率限制",

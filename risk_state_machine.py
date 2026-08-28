@@ -316,6 +316,7 @@ class KillSwitch:
         self.history = []           # 历次熔断/解除记录
         self.ack = False            # 用户是否已确认（已按清单全平）
         self._opening_equity = None  # P0-7 fix: 日初权益(固定值)，稳定风控阈值
+        self.reset_at = None        # 最近一次人工解除熔断的时间戳
         self._lock = threading.RLock()
         self._load()
 
@@ -334,6 +335,7 @@ class KillSwitch:
                 self.history = d.get("history", []) or []
                 self.ack = bool(d.get("ack"))
                 self._opening_equity = d.get("_opening_equity")
+                self.reset_at = d.get("reset_at")
         except Exception as e:
             print(f"[熔断] 状态载入失败(忽略): {repr(e)[:80]}")
 
@@ -347,6 +349,7 @@ class KillSwitch:
                     "metrics": self.metrics, "flatten_plan": self.flatten_plan,
                     "history": self.history[-50:], "ack": self.ack,
                     "_opening_equity": self._opening_equity,
+                    "reset_at": self.reset_at,
                 }, f, ensure_ascii=False, indent=2)
             os.replace(tmp, self.path)
         except Exception as e:
@@ -453,6 +456,7 @@ class KillSwitch:
         """人工解除熔断（唯一出口）。可顺便把峰值权益重置到当前，避免刚解除又被旧峰值秒杀。"""
         with self._lock:
             was = self.halted
+            self.reset_at = time.strftime("%Y-%m-%d %H:%M:%S")
             self.halted = False
             self.ack = False
             self.reason = ""
@@ -629,14 +633,32 @@ def get_combined_risk_scale():
         except Exception:
             pass
     
-    # 3. 合并：取较严者
-    combined = round(min(rsm_scale, ddg_scale), 3)
+    # 3. 市场情绪侧（#8）：极端情绪→缩仓
+    sent_scale = 1.0
+    sent_label = "中性"
+    sent_score = 50.0
+    try:
+        import sentiment_engine as _se
+        _snap = _se.get_snapshot()
+        sent_scale = float(_snap.get("scale", 1.0))
+        sent_label = _snap.get("label", "中性")
+        sent_score = float(_snap.get("score", 50.0))
+        if sent_scale < 1.0:
+            reasons.append(f"市场情绪({sent_label}={sent_score:.0f}): 缩仓×{sent_scale}")
+    except Exception:
+        pass
+
+    # 4. 合并：取较严者（三轨：rsm + ddg + sentiment）
+    combined = round(min(rsm_scale, ddg_scale, sent_scale), 3)
     locked = rsm_locked or (ddg_scale <= 0.0)
-    
+
     return {
         "combined": combined,
         "rsm_scale": rsm_scale,
         "ddg_scale": ddg_scale,
+        "sent_scale": sent_scale,
+        "sent_label": sent_label,
+        "sent_score": sent_score,
         "locked": locked,
         "rsm_state": rsm_state,
         "dd_tier": dd_tier,

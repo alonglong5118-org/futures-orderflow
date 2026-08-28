@@ -30,6 +30,11 @@ SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 # 非重入的 Lock 会造成同一线程自死锁。RLock 同线程可重入、跨线程仍互斥，行为安全。
 _LOCK = threading.RLock()
 
+# 防重复提交：记录最近一次请求的指纹和时间
+# 格式: {fingerprint: timestamp}
+_RECENT_REQUESTS = {}
+_REQUEST_DEDUP_WINDOW = 3  # 秒，同一请求在此时间窗口内会被拒绝
+
 # 合约乘数（与 four_dim_strategy DEFAULT_CONFIG.contract_specs 对齐）
 _MULTIPLIERS = {
     # 上期所 SHFE
@@ -270,6 +275,22 @@ def _normalize_sym(sym):
     return sym  # 原样返回，让下游报错
 
 
+
+def _check_duplicate_request(fingerprint: str) -> bool:
+    """检查是否为重复请求。返回 True 表示是重复请求，应拒绝。"""
+    import time
+    now = time.time()
+    # 清理过期记录
+    expired = [k for k, v in _RECENT_REQUESTS.items() if now - v > _REQUEST_DEDUP_WINDOW]
+    for k in expired:
+        del _RECENT_REQUESTS[k]
+    # 检查重复
+    if fingerprint in _RECENT_REQUESTS:
+        return True
+    # 记录新请求
+    _RECENT_REQUESTS[fingerprint] = now
+    return False
+
 def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_dist=None,
                   strategy="", account="主账户"):
     """记录一笔按信号开仓。返回 (ok, msg, trade_id)。
@@ -329,10 +350,16 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
     symbol = _normalize_sym(symbol)
     if symbol not in _MULTIPLIERS:
         return False, f"未知品种 {symbol}", 0.0
+    # 防重复提交检查
+    import time
+    _fp = f"exit:{symbol}:{direction}:{lots}:{price}:{reason}"
+    if _check_duplicate_request(_fp):
+        print(f"[record_exit] 重复请求已拒绝: {_fp}")
+        return False, "请求过于频繁，请稍候再试", 0.0
     data = _load()
     # 找该品种同方向、未平仓的最近一条
     candidates = [t for t in data["trades"]
-                  if t["symbol"] == symbol and t["direction"] == direction and t["exit_price"] is None]
+                  if t["symbol"] == symbol and t["direction"] == direction and t.get("exit_price") is None]
     if not candidates:
         return False, f"{symbol} {direction} 无未平仓记录", 0.0
     trade = candidates[-1]  # 最近一条
@@ -508,7 +535,7 @@ def _compute_summary(data):
     # 最大连胜/连亏
     max_streak = {"win": 0, "loss": 0}
     cur_win = cur_loss = 0
-    for t in sorted(closed, key=lambda t: t["time"]):
+    for t in sorted(closed, key=lambda t: t.get("time", "")):
         if t["pnl"] > 0:
             cur_win += 1; cur_loss = 0
             max_streak["win"] = max(max_streak["win"], cur_win)
@@ -519,7 +546,7 @@ def _compute_summary(data):
     # 按品种统计
     by_symbol = {}
     for t in closed:
-        s = t["symbol"]
+        s = t.get('symbol','')
         if s not in by_symbol:
             by_symbol[s] = {"count": 0, "wins": 0, "pnl": 0.0, "fee": 0.0}
         by_symbol[s]["count"] += 1
@@ -551,7 +578,7 @@ def _compute_summary(data):
 def summary():
     """成交统计：总笔数 / 胜率 / 总盈亏 / 期望值 / 最大连胜/连亏。"""
     data = _load()
-    closed = [t for t in data["trades"] if t["pnl"] is not None]
+    closed = [t for t in data["trades"] if t.get("pnl") is not None]
     open_trades = [t for t in data["trades"] if t["pnl"] is None]
     wins = [t for t in closed if t["pnl"] > 0]
     losses = [t for t in closed if t["pnl"] <= 0]
@@ -567,7 +594,7 @@ def summary():
     # 最大连胜/连亏
     max_streak = {"win": 0, "loss": 0}
     cur_win = cur_loss = 0
-    for t in sorted(closed, key=lambda t: t["time"]):
+    for t in sorted(closed, key=lambda t: t.get("time", "")):
         if t["pnl"] > 0:
             cur_win += 1; cur_loss = 0
             max_streak["win"] = max(max_streak["win"], cur_win)
@@ -578,7 +605,7 @@ def summary():
     # 按品种统计
     by_symbol = {}
     for t in closed:
-        s = t["symbol"]
+        s = t.get('symbol','')
         if s not in by_symbol:
             by_symbol[s] = {"count": 0, "wins": 0, "pnl": 0.0, "fee": 0.0}
         by_symbol[s]["count"] += 1
@@ -595,12 +622,12 @@ def summary():
     risk_pct = _risk_pct()
     r_list = []
     cum = 0.0
-    for t in sorted(closed, key=lambda t: t["time"]):
+    for t in sorted(closed, key=lambda t: t.get("time", "")):
         equity_before = base_equity - total_pnl + cum
         cum += t["pnl"]
         sd = t.get("stop_dist")
         if sd and sd > 0:
-            actual_risk = sd * _MULTIPLIERS[t["symbol"]] * t["lots"]
+            actual_risk = sd * _MULTIPLIERS.get(t.get("symbol",""), 1) * t.get("lots", 1)
             R = t["pnl"] / actual_risk if actual_risk > 0 else 0.0
         else:
             planned_risk = max(1.0, equity_before * risk_pct / 100)
@@ -618,9 +645,11 @@ def summary():
         else:
             r_dist["R<=0"] += 1
 
-    # ★ 今日统计（按开仓日期过滤），供总览驾驶舱「交易执行」板块联动
+    # ★ 今日统计（按开仓日期 OR 平仓日期过滤），供总览驾驶舱「交易执行」板块联动
     today = datetime.now().strftime("%Y-%m-%d")
-    today_trades_list = [t for t in data.get("trades", []) if (t.get("time") or "")[:10] == today]
+    today_trades_list = [t for t in data.get("trades", [])
+                         if (t.get("time") or "")[:10] == today
+                         or (t.get("exit_time") or "")[:10] == today]
     today_closed = [t for t in today_trades_list if t.get("pnl") is not None]
     today_pnl = sum(t["pnl"] for t in today_closed)
     today_fee = sum((t.get("fee_total") or 0) for t in today_closed)
@@ -642,9 +671,9 @@ def summary():
     _floating_details = []
     for _t in open_trades:
         _sym = _t["symbol"]
-        _dir = _t["direction"]
-        _lots = _t["lots"]
-        _entry = _t["entry_price"]
+        _dir = _t.get('direction','?')
+        _lots = _t.get('lots', 0)
+        _entry = _t.get('entry_price', 0)
         _stop = _t.get("stop")
         _mult = _MULTIPLIERS.get(_sym, 10)
         
@@ -936,7 +965,7 @@ def _attrib_match_signal(t, signals=None, sig_by_time=None, window_min=180):
     ttime = _tt(t.get("time", ""))
     best, best_dt = None, None
     for s in signals:
-        if s.get("symbol") != t["symbol"] or s.get("direction") != t["direction"]:
+        if s.get("symbol") != t.get("symbol") or s.get("direction") != t.get("direction"):
             continue
         st = _tt(s.get("time", ""))
         if not st or not ttime:
@@ -1090,7 +1119,7 @@ def equity_curve(prices=None):
     返回 {points:[{t,equity}], max_dd_pct, base_equity,
           peak_equity, current_dd_pct, dd_days, is_new_high}。"""
     data = _load()
-    closed = sorted([t for t in data["trades"] if t["pnl"] is not None],
+    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None],
                     key=lambda t: t.get("exit_time") or t["time"])
     base = _base_equity()
     total_pnl = sum(t["pnl"] for t in closed)
@@ -1159,10 +1188,107 @@ def equity_curve(prices=None):
     }
 
 
+# ---- 日内权益分钟级采样（实时权益曲线） ----
+INTRADAY_FILE = os.path.join(HERE, "intraday_equity.json")
+_INTRADAY_LOCK = threading.Lock()
+
+
+def _load_intraday():
+    """加载日内采样数据。格式: {date: [{t: 'HH:MM', equity: float, floating: float}]"""
+    try:
+        if os.path.exists(INTRADAY_FILE):
+            with open(INTRADAY_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_intraday(data):
+    with open(INTRADAY_FILE, "w") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+
+def sample_equity(prices=None):
+    """采样当前权益并写入日内曲线。每自然分钟最多写一条。
+    返回当前采样点 {t, equity, floating} 或 None。"""
+    try:
+        import account_tracker as at
+        snap = at.snapshot(prices or {})
+        live_eq = snap.get("equity")
+        if live_eq is None:
+            return None
+        floating = snap.get("floating_pnl", 0.0) or 0.0
+    except Exception:
+        return None
+
+    now = datetime.now()
+    date_str = now.strftime("%Y-%m-%d")
+    time_str = now.strftime("%H:%M")
+
+    with _INTRADAY_LOCK:
+        data = _load_intraday()
+        day_data = data.get(date_str, [])
+        # 同一分钟内只保留最后一条（覆盖）
+        if day_data and day_data[-1]["t"] == time_str:
+            day_data[-1] = {"t": time_str, "equity": round(live_eq, 2),
+                            "floating": round(floating, 2)}
+        else:
+            day_data.append({"t": time_str, "equity": round(live_eq, 2),
+                             "floating": round(floating, 2)})
+        data[date_str] = day_data
+        # 只保留最近 7 天
+        if len(data) > 7:
+            sorted_dates = sorted(data.keys())
+            for d in sorted_dates[:-7]:
+                del data[d]
+        _save_intraday(data)
+
+    return {"t": time_str, "equity": round(live_eq, 2),
+            "floating": round(floating, 2)}
+
+
+def intraday_equity(date=None):
+    """获取指定日期的日内权益曲线。date=None 则取今日。
+    返回 {date, points:[{t, equity, floating}], day_start_equity, day_pnl, day_pnl_pct}"""
+    if date is None:
+        date = datetime.now().strftime("%Y-%m-%d")
+
+    with _INTRADAY_LOCK:
+        data = _load_intraday()
+        points = data.get(date, [])
+
+    # 找当日起始权益 = 昨日收盘权益（或当日第一笔已平仓前的权益）
+    day_start = None
+    try:
+        # 从 equity_curve 里找最接近今日开盘的点
+        curve = equity_curve()
+        pts = curve.get("points", [])
+        # 找最后一个非"当前"的点作为昨日收盘
+        closed_pts = [p for p in pts if p["t"] != "当前(含浮动)"]
+        if closed_pts:
+            day_start = closed_pts[-1]["equity"]
+    except Exception:
+        pass
+
+    # 如果有日内数据，用第一分钟前的权益算日盈亏
+    current_eq = points[-1]["equity"] if points else (day_start or 0)
+    day_pnl = (current_eq - day_start) if day_start else 0
+    day_pnl_pct = (day_pnl / day_start * 100) if day_start and day_start > 0 else 0
+
+    return {
+        "date": date,
+        "points": points,
+        "day_start_equity": round(day_start, 2) if day_start else None,
+        "day_pnl": round(day_pnl, 2),
+        "day_pnl_pct": round(day_pnl_pct, 2),
+    }
+
+
 def performance_metrics(prices=None):
     """估算绩效指标（基于成交记录，非严格日频）。标注为估算。"""
     data = _load()
-    closed = sorted([t for t in data["trades"] if t["pnl"] is not None],
+    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None],
                     key=lambda t: t.get("exit_time") or t["time"])
     s = summary()
     if not closed:
@@ -1211,7 +1337,7 @@ def compare_to_papertrack(window_min=120):
          —— 解决“账户自动同步来的成交 signal_id='账户同步' 无法计入采纳率”的盲区
     """
     data = _load()
-    closed = [t for t in data["trades"] if t["pnl"] is not None]
+    closed = [t for t in data["trades"] if t.get("pnl") is not None]
 
     # 读信号日志
     signals = _safe_read_json(SIGNAL_LOG, [])
@@ -1242,7 +1368,7 @@ def compare_to_papertrack(window_min=120):
         if ref is None or t.get("entry_price") is None:
             return out
         try:
-            ref = float(ref); fill = float(t["entry_price"])
+            ref = float(ref); fill = float(t.get("entry_price", ref))
         except Exception:
             return out
         dir_sign = 1 if t["direction"] == "多" else -1
@@ -1250,7 +1376,7 @@ def compare_to_papertrack(window_min=120):
         slippage_signed = (fill - ref) * dir_sign
         adverse = abs(slippage_signed)
         sd = sig.get("stop_dist") or t.get("stop_dist")
-        expected = _get_slip(t["symbol"])
+        expected = _get_slip(t.get("symbol",""))
         out["adverse_slip_pts"] = round(adverse, 2)
         out["expected_slip_pts"] = round(expected, 2)
         out["excess_slip_pts"] = round(adverse - expected, 2)
@@ -1265,17 +1391,17 @@ def compare_to_papertrack(window_min=120):
         sl = sig.get("lots")
         if sl:
             try:
-                out["size_ratio"] = round(t["lots"] / float(sl), 2)
+                out["size_ratio"] = round(t.get("lots", 1) / float(sl), 2)
             except Exception:
                 pass
         pnl = t.get("pnl")
         if pnl is not None:
             tgt = sig.get("target"); stp = sig.get("stop")
             if pnl > 0 and tgt and sd:
-                out["exit_quality"] = ("达标止盈" if abs(float(t["exit_price"]) - float(tgt)) / float(sd) <= 0.25
+                out["exit_quality"] = ("达标止盈" if abs(float(t.get("exit_price", 0)) - float(tgt)) / float(sd) <= 0.25
                                        else "盈利出场(偏离目标)")
             elif pnl <= 0 and stp and sd:
-                out["exit_quality"] = ("触止损" if abs(float(t["exit_price"]) - float(stp)) / float(sd) <= 0.25
+                out["exit_quality"] = ("触止损" if abs(float(t.get("exit_price", 0)) - float(stp)) / float(sd) <= 0.25
                                        else "亏损出场(偏离止损)")
         # 判定：超流动预期滑点 >1.5倍，或占止损距 >5%，或严重偏离计划手数 → 执行偏差
         bad = []
@@ -1291,9 +1417,9 @@ def compare_to_papertrack(window_min=120):
     def _mk(t, sig, method):
         _safe_id = t.get("id") or f"legacy_{t.get('symbol','?')}_{t.get('time','')}"
         rec = {
-            "trade_id": _safe_id, "symbol": t["symbol"], "direction": t["direction"],
-            "entry": t["entry_price"], "exit": t["exit_price"], "pnl": t["pnl"],
-            "exit_reason": t["exit_reason"],
+            "trade_id": _safe_id, "symbol": t.get("symbol","?"), "direction": t.get("direction","?"),
+            "entry": t.get("entry_price"), "exit": t.get("exit_price"), "pnl": t.get("pnl"),
+            "exit_reason": t.get("exit_reason"),
             "signal_time": sig.get("time"), "match_method": method,
             "signal_stop": sig.get("stop"), "signal_target": sig.get("target"),
             "signal_lots": sig.get("lots"), "signal_type": sig.get("signal_type"),
@@ -1320,7 +1446,7 @@ def compare_to_papertrack(window_min=120):
         for s in signals:
             if id(s) in used_sig:
                 continue
-            if s.get("symbol") != t["symbol"] or s.get("direction") != t["direction"]:
+            if s.get("symbol") != t.get("symbol") or s.get("direction") != t.get("direction"):
                 continue
             st = _tt(s.get("time", ""))
             if not st or not ttime:
@@ -1339,9 +1465,9 @@ def compare_to_papertrack(window_min=120):
         if any(m["trade_id"] == _tid2 for m in matched):
             continue
         unmatched.append({
-            "trade_id": t.get("id") or "", "symbol": t["symbol"], "direction": t["direction"],
-            "entry": t["entry_price"], "exit": t["exit_price"], "pnl": t["pnl"],
-            "exit_reason": t["exit_reason"],
+            "trade_id": t.get("id") or "", "symbol": t.get("symbol","?"), "direction": t.get("direction","?"),
+            "entry": t.get("entry_price"), "exit": t.get("exit_price"), "pnl": t.get("pnl"),
+            "exit_reason": t.get("exit_reason"),
             "note": "无匹配信号（可能为冲动/手动交易）",
         })
 
@@ -1399,17 +1525,36 @@ def today_pnl(sym=None):
 
 
 def current_loss_streak():
-    """当前连续亏损笔数（驱动状态机连续止损降档）。"""
+    """当前连续亏损笔数（驱动状态机连续止损降档）。
+
+    2026-08-27 整改：当存在历史熔断解除记录时，只统计解除后的交易，
+    避免被熔断前的亏损'卡'住，导致系统永远无法恢复。
+    熔断强平交易本身计入统计（视为正常交易结果）。
+    """
+    import os
+    import json as _json
     data = _load()
-    closed = sorted([t for t in data["trades"] if t["pnl"] is not None],
-                    key=lambda t: t["time"])
+    # 查找最近的熔断解除时间戳
+    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'killswitch_state.json')
+    reset_time = None
+    try:
+        if os.path.exists(ks_path):
+            with open(ks_path, 'r', encoding='utf-8') as _f:
+                _ks = _json.load(_f)
+            reset_time = _ks.get('reset_at')
+    except Exception:
+        pass
+    # 过滤：只统计 reset_at 之后的交易（如果存在）
+    closed = sorted(
+        [t for t in data['trades']
+         if t.get('pnl') is not None],
+        key=lambda t: t['time']
+    )
+    if reset_time:
+        closed = [t for t in closed if (t.get('time') or '') >= reset_time]
     streak = 0
     for t in reversed(closed):
-        # P1-1（2026-08-14 整改）：连亏计数只认真实亏损(pnl<0)；平本(pnl==0)或盈利视为
-        # 连亏中断(终止计数)，避免手续费/滑点噪声把"刚好保本"误判成连亏→错误降档/虚逼近熔断。
-        # 同时修正原函数无 break 的隐患：原实现会累计全部历史非盈利笔数而非"最近连续"，此处改为
-        # 从最近一笔向前、遇首个非亏损即终止，得到真正的"当前连续止损笔数"。
-        if t["pnl"] < 0:
+        if t['pnl'] < 0:
             streak += 1
         else:
             break

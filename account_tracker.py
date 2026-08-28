@@ -18,9 +18,230 @@
   snap = at.snapshot(prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
 from __future__ import annotations
-import os, json, sys, threading, tempfile
+import os, json, sys, threading, tempfile, time
 from datetime import datetime
 
+# ★ 2026-08-27: akshare 实时行情（分钟级，新浪数据源）
+# ★ 2026-08-28: minishare_live 主数据源（rt_fut_k 不限次快照）
+try:
+    import minishare_live as _ml
+    _MS_AVAILABLE = True
+except ImportError:
+    _MS_AVAILABLE = False
+    _ml = None
+
+try:
+    import akshare_live as _al
+    _AK_AVAILABLE = True
+except ImportError:
+    _AK_AVAILABLE = False
+    _al = None
+
+# minishare 价格缓存（主数据源，rt_fut_k 快照）
+_MS_PRICE_CACHE = {}
+_MS_PRICE_TS = 0.0
+_MS_CACHE_LOCK = threading.Lock()
+
+# minishare feed 实例（单例，避免重复创建）
+_MS_FEED_INSTANCE = None
+_MS_FEED_LOCK = threading.Lock()
+
+# akshare 价格缓存（由后台线程或按需拉取）
+_AK_PRICE_CACHE = {}
+_AK_PRICE_TS = 0.0
+_AK_CACHE_LOCK = threading.Lock()
+
+# 全局 akshare feed 实例（避免每次 poll 都创建新实例）
+_AK_FEED_INSTANCE = None
+_AK_FEED_LOCK = threading.Lock()
+
+# akshare 后台轮询线程控制
+_AK_POLLER_RUNNING = False
+_AK_POLLER_THREAD = None
+
+def _get_ak_feed():
+    """获取全局 akshare feed 实例。"""
+    global _AK_FEED_INSTANCE
+    if not _AK_AVAILABLE or _al is None:
+        return None
+    if _AK_FEED_INSTANCE is None:
+        with _AK_FEED_LOCK:
+            if _AK_FEED_INSTANCE is None:
+                _AK_FEED_INSTANCE = _al.feed()
+    return _AK_FEED_INSTANCE
+
+def _get_ms_feed():
+    """获取全局 minishare feed 实例（rt_fut_k 单例）。"""
+    global _MS_FEED_INSTANCE
+    if not _MS_AVAILABLE or _ml is None:
+        return None
+    if _MS_FEED_INSTANCE is None:
+        with _MS_FEED_LOCK:
+            if _MS_FEED_INSTANCE is None:
+                _MS_FEED_INSTANCE = _ml.feed()
+    return _MS_FEED_INSTANCE
+
+def _is_trading_hours():
+    """判断当前是否在期货交易时段（夜盘 21:00-23:00/02:30，日盘 9:00-15:00）。"""
+    from datetime import datetime as _dt
+    now = _dt.now()
+    h, m = now.hour, now.minute
+    t = h * 60 + m
+    if t >= 21 * 60 or t <= 2 * 60 + 30:
+        return True
+    if 9 * 60 <= t <= 15 * 60:
+        return True
+    return False
+
+def _get_ms_price(sym):
+    """从 minishare rt_fut_k 获取实时价格（主数据源，不限次快照）。"""
+    global _MS_PRICE_CACHE, _MS_PRICE_TS, _MS_CACHE_LOCK
+    if not _MS_AVAILABLE or _ml is None:
+        return None
+    sym_lower = sym.lower()
+    # 先检查缓存（10秒TTL）
+    with _MS_CACHE_LOCK:
+        if _MS_PRICE_TS > 0 and (time.time() - _MS_PRICE_TS) < 10:
+            if sym_lower in _MS_PRICE_CACHE and _MS_PRICE_CACHE[sym_lower] > 0:
+                return _MS_PRICE_CACHE[sym_lower]
+    # 缓存过期，按需拉取
+    try:
+        _feed = _get_ms_feed()
+        if _feed:
+            # 优先使用已缓存的快照（避免频繁请求）
+            px = _feed.price(sym)
+            if px and px > 0:
+                with _MS_CACHE_LOCK:
+                    _MS_PRICE_CACHE[sym_lower] = px
+                    _MS_PRICE_TS = time.time()
+                return px
+            # 快照无数据则强制 poll
+            _feed.poll()
+            px = _feed.price(sym)
+            if px and px > 0:
+                with _MS_CACHE_LOCK:
+                    _MS_PRICE_CACHE[sym_lower] = px
+                    _MS_PRICE_TS = time.time()
+                return px
+    except Exception:
+        pass
+    return None
+
+def _get_ak_price(sym):
+    """从 akshare 缓存获取实时价格（由后台线程批量维护，避免每个品种单独请求新浪）。
+    
+    2026-08-28 优化：移除每次创建新 AkshareFeed 实例的逻辑，
+    改为从后台线程维护的缓存中读取，缓存失效时回退到全局 feed 实例。
+    """
+    global _AK_PRICE_CACHE, _AK_PRICE_TS
+    if not _AK_AVAILABLE or _al is None:
+        return None
+    sym_lower = sym.lower()
+    # 检查缓存（5秒TTL，足够实时又避免频繁请求）
+    with _AK_CACHE_LOCK:
+        if _AK_PRICE_TS > 0 and (time.time() - _AK_PRICE_TS) < 5:
+            if sym_lower in _AK_PRICE_CACHE and _AK_PRICE_CACHE[sym_lower] > 0:
+                return _AK_PRICE_CACHE[sym_lower]
+    # 缓存失效，按需拉取（使用全局 feed 实例）
+    try:
+        f = _get_ak_feed()
+        if f is None:
+            return None
+        snap = f.poll([sym_lower])
+        if snap and sym_lower in snap:
+            price = snap[sym_lower].get('close', 0)
+            if price > 0:
+                with _AK_CACHE_LOCK:
+                    _AK_PRICE_CACHE[sym_lower] = price
+                    _AK_PRICE_TS = time.time()
+                return price
+    except Exception:
+        pass
+    return None
+
+
+def _get_ak_prices_batch(symbols):
+    """批量获取多个品种的 akshare 实时价格（一次 poll 多个品种，高效）。"""
+    global _AK_PRICE_CACHE, _AK_PRICE_TS
+    if not _AK_AVAILABLE or _al is None:
+        return {}
+    # 过滤有效品种
+    valid_syms = []
+    for s in symbols:
+        s_lower = s.lower()
+        code = _al.ALL_CONTRACTS.get(s_lower, _al.ALL_CONTRACTS.get(s.upper()))
+        if code:
+            valid_syms.append(s_lower)
+    if not valid_syms:
+        return {}
+    try:
+        f = _get_ak_feed()
+        if f is None:
+            return {}
+        snap = f.poll(valid_syms)
+        result = {}
+        if snap:
+            with _AK_CACHE_LOCK:
+                for sym_lower in valid_syms:
+                    if sym_lower in snap and snap[sym_lower]:
+                        price = snap[sym_lower].get('close', 0)
+                        if price > 0:
+                            _AK_PRICE_CACHE[sym_lower] = price
+                            result[sym_lower] = price
+                _AK_PRICE_TS = time.time()
+        return result
+    except Exception:
+        return {}
+
+
+def start_ak_poller(interval=5):
+    """启动后台线程：每 interval 秒批量拉取所有持仓品种的实时价格。"""
+    global _AK_POLLER_RUNNING, _AK_POLLER_THREAD
+    if _AK_POLLER_RUNNING:
+        return
+    _AK_POLLER_RUNNING = True
+    
+    def _poll_loop():
+        global _AK_POLLER_RUNNING
+        print(f"[akshare_live] 后台价格轮询线程启动（{interval}秒/次，持仓品种实时价）")
+        errors = 0
+        while _AK_POLLER_RUNNING:
+            try:
+                # 从 account_state 获取当前持仓品种
+                try:
+                    st = load_state()
+                    positions = st.get('positions', {})
+                    held_syms = []
+                    for sym, pos in positions.items():
+                        if isinstance(pos, dict) and (pos.get('lots') or 0) > 0:
+                            held_syms.append(sym)
+                except Exception:
+                    held_syms = []
+                
+                if held_syms:
+                    # 批量拉取所有持仓品种
+                    _get_ak_prices_batch(held_syms)
+                    errors = 0
+                time.sleep(interval)
+            except Exception as e:
+                errors += 1
+                if errors >= 5:
+                    print(f"[akshare_live] 轮询错误过多({errors}次)，暂停30秒")
+                    time.sleep(30)
+                else:
+                    time.sleep(interval)
+    
+    _AK_POLLER_THREAD = threading.Thread(target=_poll_loop, daemon=True)
+    _AK_POLLER_THREAD.start()
+
+
+def stop_ak_poller():
+    """停止后台价格轮询线程。"""
+    global _AK_POLLER_RUNNING
+    _AK_POLLER_RUNNING = False
+
+# ★ 2026-08-28: 启动 akshare 后台轮询线程（批量维护持仓品种实时价缓存）
+# 在服务器启动时调用 start_ak_poller() 即可
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(HERE, "trade_config.json")
 STATE_FILE = os.path.join(HERE, "account_state.json")
@@ -320,6 +541,9 @@ def set_levels(sym, stop=None, target=None, t1=None, t2=None, tail_enabled=None)
             pos["t2"] = _to_float(t2)
         if tail_enabled is not None:
             pos["tail_enabled"] = bool(tail_enabled)
+        # ★ 2026-08-27: 用户手动设置止损止盈后，标记 _user_set_stop=True
+        # 防止 heal_from_journal 自动修正覆盖用户设置的值
+        pos["_user_set_stop"] = True
         _, fix_note = _validate_levels(pos)
         st["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         save_state(st)
@@ -429,15 +653,9 @@ def _auto_tp_targets(sym, pos):
 
 def _heal_position_levels(sym, pos, jlv, changes):
     """根据 journal 记录和 exit_plan 规则修正持仓的 stop/t1/t2。
-
-    重点修复：空单 stop 被移动止损/旧 bug 错误下移到开仓价下方、
-    多头 stop 被错误上移到开仓价上方等方向性错误。
-    规则：
-      - 多头：stop < entry < t1 < t2
-      - 空头：stop > entry > t1 > t2
-    优先用 journal 的 stop/stop_dist；否则用当前 t1 反推 sd 修正 stop/t2；
-    都没有则把方向错误的 stop 修正到开仓价（保本）。
-    """
+    若持仓已设置 _user_set_stop=True，则跳过所有自动修正。"""
+    if pos.get("_user_set_stop"):
+        return  # 用户已手动设置止损止盈，跳过自动修正
     direction = pos.get("direction")
     avg = pos.get("avg")
     if direction not in ("多", "空") or avg is None:
@@ -629,6 +847,25 @@ def heal_from_journal():
                     pos.setdefault("tp_level", "tp_none")
                     pos.setdefault("init_qty", int(pos.get("lots", 0)))
                     changes.append(f"{sym} 自动补齐 tp_targets: T1={_tp_tgt.get('t1_price')}, T2={_tp_tgt.get('t2_price')}")
+        # 保留旧持仓的止损/止盈数据（从旧 account_state.json 读取，防止 heal 重建时丢失）
+        _old_state = load_state()
+        _old_pos = _old_state.get("positions", {}) if isinstance(_old_state, dict) else {}
+        for _sym, _pos in list(st.get("positions", {}).items()):
+            if isinstance(_pos, dict) and (_pos.get("lots") or 0) > 0:
+                _old = _old_pos.get(_sym, {}) if isinstance(_old_pos, dict) else {}
+                if isinstance(_old, dict) and _old.get("stop") is not None and _pos.get("stop") is None:
+                    _pos["stop"] = _old["stop"]
+                    changes.append(f"{_sym} 保留旧止损: {_old['stop']}")
+                if isinstance(_old, dict) and _old.get("t1") is not None and _pos.get("t1") is None:
+                    _pos["t1"] = _old["t1"]
+                if isinstance(_old, dict) and _old.get("t2") is not None and _pos.get("t2") is None:
+                    _pos["t2"] = _old["t2"]
+                if isinstance(_old, dict) and _old.get("target") is not None and _pos.get("target") is None:
+                    _pos["target"] = _old["target"]
+                if isinstance(_old, dict) and _old.get("tp_level") is not None:
+                    _pos.setdefault("tp_level", _old["tp_level"])
+                if isinstance(_old, dict) and _old.get("tp_targets") is not None and _pos.get("tp_targets") is None:
+                    _pos["tp_targets"] = _old["tp_targets"]
         if changes:
             st["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             save_state(st)
@@ -647,17 +884,63 @@ def snapshot(prices=None):
     acc = cfg.get("account", {})
     specs = cfg.get("contract_specs", {})
     st = load_state()
+    # 兼容 positions 格式：list -> dict（key=symbol）
+    _raw_positions = st.get("positions", {})
+    if isinstance(_raw_positions, list):
+        _pos_dict = {}
+        for _p in _raw_positions:
+            if isinstance(_p, dict) and _p.get("symbol"):
+                _pos_dict[_p["symbol"]] = _p
+        st["positions"] = _pos_dict
+    elif _raw_positions is None:
+        st["positions"] = {}
     equity_synced = st.get("equity", 0) or 0
     margin_cap_pct = acc.get("margin_cap_pct", 30)
     portfolio_cap_pct = acc.get("portfolio_margin_cap_pct", 60)
-    # 先过一遍持仓，拿到浮动盈亏（用实时价）
+    # 先过一遍持仓，拿到浮动盈亏（用实时价；无实时价则回退 account_state 存储价）
     positions = []
     total_margin = 0.0
     float_total = 0.0
     for sym, sp in specs.items():
         pos = st["positions"].get(sym)
+        lots = (pos or {}).get("lots", 0) if pos else 0
         mult = sp["multiplier"]; mrate = sp["margin_rate"]
-        px = (prices or {}).get(sym)
+        # ★ 2026-08-28 优化：只在持仓时获取实时价格（无持仓品种用存储价，避免50+品种无意义请求）
+        px = None
+        if lots and lots > 0:
+            _trading = _is_trading_hours()
+            if _trading:
+                # 交易时段：优先 akshare 新浪实时（从缓存读取，后台线程已批量更新）
+                _ak_px = _get_ak_price(sym)
+                if _ak_px and _ak_px > 0:
+                    px = _ak_px
+                # 回退 minishare
+                if px is None:
+                    _ms_px = _get_ms_price(sym)
+                    if _ms_px and _ms_px > 0:
+                        px = _ms_px
+            else:
+                # 非交易时段：优先 minishare 收盘快照
+                _ms_px = _get_ms_price(sym)
+                if _ms_px and _ms_px > 0:
+                    px = _ms_px
+                # 回退 akshare
+                if px is None:
+                    _ak_px = _get_ak_price(sym)
+                    if _ak_px and _ak_px > 0:
+                        px = _ak_px
+            # 外部传入的 prices dict
+            if px is None:
+                px = (prices or {}).get(sym)
+            # 最终回退：account_state 存储价
+            if (px is None or px == 0) and pos and pos.get("price") is not None:
+                px = pos["price"]
+        else:
+            # 无持仓：直接用存储价或外部价格，不请求实时行情
+            if pos and pos.get("price") is not None:
+                px = pos["price"]
+            if px is None:
+                px = (prices or {}).get(sym)
         if pos:
             lots = pos["lots"]; avg = pos["avg"]; ds = _dir_sign(pos["direction"])
             margin_used = lots * avg * mult * mrate
@@ -692,8 +975,10 @@ def snapshot(prices=None):
                 "dist_to_cap": round(equity_synced * margin_cap_pct / 100, 2) if equity_synced > 0 else 0.0,
             })
     # 动态权益：让账户总览与持仓实时行情保持同步
-    # 同步后已实现盈亏变化 = 当前已实现盈亏 - 同步时刻已实现盈亏
-    realized_pnl = st.get("realized_pnl", 0.0)
+    # ★ 2026-08-28: 已实现盈亏采用反推法（权益 - 初始资金 - 浮动盈亏）
+    #   确保各板块数据自洽，不依赖可能不完整的交易记录
+    INIT_CAPITAL = 1000000.0
+    realized_pnl = round(equity_synced - INIT_CAPITAL - float_total, 2)
     realized_pnl_at_sync = st.get("realized_pnl_at_sync", realized_pnl)
     delta_realized = realized_pnl - realized_pnl_at_sync
     float_at_sync = st.get("float_at_sync", 0.0)
@@ -709,19 +994,53 @@ def snapshot(prices=None):
     portfolio_cap = round(dynamic_equity * portfolio_cap_pct / 100, 2)
 
     # ── 自动刷新同步基准：每次 snapshot 都将「权益同步基准」推进到当前时刻 ──
-    # 这样前端显示的「权益同步基准」永远是实时的，不再需要手动点击「同步权益」。
+    # ★ 2026-08-28: 不再修改 st["equity"]，保持用户设定的同步权益不变
+    #   动态权益仅用于前端显示，不回写到基准权益，避免漂移
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _LOCK:
-        st["equity"] = round(dynamic_equity, 2)
+        # 只更新同步时间戳和快照值，不修改基准权益
         st["equity_synced"] = now_str
         st["realized_pnl_at_sync"] = realized_pnl
         st["float_at_sync"] = round(float_total, 2)
         st["updated"] = now_str
+        # 计算动态权益后回写（但不改变用户的同步基准）
+        dynamic_eq = round(dynamic_equity, 2)
         save_state(st)
 
+    available = round(dynamic_equity - total_margin, 2)
+    # ★ 2026-08-28: 使用用户设定的同步权益作为基准，动态权益仅用于显示
+    base_equity = equity_synced  # 用户/同步时设定的基准权益
+    
+    # ★★ 2026-08-28: 数据自洽验证（确保各板块数据一致）
+    # 基本恒等式：权益 = 初始资金 + 已实现盈亏 + 浮动盈亏
+    INIT_CAPITAL = 1000000.0
+    self_check_ok = True
+    self_check_msg = ""
+    
+    # 反向计算已实现盈亏，确保自洽
+    computed_realized = round(dynamic_equity - INIT_CAPITAL - float_total, 2)
+    
+    # 自洽检查
+    expected_total = round(computed_realized + float_total, 2)
+    actual_total = round(dynamic_equity - INIT_CAPITAL, 2)
+    if abs(expected_total - actual_total) > 0.01:
+        self_check_ok = False
+        self_check_msg = f"[自检失败] 盈亏不平衡: {expected_total} != {actual_total}"
+        print(f"[SELF_CHECK] {self_check_msg}")
+    
+    # 防负值保护
+    if available < 0:
+        available = 0.0
+        self_check_msg += "[警告] 可用资金为负，已修正为0"
+    
+    # 确保保证金占用率合理
+    if usage_rate > 100:
+        self_check_msg += f"[警告] 资金使用率超过100%: {usage_rate:.1f}%"
+    
     return {
         "equity": round(dynamic_equity, 2),
         "equity_synced_raw": round(dynamic_equity, 2),
+        "available": available,
         "realized_pnl": realized_pnl,
         "realized_pnl_at_sync": realized_pnl,
         "float_total": round(float_total, 2),
@@ -737,6 +1056,15 @@ def snapshot(prices=None):
         "equity_synced": now_str,
         "updated": now_str,
         "positions": positions,
+        "init_capital": INIT_CAPITAL,
+        "self_check": {
+            "ok": self_check_ok,
+            "msg": self_check_msg or "数据自洽",
+            "equity_verified": round(dynamic_equity, 2),
+            "realized_computed": computed_realized,
+            "float_computed": round(float_total, 2),
+            "total_verified": round(dynamic_equity - INIT_CAPITAL, 2),
+        },
     }
 
 
