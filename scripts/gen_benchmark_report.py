@@ -70,10 +70,7 @@ def generate_report(results, baselines):
 
     lines.append("")
     lines.append(
-        f"**共 {total} 项基准** · "
-        f"🔴 退化 {regressions} 项 · "
-        f"🟢 提升 {improvements} 项 · "
-        f"🆕 新增 {new_items} 项"
+        f"**共 {total} 项基准** · 🔴 退化 {regressions} 项 · 🟢 提升 {improvements} 项 · 🆕 新增 {new_items} 项"
     )
 
     return "\n".join(lines), regressions

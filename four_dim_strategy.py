@@ -1444,7 +1444,7 @@ def pipeline(
 
     # ── #11 GA 6 因子挖掘模式（可选，默认关闭） ──
     # 子因子：T_trend / T_mean / T_seasonal / F_basis / F_seasonal / C
-    # 可选扩展：SR_breakout（突破强度因子，靠近压力位=正）
+    # 可选扩展：SR_breakout（突破强度因子）、V_vol（波动率因子）
     # 配置了 subfactor_weights 时用子因子加权覆盖原 bias_G
     _sf_w = (cfg or {}).get("subfactor_weights", {})
     if _sf_w:
@@ -1485,6 +1485,31 @@ def pipeline(
                 except Exception:
                     _sr_breakout = 0.0
 
+            # V_vol 波动率因子（可选）：低波动率+波动率下降 → 正分（平静=利多）
+            # 注意：不同板块方向可能不同，GA 会通过权重符号自动学习
+            _v_vol = 0.0
+            if "V_vol" in _sf_w:
+                try:
+                    _close = df_daily["close"].astype(float).values
+                    if len(_close) >= 40:
+                        _ret = np.diff(_close[-30:]) / (_close[-31:-1] + 1e-8)
+                        _vol = float(np.std(_ret) * 100)  # 20日波动率（%）
+                        # 波动率分位：用过去 120 根做参考
+                        _long_ret = np.diff(_close[-120:]) / (_close[-121:-1] + 1e-8)
+                        _long_vols = np.array(
+                            [float(np.std(_long_ret[max(0, i - 20) : i + 1]) * 100) for i in range(19, len(_long_ret))]
+                        )
+                        if len(_long_vols) > 10:
+                            _vol_pct = float(np.mean(_long_vols < _vol))  # 当前波动率分位
+                            # 波动率变化：近 5 日平均 vs 近 20 日平均
+                            _vol_5 = float(np.std(_ret[-5:]) * 100) if len(_ret) >= 5 else _vol
+                            _vol_chg = (_vol_5 - _vol) / (_vol + 1e-8)  # 变化率
+                            # 合成：低波动分位（低波=正）+ 波动率下降（降波=正）
+                            _score = (1.0 - 2 * _vol_pct) * 50 + (-_vol_chg * 200)
+                            _v_vol = round(max(-100.0, min(100.0, _score)), 1)
+                except Exception:
+                    _v_vol = 0.0
+
             _bias = (
                 _sf_w.get("T_trend", 0) * _t_trend
                 + _sf_w.get("T_mean", 0) * _t_mean
@@ -1493,6 +1518,7 @@ def pipeline(
                 + _sf_w.get("F_seasonal", 0) * _f_seas
                 + _sf_w.get("C", 0) * C_sf
                 + _sf_w.get("SR_breakout", 0) * _sr_breakout
+                + _sf_w.get("V_vol", 0) * _v_vol
             )
             bias_G = round(max(-100.0, min(100.0, _bias)), 1)
         except Exception:
