@@ -350,6 +350,7 @@ def _write_junit_xml(result, output_path):
   </testsuite>
 </testsuites>
 """
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(xml)
     print(color(f"  📄 JUnit XML 报告已生成: {output_path}", C.DIM))
