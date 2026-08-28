@@ -41,6 +41,7 @@ from four_dim_strategy import (
 #  一、回测集成测试
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestWalkForwardBacktestIntegration(unittest.TestCase):
     """walk_forward_backtest 回测集成测试（使用真实日线数据）。"""
 
@@ -57,70 +58,62 @@ class TestWalkForwardBacktestIntegration(unittest.TestCase):
 
     def test_backtest_returns_dict(self):
         """回测返回 dict"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(300))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300))
         self.assertIsInstance(result, dict)
 
     def test_backtest_has_symbol(self):
         """结果包含 symbol"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(300))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300))
         self.assertEqual(result["symbol"], self.symbol)
 
     def test_backtest_has_trades_list(self):
         """结果包含 trades（交易数，int）"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(300))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300))
         self.assertIn("trades", result)
         self.assertIsInstance(result["trades"], int)
 
     def test_backtest_trades_is_int(self):
         """trades 字段是 int（交易笔数）"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(300))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300))
         self.assertIsInstance(result["trades"], int)
         self.assertGreaterEqual(result["trades"], 0)
 
     def test_insufficient_data_returns_note(self):
         """数据不足 → 返回 note 说明"""
         small_df = self.df.tail(30)
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=small_df)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=small_df)
         self.assertIn("note", result)
         self.assertEqual(result["trades"], 0)
 
     def test_f_override_assertion(self):
         """F_override 非 None → AssertionError（红线守卫）"""
         with self.assertRaises(AssertionError):
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=self.df.tail(300),
-                                  F_override=0.5)
+            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300), F_override=0.5)
 
     def test_hmm_label_assertion(self):
         """hmm_label 非 None → AssertionError（红线守卫）"""
         with self.assertRaises(AssertionError):
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=self.df.tail(300),
-                                  hmm_label="trend_up")
+            walk_forward_backtest(
+                self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300), hmm_label="trend_up"
+            )
 
     def test_macro_label_assertion(self):
         """macro_label 非 None → AssertionError"""
         with self.assertRaises(AssertionError):
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=self.df.tail(300),
-                                  macro_label="expansion")
+            walk_forward_backtest(
+                self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300), macro_label="expansion"
+            )
 
     def test_garch_label_assertion(self):
         """garch_label 非 None → AssertionError"""
         with self.assertRaises(AssertionError):
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=self.df.tail(300),
-                                  garch_label="high")
+            walk_forward_backtest(
+                self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(300), garch_label="high"
+            )
 
     def test_trade_fields_if_trades(self):
         """如果有交易 → trades_detail 每笔字段完整"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         detail = result.get("trades_detail", [])
         if len(detail) > 0:
             t = detail[0]
@@ -133,12 +126,12 @@ class TestWalkForwardBacktestIntegration(unittest.TestCase):
 
     def test_cooldown_reduces_trades(self):
         """冷却期长 → 交易数少（或相等）"""
-        result_cd1 = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                           min_bars=60, cooldown_bars=1,
-                                           df_in=self.df.tail(500))
-        result_cd20 = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, cooldown_bars=20,
-                                            df_in=self.df.tail(500))
+        result_cd1 = walk_forward_backtest(
+            self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, cooldown_bars=1, df_in=self.df.tail(500)
+        )
+        result_cd20 = walk_forward_backtest(
+            self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, cooldown_bars=20, df_in=self.df.tail(500)
+        )
 
         n1 = result_cd1.get("trades", 0)
         n2 = result_cd20.get("trades", 0)
@@ -146,16 +139,14 @@ class TestWalkForwardBacktestIntegration(unittest.TestCase):
 
     def test_trades_have_correct_direction(self):
         """每笔交易 dir 为 1 或 -1"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         detail = result.get("trades_detail", [])
         for t in detail:
             self.assertIn(t["dir"], [1, -1])
 
     def test_trades_have_positive_stop_dist(self):
         """回测结果包含关键指标：expR, win_rate, by_regime"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         self.assertIn("expR", result)
         self.assertIn("win_rate", result)
         self.assertIn("by_regime", result)
@@ -167,6 +158,7 @@ class TestWalkForwardBacktestIntegration(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  二、数据质量监控集成测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class _FakeFeed:
     """模拟 feed 对象，用于 data_quality 集成测试。"""
@@ -363,8 +355,7 @@ class TestDataQualityIntegration(unittest.TestCase):
         dq.observe(feed, now_ts=1000000.0)
         rep = dq.check(now_ts=1000000.0, trading=True)
 
-        required_keys = ["ok", "health_pct", "counts", "rows", "worst",
-                         "trading", "stale_sec", "checked_at"]
+        required_keys = ["ok", "health_pct", "counts", "rows", "worst", "trading", "stale_sec", "checked_at"]
         for k in required_keys:
             self.assertIn(k, rep, f"missing key: {k}")
 
@@ -384,6 +375,7 @@ class TestDataQualityIntegration(unittest.TestCase):
     def test_all_symbols_tracked(self):
         """rows 中包含所有 SYMBOLS 品种"""
         from four_dim_strategy import SYMBOLS
+
         rep = dq.check(now_ts=1000000.0, trading=True)
 
         row_symbols = set(r["symbol"] for r in rep["rows"])
@@ -404,6 +396,7 @@ class TestDataQualityIntegration(unittest.TestCase):
 #  三、回测 + 风控 集成验证
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBacktestRiskGateIntegration(unittest.TestCase):
     """回测中风控闸门的实际效果。"""
 
@@ -419,14 +412,12 @@ class TestBacktestRiskGateIntegration(unittest.TestCase):
 
     def test_backtest_trades_matches_detail_count(self):
         """trades 计数 == trades_detail 长度"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         self.assertEqual(result["trades"], len(result["trades_detail"]))
 
     def test_each_trade_has_R_value(self):
         """每笔交易有 R 值（盈亏 R 倍数）"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         detail = result["trades_detail"]
         for t in detail:
             self.assertIn("R", t)
@@ -434,8 +425,7 @@ class TestBacktestRiskGateIntegration(unittest.TestCase):
 
     def test_each_trade_has_exit_reason(self):
         """每笔交易有出场原因"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         detail = result["trades_detail"]
         for t in detail:
             self.assertIn("reason", t)
@@ -443,8 +433,7 @@ class TestBacktestRiskGateIntegration(unittest.TestCase):
 
     def test_exit_reasons_count_matches(self):
         """exit_reasons 计数 == 实际交易出场分布"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         detail = result["trades_detail"]
         reasons_count = {}
         for t in detail:
@@ -452,23 +441,19 @@ class TestBacktestRiskGateIntegration(unittest.TestCase):
             reasons_count[r] = reasons_count.get(r, 0) + 1
 
         for reason, count in result["exit_reasons"].items():
-            self.assertEqual(count, reasons_count.get(reason, 0),
-                             f"exit_reason '{reason}' count mismatch")
+            self.assertEqual(count, reasons_count.get(reason, 0), f"exit_reason '{reason}' count mismatch")
 
     def test_R_adj_is_worse_than_R(self):
         """R_adj 总是 ≤ R（扣费后：盈利更少、亏损更多）"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         detail = result["trades_detail"]
         for t in detail:
             # 扣费后 R_adj 总是比 R 差
-            self.assertLessEqual(t["R_adj"], t["R"],
-                                 f"R_adj should be <= R: {t['R_adj']} > {t['R']}")
+            self.assertLessEqual(t["R_adj"], t["R"], f"R_adj should be <= R: {t['R_adj']} > {t['R']}")
 
     def test_win_rate_between_0_and_1(self):
         """win_rate 在 [0, 1] 范围内"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.df.tail(500))
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         self.assertGreaterEqual(result["win_rate"], 0.0)
         self.assertLessEqual(result["win_rate"], 1.0)
 
@@ -476,6 +461,7 @@ class TestBacktestRiskGateIntegration(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  四、数据质量 + 策略 集成
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDataQualityStrategyIntegration(unittest.TestCase):
     """数据质量 → 策略决策 的集成验证。"""
@@ -510,8 +496,7 @@ class TestDataQualityStrategyIntegration(unittest.TestCase):
         df = self.df.tail(200)
         result = pipeline(self.symbol, df, cfg=DEFAULT_CONFIG)
         valid_regimes = ["趋势", "波动", "震荡", "未知", "高波动"]
-        self.assertIn(result["regime"], valid_regimes +
-                      [r for r in valid_regimes])  # 宽松匹配
+        self.assertIn(result["regime"], valid_regimes + [r for r in valid_regimes])  # 宽松匹配
 
     def test_pipeline_bias_range(self):
         """bias_G 在合理范围内"""

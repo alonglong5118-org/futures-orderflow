@@ -75,6 +75,7 @@ from regression_test import calc_signal_agreement, classify_status, color
 #  1. _norm_daily_cols
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNormDailyCols(unittest.TestCase):
     """_norm_daily_cols 日线 DataFrame 列名规范化。"""
 
@@ -90,15 +91,17 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_chinese_columns(self):
         """中文列名映射"""
-        df = pd.DataFrame({
-            "日期": ["2026-08-28"],
-            "开盘": [100],
-            "最高": [105],
-            "最低": [95],
-            "收盘": [102],
-            "成交量": [10000],
-            "持仓量": [5000],
-        })
+        df = pd.DataFrame(
+            {
+                "日期": ["2026-08-28"],
+                "开盘": [100],
+                "最高": [105],
+                "最低": [95],
+                "收盘": [102],
+                "成交量": [10000],
+                "持仓量": [5000],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("open", result.columns)
         self.assertIn("high", result.columns)
@@ -109,34 +112,40 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_date_becomes_index(self):
         """date 列设为索引"""
-        df = pd.DataFrame({
-            "日期": ["2026-08-28", "2026-08-29"],
-            "开盘": [100, 101],
-            "收盘": [102, 103],
-        })
+        df = pd.DataFrame(
+            {
+                "日期": ["2026-08-28", "2026-08-29"],
+                "开盘": [100, 101],
+                "收盘": [102, 103],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIsInstance(result.index, pd.DatetimeIndex)
         self.assertEqual(result.index[0], pd.Timestamp("2026-08-28"))
 
     def test_sorted_by_date(self):
         """按索引排序"""
-        df = pd.DataFrame({
-            "日期": ["2026-08-29", "2026-08-28"],
-            "开盘": [101, 100],
-            "收盘": [103, 102],
-        })
+        df = pd.DataFrame(
+            {
+                "日期": ["2026-08-29", "2026-08-28"],
+                "开盘": [101, 100],
+                "收盘": [103, 102],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertEqual(result.index[0], pd.Timestamp("2026-08-28"))
         self.assertEqual(result.index[1], pd.Timestamp("2026-08-29"))
 
     def test_english_hold_to_oi(self):
         """hold → oi"""
-        df = pd.DataFrame({
-            "date": ["2026-08-28"],
-            "open": [100],
-            "close": [102],
-            "hold": [5000],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-08-28"],
+                "open": [100],
+                "close": [102],
+                "hold": [5000],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("oi", result.columns)
         self.assertNotIn("hold", result.columns)
@@ -144,32 +153,38 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_settle_to_settlement(self):
         """settle → settlement"""
-        df = pd.DataFrame({
-            "date": ["2026-08-28"],
-            "close": [102],
-            "settle": [101.5],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-08-28"],
+                "close": [102],
+                "settle": [101.5],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("settlement", result.columns)
 
     def test_open_interest_to_oi(self):
         """open_interest → oi"""
-        df = pd.DataFrame({
-            "date": ["2026-08-28"],
-            "close": [102],
-            "open_interest": [8000],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-08-28"],
+                "close": [102],
+                "open_interest": [8000],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("oi", result.columns)
 
     def test_no_date_column_preserved(self):
         """没有 date 列 → 不设索引，列照常映射"""
-        df = pd.DataFrame({
-            "open": [100],
-            "high": [105],
-            "low": [95],
-            "close": [102],
-        })
+        df = pd.DataFrame(
+            {
+                "open": [100],
+                "high": [105],
+                "low": [95],
+                "close": [102],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("close", result.columns)
         # 索引还是默认 RangeIndex
@@ -179,6 +194,7 @@ class TestNormDailyCols(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _col
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCol(unittest.TestCase):
     """_col DataFrame 列候选查找。"""
@@ -222,6 +238,7 @@ class TestCol(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _latest_change
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestLatestChange(unittest.TestCase):
     """_latest_change 最近变化归一化。"""
@@ -304,6 +321,7 @@ class TestLatestChange(unittest.TestCase):
 #  4. color
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestColor(unittest.TestCase):
     """color 终端颜色包装。"""
 
@@ -332,6 +350,7 @@ class TestColor(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. calc_signal_agreement
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSignalAgreement(unittest.TestCase):
     """calc_signal_agreement 信号一致率。"""
@@ -380,6 +399,7 @@ class TestSignalAgreement(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. classify_status
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClassifyStatus(unittest.TestCase):
     """classify_status 回归状态分类。"""

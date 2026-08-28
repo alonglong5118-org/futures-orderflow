@@ -93,6 +93,7 @@ from sentiment_engine import (
 #  1. is_hard_filtered
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHardFiltered(unittest.TestCase):
     """is_hard_filtered 情绪硬过滤。"""
 
@@ -154,6 +155,7 @@ class TestHardFiltered(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _label_for
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestLabelFor(unittest.TestCase):
     """_label_for 分数→标签映射。"""
@@ -229,6 +231,7 @@ class TestLabelFor(unittest.TestCase):
 #  3. _thr_mult
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestThrMult(unittest.TestCase):
     """_thr_mult 阈值乘数。"""
 
@@ -281,6 +284,7 @@ class TestThrMult(unittest.TestCase):
 #  4. _risk_scale
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskScale(unittest.TestCase):
     """_risk_scale 风险仓位缩放。"""
 
@@ -332,6 +336,7 @@ class TestRiskScale(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. _factor_breadth
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFactorBreadth(unittest.TestCase):
     """_factor_breadth 市场广度。"""
@@ -409,6 +414,7 @@ class TestFactorBreadth(unittest.TestCase):
 #  6. _factor_activity
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFactorActivity(unittest.TestCase):
     """_factor_activity 资金活跃度。"""
 
@@ -464,6 +470,7 @@ class TestFactorActivity(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. _factor_amplitude
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFactorAmplitude(unittest.TestCase):
     """_factor_amplitude 涨跌幅度分布。"""

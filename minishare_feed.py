@@ -16,6 +16,7 @@ minishare_feed · da龘 全品种实时报价接入
 安装：pip install minishare --extra-index-url https://minidoc.pages.dev/simple/ -U
 配置：minishare.json {"enabled": true, "token": "..."}
 """
+
 import datetime
 import json
 import os
@@ -30,29 +31,80 @@ CACHE_FILE = os.path.join(HERE, "minishare_cache.json")  # 持久化上次成功
 # (sym_key, 显示名, name匹配关键词) —— 全部用中文名匹配，避开代码前缀冲突
 WATCH = [
     ("JM", "焦煤", "焦煤"),
-    ("J",  "焦炭", "焦炭"),
+    ("J", "焦炭", "焦炭"),
     ("FG", "玻璃", "玻璃"),
     ("SA", "纯碱", "纯碱"),
     ("jd", "鸡蛋", "鸡蛋"),
     ("lh", "生猪", "生猪"),
     # 稳健池 DCE/SHFE 品种(免费行情无法订阅 tick, 由 minishare 全市场快照兜底实时价)
-    ("V",  "PVC", "PVC"),
+    ("V", "PVC", "PVC"),
     ("RB", "螺纹", "螺纹"),
-    ("P",  "棕榈", "棕榈"),
+    ("P", "棕榈", "棕榈"),
     ("HC", "热卷", "热卷"),
 ]
 
 # 全市场交易所分类（minishare 的 ts_code 无交易所后缀，需按品种代码映射）
-EXCHANGE_NAMES = {"CZCE": "郑商所", "DCE": "大商所", "SHFE": "上期所", "INE": "上期能源",
-                  "CFFEX": "中金所", "GFEX": "广期所", "其他": "其他"}
+EXCHANGE_NAMES = {
+    "CZCE": "郑商所",
+    "DCE": "大商所",
+    "SHFE": "上期所",
+    "INE": "上期能源",
+    "CFFEX": "中金所",
+    "GFEX": "广期所",
+    "其他": "其他",
+}
 EXCHANGE = {}
 for _k in ["CU", "AL", "ZN", "PB", "NI", "SN", "AU", "AG", "RB", "HC", "FU", "RU", "BU", "SP", "SS", "WR"]:
     EXCHANGE[_k] = "SHFE"
 for _k in ["SC", "LU", "NR", "BC"]:
     EXCHANGE[_k] = "INE"
-for _k in ["A", "B", "C", "CS", "EB", "EG", "FB", "I", "J", "JD", "JM", "L", "LH", "M", "P", "PP", "PG", "RR", "V", "Y"]:
+for _k in [
+    "A",
+    "B",
+    "C",
+    "CS",
+    "EB",
+    "EG",
+    "FB",
+    "I",
+    "J",
+    "JD",
+    "JM",
+    "L",
+    "LH",
+    "M",
+    "P",
+    "PP",
+    "PG",
+    "RR",
+    "V",
+    "Y",
+]:
     EXCHANGE[_k] = "DCE"
-for _k in ["AP", "CF", "CJ", "CY", "FG", "JR", "LR", "MA", "OI", "PF", "PM", "RI", "RM", "RS", "SA", "SF", "SM", "SR", "TA", "UR", "WH", "ZC"]:
+for _k in [
+    "AP",
+    "CF",
+    "CJ",
+    "CY",
+    "FG",
+    "JR",
+    "LR",
+    "MA",
+    "OI",
+    "PF",
+    "PM",
+    "RI",
+    "RM",
+    "RS",
+    "SA",
+    "SF",
+    "SM",
+    "SR",
+    "TA",
+    "UR",
+    "WH",
+    "ZC",
+]:
     EXCHANGE[_k] = "CZCE"
 for _k in ["IC", "IF", "IH", "IM", "TF", "T", "TS"]:
     EXCHANGE[_k] = "CFFEX"
@@ -62,17 +114,18 @@ for _k in ["SI", "LC", "PS"]:
 
 def _classify_exchange(ts_code):
     s = str(ts_code).upper()
-    s = re.sub(r"\d+$", "", s)                    # 去掉合约月份数字
+    s = re.sub(r"\d+$", "", s)  # 去掉合约月份数字
     if s in EXCHANGE:
-        return EXCHANGE[s]                        # 先直接命中（含 IM/IF 等股指，勿误剥 M）
-    if s.endswith("M") and s[:-1] in EXCHANGE:    # 主连标记 M（如 JMM->JM, FGM->FG）
+        return EXCHANGE[s]  # 先直接命中（含 IM/IF 等股指，勿误剥 M）
+    if s.endswith("M") and s[:-1] in EXCHANGE:  # 主连标记 M（如 JMM->JM, FGM->FG）
         return EXCHANGE[s[:-1]]
     return "其他"
+
 
 _lock = threading.RLock()  # 可重入: _poll_loop 持锁时调用 _save_persist/_load_persist(内部也加锁)不会自死锁
 _cache = {"ok": False, "enabled": False, "error": "", "updated": 0, "quotes": {}, "scan": None}
 
-_ms = None          # minishare 模块（懒加载）
+_ms = None  # minishare 模块（懒加载）
 _ms_err = ""
 
 
@@ -82,6 +135,7 @@ def _lazy_import():
         return _ms
     try:
         import minishare as ms
+
         _ms = ms
     except Exception as e:
         _ms_err = repr(e)[:200]
@@ -113,8 +167,11 @@ def fetch_once():
     """返回 (quotes_dict, scan_dict, error_str)。quotes/scan 为空表示无数据。"""
     ms = _lazy_import()
     if ms is None:
-        msg = ("minishare 未安装(请 pip install minishare --extra-index-url https://minidoc.pages.dev/simple/ -U)"
-               if not _ms_err else _ms_err)
+        msg = (
+            "minishare 未安装(请 pip install minishare --extra-index-url https://minidoc.pages.dev/simple/ -U)"
+            if not _ms_err
+            else _ms_err
+        )
         return {}, {}, msg
     cfg = _load_cfg()
     if not cfg:
@@ -133,7 +190,7 @@ def fetch_once():
             if sub.empty:
                 continue
             mc = sub[sub["name"].str.contains("主连")]
-            r = (mc.iloc[0] if not mc.empty else sub.sort_values("vol", ascending=False).iloc[0])
+            r = mc.iloc[0] if not mc.empty else sub.sort_values("vol", ascending=False).iloc[0]
             try:
                 last = float(r["close"])
             except Exception:
@@ -171,16 +228,17 @@ def build_scan(df):
     all_rows = []
     for _, r in df.iterrows():
         try:
-            code = str(r["ts_code"]); name = str(r["name"])
-            last = float(r["close"]); pct = float(r["pct_chg"]) * 100
+            code = str(r["ts_code"])
+            name = str(r["name"])
+            last = float(r["close"])
+            pct = float(r["pct_chg"]) * 100
             vol = int(r["vol"]) if "vol" in r else 0
         except Exception:
             continue
         exch = _classify_exchange(code)
-        if exch in EXCLUDE_EXCHANGES:   # 中金所(股指/国债)延迟15分且非商品，直接剔除
+        if exch in EXCLUDE_EXCHANGES:  # 中金所(股指/国债)延迟15分且非商品，直接剔除
             continue
-        all_rows.append({"code": code, "name": name, "last": last, "pct": pct,
-                         "vol": vol, "exch": exch})
+        all_rows.append({"code": code, "name": name, "last": last, "pct": pct, "vol": vol, "exch": exch})
     total = len(all_rows)
     ex_map = {}
     for r in all_rows:
@@ -191,15 +249,20 @@ def build_scan(df):
         rows = ex_map.get(key, [])
         if not rows:
             continue
-        top = sorted(rows, key=lambda x: -abs(x["pct"]))[:30]   # 每所按|涨跌幅|取异动前30
-        top.sort(key=lambda x: -x["pct"])                        # 展示按涨跌幅降序（涨在上、跌在下）
-        exchanges.append({"key": key, "name": EXCHANGE_NAMES[key],
-                          "count": len(rows), "rows": top})
+        top = sorted(rows, key=lambda x: -abs(x["pct"]))[:30]  # 每所按|涨跌幅|取异动前30
+        top.sort(key=lambda x: -x["pct"])  # 展示按涨跌幅降序（涨在上、跌在下）
+        exchanges.append({"key": key, "name": EXCHANGE_NAMES[key], "count": len(rows), "rows": top})
     top_up = sorted(all_rows, key=lambda x: -x["pct"])[:12]
     top_down = sorted(all_rows, key=lambda x: x["pct"])[:12]
-    return {"ok": True, "updated": time.time(), "total": total,
-            "excluded": ["CFFEX"],
-            "exchanges": exchanges, "top_up": top_up, "top_down": top_down}
+    return {
+        "ok": True,
+        "updated": time.time(),
+        "total": total,
+        "excluded": ["CFFEX"],
+        "exchanges": exchanges,
+        "top_up": top_up,
+        "top_down": top_down,
+    }
 
 
 def _load_persist():
@@ -221,8 +284,7 @@ def _load_persist():
 def _save_persist():
     try:
         with _lock:
-            data = {"updated": _cache["updated"], "quotes": dict(_cache["quotes"]),
-                    "scan": _cache.get("scan")}
+            data = {"updated": _cache["updated"], "quotes": dict(_cache["quotes"]), "scan": _cache.get("scan")}
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
     except Exception:
@@ -237,6 +299,7 @@ def _is_rate_limit(err):
 # ---- 交易时段(含夜盘)判断：避免在午休/夜休/周末空耗每日30次额度 ----
 _TRADING_STARTS = [(9, 0), (13, 30), (21, 0)]  # 日盘09:00 / 午后13:30 / 夜盘21:00
 
+
 def _in_trading_session(dt):
     """周一~周五且在 09:00-11:30 / 13:30-15:00 / 21:00-23:00 内。"""
     if dt.weekday() >= 5:  # 周六、周日无交易
@@ -249,6 +312,7 @@ def _in_trading_session(dt):
     if (21 * 60) <= t <= (23 * 60):
         return True
     return False
+
 
 def _seconds_to_next_session(dt):
     """距离下一个交易时段开始的秒数（单次最多睡12小时）。"""
@@ -356,6 +420,7 @@ def get_scan():
 
 if __name__ == "__main__":
     import pprint
+
     start_poll(5)
     time.sleep(8)
     pprint.pprint(get_quotes())

@@ -44,6 +44,7 @@ from four_dim_strategy import _norm_daily_cols, variety_of
 #  1. max_drawdown — 最大回撤
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMaxDrawdown(unittest.TestCase):
     """max_drawdown — 累积权益曲线的最大回撤。"""
 
@@ -104,6 +105,7 @@ class TestMaxDrawdown(unittest.TestCase):
 #  2. summarize — 回测汇总
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSummarize(unittest.TestCase):
     """summarize — 回测结果汇总指标。"""
 
@@ -143,11 +145,11 @@ class TestSummarize(unittest.TestCase):
     def test_mixed_win_rate(self):
         """混合结果 → win_rate 正确"""
         trades = [
-            {"R_adj": 2.0},   # 赢
+            {"R_adj": 2.0},  # 赢
             {"R_adj": -1.0},  # 亏
-            {"R_adj": 1.5},   # 赢
+            {"R_adj": 1.5},  # 赢
             {"R_adj": -0.5},  # 亏
-            {"R_adj": 0.0},   # 平（不算赢）
+            {"R_adj": 0.0},  # 平（不算赢）
         ]
         result = summarize({"trades_detail": trades})
         self.assertEqual(result["trades"], 5)
@@ -156,8 +158,8 @@ class TestSummarize(unittest.TestCase):
     def test_max_drawdown_in_summary(self):
         """summarize 中的 max_dd_R 正确"""
         trades = [
-            {"R_adj": 3.0},   # 权益 3
-            {"R_adj": 2.0},   # 权益 5（峰值）
+            {"R_adj": 3.0},  # 权益 3
+            {"R_adj": 2.0},  # 权益 5（峰值）
             {"R_adj": -4.0},  # 权益 1 → 回撤 4R
         ]
         result = summarize({"trades_detail": trades})
@@ -171,10 +173,12 @@ class TestSummarize(unittest.TestCase):
             "尾仓离场": 2,
             "止损": 2,
         }
-        result = summarize({
-            "trades_detail": trades,
-            "exit_reasons": exit_reasons,
-        })
+        result = summarize(
+            {
+                "trades_detail": trades,
+                "exit_reasons": exit_reasons,
+            }
+        )
         # t2_rate = (止盈2R + 尾仓离场) / trades
         self.assertAlmostEqual(result["t2_rate"], (6 + 2) / 10)
         # tail_share = 尾仓离场 / trades
@@ -183,16 +187,19 @@ class TestSummarize(unittest.TestCase):
     def test_by_regime_passed_through(self):
         """by_regime 字段透传"""
         by_regime = {"趋势": {"expR": 0.5, "trades": 10}}
-        result = summarize({
-            "trades_detail": [{"R_adj": 1.0}],
-            "by_regime": by_regime,
-        })
+        result = summarize(
+            {
+                "trades_detail": [{"R_adj": 1.0}],
+                "by_regime": by_regime,
+            }
+        )
         self.assertEqual(result["by_regime"], by_regime)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. variety_of — 品种映射
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestVarietyOf(unittest.TestCase):
     """variety_of — 具体合约 → 品种 key。"""
@@ -204,6 +211,7 @@ class TestVarietyOf(unittest.TestCase):
         """
         # 验证 VARIETY_OF 中至少有一些映射
         from four_dim_strategy import VARIETY_OF
+
         if VARIETY_OF:
             # 取第一个映射来验证
             contract, variety = list(VARIETY_OF.items())[0]
@@ -216,19 +224,22 @@ class TestVarietyOf(unittest.TestCase):
     def test_variety_key_in_symbols(self):
         """VARIETY_OF 中的品种 key 都在 SYMBOLS 里"""
         from four_dim_strategy import SYMBOLS, VARIETY_OF
+
         missing = []
         for contract, variety in VARIETY_OF.items():
             if variety not in SYMBOLS:
                 missing.append((contract, variety))
         # 允许有少量不在（可能是新合约），但大部分应该在
         if len(VARIETY_OF) > 10:
-            self.assertLess(len(missing), len(VARIETY_OF) * 0.3,
-                "超过 30% 的品种映射不在 SYMBOLS 中: %s..." % (missing[:5],))
+            self.assertLess(
+                len(missing), len(VARIETY_OF) * 0.3, "超过 30% 的品种映射不在 SYMBOLS 中: %s..." % (missing[:5],)
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _norm_daily_cols — 日线列名标准化
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNormDailyCols(unittest.TestCase):
     """_norm_daily_cols — 日线列名标准化。"""
@@ -245,15 +256,17 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_chinese_col_names_renamed(self):
         """中文列名 → 标准英文列名"""
-        df = pd.DataFrame({
-            "日期": ["2026-01-01", "2026-01-02"],
-            "开盘": [100, 101],
-            "最高": [102, 103],
-            "最低": [99, 100],
-            "收盘": [101, 102],
-            "成交量": [1000, 2000],
-            "持仓量": [5000, 6000],
-        })
+        df = pd.DataFrame(
+            {
+                "日期": ["2026-01-01", "2026-01-02"],
+                "开盘": [100, 101],
+                "最高": [102, 103],
+                "最低": [99, 100],
+                "收盘": [101, 102],
+                "成交量": [1000, 2000],
+                "持仓量": [5000, 6000],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("open", result.columns)
         self.assertIn("high", result.columns)
@@ -266,37 +279,43 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_date_becomes_index(self):
         """date 列 → 转为 DatetimeIndex"""
-        df = pd.DataFrame({
-            "date": ["2026-01-01", "2026-01-02"],
-            "open": [100, 101],
-            "close": [101, 102],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-01", "2026-01-02"],
+                "open": [100, 101],
+                "close": [101, 102],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIsInstance(result.index, pd.DatetimeIndex)
         self.assertNotIn("date", result.columns)
 
     def test_english_cols_unchanged(self):
         """英文列名 → 基本不变"""
-        df = pd.DataFrame({
-            "date": ["2026-01-01"],
-            "open": [100],
-            "high": [102],
-            "low": [99],
-            "close": [101],
-            "volume": [1000],
-            "oi": [5000],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-01"],
+                "open": [100],
+                "high": [102],
+                "low": [99],
+                "close": [101],
+                "volume": [1000],
+                "oi": [5000],
+            }
+        )
         result = _norm_daily_cols(df)
         for col in ["open", "high", "low", "close", "volume", "oi"]:
             self.assertIn(col, result.columns)
 
     def test_hold_becomes_oi(self):
         """hold → oi（另一种持仓量列名）"""
-        df = pd.DataFrame({
-            "date": ["2026-01-01"],
-            "hold": [5000],
-            "close": [100],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-01"],
+                "hold": [5000],
+                "close": [100],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("oi", result.columns)
         self.assertNotIn("hold", result.columns)
@@ -304,11 +323,13 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_settle_becomes_settlement(self):
         """settle → settlement"""
-        df = pd.DataFrame({
-            "date": ["2026-01-01"],
-            "settle": [100.5],
-            "close": [100],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-01"],
+                "settle": [100.5],
+                "close": [100],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("settlement", result.columns)
         self.assertNotIn("settle", result.columns)

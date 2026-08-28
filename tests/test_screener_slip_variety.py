@@ -53,6 +53,7 @@ from symbol_screener import _check_criteria
 #  1. _check_criteria
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCheckCriteria(unittest.TestCase):
     """_check_criteria 品种筛选条件判定。"""
 
@@ -70,8 +71,8 @@ class TestCheckCriteria(unittest.TestCase):
     def _criteria(self, **overrides):
         c = {
             "min_turnover": 1.0,
-            "atr_pct_min": 0.005,   # 小数形式：0.5%
-            "atr_pct_max": 0.03,    # 小数形式：3%
+            "atr_pct_min": 0.005,  # 小数形式：0.5%
+            "atr_pct_max": 0.03,  # 小数形式：3%
             "min_abs_T_D": 30.0,
             "min_volume_ratio": 0.8,
             "max_correlation": 0.7,
@@ -223,6 +224,7 @@ class TestCheckCriteria(unittest.TestCase):
 #  2. get_slip_pts
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestGetSlipPts(unittest.TestCase):
     """get_slip_pts 流动性滑点查表。"""
 
@@ -283,6 +285,7 @@ class TestGetSlipPts(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. variety_of
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestVarietyOf(unittest.TestCase):
     """variety_of 合约→品种映射。"""

@@ -61,6 +61,7 @@ from trade_journal import (
 #  1. _dir_sign
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDirSign(unittest.TestCase):
     """_dir_sign 方向符号。"""
 
@@ -82,6 +83,7 @@ class TestDirSign(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _validate_entry_stop
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestValidateEntryStop(unittest.TestCase):
     """_validate_entry_stop 止损方向校验 + 镜像修正。"""
@@ -161,12 +163,14 @@ class TestValidateEntryStop(unittest.TestCase):
 #  3. _normalize_sym
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNormalizeSym(unittest.TestCase):
     """_normalize_sym 品种名标准化。"""
 
     def test_exact_match_returns_as_is(self):
         """已在表里（小写）→ 原样返回"""
         from trade_journal import _MULTIPLIERS
+
         # 找一个小写 key
         lower_keys = [k for k in _MULTIPLIERS if k.islower()]
         if not lower_keys:
@@ -177,6 +181,7 @@ class TestNormalizeSym(unittest.TestCase):
     def test_upper_input_matches_lower_key(self):
         """大写输入 → 匹配小写 key"""
         from trade_journal import _MULTIPLIERS
+
         lower_keys = [k for k in _MULTIPLIERS if k.islower()]
         if not lower_keys:
             self.skipTest("没有小写品种名")
@@ -187,6 +192,7 @@ class TestNormalizeSym(unittest.TestCase):
     def test_lower_input_matches_upper_key(self):
         """小写输入 → 匹配大写 key"""
         from trade_journal import _MULTIPLIERS
+
         upper_keys = [k for k in _MULTIPLIERS if k.isupper()]
         if not upper_keys:
             self.skipTest("没有大写品种名")
@@ -208,12 +214,14 @@ class TestNormalizeSym(unittest.TestCase):
 #  4. _leg_fee
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLegFee(unittest.TestCase):
     """_leg_fee 单边手续费。"""
 
     def test_fixed_mode_open(self):
         """fixed 模式开仓"""
         from trade_journal import _FEE_SCHEDULE
+
         # 找一个 fixed 模式的品种
         fixed_sym = None
         for sym, cfg in _FEE_SCHEDULE.items():
@@ -230,6 +238,7 @@ class TestLegFee(unittest.TestCase):
     def test_fixed_mode_close(self):
         """fixed 模式平仓（非平今）"""
         from trade_journal import _FEE_SCHEDULE
+
         fixed_sym = None
         for sym, cfg in _FEE_SCHEDULE.items():
             if cfg.get("mode") == "fixed" and "close" in cfg:
@@ -245,6 +254,7 @@ class TestLegFee(unittest.TestCase):
     def test_fixed_close_today_free(self):
         """平今免收：close_today=0 → 0 元"""
         from trade_journal import _FEE_SCHEDULE
+
         free_sym = None
         for sym, cfg in _FEE_SCHEDULE.items():
             if cfg.get("close_today") == 0:
@@ -259,6 +269,7 @@ class TestLegFee(unittest.TestCase):
     def test_pct_mode_open(self):
         """pct 模式开仓：fee = price × mult × lots × rate"""
         from trade_journal import _FEE_SCHEDULE, _MULTIPLIERS
+
         pct_sym = None
         for sym, cfg in _FEE_SCHEDULE.items():
             if cfg.get("mode") != "fixed" and "open" in cfg:
@@ -278,6 +289,7 @@ class TestLegFee(unittest.TestCase):
     def test_unknown_symbol_fallback(self):
         """未知品种 → 回退默认费率"""
         from trade_journal import _FEE_DEFAULT
+
         fee = _leg_fee("UNKNOWN_XYZ", 1000, 1, side="open")
         # 回退模式：price * mult * lots * _FEE_DEFAULT
         expected = round(1000 * 10 * 1 * _FEE_DEFAULT, 2)
@@ -297,6 +309,7 @@ class TestLegFee(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. _session_of
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSessionOf(unittest.TestCase):
     """_session_of 交易时段判断。"""

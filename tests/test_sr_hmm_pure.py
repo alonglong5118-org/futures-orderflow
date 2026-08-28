@@ -70,6 +70,7 @@ from sr_analyzer import _classify, _empty_result, _finalize_cluster
 #  1. _finalize_cluster
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFinalizeCluster(unittest.TestCase):
     """_finalize_cluster 聚类位最终化。"""
 
@@ -224,6 +225,7 @@ class TestFinalizeCluster(unittest.TestCase):
 #  2. _classify
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestClassify(unittest.TestCase):
     """_classify 支撑压力位分类。"""
 
@@ -263,8 +265,8 @@ class TestClassify(unittest.TestCase):
         levels = [
             {"price": 120},  # 上方 → 压力
             {"price": 105},  # 上方 → 压力
-            {"price": 95},   # 下方 → 支撑
-            {"price": 80},   # 下方 → 支撑
+            {"price": 95},  # 下方 → 支撑
+            {"price": 80},  # 下方 → 支撑
         ]
         result = _classify(levels, 100)
         self.assertEqual(result[0]["role"], "resistance")
@@ -289,6 +291,7 @@ class TestClassify(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _empty_result
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEmptyResult(unittest.TestCase):
     """_empty_result 空结果构造。"""
@@ -329,15 +332,24 @@ class TestEmptyResult(unittest.TestCase):
     def test_return_eight_fields(self):
         """返回 8 字段"""
         r = _empty_result(100)
-        for key in ("levels", "nearest_support", "nearest_resistance",
-                     "at_support", "at_resistance", "zone", "zone_label",
-                     "nearest_dist_pct", "current_price"):
+        for key in (
+            "levels",
+            "nearest_support",
+            "nearest_resistance",
+            "at_support",
+            "at_resistance",
+            "zone",
+            "zone_label",
+            "nearest_dist_pct",
+            "current_price",
+        ):
             self.assertIn(key, r)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _rule_label
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRuleLabel(unittest.TestCase):
     """_rule_label HMM退化规则标签。"""
@@ -350,7 +362,7 @@ class TestRuleLabel(unittest.TestCase):
         """
         if high_vol_thresh is None:
             # 默认：vol 75分位 = 0.5 → 高波动阈值 0.5
-            low_vol = 0.3   # 75% 的数据
+            low_vol = 0.3  # 75% 的数据
             high_vol = 1.0  # 25% 的数据
         else:
             low_vol = high_vol_thresh * 0.6
@@ -437,6 +449,7 @@ class TestRuleLabel(unittest.TestCase):
 #  5. thr_mult
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestThrMult(unittest.TestCase):
     """thr_mult HMM态阈值乘数。"""
 
@@ -463,11 +476,13 @@ class TestThrMult(unittest.TestCase):
     def test_unknown_default(self):
         """未知 → 默认值"""
         from regime_hmm import DEFAULT_THR_MULT
+
         self.assertEqual(thr_mult("unknown"), DEFAULT_THR_MULT)
 
     def test_none_default(self):
         """None → 默认值"""
         from regime_hmm import DEFAULT_THR_MULT
+
         self.assertEqual(thr_mult(None), DEFAULT_THR_MULT)
 
     def test_returns_float(self):

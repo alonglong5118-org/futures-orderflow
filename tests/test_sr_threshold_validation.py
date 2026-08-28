@@ -36,6 +36,7 @@ from sr_threshold_validation import analyze_by_zone, fine_grained_bins
 #  辅助
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _make_trade(nearest_dist, R_adj, friendly_dist=None, hostile_dist=None):
     """构造一笔带距离字段的交易"""
     return {
@@ -50,15 +51,16 @@ def _make_trade(nearest_dist, R_adj, friendly_dist=None, hostile_dist=None):
 #  1. analyze_by_zone
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAnalyzeByZone(unittest.TestCase):
     """analyze_by_zone 按距离分档统计。"""
 
     def test_three_zones_exist(self):
         """三档分区都存在"""
         trades = [
-            _make_trade(0.5, 1.0),   # 近位区
+            _make_trade(0.5, 1.0),  # 近位区
             _make_trade(1.2, -0.5),  # 灰色地带
-            _make_trade(2.0, 2.0),   # 远位区
+            _make_trade(2.0, 2.0),  # 远位区
         ]
         result = analyze_by_zone(trades)
         self.assertEqual(len(result), 3)
@@ -79,9 +81,9 @@ class TestAnalyzeByZone(unittest.TestCase):
     def test_near_zone_correct(self):
         """近位区交易统计正确"""
         trades = [
-            _make_trade(0.3, 2.0),   # 近位区，赚
+            _make_trade(0.3, 2.0),  # 近位区，赚
             _make_trade(0.7, -1.0),  # 近位区，亏
-            _make_trade(0.5, 0.5),   # 近位区，赚
+            _make_trade(0.5, 0.5),  # 近位区，赚
         ]
         result = analyze_by_zone(trades, near_pct=0.8, grey_pct=1.6)
         near_key = [k for k in result if "近位" in k][0]
@@ -172,6 +174,7 @@ class TestAnalyzeByZone(unittest.TestCase):
 #  2. fine_grained_bins
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFineGrainedBins(unittest.TestCase):
     """fine_grained_bins 细粒度分档。"""
 
@@ -219,12 +222,12 @@ class TestFineGrainedBins(unittest.TestCase):
     def test_multiple_bins_mixed(self):
         """多档混合统计正确"""
         trades = [
-            _make_trade(0.2, 2.0),    # 0-0.3%，赚
-            _make_trade(0.4, -1.0),   # 0.3-0.5%，亏
-            _make_trade(0.6, 1.5),    # 0.5-0.8%，赚
-            _make_trade(1.0, 0.5),    # 0.8-1.2%，赚
-            _make_trade(2.5, -2.0),   # 2.0-3.0%，亏
-            _make_trade(6.0, 3.0),    # >=5.0%，赚
+            _make_trade(0.2, 2.0),  # 0-0.3%，赚
+            _make_trade(0.4, -1.0),  # 0.3-0.5%，亏
+            _make_trade(0.6, 1.5),  # 0.5-0.8%，赚
+            _make_trade(1.0, 0.5),  # 0.8-1.2%，赚
+            _make_trade(2.5, -2.0),  # 2.0-3.0%，亏
+            _make_trade(6.0, 3.0),  # >=5.0%，赚
         ]
         stats = fine_grained_bins(trades)
         stats_dict = {label: (n, expR, wr) for label, n, expR, wr in stats}
@@ -245,9 +248,7 @@ class TestFineGrainedBins(unittest.TestCase):
 
     def test_mode_friendly(self):
         """mode = friendly 使用 friendly_dist"""
-        trades = [
-            _make_trade(0.2, 1.0, friendly_dist=1.0)
-        ]
+        trades = [_make_trade(0.2, 1.0, friendly_dist=1.0)]
         stats = fine_grained_bins(trades, mode="friendly")
         # friendly_dist = 1.0 → 0.8-1.2% 档
         bin_08_12 = [s for s in stats if s[0] == "0.8-1.2%"][0]
@@ -258,8 +259,15 @@ class TestFineGrainedBins(unittest.TestCase):
         stats = fine_grained_bins([])
         labels = [s[0] for s in stats]
         expected = [
-            "0-0.3%", "0.3-0.5%", "0.5-0.8%", "0.8-1.2%",
-            "1.2-1.6%", "1.6-2.0%", "2.0-3.0%", "3.0-5.0%", ">=5.0%"
+            "0-0.3%",
+            "0.3-0.5%",
+            "0.5-0.8%",
+            "0.8-1.2%",
+            "1.2-1.6%",
+            "1.6-2.0%",
+            "2.0-3.0%",
+            "3.0-5.0%",
+            ">=5.0%",
         ]
         self.assertEqual(labels, expected)
 

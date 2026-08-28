@@ -71,6 +71,7 @@ from preflight_check import is_trading_day, parse_ts
 #  1. is_trading_day
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsTradingDay(unittest.TestCase):
     """is_trading_day 交易日判断。"""
 
@@ -119,6 +120,7 @@ class TestIsTradingDay(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. parse_ts
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestParseTs(unittest.TestCase):
     """parse_ts 时间戳解析（秒/毫秒兼容）。"""
@@ -172,6 +174,7 @@ class TestParseTs(unittest.TestCase):
 #  3. _parse
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalibrationParse(unittest.TestCase):
     """_parse 时间字符串解析（校准用）。"""
 
@@ -209,6 +212,7 @@ class TestCalibrationParse(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _future_close
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFutureClose(unittest.TestCase):
     """_future_close 窗口后第一根K线收盘价。"""
@@ -254,6 +258,7 @@ class TestFutureClose(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. normalize_contract_code
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNormalizeContract(unittest.TestCase):
     """normalize_contract_code 合约代码规范化。"""
@@ -302,6 +307,7 @@ class TestNormalizeContract(unittest.TestCase):
 #  6. _contract_ym
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestContractYm(unittest.TestCase):
     """_contract_ym 合约代码 → 年月整数。"""
 
@@ -341,6 +347,7 @@ class TestContractYm(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. _is_tradeable_contract
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestIsTradeableContract(unittest.TestCase):
     """_is_tradeable_contract 是否真实可交割合约。"""

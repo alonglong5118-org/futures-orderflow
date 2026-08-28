@@ -58,6 +58,7 @@ from regression_test import calc_signal_agreement, classify_status
 #  1. compute_kelly_factor
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeKellyFactor(unittest.TestCase):
     """compute_kelly_factor Kelly 仓位缩放系数。"""
 
@@ -145,6 +146,7 @@ class TestComputeKellyFactor(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. classify_status
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClassifyStatus(unittest.TestCase):
     """classify_status 回归测试状态分类。
@@ -278,6 +280,7 @@ class TestClassifyStatus(unittest.TestCase):
 #  3. calc_signal_agreement
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcSignalAgreement(unittest.TestCase):
     """calc_signal_agreement 信号一致率。"""
 
@@ -329,6 +332,7 @@ class TestCalcSignalAgreement(unittest.TestCase):
 #  4. _is_tradeable_contract
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsTradeableContract(unittest.TestCase):
     """_is_tradeable_contract 可交易合约判断。"""
 
@@ -364,6 +368,7 @@ class TestIsTradeableContract(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. _contract_ym
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestContractYm(unittest.TestCase):
     """_contract_ym 合约年月解析。"""

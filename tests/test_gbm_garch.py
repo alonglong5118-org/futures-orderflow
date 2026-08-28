@@ -67,6 +67,7 @@ from gbm_garch import (
 #  1. _log_returns
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLogReturns(unittest.TestCase):
     """_log_returns 对数收益计算。"""
 
@@ -124,6 +125,7 @@ class TestLogReturns(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _ewma_vol
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEwmaVol(unittest.TestCase):
     """_ewma_vol EWMA 波动率。"""
@@ -185,6 +187,7 @@ class TestEwmaVol(unittest.TestCase):
 #  3. _rolling_std
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRollingStd(unittest.TestCase):
     """_rolling_std 滑动标准差。"""
 
@@ -235,6 +238,7 @@ class TestRollingStd(unittest.TestCase):
 #  4. _garch_nll
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestGarchNll(unittest.TestCase):
     """_garch_nll GARCH 负对数似然。"""
 
@@ -284,7 +288,7 @@ class TestGarchNll(unittest.TestCase):
         sigma2[0] = true_omega / (1 - true_alpha - true_beta)
         r[0] = np.sqrt(sigma2[0]) * np.random.randn()
         for t in range(1, n):
-            sigma2[t] = true_omega + true_alpha * r[t-1]**2 + true_beta * sigma2[t-1]
+            sigma2[t] = true_omega + true_alpha * r[t - 1] ** 2 + true_beta * sigma2[t - 1]
             r[t] = np.sqrt(sigma2[t]) * np.random.randn()
 
         # 真实参数附近的 NLL 应该比随机参数低
@@ -296,6 +300,7 @@ class TestGarchNll(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. thr_mult / risk_scale
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestVolStateMapping(unittest.TestCase):
     """波动率状态 → 阈值乘数 / 仓位系数。"""

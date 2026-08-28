@@ -16,6 +16,7 @@ E. baseline     : 基准（默认权重）
 每个 fold 内，用训练集 GA 优化，用验证集选最优原型，然后在测试集上评估。
 最终汇总两折测试集表现。
 """
+
 import copy
 import json
 import os
@@ -35,9 +36,9 @@ from ga_group_six_factor import load_group_data
 # ===== 策略原型定义 =====
 ARCHETYPES = {
     "conservative": {"n_factor": 6, "max_w": 0.30, "entropy_lambda": 0.20, "label": "保守分散型"},
-    "balanced":     {"n_factor": 6, "max_w": 0.40, "entropy_lambda": 0.10, "label": "均衡稳健型"},
-    "aggressive":   {"n_factor": 6, "max_w": 0.60, "entropy_lambda": 0.03, "label": "集中进攻型"},
-    "focused":      {"n_factor": 5, "max_w": 0.45, "entropy_lambda": 0.08, "label": "精简聚焦型"},
+    "balanced": {"n_factor": 6, "max_w": 0.40, "entropy_lambda": 0.10, "label": "均衡稳健型"},
+    "aggressive": {"n_factor": 6, "max_w": 0.60, "entropy_lambda": 0.03, "label": "集中进攻型"},
+    "focused": {"n_factor": 5, "max_w": 0.45, "entropy_lambda": 0.08, "label": "精简聚焦型"},
 }
 
 # ===== GA 参数 =====
@@ -64,7 +65,7 @@ def ind_to_weights(ind, n_factor):
     names = get_factor_names(n_factor)
     s = sum(max(0, x) for x in ind)
     if s < 1e-6:
-        return {n: 1.0/len(names) for n in names}
+        return {n: 1.0 / len(names) for n in names}
     norm = [max(0, x) / s for x in ind]
     return {name: round(w, 4) for name, w in zip(names, norm)}
 
@@ -101,8 +102,7 @@ def eval_weights(data, weights=None):
     total_trades = 0
     for sym, df in sorted(data.items()):
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                      min_bars=MIN_BARS, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES:
                 expRs.append(float(r.get("expR", 0)))
@@ -135,8 +135,7 @@ def ga_optimize(train_data, archetype_name, archetype_cfg):
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.FDiffInd,
-                     toolbox.attr_float, n=n_vars)
+    toolbox.register("individual", tools.initRepeat, creator.FDiffInd, toolbox.attr_float, n=n_vars)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _evaluate(ind):
@@ -217,9 +216,9 @@ def split_fold(group_data, fold_idx, total_bars=500):
 
 def process_group(group_name):
     """处理单个板块：两折走步法 + 多原型对比。"""
-    print(f"\n{'='*65}", flush=True)
+    print(f"\n{'=' * 65}", flush=True)
     print(f"[板块] {group_name}", flush=True)
-    print(f"{'='*65}", flush=True)
+    print(f"{'=' * 65}", flush=True)
 
     group_data = load_group_data(group_name, min_bars=500, tail=0)
     if len(group_data) < 3:
@@ -231,7 +230,7 @@ def process_group(group_name):
     fold_results = []
 
     for fold in range(2):
-        print(f"\n  --- Fold {fold+1} ---", flush=True)
+        print(f"\n  --- Fold {fold + 1} ---", flush=True)
         train_d, val_d, test_d = split_fold(group_data, fold)
 
         if len(train_d) < 3 or len(test_d) < 3:
@@ -265,8 +264,11 @@ def process_group(group_name):
             }
 
             gain = val_expR - base_val
-            print(f"    {aname:14s}: train={train_expR:+.3f}  val={val_expR:+.3f}  "
-                  f"test={test_expR:+.3f}  val_gain={gain:+.3f}", flush=True)
+            print(
+                f"    {aname:14s}: train={train_expR:+.3f}  val={val_expR:+.3f}  "
+                f"test={test_expR:+.3f}  val_gain={gain:+.3f}",
+                flush=True,
+            )
 
             if val_expR > best_val_expR:
                 best_val_expR = val_expR
@@ -276,14 +278,17 @@ def process_group(group_name):
         diff_test_expR = archetype_results[best_archetype]["test_expR"]
         print(f"    >>> 选择: {best_archetype}, test_expR={diff_test_expR:+.3f}", flush=True)
 
-        fold_results.append({
-            "fold": fold,
-            "base_test": base_test,
-            "best_archetype": best_archetype,
-            "differentiated_test": diff_test_expR,
-            "archetypes": {k: {"test_expR": v["test_expR"], "val_expR": v["val_expR"]}
-                          for k, v in archetype_results.items()},
-        })
+        fold_results.append(
+            {
+                "fold": fold,
+                "base_test": base_test,
+                "best_archetype": best_archetype,
+                "differentiated_test": diff_test_expR,
+                "archetypes": {
+                    k: {"test_expR": v["test_expR"], "val_expR": v["val_expR"]} for k, v in archetype_results.items()
+                },
+            }
+        )
 
     # 汇总两折
     if not fold_results:
@@ -333,9 +338,9 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     elapsed = time.time() - t0
-    print(f"\n{'='*65}", flush=True)
-    print(f"全部完成，耗时 {elapsed/60:.1f} 分钟", flush=True)
-    print(f"{'='*65}", flush=True)
+    print(f"\n{'=' * 65}", flush=True)
+    print(f"全部完成，耗时 {elapsed / 60:.1f} 分钟", flush=True)
+    print(f"{'=' * 65}", flush=True)
 
     # 汇总表
     print(f"\n{'板块':<8s} {'基准':>8s} {'最优统一':>10s} {'差异化':>8s} {'提升':>8s} {'最优原型':>10s}", flush=True)
@@ -345,13 +350,15 @@ def main():
         bu_val = r["avg_archetype_test"][bu]
         diff = r["avg_differentiated_test"]
         delta = diff - bu_val
-        print(f"{g:<8s} {r['avg_base_test']:+.3f}    {bu_val:+.3f}    "
-              f"{diff:+.3f}    {delta:+.3f}    {bu:>10s}", flush=True)
+        print(
+            f"{g:<8s} {r['avg_base_test']:+.3f}    {bu_val:+.3f}    {diff:+.3f}    {delta:+.3f}    {bu:>10s}",
+            flush=True,
+        )
 
     # 各板块每折选择的原型
     print(f"\n各板块每折选择的原型:", flush=True)
     for g, r in results.items():
-        choices = [f"F{f['fold']+1}:{f['best_archetype']}" for f in r["fold_results"]]
+        choices = [f"F{f['fold'] + 1}:{f['best_archetype']}" for f in r["fold_results"]]
         print(f"  {g}: {', '.join(choices)}", flush=True)
 
     print(f"\n结果已保存到: {OUTFILE}", flush=True)

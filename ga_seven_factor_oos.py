@@ -6,6 +6,7 @@ ga_seven_factor_oos.py — 7 因子（6+SR_breakout）板块级 GA 优化 + OOS 
 对比：基准 vs 6因子稳健版 vs 7因子（6+SR_breakout）稳健版
 每个板块：训练集 GA 搜索 → 验证集 OOS 检验
 """
+
 import argparse
 import copy
 import json
@@ -43,7 +44,7 @@ POP = 15
 GEN = 10
 CXPB = 0.6
 MUTPB = 0.3
-MAX_W = 0.35          # 单因子权重上限
+MAX_W = 0.35  # 单因子权重上限
 ENTROPY_LAMBDA = 0.10  # 熵惩罚系数
 TRAIN_BARS = 300
 TEST_BARS = 200
@@ -55,6 +56,7 @@ MIN_TRADES_PER_SYMBOL = 5
 def load_group_data(group_name, tail=None):
     """加载板块内所有品种的日线数据。"""
     from four_dim_strategy import load_daily
+
     syms = GROUPS.get(group_name, [])
     data = {}
     for sym in syms:
@@ -106,8 +108,7 @@ def evaluate(ind, group_data, factor_names, cfg_template=None, tail=None):
             df_use = df
             if tail and len(df) > tail:
                 df_use = df.iloc[-tail:]
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                    min_bars=MIN_BARS, df_in=df_use)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df_use)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES_PER_SYMBOL:
                 expRs.append(float(r.get("expR", 0)))
@@ -144,8 +145,7 @@ def run_ga(group_data, factor_names, cfg_template=None, tail=None, pop_size=15, 
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.random)
-    toolbox.register("individual", tools.initRepeat, creator.Individual,
-                     toolbox.attr_float, n=n_factor)
+    toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=n_factor)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval(ind):
@@ -182,7 +182,7 @@ def run_ga(group_data, factor_names, cfg_template=None, tail=None, pop_size=15, 
         hof.update(pop)
 
         best_fit = hof[0].fitness.values[0]
-        print(f"    第 {gen+1}/{n_gen} 代: 最佳 expR={best_fit:.4f}", end="\r", flush=True)
+        print(f"    第 {gen + 1}/{n_gen} 代: 最佳 expR={best_fit:.4f}", end="\r", flush=True)
 
     print()
 
@@ -200,8 +200,7 @@ def run_ga(group_data, factor_names, cfg_template=None, tail=None, pop_size=15, 
             df_use = df
             if tail and len(df) > tail:
                 df_use = df.iloc[-tail:]
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                    min_bars=MIN_BARS, df_in=df_use)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df_use)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES_PER_SYMBOL:
                 expRs.append(float(r.get("expR", 0)))
@@ -231,9 +230,8 @@ def oos_evaluate(weights, group_data, train_bars, test_bars):
         if len(df) < train_bars + test_bars:
             continue
         try:
-            df_test = df.iloc[train_bars:train_bars + test_bars]
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                    min_bars=MIN_BARS, df_in=df_test)
+            df_test = df.iloc[train_bars : train_bars + test_bars]
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df_test)
             nt = int(r.get("trades", 0))
             if nt >= 2:
                 expRs.append(float(r.get("expR", 0)))
@@ -262,9 +260,8 @@ def baseline_oos(group_data, train_bars, test_bars):
         if len(df) < train_bars + test_bars:
             continue
         try:
-            df_test = df.iloc[train_bars:train_bars + test_bars]
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                    min_bars=MIN_BARS, df_in=df_test)
+            df_test = df.iloc[train_bars : train_bars + test_bars]
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df_test)
             nt = int(r.get("trades", 0))
             if nt >= 2:
                 expRs.append(float(r.get("expR", 0)))
@@ -325,8 +322,7 @@ def main():
 
         # 2. 6 因子 GA（训练集）
         print("  6 因子 GA 训练...")
-        train_data = {sym: df.iloc[:args.train] for sym, df in data.items()
-                      if len(df) >= args.train}
+        train_data = {sym: df.iloc[: args.train] for sym, df in data.items() if len(df) >= args.train}
         ga6_result = run_ga(train_data, SF6, pop_size=pop_size, n_gen=gen_count)
         print(f"    最优权重: {ga6_result['weights']}")
         print(f"    训练集 expR: {ga6_result['pure_expR']:+.4f}, 熵: {ga6_result['entropy']:.3f}")
@@ -342,7 +338,7 @@ def main():
         print(f"    最优权重: {ga7_result['weights']}")
         print(f"    训练集 expR: {ga7_result['pure_expR']:+.4f}, 熵: {ga7_result['entropy']:.3f}")
         sr_w = ga7_result["weights"].get("SR_breakout", 0)
-        print(f"    SR_breakout 权重: {sr_w:.4f} ({sr_w*100:.1f}%)")
+        print(f"    SR_breakout 权重: {sr_w:.4f} ({sr_w * 100:.1f}%)")
 
         # 5. 7 因子 OOS
         print("  7 因子 OOS 验证...", end=" ", flush=True)
@@ -376,7 +372,9 @@ def main():
         }
 
         print(f"\n  对比: 基准={base_oos['expR']:+.4f} → 6因子={ga6_oos['expR']:+.4f} → 7因子={ga7_oos['expR']:+.4f}")
-        print(f"  SR 增量: {sr_delta_oos:+.4f} ({'+' if sr_delta_oos > 0 else ''}{sr_delta_oos/(abs(ga6_oos['expR'])+1e-8)*100:.1f}%)")
+        print(
+            f"  SR 增量: {sr_delta_oos:+.4f} ({'+' if sr_delta_oos > 0 else ''}{sr_delta_oos / (abs(ga6_oos['expR']) + 1e-8) * 100:.1f}%)"
+        )
 
     # 汇总
     print("\n" + "=" * 80)
@@ -395,19 +393,24 @@ def main():
     if args.save:
         out_file = os.path.join(HERE, "logs", "ga_seven_factor_oos.json")
         with open(out_file, "w", encoding="utf-8") as f:
-            json.dump({
-                "params": {
-                    "train_bars": args.train,
-                    "test_bars": args.test,
-                    "pop": pop_size,
-                    "gen": gen_count,
-                    "max_w": MAX_W,
-                    "entropy_lambda": ENTROPY_LAMBDA,
-                    "factors_7": SF7,
-                    "factors_6": SF6,
+            json.dump(
+                {
+                    "params": {
+                        "train_bars": args.train,
+                        "test_bars": args.test,
+                        "pop": pop_size,
+                        "gen": gen_count,
+                        "max_w": MAX_W,
+                        "entropy_lambda": ENTROPY_LAMBDA,
+                        "factors_7": SF7,
+                        "factors_6": SF6,
+                    },
+                    "results": results,
                 },
-                "results": results,
-            }, f, ensure_ascii=False, indent=2)
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         print(f"\n结果已保存: {out_file}")
 
 

@@ -30,14 +30,14 @@ BASELINE_FILE = os.path.join(HERE, "regression_baseline.json")
 
 # 8 个基准品种（覆盖全品类，平衡速度与覆盖度）
 DEFAULT_SYMBOLS = [
-    "cu",   # 有色 · 稳健
-    "rb",   # 黑系 · 活跃
-    "JM",   # 黑系 · 低胜率（边缘案例）
-    "i",    # 黑系 · 中等表现
-    "m",    # 农产品 · 季节性强（豆粕）
-    "y",    # 农产品 · 稳健（豆油）
-    "pp",   # 化工 · 代表（聚丙烯）
-    "TA",   # 化工 · 交叉验证（PTA）
+    "cu",  # 有色 · 稳健
+    "rb",  # 黑系 · 活跃
+    "JM",  # 黑系 · 低胜率（边缘案例）
+    "i",  # 黑系 · 中等表现
+    "m",  # 农产品 · 季节性强（豆粕）
+    "y",  # 农产品 · 稳健（豆油）
+    "pp",  # 化工 · 代表（聚丙烯）
+    "TA",  # 化工 · 交叉验证（PTA）
 ]
 
 # 判定阈值
@@ -232,18 +232,18 @@ def print_header(baseline, tail, symbols):
     else:
         title += "  (无基准，仅展示当前值)"
     print(color(title, C.BOLD, C.CYAN))
-    info = (f"  测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            f"  |  品种数: {len(symbols)}"
-            f"  |  尾部: {tail} bars")
+    info = f"  测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  品种数: {len(symbols)}  |  尾部: {tail} bars"
     print(color(info, C.DIM))
     print(color("=" * 80, C.BOLD, C.CYAN))
     print()
 
 
 def print_table_header():
-    hdr = (f"{'品种':<5} {'分组':<6} {'expR':>8} {'ΔexpR':>8} "
-           f"{'胜率':>7} {'Δ胜率':>7} {'交易数':>6} {'Δ笔数':>6} "
-           f"{'信号一致':>8}  状态")
+    hdr = (
+        f"{'品种':<5} {'分组':<6} {'expR':>8} {'ΔexpR':>8} "
+        f"{'胜率':>7} {'Δ胜率':>7} {'交易数':>6} {'Δ笔数':>6} "
+        f"{'信号一致':>8}  状态"
+    )
     print(color(hdr, C.BOLD))
     print(color("─" * 80, C.DIM))
 
@@ -274,8 +274,7 @@ def print_result_row(r, baseline_sym):
 
     if r.get("error"):
         err = r["error"][:30]
-        print(f"{sym:<5} {group:<6} {color('ERROR', C.RED):>8} "
-              f"{'':>8} {'':>7} {'':>7} {'':>6} {'':>6} {'':>8}  {err}")
+        print(f"{sym:<5} {group:<6} {color('ERROR', C.RED):>8} {'':>8} {'':>7} {'':>7} {'':>6} {'':>6} {'':>8}  {err}")
         return "error"
 
     # 当前值
@@ -308,7 +307,7 @@ def print_result_row(r, baseline_sym):
     elif expR is not None and expR < 0:
         expR_str = color(expR_str, C.RED)
 
-    win_str = f"{win_rate*100:>5.1f}%" if win_rate is not None else "  N/A "
+    win_str = f"{win_rate * 100:>5.1f}%" if win_rate is not None else "  N/A "
     if win_rate is not None and win_rate >= 0.45:
         win_str = color(win_str, C.GREEN)
     elif win_rate is not None and win_rate < 0.35:
@@ -316,8 +315,14 @@ def print_result_row(r, baseline_sym):
 
     trades_str = f"{trades:>4}" if trades is not None else " N/A"
 
-    expr_d_str = fmt_delta(expr_delta, "{:.3f}", WARN_EXPR_DELTA, CRIT_EXPR_DELTA) if baseline_sym else color("    -   ", C.GREY)
-    win_d_str = fmt_delta(win_delta, "{:.1f}%", WARN_WIN_DELTA, CRIT_WIN_DELTA, is_pct=True) if baseline_sym else color("   -   ", C.GREY)
+    expr_d_str = (
+        fmt_delta(expr_delta, "{:.3f}", WARN_EXPR_DELTA, CRIT_EXPR_DELTA) if baseline_sym else color("    -   ", C.GREY)
+    )
+    win_d_str = (
+        fmt_delta(win_delta, "{:.1f}%", WARN_WIN_DELTA, CRIT_WIN_DELTA, is_pct=True)
+        if baseline_sym
+        else color("   -   ", C.GREY)
+    )
 
     if trades_delta is not None and baseline_sym:
         td_text = f"{trades_delta:+d}"
@@ -331,7 +336,7 @@ def print_result_row(r, baseline_sym):
         td_str = color("  -  ", C.GREY)
 
     if sig_agree is not None:
-        sa_text = f"{sig_agree*100:>5.1f}%"
+        sa_text = f"{sig_agree * 100:>5.1f}%"
         if sig_agree < CRIT_SIG_AGREE:
             sa_str = color(sa_text, C.BOLD, C.RED)
         elif sig_agree < WARN_SIG_AGREE:
@@ -348,9 +353,11 @@ def print_result_row(r, baseline_sym):
     else:
         status_str = color(" ❌ ", C.RED)
 
-    print(f"{sym:<5} {group:<6} {expR_str:>8} {expr_d_str:>8} "
-          f"{win_str:>7} {win_d_str:>7} {trades_str:>6} {td_str:>6} "
-          f"{sa_str:>8} {status_str}")
+    print(
+        f"{sym:<5} {group:<6} {expR_str:>8} {expr_d_str:>8} "
+        f"{win_str:>7} {win_d_str:>7} {trades_str:>6} {td_str:>6} "
+        f"{sa_str:>8} {status_str}"
+    )
 
     return status
 
@@ -379,14 +386,22 @@ def print_summary(results, baseline):
     trades_d = (total_trades - base_trades) if (base_trades is not None) else None
 
     expR_str = f"{avg_expR:+.4f}"
-    win_str = f"{avg_win*100:.1f}%"
+    win_str = f"{avg_win * 100:.1f}%"
 
-    expr_d_str = fmt_delta(expr_d, "{:.4f}", WARN_EXPR_DELTA, CRIT_EXPR_DELTA) if baseline else color("      -     ", C.GREY)
-    win_d_str = fmt_delta(win_d, "{:.1f}%", WARN_WIN_DELTA, CRIT_WIN_DELTA, is_pct=True) if baseline else color("   -     ", C.GREY)
+    expr_d_str = (
+        fmt_delta(expr_d, "{:.4f}", WARN_EXPR_DELTA, CRIT_EXPR_DELTA) if baseline else color("      -     ", C.GREY)
+    )
+    win_d_str = (
+        fmt_delta(win_d, "{:.1f}%", WARN_WIN_DELTA, CRIT_WIN_DELTA, is_pct=True)
+        if baseline
+        else color("   -     ", C.GREY)
+    )
 
-    print(f"  加权平均              {expR_str:>8} {expr_d_str:>8} "
-          f"{win_str:>7} {win_d_str:>7} {total_trades:>6} "
-          f"{'':>6} {'':>8}")
+    print(
+        f"  加权平均              {expR_str:>8} {expr_d_str:>8} "
+        f"{win_str:>7} {win_d_str:>7} {total_trades:>6} "
+        f"{'':>6} {'':>8}"
+    )
     print()
 
 
@@ -415,8 +430,7 @@ def print_verdict(results, baseline):
     else:
         verdict = color("✅ 通过", C.BOLD, C.GREEN)
 
-    print(f"  判定: {verdict}  "
-          f"({crit_count} 个严重异常, {warn_count} 个警告, {err_count} 个错误)")
+    print(f"  判定: {verdict}  ({crit_count} 个严重异常, {warn_count} 个警告, {err_count} 个错误)")
     print()
     print(color("  · 严重异常: 信号一致率 < 90% 或 expR 变化 > 0.03 或 胜率变化 > 6% 或 交易数变化 > 30%", C.DIM))
     print(color("  · 警告:     信号一致率 < 95% 或 expR 变化 > 0.015 或 胜率变化 > 3% 或 交易数变化 > 15%", C.DIM))
@@ -429,16 +443,11 @@ def print_verdict(results, baseline):
 # ── 主流程 ────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="四维策略自动回归测试")
-    parser.add_argument("--tail", type=int, default=DEFAULT_TAIL,
-                        help=f"回测尾部 N 根日线（默认 {DEFAULT_TAIL}）")
-    parser.add_argument("--symbols", type=str, default=None,
-                        help="指定品种，逗号分隔（如 cu,rb,M）")
-    parser.add_argument("--update-baseline", action="store_true",
-                        help="更新基准数据")
-    parser.add_argument("--version", type=str, default="dev",
-                        help="基准版本标签（配合 --update-baseline 使用）")
-    parser.add_argument("--summary", action="store_true",
-                        help="只看汇总（简洁输出）")
+    parser.add_argument("--tail", type=int, default=DEFAULT_TAIL, help=f"回测尾部 N 根日线（默认 {DEFAULT_TAIL}）")
+    parser.add_argument("--symbols", type=str, default=None, help="指定品种，逗号分隔（如 cu,rb,M）")
+    parser.add_argument("--update-baseline", action="store_true", help="更新基准数据")
+    parser.add_argument("--version", type=str, default="dev", help="基准版本标签（配合 --update-baseline 使用）")
+    parser.add_argument("--summary", action="store_true", help="只看汇总（简洁输出）")
     args = parser.parse_args()
 
     # 确定测试品种
@@ -469,8 +478,16 @@ def main():
         if r.get("error"):
             r["_status"] = "error"
         elif baseline_sym:
-            expr_d = r["expR"] - baseline_sym["expR"] if (r["expR"] is not None and baseline_sym.get("expR") is not None) else None
-            win_d = r["win_rate"] - baseline_sym["win_rate"] if (r["win_rate"] is not None and baseline_sym.get("win_rate") is not None) else None
+            expr_d = (
+                r["expR"] - baseline_sym["expR"]
+                if (r["expR"] is not None and baseline_sym.get("expR") is not None)
+                else None
+            )
+            win_d = (
+                r["win_rate"] - baseline_sym["win_rate"]
+                if (r["win_rate"] is not None and baseline_sym.get("win_rate") is not None)
+                else None
+            )
             base_trades = baseline_sym.get("trades", 0)
             trades_pct_d = (r["trades"] - base_trades) / base_trades if base_trades else None
             sig_agree = calc_signal_agreement(r["signatures"], baseline_sym.get("signatures", []))

@@ -58,6 +58,7 @@ from four_dim_strategy import (
 #  1. regime_weights
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRegimeWeights(unittest.TestCase):
     """regime_weights 市场状态权重映射。"""
 
@@ -151,6 +152,7 @@ class TestRegimeWeights(unittest.TestCase):
 #  2. _is_risk_locked
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsRiskLocked(unittest.TestCase):
     """_is_risk_locked 风控锁定检查。"""
 
@@ -242,6 +244,7 @@ class TestIsRiskLocked(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. combine_bias
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCombineBias(unittest.TestCase):
     """combine_bias 背景偏置合成。"""

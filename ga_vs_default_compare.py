@@ -48,8 +48,15 @@ def run_with_weights(symbol, weights_label, weights_dict, tail=None):
             "max_dd": round(float(r.get("max_drawdown", 0)), 4),
         }
     except Exception as e:
-        return {"label": weights_label, "expR": 0, "win_rate": 0, "trades": 0,
-                "total_R": 0, "max_dd": 0, "error": str(e)}
+        return {
+            "label": weights_label,
+            "expR": 0,
+            "win_rate": 0,
+            "trades": 0,
+            "total_R": 0,
+            "max_dd": 0,
+            "error": str(e),
+        }
 
 
 def main():
@@ -98,7 +105,7 @@ def main():
                 status = "✗"
         except Exception:
             status = "✗"
-        print(f"  [{i+1}/{len(all_syms)}] {sym} {status}", end="\r", flush=True)
+        print(f"  [{i + 1}/{len(all_syms)}] {sym} {status}", end="\r", flush=True)
     print()
 
     if not valid_syms:
@@ -138,7 +145,7 @@ def main():
         if r_ga:
             expR_g = r_ga["expR"]
             delta = expR_g - expR_d
-            delta_pct = (delta / abs(expR_d) * 100) if expR_d != 0 else float('inf')
+            delta_pct = (delta / abs(expR_d) * 100) if expR_d != 0 else float("inf")
             arrow = "↑" if delta > 0.01 else ("↓" if delta < -0.01 else "→")
             ga_tag = "GA"
         else:
@@ -148,26 +155,32 @@ def main():
             arrow = "—"
             ga_tag = "  "
 
-        print(f"  [{idx+1}/{len(valid_syms)}] {sym:<6} {group:<4} "
-              f"默认={expR_d:>7.4f} {ga_tag}={expR_g:>7.4f} {arrow} "
-              f"{delta:+.4f} ({delta_pct:+.0f}%)",
-              flush=True)
+        print(
+            f"  [{idx + 1}/{len(valid_syms)}] {sym:<6} {group:<4} "
+            f"默认={expR_d:>7.4f} {ga_tag}={expR_g:>7.4f} {arrow} "
+            f"{delta:+.4f} ({delta_pct:+.0f}%)",
+            flush=True,
+        )
 
     total_time = time.time() - t_start
 
     # 汇总
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"[3/3] 汇总")
-    print(f"{'='*80}")
-    print(f"总品种: {len(valid_syms)} | 有GA权重: {sum(1 for r in results.values() if r['has_ga'])} | "
-          f"总耗时: {total_time/60:.1f}min")
+    print(f"{'=' * 80}")
+    print(
+        f"总品种: {len(valid_syms)} | 有GA权重: {sum(1 for r in results.values() if r['has_ga'])} | "
+        f"总耗时: {total_time / 60:.1f}min"
+    )
 
     # 有 GA 权重的品种对比
     ga_syms = {s: r for s, r in results.items() if r["has_ga"] and r["ga"]}
     if ga_syms:
         print(f"\n--- 有 GA 权重的品种对比 ({len(ga_syms)} 个) ---")
-        print(f"{'品种':<6} {'板块':<5} {'默认expR':>9} {'GA expR':>9} {'差值':>8} {'变化%':>8} "
-              f"{'默认胜率':>8} {'GA胜率':>8} {'默认笔数':>8} {'GA笔数':>8}")
+        print(
+            f"{'品种':<6} {'板块':<5} {'默认expR':>9} {'GA expR':>9} {'差值':>8} {'变化%':>8} "
+            f"{'默认胜率':>8} {'GA胜率':>8} {'默认笔数':>8} {'GA笔数':>8}"
+        )
         print("-" * 82)
 
         improved = 0
@@ -177,13 +190,12 @@ def main():
         total_default_expR = 0
         total_ga_expR = 0
 
-        for sym in sorted(ga_syms.keys(),
-                          key=lambda s: -(ga_syms[s]["ga"]["expR"] - ga_syms[s]["default"]["expR"])):
+        for sym in sorted(ga_syms.keys(), key=lambda s: -(ga_syms[s]["ga"]["expR"] - ga_syms[s]["default"]["expR"])):
             r = ga_syms[sym]
             d = r["default"]
             g = r["ga"]
             delta = g["expR"] - d["expR"]
-            delta_pct = (delta / abs(d["expR"]) * 100) if d["expR"] != 0 else float('inf')
+            delta_pct = (delta / abs(d["expR"]) * 100) if d["expR"] != 0 else float("inf")
 
             if delta > 0.01:
                 improved += 1
@@ -196,10 +208,12 @@ def main():
             total_default_expR += d["expR"]
             total_ga_expR += g["expR"]
 
-            print(f"{sym:<6} {r['group']:<5} {d['expR']:>9.4f} {g['expR']:>9.4f} "
-                  f"{delta:>+8.4f} {delta_pct:>+7.0f}% "
-                  f"{d['win_rate']*100:>7.1f}% {g['win_rate']*100:>7.1f}% "
-                  f"{d['trades']:>8} {g['trades']:>8}")
+            print(
+                f"{sym:<6} {r['group']:<5} {d['expR']:>9.4f} {g['expR']:>9.4f} "
+                f"{delta:>+8.4f} {delta_pct:>+7.0f}% "
+                f"{d['win_rate'] * 100:>7.1f}% {g['win_rate'] * 100:>7.1f}% "
+                f"{d['trades']:>8} {g['trades']:>8}"
+            )
 
         avg_default = total_default_expR / len(ga_syms)
         avg_ga = total_ga_expR / len(ga_syms)
@@ -207,8 +221,7 @@ def main():
         avg_delta_pct = (avg_delta / abs(avg_default) * 100) if avg_default != 0 else 0
 
         print("-" * 82)
-        print(f"{'平均':<6} {'':<5} {avg_default:>9.4f} {avg_ga:>9.4f} "
-              f"{avg_delta:>+8.4f} {avg_delta_pct:>+7.0f}%")
+        print(f"{'平均':<6} {'':<5} {avg_default:>9.4f} {avg_ga:>9.4f} {avg_delta:>+8.4f} {avg_delta_pct:>+7.0f}%")
         print()
         print(f"  提升: {improved} 个 | 下降: {worsened} 个 | 持平: {unchanged} 个")
         print(f"  平均 expR 变化: {avg_delta:+.4f} ({avg_delta_pct:+.1f}%)")
@@ -226,6 +239,7 @@ def main():
     # 按板块汇总（有 GA 的）
     if ga_syms:
         from collections import defaultdict
+
         groups = defaultdict(lambda: {"default": [], "ga": []})
         for sym, r in ga_syms.items():
             groups[r["group"]]["default"].append(r["default"]["expR"])
@@ -234,33 +248,37 @@ def main():
         print(f"\n--- 板块平均 expR 对比（有 GA 权重的品种） ---")
         print(f"{'板块':<6} {'品种数':>6} {'默认avg':>9} {'GA avg':>9} {'变化':>8} {'变化%':>8}")
         print("-" * 55)
-        for grp in sorted(groups.keys(), key=lambda g: -(sum(groups[g]["ga"])/len(groups[g]["ga"]))):
+        for grp in sorted(groups.keys(), key=lambda g: -(sum(groups[g]["ga"]) / len(groups[g]["ga"]))):
             data = groups[grp]
             n = len(data["default"])
             d_avg = sum(data["default"]) / n
             g_avg = sum(data["ga"]) / n
             delta = g_avg - d_avg
             delta_pct = (delta / abs(d_avg) * 100) if d_avg != 0 else 0
-            print(f"{grp:<6} {n:>6} {d_avg:>9.4f} {g_avg:>9.4f} "
-                  f"{delta:>+8.4f} {delta_pct:>+7.0f}%")
+            print(f"{grp:<6} {n:>6} {d_avg:>9.4f} {g_avg:>9.4f} {delta:>+8.4f} {delta_pct:>+7.0f}%")
 
     # 保存结果
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
-        json.dump({
-            "summary": {
-                "total": len(valid_syms),
-                "with_ga": len(ga_syms),
-                "without_ga": len(no_ga_syms),
-                "improved": improved if ga_syms else 0,
-                "worsened": worsened if ga_syms else 0,
-                "avg_default_expR": avg_default if ga_syms else 0,
-                "avg_ga_expR": avg_ga if ga_syms else 0,
-                "avg_delta": avg_delta if ga_syms else 0,
-                "avg_delta_pct": avg_delta_pct if ga_syms else 0,
+        json.dump(
+            {
+                "summary": {
+                    "total": len(valid_syms),
+                    "with_ga": len(ga_syms),
+                    "without_ga": len(no_ga_syms),
+                    "improved": improved if ga_syms else 0,
+                    "worsened": worsened if ga_syms else 0,
+                    "avg_default_expR": avg_default if ga_syms else 0,
+                    "avg_ga_expR": avg_ga if ga_syms else 0,
+                    "avg_delta": avg_delta if ga_syms else 0,
+                    "avg_delta_pct": avg_delta_pct if ga_syms else 0,
+                },
+                "results": results,
             },
-            "results": results,
-        }, f, ensure_ascii=False, indent=2)
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     print(f"\n详细结果已保存到: {args.output}")
 

@@ -60,10 +60,12 @@ class TestComputeTScore(unittest.TestCase):
         """拥挤降权生效 → T 比无降权时小"""
         cfg = self._cfg()
         sig = {"ma_break": 1, "dma": 1, "turtle": 1, "boll": 0, "rsi": 0, "carry": 0}
-        r_pen = compute_T_score(sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"],
-                                 crowd_thresh=0.8, crowd_pen=0.35)
-        r_nopen = compute_T_score(sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"],
-                                   crowd_thresh=0.8, crowd_pen=0.0)
+        r_pen = compute_T_score(
+            sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"], crowd_thresh=0.8, crowd_pen=0.35
+        )
+        r_nopen = compute_T_score(
+            sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"], crowd_thresh=0.8, crowd_pen=0.0
+        )
         self.assertLess(abs(r_pen["T_score"]), abs(r_nopen["T_score"]))
         self.assertLess(r_pen["crowd_factor"], 1.0)
         self.assertEqual(r_nopen["crowd_factor"], 1.0)
@@ -72,10 +74,12 @@ class TestComputeTScore(unittest.TestCase):
         """反向阻尼生效 → T 幅度比无阻尼时小"""
         cfg = self._cfg()
         sig = {"ma_break": 1, "dma": 1, "turtle": 1, "boll": -1, "rsi": -1, "carry": 0}
-        r_damp = compute_T_score(sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"],
-                                  contr_damp=0.25)
-        r_nodamp = compute_T_score(sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"],
-                                    contr_damp=0.0)
+        r_damp = compute_T_score(
+            sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"], contr_damp=0.25
+        )
+        r_nodamp = compute_T_score(
+            sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"], contr_damp=0.0
+        )
         self.assertLess(abs(r_damp["T_score"]), abs(r_nodamp["T_score"]))
         self.assertLess(r_damp["contr_factor"], 1.0)
         self.assertEqual(r_nodamp["contr_factor"], 1.0)
@@ -100,8 +104,7 @@ class TestComputeTScore(unittest.TestCase):
         cfg = self._cfg()
         sig = {"ma_break": 1, "dma": 1, "turtle": 1, "boll": 0, "rsi": 0, "carry": 0}
         result = compute_T_score(sig, cfg["clusters"], cfg["cluster_weights"], cfg["base_cluster_weights"])
-        for key in ("T_score", "cluster_vote", "cluster_consensus",
-                    "crowd_factor", "contr_factor", "raw_score"):
+        for key in ("T_score", "cluster_vote", "cluster_consensus", "crowd_factor", "contr_factor", "raw_score"):
             self.assertIn(key, result, f"missing key: {key}")
 
     def test_same_direction_no_contr_damping(self):

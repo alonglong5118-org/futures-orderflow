@@ -69,6 +69,7 @@ from macro_context import _norm_tanh
 #  1. _norm_key
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNormKey(unittest.TestCase):
     """_norm_key 表头标准化。"""
 
@@ -122,6 +123,7 @@ class TestNormKey(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. contract_to_symbol
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestContractToSymbol(unittest.TestCase):
     """contract_to_symbol 合约 → 品种主键。"""
@@ -193,6 +195,7 @@ class TestContractToSymbol(unittest.TestCase):
 #  3. _parse_side
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseSide(unittest.TestCase):
     """_parse_side 买卖方向解析。"""
 
@@ -259,6 +262,7 @@ class TestParseSide(unittest.TestCase):
 #  4. _parse_offset
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseOffset(unittest.TestCase):
     """_parse_offset 开平标记解析。"""
 
@@ -313,6 +317,7 @@ class TestParseOffset(unittest.TestCase):
 #  5. _to_num
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestToNum(unittest.TestCase):
     """_to_num 数值转换。"""
 
@@ -366,6 +371,7 @@ class TestToNum(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. _norm_tanh
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNormTanh(unittest.TestCase):
     """_norm_tanh tanh 归一化。"""
@@ -428,6 +434,7 @@ class TestNormTanh(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. _map_symbol
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestMapSymbol(unittest.TestCase):
     """_map_symbol tqsdk 合约 → 内部品种。"""

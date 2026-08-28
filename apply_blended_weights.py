@@ -82,8 +82,7 @@ def main():
 
         if alpha == 0:
             # alpha=0，完全用默认权重 → 从缓存删除
-            summary[sym] = {"group": group, "alpha": 0, "action": "removed",
-                            "ga_w": ga_w, "blend_w": DEFAULT_W}
+            summary[sym] = {"group": group, "alpha": 0, "action": "removed", "ga_w": ga_w, "blend_w": DEFAULT_W}
             continue
 
         # 融合基础权重
@@ -112,11 +111,11 @@ def main():
         }
 
         new_cache[sym] = new_data
-        summary[sym] = {"group": group, "alpha": alpha, "action": "blended",
-                        "ga_w": ga_w, "blend_w": blend_w}
+        summary[sym] = {"group": group, "alpha": alpha, "action": "blended", "ga_w": ga_w, "blend_w": blend_w}
 
     # 打印汇总
     from collections import defaultdict
+
     group_stats = defaultdict(lambda: {"total": 0, "blended": 0, "removed": 0})
 
     for sym, s in summary.items():
@@ -148,22 +147,27 @@ def main():
 
     # 融合后的权重 vs 默认权重 vs GA 权重对比（top10）
     print(f"\n--- 融合权重明细（按 alpha*GA影响排序）---")
-    print(f"{'品种':<6} {'板块':<5} {'α':>4} "
-          f"{'T_ga':>7} {'T_blend':>8} {'T_def':>7} "
-          f"{'F_ga':>7} {'F_blend':>8} {'F_def':>7} "
-          f"{'C_ga':>7} {'C_blend':>8} {'C_def':>7}")
+    print(
+        f"{'品种':<6} {'板块':<5} {'α':>4} "
+        f"{'T_ga':>7} {'T_blend':>8} {'T_def':>7} "
+        f"{'F_ga':>7} {'F_blend':>8} {'F_def':>7} "
+        f"{'C_ga':>7} {'C_blend':>8} {'C_def':>7}"
+    )
     print("-" * 85)
-    for sym in sorted(summary.keys(),
-                      key=lambda s: -(summary[s]["alpha"] * abs(summary[s]["ga_w"].get("T", 0) - DEFAULT_W["T"]))):
+    for sym in sorted(
+        summary.keys(), key=lambda s: -(summary[s]["alpha"] * abs(summary[s]["ga_w"].get("T", 0) - DEFAULT_W["T"]))
+    ):
         s = summary[sym]
         if s["action"] != "blended":
             continue
         g = s["ga_w"]
         b = s["blend_w"]
-        print(f"{sym:<6} {s['group']:<5} {s['alpha']:>4.1f} "
-              f"{g['T']:>7.3f} {b['T']:>8.4f} {DEFAULT_W['T']:>7.3f} "
-              f"{g['F']:>7.3f} {b['F']:>8.4f} {DEFAULT_W['F']:>7.3f} "
-              f"{g['C']:>7.3f} {b['C']:>8.4f} {DEFAULT_W['C']:>7.3f}")
+        print(
+            f"{sym:<6} {s['group']:<5} {s['alpha']:>4.1f} "
+            f"{g['T']:>7.3f} {b['T']:>8.4f} {DEFAULT_W['T']:>7.3f} "
+            f"{g['F']:>7.3f} {b['F']:>8.4f} {DEFAULT_W['F']:>7.3f} "
+            f"{g['C']:>7.3f} {b['C']:>8.4f} {DEFAULT_W['C']:>7.3f}"
+        )
 
     # 应用
     if args.apply:

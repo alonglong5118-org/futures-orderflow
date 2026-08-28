@@ -20,8 +20,7 @@ Kelly 因子计算 — 核心逻辑工具模块
 """
 
 
-def compute_kelly_factor(edge, kelly_min=0.6, kelly_max=1.2, target_edge=0.5,
-                         cur_full_expR=None):
+def compute_kelly_factor(edge, kelly_min=0.6, kelly_max=1.2, target_edge=0.5, cur_full_expR=None):
     """
     计算 fractional-Kelly 仓位缩放系数。
 

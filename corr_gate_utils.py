@@ -136,18 +136,12 @@ def apply_corr_gate(T_score, C_score, corr_hist=None, gate=0.70, min_history=10)
         # T 更弱 → 降权 T
         result["T"] = 0.0
         result["dropped"] = "T"
-        result["action"] = (
-            f"corr={corr:.2f}>gate={gate},降权T"
-            f"(|T|={abs_T:.1f}≤|C|={abs_C:.1f})"
-        )
+        result["action"] = f"corr={corr:.2f}>gate={gate},降权T(|T|={abs_T:.1f}≤|C|={abs_C:.1f})"
     else:
         # C 更弱 → 降权 C
         result["C"] = 0.0
         result["dropped"] = "C"
-        result["action"] = (
-            f"corr={corr:.2f}>gate={gate},降权C"
-            f"(|C|={abs_C:.1f}<|T|={abs_T:.1f})"
-        )
+        result["action"] = f"corr={corr:.2f}>gate={gate},降权C(|C|={abs_C:.1f}<|T|={abs_T:.1f})"
 
     result["applied"] = True
     return result

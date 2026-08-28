@@ -23,6 +23,7 @@
   st = ddg.current()                     # 供面板展示
   ddg.reset_peak(equity)                 # 人工解除熔断时重置峰值
 """
+
 from __future__ import annotations
 
 import json
@@ -42,6 +43,7 @@ def init_from_config():
     格式：[[阈值百分比, 系数], ...] 或 [[阈值小数, 系数], ...]（>1 自动视为百分比）。"""
     try:
         from account_tracker import load_config
+
         cfg = load_config()
         wl = cfg.get("risk_gate", {}).get("drawdown_waterlines")
         if wl:
@@ -49,10 +51,10 @@ def init_from_config():
             for row in wl:
                 th, sc = row[0], row[1]
                 th = float(th)
-                if th > 1.0:        # 形如 5 / 10 → 视为百分比
+                if th > 1.0:  # 形如 5 / 10 → 视为百分比
                     th = th / 100.0
                 parsed.append((th, float(sc)))
-            parsed.sort(key=lambda x: x[0])   # 升序，便于查找
+            parsed.sort(key=lambda x: x[0])  # 升序，便于查找
             if parsed:
                 _CONFIG["waterlines"] = parsed
     except Exception:
@@ -72,10 +74,18 @@ def _load():
     except Exception:
         pass
     # P1-13 fix: 添加日内回撤默认字段
-    return {"peak_equity": None, "dd_pct": 0.0, "tier": 0,
-            "scale": 1.0, "updated": "", "thresholds": waterlines(),
-            "intraday_peak": None, "intraday_peak_date": None,
-            "intraday_dd_pct": 0.0, "opening_equity": None}
+    return {
+        "peak_equity": None,
+        "dd_pct": 0.0,
+        "tier": 0,
+        "scale": 1.0,
+        "updated": "",
+        "thresholds": waterlines(),
+        "intraday_peak": None,
+        "intraday_peak_date": None,
+        "intraday_dd_pct": 0.0,
+        "opening_equity": None,
+    }
 
 
 def _save(d):
@@ -89,7 +99,7 @@ def _save(d):
 
 def update(equity):
     """每轮喂入动态权益，更新峰值 / 回撤 / 档位，返回当前状态 dict。
-    
+
     P1-13 fix: 新增日内峰值追踪，用于计算日内最大回撤（独立于全周期峰值）。
     日内峰值在每日首次调用时初始化为当日开盘权益。"""
     with _LOCK:
@@ -165,7 +175,7 @@ def current():
 
 def reset_peak(equity=None):
     """重置峰值权益（人工解除熔断时调用），使回撤归零、降险系数回 1.0。
-    
+
     P1-13 fix: 同时重置日内峰值追踪。"""
     with _LOCK:
         st = _load()
@@ -193,6 +203,7 @@ def reset_peak(equity=None):
 
 if __name__ == "__main__":
     import tempfile
+
     # 自测：用临时状态文件，不污染真实文件
     STATE_FILE = os.path.join(tempfile.gettempdir(), "ddg_selftest.json")
     if os.path.exists(STATE_FILE):

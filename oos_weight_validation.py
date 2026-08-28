@@ -6,6 +6,7 @@
   · 只报告，不自动 apply（遵守 auto-stage + 手动 apply 铁律）
 用法：python3 oos_weight_validation.py [--symbols jd,lh,FG,SA,JM,J] [--pilot]
 """
+
 import argparse
 import copy
 import json
@@ -28,8 +29,8 @@ def split_is_oos(df, is_ratio=0.6, embargo_bars=20):
     """时间序切分：IS=前 is_ratio，OOS=后 (1-is_ratio)；丢弃边界 embargo_bars 防泄漏。"""
     n = len(df)
     cut = int(n * is_ratio)
-    is_df = df.iloc[:cut - embargo_bars]
-    oos_df = df.iloc[cut + embargo_bars:]
+    is_df = df.iloc[: cut - embargo_bars]
+    oos_df = df.iloc[cut + embargo_bars :]
     return is_df, oos_df
 
 
@@ -38,8 +39,7 @@ def _metric(r):
     return float(r.get("expR", 0.0)), int(r.get("trades", 0))
 
 
-def run_oos_validation(symbol, cfg=None, param_grid=None, is_ratio=0.6, embargo_bars=20,
-                       min_trades=20):
+def run_oos_validation(symbol, cfg=None, param_grid=None, is_ratio=0.6, embargo_bars=20, min_trades=20):
     base = cfg or fd.DEFAULT_CONFIG
     df = fd.load_daily(symbol)
     if df is None or len(df) < 120:
@@ -58,9 +58,13 @@ def run_oos_validation(symbol, cfg=None, param_grid=None, is_ratio=0.6, embargo_
         is_expR, is_trades = _metric(r_is_def)
         deg = ((is_expR - oos_expR_def) / abs(is_expR)) if is_expR != 0 else None
         return {
-            "symbol": symbol, "is_trades": is_trades, "oos_trades": oos_trades_def,
-            "is_expR": round(is_expR, 4), "oos_expR_default": round(oos_expR_def, 4),
-            "oos_expR_best": round(oos_expR_def, 4), "best_params": None,
+            "symbol": symbol,
+            "is_trades": is_trades,
+            "oos_trades": oos_trades_def,
+            "is_expR": round(is_expR, 4),
+            "oos_expR_default": round(oos_expR_def, 4),
+            "oos_expR_best": round(oos_expR_def, 4),
+            "best_params": None,
             "degradation_pct": round(deg * 100, 1) if deg is not None else None,
             "overfit_flag": (deg is not None and deg > 0.5),
         }
@@ -79,8 +83,13 @@ def run_oos_validation(symbol, cfg=None, param_grid=None, is_ratio=0.6, embargo_
             best = (is_expR, combo)
 
     if best is None:
-        return {"symbol": symbol, "error": "IS 扫参无达标组合(trades<%d)" % min_trades,
-                "is": None, "oos": None, "grid": grid_results}
+        return {
+            "symbol": symbol,
+            "error": "IS 扫参无达标组合(trades<%d)" % min_trades,
+            "is": None,
+            "oos": None,
+            "grid": grid_results,
+        }
 
     best_params = best[1]
     patched_best = _deep_merge(base, best_params)
@@ -92,7 +101,8 @@ def run_oos_validation(symbol, cfg=None, param_grid=None, is_ratio=0.6, embargo_
     deg = ((is_expR_best - oos_expR_best) / abs(is_expR_best)) if is_expR_best != 0 else None
     return {
         "symbol": symbol,
-        "is_trades": _metric(r_is_best)[1], "oos_trades_best": oos_trades_best,
+        "is_trades": _metric(r_is_best)[1],
+        "oos_trades_best": oos_trades_best,
         "oos_trades_default": oos_trades_def,
         "is_expR_best": round(is_expR_best, 4),
         "oos_expR_best": round(oos_expR_best, 4),
@@ -137,10 +147,12 @@ def main():
             print(f"{sym:4} ERROR: {r['error']}")
             continue
         bp = r.get("best_params")
-        print(f"{sym:4} {str(r.get('is_expR_best', r.get('is_expR'))):>8} "
-              f"{str(r.get('oos_expR_best', r.get('oos_expR_default'))):>9} "
-              f"{str(r.get('degradation_pct')):>7} {str(r.get('overfit_flag')):>8}  "
-              f"{bp if bp else '(default)'}")
+        print(
+            f"{sym:4} {str(r.get('is_expR_best', r.get('is_expR'))):>8} "
+            f"{str(r.get('oos_expR_best', r.get('oos_expR_default'))):>9} "
+            f"{str(r.get('degradation_pct')):>7} {str(r.get('overfit_flag')):>8}  "
+            f"{bp if bp else '(default)'}"
+        )
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
     print(f"\n报告已写 {args.out}")

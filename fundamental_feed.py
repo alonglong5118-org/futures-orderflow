@@ -13,6 +13,7 @@ fundamental_feed · 四维策略 基本面 F 数据源
 
 依赖：akshare（default venv 已装 1.18.78）
 """
+
 import datetime
 import json
 import os
@@ -45,21 +46,21 @@ SYMBOL_MAP = {
     "sc": {"basis_code": "SC", "inv_name": "原油"},
     "ec": {"basis_code": "EC", "inv_name": "集运欧线"},
     # 大商所 DCE
-    "i":  {"basis_code": "I",  "inv_name": "铁矿石"},
-    "J":  {"basis_code": "J",  "inv_name": "焦炭"},
+    "i": {"basis_code": "I", "inv_name": "铁矿石"},
+    "J": {"basis_code": "J", "inv_name": "焦炭"},
     "JM": {"basis_code": "JM", "inv_name": "焦煤"},
     "eb": {"basis_code": "EB", "inv_name": "苯乙烯"},
     "eg": {"basis_code": "EG", "inv_name": "乙二醇"},
-    "l":  {"basis_code": "L",  "inv_name": "LLDPE"},
+    "l": {"basis_code": "L", "inv_name": "LLDPE"},
     "pp": {"basis_code": "PP", "inv_name": "聚丙烯"},
-    "v":  {"basis_code": "V",  "inv_name": "PVC"},
+    "v": {"basis_code": "V", "inv_name": "PVC"},
     "pg": {"basis_code": "PG", "inv_name": "液化气"},
-    "m":  {"basis_code": "M",  "inv_name": "豆粕"},
-    "y":  {"basis_code": "Y",  "inv_name": "豆油"},
-    "a":  {"basis_code": "A",  "inv_name": "豆一"},
-    "b":  {"basis_code": "B",  "inv_name": "豆二"},
-    "p":  {"basis_code": "P",  "inv_name": "棕榈油"},
-    "c":  {"basis_code": "C",  "inv_name": "玉米"},
+    "m": {"basis_code": "M", "inv_name": "豆粕"},
+    "y": {"basis_code": "Y", "inv_name": "豆油"},
+    "a": {"basis_code": "A", "inv_name": "豆一"},
+    "b": {"basis_code": "B", "inv_name": "豆二"},
+    "p": {"basis_code": "P", "inv_name": "棕榈油"},
+    "c": {"basis_code": "C", "inv_name": "玉米"},
     "cs": {"basis_code": "CS", "inv_name": "玉米淀粉"},
     "jd": {"basis_code": "JD", "inv_name": "鸡蛋"},
     "lh": {"basis_code": "LH", "inv_name": "生猪"},
@@ -96,6 +97,7 @@ def _today_str():
 def fetch_basis_history(start_day="20210101", end_day=None):
     """拉全部 6 品种基差日序列，返回 {symbol: [{date, dom_basis, dom_basis_rate, spot, dom_price}]}。"""
     import akshare as ak
+
     end_day = end_day or _today_str()
     codes = [v["basis_code"] for v in SYMBOL_MAP.values()]
     try:
@@ -115,13 +117,17 @@ def fetch_basis_history(start_day="20210101", end_day=None):
         if sym is None:
             continue
         try:
-            out[sym].append({
-                "date": str(r["date"]),
-                "dom_basis": float(r["dom_basis"]) if r.get("dom_basis") not in (None, "") else None,
-                "dom_basis_rate": float(r["dom_basis_rate"]) if r.get("dom_basis_rate") not in (None, "") else None,
-                "spot": float(r["spot_price"]) if r.get("spot_price") not in (None, "") else None,
-                "dom_price": float(r["dominant_contract_price"]) if r.get("dominant_contract_price") not in (None, "") else None,
-            })
+            out[sym].append(
+                {
+                    "date": str(r["date"]),
+                    "dom_basis": float(r["dom_basis"]) if r.get("dom_basis") not in (None, "") else None,
+                    "dom_basis_rate": float(r["dom_basis_rate"]) if r.get("dom_basis_rate") not in (None, "") else None,
+                    "spot": float(r["spot_price"]) if r.get("spot_price") not in (None, "") else None,
+                    "dom_price": float(r["dominant_contract_price"])
+                    if r.get("dominant_contract_price") not in (None, "")
+                    else None,
+                }
+            )
         except Exception:
             continue
     return out
@@ -130,6 +136,7 @@ def fetch_basis_history(start_day="20210101", end_day=None):
 def fetch_inventory():
     """拉 6 品种库存（部分品种可能无数据），返回 {symbol: [{date, stock, chg}]}。"""
     import akshare as ak
+
     out = {k: [] for k in SYMBOL_MAP}
     for sym, m in SYMBOL_MAP.items():
         try:
@@ -141,11 +148,13 @@ def fetch_inventory():
             continue
         for _, r in df.iterrows():
             try:
-                out[sym].append({
-                    "date": str(r["日期"]),
-                    "stock": float(r["库存"]) if r.get("库存") not in (None, "") else None,
-                    "chg": float(r["增减"]) if r.get("增减") not in (None, "") else None,
-                })
+                out[sym].append(
+                    {
+                        "date": str(r["日期"]),
+                        "stock": float(r["库存"]) if r.get("库存") not in (None, "") else None,
+                        "chg": float(r["增减"]) if r.get("增减") not in (None, "") else None,
+                    }
+                )
             except Exception:
                 continue
     return out
@@ -198,8 +207,7 @@ def load(cache_file=CACHE_FILE):
         return refresh(cache_file)
     try:
         mtime = os.path.getmtime(cache_file)
-        if (_load_cache["path"] == cache_file and _load_cache["mtime"] == mtime
-                and _load_cache["data"] is not None):
+        if _load_cache["path"] == cache_file and _load_cache["mtime"] == mtime and _load_cache["data"] is not None:
             return _load_cache["data"]
         data = json.load(open(cache_file, encoding="utf-8"))
         _load_cache["path"] = cache_file

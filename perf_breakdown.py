@@ -17,6 +17,7 @@ R 口径：单笔 R = pnl / 计划风险额。计划风险额优先用 stop_dist
     rep = pb.full_report()          # 全维度
     pb.print_report(rep)            # 终端人话版
 """
+
 from __future__ import annotations
 
 import time
@@ -24,9 +25,9 @@ from datetime import datetime
 
 import trade_journal as tj
 
-_REGIME_CACHE = {}      # (symbol, date) -> regime 文本
+_REGIME_CACHE = {}  # (symbol, date) -> regime 文本
 _REGIME_TTL = 86400
-_MIN_N = 3              # 少于 3 笔的切片不下结论（样本太小）
+_MIN_N = 3  # 少于 3 笔的切片不下结论（样本太小）
 
 
 # ── 单笔指标 ──────────────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ def _weekday(t):
 def _group_of(sym):
     try:
         import four_dim_strategy as fd
+
         return fd.SYMBOLS.get(sym, {}).get("group") or "其他"
     except Exception:
         return "其他"
@@ -103,6 +105,7 @@ def _regime_of(t):
     reg = "未知"
     try:
         import four_dim_strategy as fd
+
         df = fd.load_daily(sym)
         if df is not None and len(df) > 30:
             sub = df[df.index <= date] if date else df
@@ -135,7 +138,8 @@ def _stat(trades):
         "avg_win_R": round(sum(t["_R"] for t in wins) / len(wins), 2) if wins else 0.0,
         "avg_loss_R": round(sum(t["_R"] for t in losses) / len(losses), 2) if losses else 0.0,
         "pf": round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0.0),
-        "best": round(max(rs), 2), "worst": round(min(rs), 2),
+        "best": round(max(rs), 2),
+        "worst": round(min(rs), 2),
         "reliable": n >= _MIN_N,
     }
 
@@ -189,8 +193,7 @@ def full_report(with_regime=True):
     ]
     if with_regime:
         dims.append(_breakdown(trades, _regime_of, "市场状态"))
-        dims.append(_breakdown(
-            trades, lambda t: f"{_regime_of(t)}·{t.get('direction')}", "状态×方向"))
+        dims.append(_breakdown(trades, lambda t: f"{_regime_of(t)}·{t.get('direction')}", "状态×方向"))
     overall = _stat(trades)
     # 最赚 / 最亏 / 建议砍掉（样本够 且 期望R 明显为负）
     best = worst = None
@@ -205,14 +208,20 @@ def full_report(with_regime=True):
             if worst is None or r["expR"] < worst["expR"]:
                 worst = dict(r, tag=tag)
             if r["expR"] <= -0.15 and r["n"] >= max(_MIN_N, 5):
-                cut.append({"tag": tag, "n": r["n"], "expR": r["expR"],
-                            "pnl": r["pnl"], "win_rate": r["win_rate"]})
+                cut.append({"tag": tag, "n": r["n"], "expR": r["expR"], "pnl": r["pnl"], "win_rate": r["win_rate"]})
     cut.sort(key=lambda x: x["expR"])
-    return {"ok": True, "n": len(trades), "equity": equity,
-            "overall": overall, "dims": dims,
-            "best": best, "worst": worst, "cut": cut[:6],
-            "min_n": _MIN_N,
-            "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    return {
+        "ok": True,
+        "n": len(trades),
+        "equity": equity,
+        "overall": overall,
+        "dims": dims,
+        "best": best,
+        "worst": worst,
+        "cut": cut[:6],
+        "min_n": _MIN_N,
+        "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
 
 def print_report(rep=None):
@@ -221,18 +230,22 @@ def print_report(rep=None):
         print(rep.get("reason"))
         return
     o = rep["overall"]
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"绩效多维分解 · 已平仓 {rep['n']} 笔 · 权益基准 {rep['equity']:.0f}")
-    print(f"总体：胜率 {o['win_rate']}% | 净盈亏 {o['pnl']:.0f} | 期望R {o['expR']:+.3f} "
-          f"| 盈亏比 {o['pf']} | 均盈 {o['avg_win_R']:+.2f}R 均亏 {o['avg_loss_R']:+.2f}R")
+    print(
+        f"总体：胜率 {o['win_rate']}% | 净盈亏 {o['pnl']:.0f} | 期望R {o['expR']:+.3f} "
+        f"| 盈亏比 {o['pf']} | 均盈 {o['avg_win_R']:+.2f}R 均亏 {o['avg_loss_R']:+.2f}R"
+    )
     print("=" * 70)
     for d in rep["dims"]:
         print(f"\n【{d['dim']}】")
         print(f"  {'切片':<16}{'笔数':>5}{'胜率':>8}{'净盈亏':>11}{'期望R':>9}{'盈亏比':>8}")
         for r in d["rows"]:
             mark = "" if r["reliable"] else "  (样本少)"
-            print(f"  {str(r['key']):<16}{r['n']:>5}{r['win_rate']:>7.1f}%"
-                  f"{r['pnl']:>11.0f}{r['expR']:>+9.3f}{r['pf']:>8.2f}{mark}")
+            print(
+                f"  {str(r['key']):<16}{r['n']:>5}{r['win_rate']:>7.1f}%"
+                f"{r['pnl']:>11.0f}{r['expR']:>+9.3f}{r['pf']:>8.2f}{mark}"
+            )
     if rep.get("best"):
         b = rep["best"]
         print(f"\n✅ 最赚切片：{b['tag']}（{b['n']}笔 期望R {b['expR']:+.3f} 净{b['pnl']:.0f}）")
@@ -242,8 +255,7 @@ def print_report(rep=None):
     if rep.get("cut"):
         print(f"\n🔪 建议砍掉（样本≥5 且 期望R≤-0.15）：")
         for c in rep["cut"]:
-            print(f"   · {c['tag']}：{c['n']}笔 胜率{c['win_rate']}% "
-                  f"期望R {c['expR']:+.3f} 净{c['pnl']:.0f}")
+            print(f"   · {c['tag']}：{c['n']}笔 胜率{c['win_rate']}% 期望R {c['expR']:+.3f} 净{c['pnl']:.0f}")
     else:
         print("\n🔪 暂无「样本够且明显负期望」的切片需要砍。")
 

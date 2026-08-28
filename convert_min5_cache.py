@@ -10,6 +10,7 @@
 不改动 tq_free/ 与任何源文件，只写 data_5m/_XX0_min5.csv。
 加性数据工程，不在四红线内。
 """
+
 import glob
 import json
 import os
@@ -26,6 +27,7 @@ os.makedirs(DATA_5M, exist_ok=True)
 COLMAP = fd.COLMAP  # 中文->英文
 STD = ["date", "open", "high", "low", "close", "volume", "oi"]
 
+
 def load_any(path, src_label):
     """读一个 5m csv（中/英文列皆可），返回带 date DatetimeIndex 的 DataFrame(英文列)。"""
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -33,7 +35,8 @@ def load_any(path, src_label):
     # 兜底日期列名
     for s in ("日期", "时间", "datetime", "Datetime", "time", "Time"):
         if s in df.columns and "date" not in df.columns:
-            df = df.rename(columns={s: "date"}); break
+            df = df.rename(columns={s: "date"})
+            break
     if "date" not in df.columns:
         return None
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -43,17 +46,20 @@ def load_any(path, src_label):
     df = df.sort_values("date").drop_duplicates(subset=["date"]).set_index("date")
     return df
 
+
 def sym_from_cache(fname):
     return os.path.basename(fname).replace("_5min.csv", "")
+
 
 def sym_from_std(fname):
     # _FG0_min5.csv -> FG ; _jd0_min5.csv -> jd （"0" 是主连连续标记，非符号一部分）
     b = os.path.basename(fname)
     assert b.startswith("_") and b.endswith("_min5.csv"), b
-    s = b[1:-len("_min5.csv")]
+    s = b[1 : -len("_min5.csv")]
     if s.endswith("0"):
         s = s[:-1]
     return s
+
 
 # ---- 1. 收集所有源文件，按品种归组 ----
 groups = {}  # sym -> list of (path, label)
@@ -67,12 +73,14 @@ for f in glob.glob(os.path.join(TQ_FREE, "_*0_min5.csv")):
     s = sym_from_std(f)
     groups.setdefault(s, []).append((f, "tq_free"))
 
+
 # 把 sym 对齐到 SYMBOLS 键（大小写）
 def to_key(sym):
     for k in fd.SYMBOLS:
         if k.lower() == sym.lower():
             return k
     return sym  # 不在 SYMBOLS（如 bz）保留原样
+
 
 print(f"=== Phase A：{len(groups)} 个品种待合并 ===\n")
 report = {}
@@ -95,21 +103,28 @@ for sym in sorted(groups):
         if c not in merged.columns:
             merged[c] = float("nan")
     key = to_key(sym)
-    out_df = merged.reset_index()          # date 变回普通列
-    out_df = out_df[STD]                   # [date,open,high,low,close,volume,oi]
+    out_df = merged.reset_index()  # date 变回普通列
+    out_df = out_df[STD]  # [date,open,high,low,close,volume,oi]
     # 同时写 data_5m 与 BACKTEST_DIR 根目录（load_min5 先查 BACKTEST_DIR，
     # 否则旧 sina _JD0/_RM0 会盖住新合并数据）
-    out_paths = [os.path.join(DATA_5M, f"_{key}0_min5.csv"),
-                 os.path.join(fd.BACKTEST_DIR, f"_{key}0_min5.csv")]
+    out_paths = [os.path.join(DATA_5M, f"_{key}0_min5.csv"), os.path.join(fd.BACKTEST_DIR, f"_{key}0_min5.csv")]
     for p in out_paths:
         out_df.to_csv(p, index=False)
     # 完整性校验
     nan_close = int(out_df["close"].isna().sum())
-    report[key] = dict(ok=True, n=len(out_df), srcs=srcs,
-                       first=str(out_df["date"].iloc[0]), last=str(out_df["date"].iloc[-1]),
-                       nan_close=nan_close, paths=out_paths)
+    report[key] = dict(
+        ok=True,
+        n=len(out_df),
+        srcs=srcs,
+        first=str(out_df["date"].iloc[0]),
+        last=str(out_df["date"].iloc[-1]),
+        nan_close=nan_close,
+        paths=out_paths,
+    )
     n_total_rows += len(merged)
-    print(f"  {key:4} 行={len(merged):5d} 源=[{', '.join(srcs)}] 首={merged.index[0]} 尾={merged.index[-1]} nan_close={nan_close}")
+    print(
+        f"  {key:4} 行={len(merged):5d} 源=[{', '.join(srcs)}] 首={merged.index[0]} 尾={merged.index[-1]} nan_close={nan_close}"
+    )
 
 # ---- 2. 日线可用性（决定 Phase C 5m出场回测能否跑） ----
 BACKTEST_DIR = fd.BACKTEST_DIR
@@ -120,7 +135,8 @@ for key in report:
     found = False
     for c in (key, key.upper(), key.lower()):
         if os.path.exists(os.path.join(BACKTEST_DIR, f"_{c}0_daily.csv")):
-            found = True; break
+            found = True
+            break
     (have_daily if found else miss_daily).append(key)
 
 print(f"\n=== 合并完成：{sum(1 for v in report.values() if v.get('ok'))} 个文件，总行数={n_total_rows} ===")
@@ -129,7 +145,16 @@ print(f"无日线: {len(miss_daily)} 个 -> {miss_daily}")
 print(f"\nDISABLED_SYMBOLS(校准判死, 回测结果仅作数据参考):", sorted(set(have_daily) & fd.DISABLED_SYMBOLS))
 
 with open(os.path.join(HERE, "_convert_min5_report.json"), "w") as f:
-    json.dump({"report": report, "have_daily": have_daily, "miss_daily": miss_daily,
-               "disabled_in_have": sorted(set(have_daily) & fd.DISABLED_SYMBOLS)},
-              f, ensure_ascii=False, indent=2, default=str)
+    json.dump(
+        {
+            "report": report,
+            "have_daily": have_daily,
+            "miss_daily": miss_daily,
+            "disabled_in_have": sorted(set(have_daily) & fd.DISABLED_SYMBOLS),
+        },
+        f,
+        ensure_ascii=False,
+        indent=2,
+        default=str,
+    )
 print("\n报告已写 _convert_min5_report.json")

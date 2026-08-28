@@ -9,6 +9,7 @@ off = make_cfg(False) (v12, 五块开关全 False)
 输出：oos_5m_45_result.json（结构同 oos_5m_result.json，扩展到全市场）。
 单品种超时保护；可重入（先恢复已完成）。
 """
+
 import argparse
 import gc
 import json
@@ -22,8 +23,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PER_SYM_TIMEOUT = 600
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--out", default=os.path.join(HERE, "oos_5m_45_result.json"),
-                help="本分块结果文件(并行分块时各任务独立落盘, 避免互相覆盖)")
+ap.add_argument(
+    "--out",
+    default=os.path.join(HERE, "oos_5m_45_result.json"),
+    help="本分块结果文件(并行分块时各任务独立落盘, 避免互相覆盖)",
+)
 ap.add_argument("--only", default="", help="仅跑这些品种, 逗号分隔(分块用)")
 args = ap.parse_args()
 OUT = args.out
@@ -35,8 +39,10 @@ if only_set:
     targets = [t for t in targets if t in only_set]
 print(f"=== Phase C2 分块：{len(targets)} 品种 (out={os.path.basename(OUT)}) on/off ===\n", flush=True)
 
+
 def _on_alarm(signum, frame):
     raise TimeoutError("per-symbol timeout")
+
 
 # 恢复已完成
 rows = []
@@ -69,8 +75,11 @@ for sym in todo:
         name = fd.SYMBOLS.get(sym, {}).get("name", sym)
         grp = fd.SYMBOLS.get(sym, {}).get("group", "?")
         rows.append((sym, a, b))
-        print(f"  {sym:4} {name:4}({grp}) on笔={a['trades']:>4} on期望R={a['expR']:>7} "
-              f"off笔={b['trades']:>4} off期望R={b['expR']:>7} Δ={a['expR']-b['expR']:>7}", flush=True)
+        print(
+            f"  {sym:4} {name:4}({grp}) on笔={a['trades']:>4} on期望R={a['expR']:>7} "
+            f"off笔={b['trades']:>4} off期望R={b['expR']:>7} Δ={a['expR'] - b['expR']:>7}",
+            flush=True,
+        )
         # 增量落盘
         out = oc._build_out(targets, "5m_exit_45", rows)
         json.dump(out, open(OUT, "w"), ensure_ascii=False, indent=2, default=str)
@@ -90,5 +99,7 @@ for sym in todo:
 out = oc._build_out(targets, "5m_exit_45", rows)
 json.dump(out, open(OUT, "w"), ensure_ascii=False, indent=2, default=str)
 s = out["summary"]
-print(f"\n=== 完成：{s['n_valid']}/{s['n_total']} 有效 | 改善 {s['n_improve']} / 退化 {s['n_degrade']} / 持平 {s['n_flat']} | 平均Δ期望R={s['avg_delta_expR']} ===")
+print(
+    f"\n=== 完成：{s['n_valid']}/{s['n_total']} 有效 | 改善 {s['n_improve']} / 退化 {s['n_degrade']} / 持平 {s['n_flat']} | 平均Δ期望R={s['avg_delta_expR']} ==="
+)
 print(f"报告已写 {OUT}")

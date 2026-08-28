@@ -86,6 +86,7 @@ def _timeit(func, *args, iterations=1000, warmup=10, **kwargs):
 
 def _load_perf_baselines():
     import json
+
     if os.path.exists(PERF_BASELINE_FILE):
         with open(PERF_BASELINE_FILE, "r") as f:
             return json.load(f)
@@ -94,6 +95,7 @@ def _load_perf_baselines():
 
 def _save_perf_baselines(data):
     import json
+
     with open(PERF_BASELINE_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
@@ -111,9 +113,7 @@ def _check_perf(name, avg_ms, threshold_ms=None):
 
     # 检查绝对阈值
     if threshold_ms is not None and avg_ms > threshold_ms:
-        raise AssertionError(
-            f"性能超出绝对阈值: {name} = {avg_ms:.3f}ms > {threshold_ms:.3f}ms"
-        )
+        raise AssertionError(f"性能超出绝对阈值: {name} = {avg_ms:.3f}ms > {threshold_ms:.3f}ms")
 
     # 检查相对基线
     if name in _perf_baselines:
@@ -122,8 +122,8 @@ def _check_perf(name, avg_ms, threshold_ms=None):
             raise AssertionError(
                 f"性能退化: {name} = {avg_ms:.3f}ms, "
                 f"基线 = {baseline:.3f}ms, "
-                f"退化 {(avg_ms/baseline - 1)*100:.1f}% "
-                f"(阈值 {PERF_REGRESSION_THRESHOLD*100:.0f}%)"
+                f"退化 {(avg_ms / baseline - 1) * 100:.1f}% "
+                f"(阈值 {PERF_REGRESSION_THRESHOLD * 100:.0f}%)"
             )
 
 
@@ -131,11 +131,13 @@ def _check_perf(name, avg_ms, threshold_ms=None):
 #  一、策略核心函数性能
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCoreFunctionPerformance(unittest.TestCase):
     """策略核心函数性能基准。"""
 
     def test_risk_gate_perf(self):
         """risk_gate 单次调用 < 0.5ms"""
+
         def run():
             risk_gate("rb", 3500.0, 80.0, cfg=DEFAULT_CONFIG)
 
@@ -145,6 +147,7 @@ class TestCoreFunctionPerformance(unittest.TestCase):
 
     def test_kelly_factor_perf(self):
         """compute_kelly_factor 单次调用 < 0.01ms"""
+
         def run():
             compute_kelly_factor(0.5, 0.5, 1.5, 0.5, 0.3)
 
@@ -154,6 +157,7 @@ class TestCoreFunctionPerformance(unittest.TestCase):
 
     def test_norm_tanh_perf(self):
         """_norm_tanh 单次调用 < 0.005ms"""
+
         def run():
             _norm_tanh(1.5, 2.0)
 
@@ -165,6 +169,7 @@ class TestCoreFunctionPerformance(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  二、回测性能
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBacktestPerformance(unittest.TestCase):
     """回测性能基准。"""
@@ -184,8 +189,7 @@ class TestBacktestPerformance(unittest.TestCase):
         df_slice = self.df.tail(300)
 
         def run():
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=df_slice)
+            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_slice)
 
         avg, mn, mx, med = _timeit(run, iterations=10, warmup=2)
         _check_perf("backtest_300bars", avg, threshold_ms=500)
@@ -196,8 +200,7 @@ class TestBacktestPerformance(unittest.TestCase):
         df_slice = self.df.tail(500)
 
         def run():
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=df_slice)
+            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_slice)
 
         avg, mn, mx, med = _timeit(run, iterations=5, warmup=1)
         _check_perf("backtest_500bars", avg, threshold_ms=1500)
@@ -209,8 +212,7 @@ class TestBacktestPerformance(unittest.TestCase):
         n_bars = len(df_slice)
 
         def run():
-            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                  min_bars=60, df_in=df_slice)
+            walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_slice)
 
         avg_total, _, _, _ = _timeit(run, iterations=5, warmup=1)
         per_bar = avg_total / n_bars
@@ -224,14 +226,14 @@ class TestBacktestPerformance(unittest.TestCase):
         df_400 = self.df.tail(400)
 
         t_200, _, _, _ = _timeit(
-            lambda: walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                          min_bars=60, df_in=df_200),
-            iterations=10, warmup=2
+            lambda: walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_200),
+            iterations=10,
+            warmup=2,
         )
         t_400, _, _, _ = _timeit(
-            lambda: walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                          min_bars=60, df_in=df_400),
-            iterations=5, warmup=1
+            lambda: walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_400),
+            iterations=5,
+            warmup=1,
         )
 
         ratio = t_400 / t_200 if t_200 > 0 else 0
@@ -244,6 +246,7 @@ class TestBacktestPerformance(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  三、数据质量性能
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class _FakeFeed:
     def __init__(self, prices=None):
@@ -278,10 +281,15 @@ class TestDataQualityPerformance(unittest.TestCase):
 
     def test_observe_multi_symbol_perf(self):
         """dq.observe 多品种(5个) < 0.05ms"""
-        feed = _FakeFeed({
-            "rb": 3500.0, "hc": 3800.0, "FG": 1500.0,
-            "SA": 1800.0, "MA": 2500.0,
-        })
+        feed = _FakeFeed(
+            {
+                "rb": 3500.0,
+                "hc": 3800.0,
+                "FG": 1500.0,
+                "SA": 1800.0,
+                "MA": 2500.0,
+            }
+        )
         base_ts = 1000000.0
 
         def run():
@@ -319,18 +327,20 @@ class TestDataQualityPerformance(unittest.TestCase):
         total_ms = (t1 - t0) * 1000
 
         _check_perf("dq_observe_1000ticks", total_ms, threshold_ms=50)
-        print(f"  dq.observe 1000 ticks: total={total_ms:.1f}ms, per_tick={total_ms/1000:.4f}ms")
+        print(f"  dq.observe 1000 ticks: total={total_ms:.1f}ms, per_tick={total_ms / 1000:.4f}ms")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  四、解析函数性能
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParsePerformance(unittest.TestCase):
     """解析函数性能基准。"""
 
     def test_parse_side_perf(self):
         """_parse_side < 0.005ms"""
+
         def run():
             _parse_side("BUY")
 
@@ -340,6 +350,7 @@ class TestParsePerformance(unittest.TestCase):
 
     def test_parse_offset_perf(self):
         """_parse_offset < 0.005ms"""
+
         def run():
             _parse_offset("平仓")
 
@@ -349,6 +360,7 @@ class TestParsePerformance(unittest.TestCase):
 
     def test_to_num_perf(self):
         """_to_num < 0.01ms"""
+
         def run():
             _to_num("1,234.56")
 
@@ -358,6 +370,7 @@ class TestParsePerformance(unittest.TestCase):
 
     def test_norm_key_perf(self):
         """_norm_key < 0.01ms"""
+
         def run():
             _norm_key("Signal_Order_123 : 螺纹钢")
 
@@ -370,12 +383,13 @@ class TestParsePerformance(unittest.TestCase):
 #  main
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def run_all_perf_tests():
     """运行所有性能测试并输出汇总。"""
     print("=" * 60)
     print("  性能基准测试")
     if PERF_CHECK:
-        print(f"  ⚠️  严格模式：退化超 {PERF_REGRESSION_THRESHOLD*100:.0f}% 则失败")
+        print(f"  ⚠️  严格模式：退化超 {PERF_REGRESSION_THRESHOLD * 100:.0f}% 则失败")
     print("=" * 60)
     print()
 

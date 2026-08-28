@@ -10,6 +10,7 @@
 
 输出：_dir_src_45.json + 终端汇总（按分歧率排序）。
 """
+
 import json
 import os
 
@@ -45,7 +46,7 @@ for s in syms:
         if d.normalize() < d5_start or d.normalize() > d5_end:
             continue
         try:
-            TD = fd.compute_T(df.iloc[:i + 1], cfg, group, symbol=s)[0]
+            TD = fd.compute_T(df.iloc[: i + 1], cfg, group, symbol=s)[0]
         except Exception:
             continue
         seg5 = df5[df5.index.normalize() <= d.normalize()]
@@ -72,9 +73,11 @@ overall_rate = overall_disc / overall_tot if overall_tot else float("nan")
 print(f"\n全样本分歧率={overall_rate:.1%} ({overall_disc}/{overall_tot})")
 
 # 按分歧率排序输出
-ranked = sorted([(k, v) for k, v in per.items() if v.get("tot", 0) > 0],
-                key=lambda kv: (kv[1]["rate"] if kv[1]["rate"] == kv[1]["rate"] else -1),
-                reverse=True)
+ranked = sorted(
+    [(k, v) for k, v in per.items() if v.get("tot", 0) > 0],
+    key=lambda kv: kv[1]["rate"] if kv[1]["rate"] == kv[1]["rate"] else -1,
+    reverse=True,
+)
 out = {
     "W": W,
     "overall": dict(rate=overall_rate, disc=overall_disc, tot=overall_tot),

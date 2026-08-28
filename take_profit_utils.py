@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Tuple
 #  1. 止盈止损参数计算（exit_plan 核心）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def calc_exit_plan(
     entry: float,
     dir_T: float,
@@ -69,8 +70,8 @@ def calc_exit_plan(
     if is_long:
         # 多单：止损在下方，止盈在上方
         stop = entry - stop_dist
-        t1 = entry + stop_dist        # 1R 平半
-        t2 = entry + rr_ratio * stop_dist   # rr_ratio R 全平（或进入尾仓）
+        t1 = entry + stop_dist  # 1R 平半
+        t2 = entry + rr_ratio * stop_dist  # rr_ratio R 全平（或进入尾仓）
     else:
         # 空单：止损在上方，止盈在下方
         stop = entry + stop_dist
@@ -95,8 +96,9 @@ def calc_exit_plan(
 #  2. 逐 bar 出场模拟（_sim_exit_5m 核心）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def sim_exit_bars(
-    bars: List[Tuple[float, float]],       # [(high, low), ...]
+    bars: List[Tuple[float, float]],  # [(high, low), ...]
     dir_T: float,
     entry: float,
     ep: Dict[str, Any],

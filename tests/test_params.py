@@ -36,6 +36,7 @@ from four_dim_strategy import (
 #  1. effective_params — 阈值参数解析
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestEffectiveParams(unittest.TestCase):
     """effective_params — T_thresh + bias_hard_dict 解析。"""
 
@@ -116,15 +117,15 @@ class TestEffectiveParams(unittest.TestCase):
         注意：很多品种有 per-symbol 覆盖，所以这里直接比 thresholds 配置。
         """
         thresholds = DEFAULT_CONFIG["thresholds"]
-        T_agri = thresholds["农产品"]["T_thresh"]   # 25
-        T_black = thresholds["黑系"]["T_thresh"]     # 22
-        self.assertGreater(T_agri, T_black,
-            "农产品波动小，组级 T_thresh 应该更高（更难触发）")
+        T_agri = thresholds["农产品"]["T_thresh"]  # 25
+        T_black = thresholds["黑系"]["T_thresh"]  # 22
+        self.assertGreater(T_agri, T_black, "农产品波动小，组级 T_thresh 应该更高（更难触发）")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. regime_params_for — Regime 阈值解析
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRegimeParamsFor(unittest.TestCase):
     """regime_params_for — 分品种 regime 阈值解析。"""
@@ -143,8 +144,13 @@ class TestRegimeParamsFor(unittest.TestCase):
         custom_cfg = {
             "regime_params": {
                 "enabled": False,
-                "default": {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012,
-                            "trend_slope": 0.003, "trend_dev": 0.010},
+                "default": {
+                    "atr_thresh": 0.025,
+                    "flat_dev": 0.008,
+                    "flat_atr": 0.012,
+                    "trend_slope": 0.003,
+                    "trend_dev": 0.010,
+                },
             }
         }
         params = regime_params_for("rb", cfg=custom_cfg)
@@ -170,11 +176,21 @@ class TestRegimeParamsFor(unittest.TestCase):
         custom_cfg = {
             "regime_params": {
                 "enabled": True,
-                "default": {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012,
-                            "trend_slope": 0.003, "trend_dev": 0.010},
+                "default": {
+                    "atr_thresh": 0.025,
+                    "flat_dev": 0.008,
+                    "flat_atr": 0.012,
+                    "trend_slope": 0.003,
+                    "trend_dev": 0.010,
+                },
                 "by_group": {
-                    "黑系": {"atr_thresh": 0.035, "flat_dev": 0.010, "flat_atr": 0.018,
-                             "trend_slope": 0.0035, "trend_dev": 0.012},
+                    "黑系": {
+                        "atr_thresh": 0.035,
+                        "flat_dev": 0.010,
+                        "flat_atr": 0.018,
+                        "trend_slope": 0.0035,
+                        "trend_dev": 0.012,
+                    },
                 },
                 "by_symbol": {
                     "rb": {"atr_thresh": 0.045},  # rb 特殊：更高
@@ -193,8 +209,13 @@ class TestRegimeParamsFor(unittest.TestCase):
         custom_cfg = {
             "regime_params": {
                 "enabled": True,
-                "default": {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012,
-                            "trend_slope": 0.003, "trend_dev": 0.010},
+                "default": {
+                    "atr_thresh": 0.025,
+                    "flat_dev": 0.008,
+                    "flat_atr": 0.012,
+                    "trend_slope": 0.003,
+                    "trend_dev": 0.010,
+                },
                 "by_group": {
                     "黑系": {"atr_thresh": 0.035},
                 },
@@ -213,14 +234,11 @@ class TestRegimeParamsFor(unittest.TestCase):
         高波动品种（黑系）长期被判"波动"，低波动品种（农产品）几乎到不了"波动"。
         修复后：黑系阈值放大，农产品阈值缩小。
         """
-        p_black = regime_params_for("rb")   # 黑系
-        p_agri = regime_params_for("m")     # 农产品
-        self.assertGreater(p_black["atr_thresh"], p_agri["atr_thresh"],
-            "P-F 回归：高波动品种 regime 阈值应该更大")
-        self.assertGreater(p_black["flat_atr"], p_agri["flat_atr"],
-            "P-F 回归：高波动品种 flat_atr 阈值应该更大")
-        self.assertGreater(p_black["trend_dev"], p_agri["trend_dev"],
-            "P-F 回归：高波动品种 trend_dev 阈值应该更大")
+        p_black = regime_params_for("rb")  # 黑系
+        p_agri = regime_params_for("m")  # 农产品
+        self.assertGreater(p_black["atr_thresh"], p_agri["atr_thresh"], "P-F 回归：高波动品种 regime 阈值应该更大")
+        self.assertGreater(p_black["flat_atr"], p_agri["flat_atr"], "P-F 回归：高波动品种 flat_atr 阈值应该更大")
+        self.assertGreater(p_black["trend_dev"], p_agri["trend_dev"], "P-F 回归：高波动品种 trend_dev 阈值应该更大")
 
     def test_all_params_are_positive(self):
         """所有返回的参数都是正数"""
@@ -234,8 +252,13 @@ class TestRegimeParamsFor(unittest.TestCase):
         custom_cfg = {
             "regime_params": {
                 "enabled": True,
-                "default": {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012,
-                            "trend_slope": 0.003, "trend_dev": 0.010},
+                "default": {
+                    "atr_thresh": 0.025,
+                    "flat_dev": 0.008,
+                    "flat_atr": 0.012,
+                    "trend_slope": 0.003,
+                    "trend_dev": 0.010,
+                },
                 "by_group": {},  # 没有任何分组
             }
         }
@@ -250,13 +273,13 @@ class TestRegimeParamsFor(unittest.TestCase):
         params1["atr_thresh"] = 999
         # 再取一次，应该还是原值
         params2 = regime_params_for("rb")
-        self.assertNotEqual(params2["atr_thresh"], 999,
-            "返回的 dict 应该是副本，修改不应该影响后续调用")
+        self.assertNotEqual(params2["atr_thresh"], 999, "返回的 dict 应该是副本，修改不应该影响后续调用")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. 品种元数据完整性
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSymbolMetadata(unittest.TestCase):
     """SYMBOLS 品种元数据完整性检查。"""
@@ -283,21 +306,18 @@ class TestSymbolMetadata(unittest.TestCase):
         groups_in_symbols = set(info["group"] for info in SYMBOLS.values())
         groups_in_thresholds = set(DEFAULT_CONFIG["thresholds"].keys())
         missing = groups_in_symbols - groups_in_thresholds
-        self.assertEqual(len(missing), 0,
-            f"以下分组缺少 thresholds 配置: {missing}")
+        self.assertEqual(len(missing), 0, f"以下分组缺少 thresholds 配置: {missing}")
 
     def test_regime_params_covers_all_groups(self):
         """regime_params.by_group 覆盖 SYMBOLS 中所有分组"""
         groups_in_symbols = set(info["group"] for info in SYMBOLS.values())
         groups_in_regime = set(DEFAULT_CONFIG["regime_params"].get("by_group", {}).keys())
         missing = groups_in_symbols - groups_in_regime
-        self.assertEqual(len(missing), 0,
-            f"以下分组缺少 regime_params.by_group 配置: {missing}")
+        self.assertEqual(len(missing), 0, f"以下分组缺少 regime_params.by_group 配置: {missing}")
 
     def test_symbol_count_reasonable(self):
         """品种数量合理（> 40 个）"""
-        self.assertGreater(len(SYMBOLS), 40,
-            "SYMBOLS 品种数量太少，可能加载不完整")
+        self.assertGreater(len(SYMBOLS), 40, "SYMBOLS 品种数量太少，可能加载不完整")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

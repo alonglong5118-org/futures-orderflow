@@ -64,6 +64,7 @@ from macro_context import _norm_tanh
 #  1. _parse_time
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseTime(unittest.TestCase):
     """_parse_time 时间字符串双格式解析。"""
 
@@ -115,6 +116,7 @@ class TestParseTime(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _period_bounds
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPeriodBounds(unittest.TestCase):
     """_period_bounds 周期边界计算。"""
@@ -183,6 +185,7 @@ class TestPeriodBounds(unittest.TestCase):
 #  3. _friday_of
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFridayOf(unittest.TestCase):
     """_friday_of 计算当周周五。"""
 
@@ -238,6 +241,7 @@ class TestFridayOf(unittest.TestCase):
 #  4. _is_last_trading_day
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsLastTradingDay(unittest.TestCase):
     """_is_last_trading_day 是否当月最后交易日。"""
 
@@ -250,11 +254,11 @@ class TestIsLastTradingDay(unittest.TestCase):
     def test_last_day_saturday_prev_friday(self):
         """月末在周六 → 前周五是最后交易日"""
         # 2026年5月31日是周日... 找一个月末是周六的
-        # 2025年11月30日是周日... 
+        # 2025年11月30日是周日...
         # 2026年1月31日是周六
         d_fri = date(2026, 1, 30)  # 周五（前一天）
         d_sat = date(2026, 1, 31)  # 周六（月末）
-        self.assertTrue(_is_last_trading_day(d_fri))   # 周五 = 最后交易日
+        self.assertTrue(_is_last_trading_day(d_fri))  # 周五 = 最后交易日
         self.assertFalse(_is_last_trading_day(d_sat))  # 周六不是
 
     def test_last_day_sunday_prev_friday(self):
@@ -262,7 +266,7 @@ class TestIsLastTradingDay(unittest.TestCase):
         # 2026年5月31日是周日
         d_fri = date(2026, 5, 29)  # 周五
         d_sun = date(2026, 5, 31)  # 周日（月末）
-        self.assertTrue(_is_last_trading_day(d_fri))   # 周五 = 最后交易日
+        self.assertTrue(_is_last_trading_day(d_fri))  # 周五 = 最后交易日
         self.assertFalse(_is_last_trading_day(d_sun))  # 周日不是
 
     def test_mid_month_false(self):
@@ -289,6 +293,7 @@ class TestIsLastTradingDay(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. _norm_tanh
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNormTanh(unittest.TestCase):
     """_norm_tanh tanh 归一化。"""

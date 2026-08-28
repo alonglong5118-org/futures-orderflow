@@ -64,6 +64,7 @@ def _make_df(prices, highs=None, lows=None):
 #  1. s_donchian
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDonchian(unittest.TestCase):
     """s_donchian 通道突破。"""
 
@@ -76,8 +77,8 @@ class TestDonchian(unittest.TestCase):
         prices = [95.0] * 19
         highs = [100.0] * 19
         lows = [90.0] * 19
-        prices.append(110.0)   # 第 20 根 close = high
-        highs.append(110.0)    # 新高
+        prices.append(110.0)  # 第 20 根 close = high
+        highs.append(110.0)  # 新高
         lows.append(105.0)
         df = _make_df(prices, highs, lows)
         sig, info = s_donchian(df, n=20)
@@ -88,9 +89,9 @@ class TestDonchian(unittest.TestCase):
         prices = [95.0] * 19
         highs = [100.0] * 19
         lows = [90.0] * 19
-        prices.append(80.0)    # close = low（光脚阴线）
+        prices.append(80.0)  # close = low（光脚阴线）
         highs.append(90.0)
-        lows.append(80.0)      # 新低
+        lows.append(80.0)  # 新低
         df = _make_df(prices, highs, lows)
         sig, info = s_donchian(df, n=20)
         self.assertEqual(sig, -1)
@@ -126,6 +127,7 @@ class TestDonchian(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. s_boll
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBoll(unittest.TestCase):
     """s_boll 布林带反转。"""
@@ -181,6 +183,7 @@ class TestBoll(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. s_rsi
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRsiStrategy(unittest.TestCase):
     """s_rsi RSI 超买超卖。"""
@@ -239,6 +242,7 @@ class TestRsiStrategy(unittest.TestCase):
 #  4. s_ma_break
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMaBreak(unittest.TestCase):
     """s_ma_break MA 突破。"""
 
@@ -281,13 +285,14 @@ class TestMaBreak(unittest.TestCase):
 #  5. s_pullback
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPullback(unittest.TestCase):
     """s_pullback 回踩策略。"""
 
     def test_large_deviation_zero(self):
         """大幅偏离 MA20 → 0（不是回踩）"""
         prices = [100.0] * 60  # MA20 = MA60 = 100
-        prices[-1] = 150.0    # 最后一根暴涨 50%
+        prices[-1] = 150.0  # 最后一根暴涨 50%
         df = _make_df(prices)
         sig, info = s_pullback(df)
         # dev = 50/100 = 0.5 >> 0.02 → 不满足

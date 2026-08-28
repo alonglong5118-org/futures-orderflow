@@ -72,6 +72,7 @@ from regime_hmm import (
 #  1. round_tick
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRoundTick(unittest.TestCase):
     """round_tick 价格 tick 取整。"""
 
@@ -102,19 +103,20 @@ class TestRoundTick(unittest.TestCase):
     def test_result_is_tick_multiple(self):
         """结果总是 tick 的整数倍"""
         import random
+
         random.seed(42)
         for _ in range(20):
             price = random.uniform(10, 1000)
             tick = random.choice([0.5, 1.0, 2.0, 5.0, 10.0])
             result = round_tick(price, tick)
             ratio = result / tick
-            self.assertAlmostEqual(ratio, round(ratio), places=5,
-                msg=f"price={price}, tick={tick}, result={result}")
+            self.assertAlmostEqual(ratio, round(ratio), places=5, msg=f"price={price}, tick={tick}, result={result}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. find_swings
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFindSwings(unittest.TestCase):
     """find_swings ZigZag 摆动点检测。"""
@@ -160,6 +162,7 @@ class TestFindSwings(unittest.TestCase):
         for i in range(n):
             # 正弦波模拟摆动
             import math
+
             val = base + 5 * math.sin(i * 0.5)
             highs.append(val + 1)
             lows.append(val - 1)
@@ -169,8 +172,7 @@ class TestFindSwings(unittest.TestCase):
         self.assertGreater(len(swings), 3)
         # 高低交替
         for i in range(1, len(swings)):
-            self.assertNotEqual(swings[i][1], swings[i-1][1],
-                f"摆动点 {i} 和 {i-1} 类型相同，应该交替")
+            self.assertNotEqual(swings[i][1], swings[i - 1][1], f"摆动点 {i} 和 {i - 1} 类型相同，应该交替")
 
     def test_deviation_filters_small_swings(self):
         """deviation 过滤小摆动"""
@@ -197,6 +199,7 @@ class TestFindSwings(unittest.TestCase):
         """更大的 depth → 更少摆动点（需要更多确认）"""
         n = 30
         import math
+
         base = 100
         highs = [base + 3 * math.sin(i * 0.4) + 1 for i in range(n)]
         lows = [base + 3 * math.sin(i * 0.4) - 1 for i in range(n)]
@@ -210,6 +213,7 @@ class TestFindSwings(unittest.TestCase):
 #  3. latest_abc
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLatestAbc(unittest.TestCase):
     """latest_abc a-b-c 结构识别。"""
 
@@ -221,7 +225,7 @@ class TestLatestAbc(unittest.TestCase):
     def test_bullish_abc(self):
         """看涨 a-b-c：低-高-低，c > a"""
         swings = [
-            (0, "low", 100),   # a
+            (0, "low", 100),  # a
             (5, "high", 120),  # b
             (10, "low", 105),  # c（高于 a）
         ]
@@ -236,8 +240,8 @@ class TestLatestAbc(unittest.TestCase):
     def test_bearish_abc(self):
         """看跌 a-b-c：高-低-高，c < a"""
         swings = [
-            (0, "high", 120),   # a
-            (5, "low", 100),    # b
+            (0, "high", 120),  # a
+            (5, "low", 100),  # b
             (10, "high", 115),  # c（低于 a）
         ]
         result = latest_abc(swings)
@@ -252,11 +256,11 @@ class TestLatestAbc(unittest.TestCase):
         """c <= a → 不构成看涨，继续往前找"""
         # 最近的 c = a，不满足；应该找更前面的
         swings = [
-            (0, "low", 100),    # a2
-            (5, "high", 120),   # b2
-            (10, "low", 95),    # c2（低于 a → 不满足看涨）
+            (0, "low", 100),  # a2
+            (5, "high", 120),  # b2
+            (10, "low", 95),  # c2（低于 a → 不满足看涨）
             (15, "high", 115),  # 又一个高点
-            (20, "low", 105),   # 最近的低点（c1 > a1? 但 a1 是谁？）
+            (20, "low", 105),  # 最近的低点（c1 > a1? 但 a1 是谁？）
         ]
         # 实际上这个序列的结构是 low-high-low-high-low
         # 最近的 3 点：high-low-high → 看跌候选，需要 c < a
@@ -289,6 +293,7 @@ class TestLatestAbc(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. hidden_pivot
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHiddenPivot(unittest.TestCase):
     """hidden_pivot 隐藏枢轴点计算。"""
@@ -366,6 +371,7 @@ class TestHiddenPivot(unittest.TestCase):
 #  5. _features_raw
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFeaturesRaw(unittest.TestCase):
     """_features_raw HMM 原始特征。"""
 
@@ -409,6 +415,7 @@ class TestFeaturesRaw(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. _rule_label
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRuleLabel(unittest.TestCase):
     """_rule_label 规则式 regime 标注。"""

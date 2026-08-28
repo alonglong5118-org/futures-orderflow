@@ -51,6 +51,7 @@ from symbol_screener import (
 #  1. _tag_to_symbols
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestTagToSymbols(unittest.TestCase):
     """_tag_to_symbols 文本标签命中品种。"""
 
@@ -128,12 +129,14 @@ class TestTagToSymbols(unittest.TestCase):
 #  2. _age_factor
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAgeFactor(unittest.TestCase):
     """_age_factor 信息时效衰减。"""
 
     def test_fresh_info_is_10(self):
         """新鲜信息（刚发布） → 1.0"""
         import time
+
         now_ts = time.time()
         factor = _age_factor(now_ts)
         self.assertAlmostEqual(factor, 1.0, places=2)
@@ -149,6 +152,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_12_hours_about_065(self):
         """12 小时 → 约 0.65（1 - 0.7 * 0.5 = 0.65）"""
         import time
+
         ts = time.time() - 12 * 3600
         factor = _age_factor(ts)
         self.assertAlmostEqual(factor, 0.65, places=1)
@@ -156,6 +160,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_24_hours_is_03(self):
         """24 小时 → 0.3（线性衰减到底）"""
         import time
+
         ts = time.time() - 24 * 3600
         factor = _age_factor(ts)
         self.assertAlmostEqual(factor, 0.3, places=1)
@@ -163,6 +168,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_48_hours_is_01(self):
         """48 小时 → 0.1（过期底限）"""
         import time
+
         ts = time.time() - 48 * 3600
         factor = _age_factor(ts)
         self.assertAlmostEqual(factor, 0.1, places=2)
@@ -170,6 +176,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_over_48_hours_stays_01(self):
         """超过 48 小时 → 仍为 0.1（封底）"""
         import time
+
         ts = time.time() - 72 * 3600  # 3 天
         factor = _age_factor(ts)
         self.assertAlmostEqual(factor, 0.1, places=2)
@@ -177,6 +184,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_future_ts_is_10(self):
         """未来时间戳 → 1.0（age_h <= 0）"""
         import time
+
         ts = time.time() + 3600  # 1 小时后
         factor = _age_factor(ts)
         self.assertEqual(factor, 1.0)
@@ -184,6 +192,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_monotonic_decreasing(self):
         """单调性：越旧的信息，衰减系数越小"""
         import time
+
         now = time.time()
         f_1h = _age_factor(now - 3600)
         f_6h = _age_factor(now - 6 * 3600)
@@ -198,6 +207,7 @@ class TestAgeFactor(unittest.TestCase):
     def test_bounds_01_to_10(self):
         """范围：0.1 ~ 1.0"""
         import time
+
         # 测试几个不同时间点
         for hours in [0, 1, 6, 12, 24, 36, 48, 72, 168]:
             ts = time.time() - hours * 3600
@@ -210,6 +220,7 @@ class TestAgeFactor(unittest.TestCase):
 #  3. _check_criteria
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCheckCriteria(unittest.TestCase):
     """_check_criteria 品种筛选条件。"""
 
@@ -217,10 +228,10 @@ class TestCheckCriteria(unittest.TestCase):
         """构造一个默认通过的 metrics dict"""
         m = {
             "symbol": "rb",
-            "turnover_billion": 50.0,   # 50 亿，够高
-            "atr_pct": 1.5,             # 1.5%，中等
-            "T_D": 60.0,                # 强趋势
-            "vol_ratio": 1.5,           # 1.5 倍量
+            "turnover_billion": 50.0,  # 50 亿，够高
+            "atr_pct": 1.5,  # 1.5%，中等
+            "T_D": 60.0,  # 强趋势
+            "vol_ratio": 1.5,  # 1.5 倍量
         }
         m.update(kwargs)
         return m
@@ -228,12 +239,12 @@ class TestCheckCriteria(unittest.TestCase):
     def _make_criteria(self, **kwargs):
         """构造筛选条件"""
         c = {
-            "min_turnover": 10.0,       # 最低 10 亿
-            "atr_pct_min": 0.005,       # ATR 0.5% ~ 3%
+            "min_turnover": 10.0,  # 最低 10 亿
+            "atr_pct_min": 0.005,  # ATR 0.5% ~ 3%
             "atr_pct_max": 0.03,
-            "min_abs_T_D": 30.0,        # 最低 |T_D| = 30
-            "min_volume_ratio": 1.0,    # 最低量比 1.0
-            "max_correlation": 0.7,     # 最大相关 0.7
+            "min_abs_T_D": 30.0,  # 最低 |T_D| = 30
+            "min_volume_ratio": 1.0,  # 最低量比 1.0
+            "max_correlation": 0.7,  # 最大相关 0.7
         }
         c.update(kwargs)
         return c
@@ -266,7 +277,7 @@ class TestCheckCriteria(unittest.TestCase):
         """波动率过高 → 波动率项扣分（拉低总分）"""
         c = self._make_criteria()
         m_normal = self._make_metrics(atr_pct=1.5)  # 1.5%，正常
-        m_high = self._make_metrics(atr_pct=4.0)    # 4%，过高
+        m_high = self._make_metrics(atr_pct=4.0)  # 4%，过高
         _, score_normal, _ = _check_criteria(m_normal, c)
         _, score_high, _ = _check_criteria(m_high, c)
         # 高波动的波动率得分 = max/atr = 3/4 = 0.75，比正常的 1.0 低
@@ -276,7 +287,7 @@ class TestCheckCriteria(unittest.TestCase):
         """波动率过低 → 波动率项扣分"""
         c = self._make_criteria()
         m_normal = self._make_metrics(atr_pct=1.5)
-        m_low = self._make_metrics(atr_pct=0.3)   # 0.3% < 0.5%
+        m_low = self._make_metrics(atr_pct=0.3)  # 0.3% < 0.5%
         _, score_normal, _ = _check_criteria(m_normal, c)
         _, score_low, _ = _check_criteria(m_low, c)
         self.assertLess(score_low, score_normal)
@@ -300,9 +311,7 @@ class TestCheckCriteria(unittest.TestCase):
         m = self._make_metrics()
         c = self._make_criteria()
         corr_data = {"rb_vs_hc": 0.85}  # 0.85 > 0.7
-        passed, score, reasons = _check_criteria(
-            m, c, held_symbols=["hc"], corr_data=corr_data
-        )
+        passed, score, reasons = _check_criteria(m, c, held_symbols=["hc"], corr_data=corr_data)
         self.assertFalse(passed)
 
     def test_low_correlation_passes(self):
@@ -310,9 +319,7 @@ class TestCheckCriteria(unittest.TestCase):
         m = self._make_metrics()
         c = self._make_criteria()
         corr_data = {"rb_vs_hc": 0.3}  # 0.3 < 0.7
-        passed, score, reasons = _check_criteria(
-            m, c, held_symbols=["hc"], corr_data=corr_data
-        )
+        passed, score, reasons = _check_criteria(m, c, held_symbols=["hc"], corr_data=corr_data)
         self.assertTrue(passed)
 
     def test_no_held_no_corr_check(self):
@@ -334,12 +341,8 @@ class TestCheckCriteria(unittest.TestCase):
     def test_better_metrics_higher_score(self):
         """更好的指标 → 更高的分数"""
         c = self._make_criteria()
-        m_bad = self._make_metrics(
-            turnover_billion=5.0, atr_pct=0.3, T_D=10.0, vol_ratio=0.5
-        )
-        m_good = self._make_metrics(
-            turnover_billion=100.0, atr_pct=1.5, T_D=80.0, vol_ratio=2.0
-        )
+        m_bad = self._make_metrics(turnover_billion=5.0, atr_pct=0.3, T_D=10.0, vol_ratio=0.5)
+        m_good = self._make_metrics(turnover_billion=100.0, atr_pct=1.5, T_D=80.0, vol_ratio=2.0)
         _, score_bad, _ = _check_criteria(m_bad, c)
         _, score_good, _ = _check_criteria(m_good, c)
         self.assertGreater(score_good, score_bad)

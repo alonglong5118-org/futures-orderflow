@@ -73,6 +73,7 @@ def _make_level(price, distance_pct=1.0, strength=50, role=None):
 #  1. 逆向位信号质量调整
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSignalQualityBoost(unittest.TestCase):
     """signal_quality_boost — 逆向位方向感知过滤。"""
 
@@ -209,14 +210,14 @@ class TestSignalQualityBoost(unittest.TestCase):
             nearest_resistance=_make_level(110, distance_pct=10.0),  # 很远
         )
         boost, reason = signal_quality_boost(sr, direction=1)
-        self.assertEqual(boost, 0.0,
-            "做多时只关心压力位，支撑位近不应该惩罚")
+        self.assertEqual(boost, 0.0, "做多时只关心压力位，支撑位近不应该惩罚")
         self.assertIn("压力", reason)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. 极值聚类
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClusterLevels(unittest.TestCase):
     """_cluster_levels — 相近极值合并为结构位。"""
@@ -233,7 +234,7 @@ class TestClusterLevels(unittest.TestCase):
         """相近价格（<0.3%）→ 合并"""
         extrema = [
             (0, 100.0, "high", 1000),
-            (1, 100.2, "high", 800),   # 0.2% < 0.3% → 合并
+            (1, 100.2, "high", 800),  # 0.2% < 0.3% → 合并
         ]
         clusters = _cluster_levels(extrema, cluster_pct=0.003)
         self.assertEqual(len(clusters), 1)
@@ -243,7 +244,7 @@ class TestClusterLevels(unittest.TestCase):
         """相差较远（>0.3%）→ 不合并"""
         extrema = [
             (0, 100.0, "high", 1000),
-            (1, 101.0, "high", 800),   # 1.0% > 0.3% → 不合并
+            (1, 101.0, "high", 800),  # 1.0% > 0.3% → 不合并
         ]
         clusters = _cluster_levels(extrema, cluster_pct=0.003)
         self.assertEqual(len(clusters), 2)
@@ -299,7 +300,7 @@ class TestClusterLevels(unittest.TestCase):
         extrema = [
             (0, 100.0, "high", 1000),
             (1, 100.1, "high", 800),
-            (2, 110.0, "low", 500),   # 远
+            (2, 110.0, "low", 500),  # 远
             (3, 110.2, "low", 600),
         ]
         clusters = _cluster_levels(extrema, cluster_pct=0.005)
@@ -312,24 +313,35 @@ class TestClusterLevels(unittest.TestCase):
 #  3. 强度评分
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScoreStrength(unittest.TestCase):
     """_score_strength — 结构位强度评分。"""
 
     def _make_df(self, avg_volume=1000, n=30):
         """构造简单的 DataFrame 用于评分测试。"""
         dates = pd.date_range("2026-01-01", periods=n, freq="D")
-        df = pd.DataFrame({
-            "high": [100 + i * 0.1 for i in range(n)],
-            "low": [99 + i * 0.1 for i in range(n)],
-            "close": [99.5 + i * 0.1 for i in range(n)],
-            "volume": [avg_volume] * n,
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "high": [100 + i * 0.1 for i in range(n)],
+                "low": [99 + i * 0.1 for i in range(n)],
+                "close": [99.5 + i * 0.1 for i in range(n)],
+                "volume": [avg_volume] * n,
+            },
+            index=dates,
+        )
         return df
 
     def test_two_touches_base_score(self):
         """2 次触及 → 基础分 = 20 + (2-1)*25 = 45"""
-        levels = [{"price": 100, "touches": 2, "dual_sided": False,
-                   "avg_volume": 1000, "last_date": pd.Timestamp("2026-01-28")}]
+        levels = [
+            {
+                "price": 100,
+                "touches": 2,
+                "dual_sided": False,
+                "avg_volume": 1000,
+                "last_date": pd.Timestamp("2026-01-28"),
+            }
+        ]
         df = self._make_df(avg_volume=1000, n=30)
         result = _score_strength(levels, df, 100)
         # touch_score = 20 + 1*25 = 45
@@ -342,10 +354,24 @@ class TestScoreStrength(unittest.TestCase):
     def test_more_touches_higher_score(self):
         """触及次数越多，分数越高"""
         df = self._make_df()
-        levels_2 = [{"price": 100, "touches": 2, "dual_sided": False,
-                     "avg_volume": 1000, "last_date": pd.Timestamp("2026-01-28")}]
-        levels_5 = [{"price": 100, "touches": 5, "dual_sided": False,
-                     "avg_volume": 1000, "last_date": pd.Timestamp("2026-01-28")}]
+        levels_2 = [
+            {
+                "price": 100,
+                "touches": 2,
+                "dual_sided": False,
+                "avg_volume": 1000,
+                "last_date": pd.Timestamp("2026-01-28"),
+            }
+        ]
+        levels_5 = [
+            {
+                "price": 100,
+                "touches": 5,
+                "dual_sided": False,
+                "avg_volume": 1000,
+                "last_date": pd.Timestamp("2026-01-28"),
+            }
+        ]
         s2 = _score_strength(list(levels_2), df, 100)[0]["strength"]
         s5 = _score_strength(list(levels_5), df, 100)[0]["strength"]
         self.assertGreater(s5, s2)
@@ -354,10 +380,8 @@ class TestScoreStrength(unittest.TestCase):
         """双面验证 → 加 5 分"""
         df = self._make_df()
         date = pd.Timestamp("2026-01-28")
-        lv_single = [{"price": 100, "touches": 3, "dual_sided": False,
-                       "avg_volume": 1000, "last_date": date}]
-        lv_dual = [{"price": 100, "touches": 3, "dual_sided": True,
-                     "avg_volume": 1000, "last_date": date}]
+        lv_single = [{"price": 100, "touches": 3, "dual_sided": False, "avg_volume": 1000, "last_date": date}]
+        lv_dual = [{"price": 100, "touches": 3, "dual_sided": True, "avg_volume": 1000, "last_date": date}]
         s_single = _score_strength(list(lv_single), df, 100)[0]["strength"]
         s_dual = _score_strength(list(lv_dual), df, 100)[0]["strength"]
         self.assertAlmostEqual(s_dual - s_single, 5.0, places=1)
@@ -366,10 +390,8 @@ class TestScoreStrength(unittest.TestCase):
         """高成交量确认 → 分数更高"""
         df = self._make_df(avg_volume=1000)
         date = pd.Timestamp("2026-01-28")
-        lv_low_vol = [{"price": 100, "touches": 3, "dual_sided": False,
-                        "avg_volume": 500, "last_date": date}]
-        lv_high_vol = [{"price": 100, "touches": 3, "dual_sided": False,
-                         "avg_volume": 2000, "last_date": date}]
+        lv_low_vol = [{"price": 100, "touches": 3, "dual_sided": False, "avg_volume": 500, "last_date": date}]
+        lv_high_vol = [{"price": 100, "touches": 3, "dual_sided": False, "avg_volume": 2000, "last_date": date}]
         s_low = _score_strength(list(lv_low_vol), df, 100)[0]["strength"]
         s_high = _score_strength(list(lv_high_vol), df, 100)[0]["strength"]
         self.assertGreater(s_high, s_low)
@@ -378,29 +400,40 @@ class TestScoreStrength(unittest.TestCase):
         """越旧的结构位，分数越低（时间衰减）"""
         df = self._make_df(n=100)
         recent = pd.Timestamp("2026-04-10")  # 离最后一天近
-        old = pd.Timestamp("2026-01-15")     # 很久以前
-        lv_recent = [{"price": 100, "touches": 3, "dual_sided": False,
-                       "avg_volume": 1000, "last_date": recent}]
-        lv_old = [{"price": 100, "touches": 3, "dual_sided": False,
-                    "avg_volume": 1000, "last_date": old}]
+        old = pd.Timestamp("2026-01-15")  # 很久以前
+        lv_recent = [{"price": 100, "touches": 3, "dual_sided": False, "avg_volume": 1000, "last_date": recent}]
+        lv_old = [{"price": 100, "touches": 3, "dual_sided": False, "avg_volume": 1000, "last_date": old}]
         s_recent = _score_strength(list(lv_recent), df, 100)[0]["strength"]
         s_old = _score_strength(list(lv_old), df, 100)[0]["strength"]
-        self.assertGreater(s_recent, s_old,
-                           "时间衰减：越旧的结构位分数应该越低")
+        self.assertGreater(s_recent, s_old, "时间衰减：越旧的结构位分数应该越低")
 
     def test_score_capped_at_100(self):
         """分数封顶 100"""
         df = self._make_df(avg_volume=1000)
         # 很多触及 + 高量 + 新 + 双面 → 应该封顶
-        lv = [{"price": 100, "touches": 20, "dual_sided": True,
-               "avg_volume": 5000, "last_date": pd.Timestamp("2026-01-29")}]
+        lv = [
+            {
+                "price": 100,
+                "touches": 20,
+                "dual_sided": True,
+                "avg_volume": 5000,
+                "last_date": pd.Timestamp("2026-01-29"),
+            }
+        ]
         result = _score_strength(lv, df, 100)
         self.assertLessEqual(result[0]["strength"], 100)
 
     def test_empty_df_no_crash(self):
         """空 DataFrame → 不崩溃"""
-        levels = [{"price": 100, "touches": 3, "dual_sided": False,
-                   "avg_volume": 1000, "last_date": pd.Timestamp("2026-01-28")}]
+        levels = [
+            {
+                "price": 100,
+                "touches": 3,
+                "dual_sided": False,
+                "avg_volume": 1000,
+                "last_date": pd.Timestamp("2026-01-28"),
+            }
+        ]
         result = _score_strength(levels, pd.DataFrame(), 100)
         self.assertEqual(len(result), 1)
 
@@ -408,6 +441,7 @@ class TestScoreStrength(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. 支撑/压力分类
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClassify(unittest.TestCase):
     """_classify — 按当前价分类支撑/压力。"""
@@ -441,6 +475,7 @@ class TestClassify(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. adjust_exit_plan — SR 微调止盈止损
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestAdjustExitPlan(unittest.TestCase):
     """adjust_exit_plan — SR 位微调止盈止损。"""
@@ -527,6 +562,7 @@ class TestAdjustExitPlan(unittest.TestCase):
 #  6. 完整分析（集成）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAnalyzeIntegration(unittest.TestCase):
     """analyze — 完整 SR 分析集成测试。"""
 
@@ -536,10 +572,15 @@ class TestAnalyzeIntegration(unittest.TestCase):
         highs = [start + slope * i + 1 for i in range(n)]
         lows = [start + slope * i - 1 for i in range(n)]
         closes = [start + slope * i for i in range(n)]
-        df = pd.DataFrame({
-            "high": highs, "low": lows, "close": closes,
-            "volume": [1000] * n,
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000] * n,
+            },
+            index=dates,
+        )
         return df
 
     def test_insufficient_data_empty(self):
@@ -577,9 +618,15 @@ class TestAnalyzeIntegration(unittest.TestCase):
         df = self._make_trend_df(n=60)
         result = analyze(df, current_price=100)
         required_keys = [
-            "levels", "nearest_support", "nearest_resistance",
-            "at_support", "at_resistance", "zone", "zone_label",
-            "nearest_dist_pct", "current_price",
+            "levels",
+            "nearest_support",
+            "nearest_resistance",
+            "at_support",
+            "at_resistance",
+            "zone",
+            "zone_label",
+            "nearest_dist_pct",
+            "current_price",
         ]
         for key in required_keys:
             self.assertIn(key, result, f"缺少字段: {key}")

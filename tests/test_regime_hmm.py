@@ -40,12 +40,14 @@ from regime_hmm import DEFAULT_THR_MULT, _features_raw, _rule_label, thr_mult
 #  1. _features_raw
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFeaturesRaw(unittest.TestCase):
     """_features_raw 从日线数据构造特征。"""
 
     def test_normal_data_returns_2d_array(self):
         """正常数据 → 返回二维数组 [log_ret, rolling_vol]"""
         import pandas as pd
+
         # 构造 50 根上升趋势的日线
         close = np.linspace(100, 120, 50)
         df = pd.DataFrame({"close": close})
@@ -57,6 +59,7 @@ class TestFeaturesRaw(unittest.TestCase):
     def test_insufficient_data_returns_none(self):
         """数据不足（<40 根）→ None"""
         import pandas as pd
+
         close = np.linspace(100, 105, 20)
         df = pd.DataFrame({"close": close})
         self.assertIsNone(_features_raw(df))
@@ -64,17 +67,58 @@ class TestFeaturesRaw(unittest.TestCase):
     def test_no_close_column_returns_none(self):
         """不含 close 列 → None"""
         import pandas as pd
+
         df = pd.DataFrame({"open": [100, 101, 102], "high": [101, 102, 103]})
         self.assertIsNone(_features_raw(df))
 
     def test_log_return_correctness(self):
         """对数收益计算正确：ret[i] = log(close[i+1]) - log(close[i])"""
         import pandas as pd
-        close = np.array([100.0, 105.0, 110.0, 115.0, 120.0, 118.0, 122.0, 125.0,
-                          123.0, 126.0, 128.0, 130.0, 129.0, 131.0, 133.0, 135.0,
-                          134.0, 136.0, 138.0, 140.0, 139.0, 141.0, 143.0, 145.0,
-                          144.0, 146.0, 148.0, 150.0, 149.0, 151.0, 153.0, 155.0,
-                          154.0, 156.0, 158.0, 160.0, 159.0, 161.0, 163.0, 165.0])
+
+        close = np.array(
+            [
+                100.0,
+                105.0,
+                110.0,
+                115.0,
+                120.0,
+                118.0,
+                122.0,
+                125.0,
+                123.0,
+                126.0,
+                128.0,
+                130.0,
+                129.0,
+                131.0,
+                133.0,
+                135.0,
+                134.0,
+                136.0,
+                138.0,
+                140.0,
+                139.0,
+                141.0,
+                143.0,
+                145.0,
+                144.0,
+                146.0,
+                148.0,
+                150.0,
+                149.0,
+                151.0,
+                153.0,
+                155.0,
+                154.0,
+                156.0,
+                158.0,
+                160.0,
+                159.0,
+                161.0,
+                163.0,
+                165.0,
+            ]
+        )
         df = pd.DataFrame({"close": close})
         X = _features_raw(df)
         # 第一列是对数收益
@@ -84,6 +128,7 @@ class TestFeaturesRaw(unittest.TestCase):
     def test_volatility_non_negative(self):
         """波动率始终 ≥ 0"""
         import pandas as pd
+
         np.random.seed(42)
         close = 100 + np.cumsum(np.random.randn(60) * 2)
         df = pd.DataFrame({"close": close})
@@ -93,6 +138,7 @@ class TestFeaturesRaw(unittest.TestCase):
     def test_no_nan_in_output(self):
         """输出中不含 NaN"""
         import pandas as pd
+
         np.random.seed(42)
         close = 100 + np.cumsum(np.random.randn(60) * 2)
         df = pd.DataFrame({"close": close})
@@ -103,6 +149,7 @@ class TestFeaturesRaw(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _rule_label
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRuleLabel(unittest.TestCase):
     """_rule_label 规则分桶（无 hmmlearn 退化路径）。"""
@@ -133,10 +180,10 @@ class TestRuleLabel(unittest.TestCase):
         """高正收益 + 非高波动 → trend_up"""
         Xz = np.zeros((20, 2))
         Xz[:, 0] = 0.05  # 普通收益
-        Xz[-1, 0] = 0.3   # 最新一根高正收益（>0.15）
+        Xz[-1, 0] = 0.3  # 最新一根高正收益（>0.15）
         # vol 大部分很高，但最新一根 vol 很低（明显低于 75% 分位）
-        Xz[:, 1] = 0.8    # 大部分样本 vol=0.8
-        Xz[-1, 1] = 0.2   # 最新 vol=0.2，远低于 75% 分位（≈0.8）
+        Xz[:, 1] = 0.8  # 大部分样本 vol=0.8
+        Xz[-1, 1] = 0.2  # 最新 vol=0.2，远低于 75% 分位（≈0.8）
         label = _rule_label(Xz)
         self.assertEqual(label, "trend_up")
 
@@ -144,7 +191,7 @@ class TestRuleLabel(unittest.TestCase):
         """高负收益 + 非高波动 → trend_down"""
         Xz = np.zeros((20, 2))
         Xz[:, 0] = -0.05
-        Xz[-1, 0] = -0.3   # 最新一根高负收益（<-0.15）
+        Xz[-1, 0] = -0.3  # 最新一根高负收益（<-0.15）
         Xz[:, 1] = 0.8
         Xz[-1, 1] = 0.2
         label = _rule_label(Xz)
@@ -153,10 +200,10 @@ class TestRuleLabel(unittest.TestCase):
     def test_choppy_label(self):
         """收益近零 + 非高波动 → choppy"""
         Xz = np.zeros((20, 2))
-        Xz[:, 0] = 0.05   # 普通小波动
-        Xz[-1, 0] = 0.05   # 最新收益接近 0（在 -0.15 ~ 0.15 之间）
-        Xz[:, 1] = 0.8     # 大部分 vol 高
-        Xz[-1, 1] = 0.2    # 最新 vol 低（远低于 75% 分位）
+        Xz[:, 0] = 0.05  # 普通小波动
+        Xz[-1, 0] = 0.05  # 最新收益接近 0（在 -0.15 ~ 0.15 之间）
+        Xz[:, 1] = 0.8  # 大部分 vol 高
+        Xz[-1, 1] = 0.2  # 最新 vol 低（远低于 75% 分位）
         label = _rule_label(Xz)
         self.assertEqual(label, "choppy")
 
@@ -164,7 +211,7 @@ class TestRuleLabel(unittest.TestCase):
         """高波动优先于方向判断（即使是趋势）"""
         Xz = np.zeros((20, 2))
         Xz[:, 0] = 0.0
-        Xz[-1, 0] = 0.3    # 高正收益（本应 trend_up）
+        Xz[-1, 0] = 0.3  # 高正收益（本应 trend_up）
         Xz[:, 1] = np.linspace(0.1, 0.8, 20)  # 但 vol 极高
         label = _rule_label(Xz)
         self.assertEqual(label, "high_vol")
@@ -194,6 +241,7 @@ class TestRuleLabel(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. thr_mult
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestThrMult(unittest.TestCase):
     """thr_mult 阈值乘数查询。"""

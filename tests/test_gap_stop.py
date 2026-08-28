@@ -32,6 +32,7 @@ from gap_stop_utils import check_gap_stop_triggered as _check_gap_stop_triggered
 #  多单场景
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLongPosition(unittest.TestCase):
     """多单（ds=1）场景测试。"""
 
@@ -100,6 +101,7 @@ class TestLongPosition(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  空单场景
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestShortPosition(unittest.TestCase):
     """空单（ds=-1）场景测试。"""
@@ -171,6 +173,7 @@ class TestShortPosition(unittest.TestCase):
 #  （来自 2026-08-28 gap_stop 假阳性修复时的真实持仓数据）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRealHoldingsRegression(unittest.TestCase):
     """
     真实持仓数据回归测试 —— 确保修复后的假阳性场景不再复发。
@@ -217,15 +220,14 @@ class TestRealHoldingsRegression(unittest.TestCase):
         ]
         for ds, px, stop, entry, name in holdings:
             r = _check_gap_stop_triggered(ds, px, stop, entry)
-            self.assertFalse(r["triggered"],
-                             f"{name}: 价格在有利方向但被误判为缺口击穿 → 假阳性 bug 复发！")
-            self.assertFalse(r["is_adverse"],
-                             f"{name}: 方向判定错误")
+            self.assertFalse(r["triggered"], f"{name}: 价格在有利方向但被误判为缺口击穿 → 假阳性 bug 复发！")
+            self.assertFalse(r["is_adverse"], f"{name}: 方向判定错误")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  边界 & 异常输入
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEdgeCases(unittest.TestCase):
     """边界情况和异常输入测试。"""
@@ -292,6 +294,7 @@ class TestEdgeCases(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  pen_ratio 计算验证
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPenRatio(unittest.TestCase):
     """pen_ratio（穿透比例）计算准确性测试。"""

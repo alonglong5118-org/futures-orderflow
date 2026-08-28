@@ -28,6 +28,7 @@ Tushare HTTP 约定：
   body = {"api_name": "...", "token": "...", "params": {...}, "fields": "..."}
   返回 = {"code": 0, "msg": "", "data": {"fields": [...], "items": [[...], ...]}}
 """
+
 import argparse
 import json
 import os
@@ -64,11 +65,10 @@ def _tushare_call(api_name, params=None, fields=""):
     token = _load_token()
     if not token:
         raise RuntimeError("无 TUSHARE_TOKEN：请设环境变量 TUSHARE_TOKEN 或写 tushare_token.txt")
-    payload = {"api_name": api_name, "token": token,
-               "params": params or {}, "fields": fields}
+    payload = {"api_name": api_name, "token": token, "params": params or {}, "fields": fields}
     req = urllib.request.Request(
-        TUSHARE_URL, data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"})
+        TUSHARE_URL, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}
+    )
     with urllib.request.urlopen(req, timeout=20) as r:
         resp = json.loads(r.read().decode("utf-8"))
     if resp.get("code") != 0:
@@ -186,16 +186,20 @@ def main():
 
     token = _load_token()
     if not token:
-        print("[fetch_macro_context_full] ⚠️ 未配置 TUSHARE_TOKEN（设环境变量 TUSHARE_TOKEN 或写 tushare_token.txt 首行）")
+        print(
+            "[fetch_macro_context_full] ⚠️ 未配置 TUSHARE_TOKEN（设环境变量 TUSHARE_TOKEN 或写 tushare_token.txt 首行）"
+        )
         if args.dry_run:
             return
         # 无 token 也写出占位缓存，便于读取层优雅降级（不中断 runner）
-        payload = {"as_of": time.strftime("%Y-%m-%d"),
-                   "token_configured": False,
-                   "ine_main": {"available": False, "note": "无 TUSHARE_TOKEN"},
-                   "crude": {"available": False, "note": "无 TUSHARE_TOKEN"},
-                   "nh_comm": {"available": False, "note": "无 TUSHARE_TOKEN"},
-                   "usda": {"available": False, "note": "无 TUSHARE_TOKEN"}}
+        payload = {
+            "as_of": time.strftime("%Y-%m-%d"),
+            "token_configured": False,
+            "ine_main": {"available": False, "note": "无 TUSHARE_TOKEN"},
+            "crude": {"available": False, "note": "无 TUSHARE_TOKEN"},
+            "nh_comm": {"available": False, "note": "无 TUSHARE_TOKEN"},
+            "usda": {"available": False, "note": "无 TUSHARE_TOKEN"},
+        }
         json.dump(payload, open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
         print(f"[fetch_macro_context_full] 已写出占位缓存 {OUT}（无 token）")
         return
@@ -214,9 +218,7 @@ def main():
             print(f"  {k:10s} available={v.get('available')}  {v.get('note')}")
         return
 
-    payload = {"as_of": time.strftime("%Y-%m-%d"),
-               "token_configured": True,
-               **results}
+    payload = {"as_of": time.strftime("%Y-%m-%d"), "token_configured": True, **results}
     json.dump(payload, open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     print(f"[fetch_macro_context_full] 已写出 {OUT}")
     for k, v in results.items():

@@ -200,11 +200,16 @@ jobs:
           echo ""
           echo "📊 以上为建议改进项，不阻塞 PR 合并"
 
-  # ── Ruff 格式化检查（建议级 · 不阻塞） ─────────────────────────────────
+  # ── Ruff 格式化检查（阻塞级） ──────────────────────────────────────────
+  #  代码格式不统一会导致：
+  #    · 阅读困难（每个人风格不一样）
+  #    · Git 合并冲突多（格式改动混入业务改动）
+  #    · Code Review 时噪音大（diff 里全是格式变化）
+  #  用 ruff format --check 保证全仓库代码风格一致
+  # ========================================================================
   ruff-format:
-    name: "Ruff · Format check (advisory)"
+    name: "Ruff · Format check"
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -226,16 +231,10 @@ jobs:
 
       - name: Check formatting
         run: |
-          echo "=== Ruff 格式化检查（建议级）==="
+          echo "=== Ruff 格式化检查（阻塞级）==="
           echo "检查代码格式是否符合规范..."
-          echo ""
-          if ruff format --check --diff . 2>&1; then
-            echo "✅ 格式检查通过"
-          else
-            echo "⚠️  部分文件格式不规范（上方 diff 显示差异）"
-            echo "💡 可运行 'ruff format .' 自动修复"
-            exit 0  # 建议级，不阻塞
-          fi
+          ruff format --check .
+          echo "✅ 格式检查通过"
 
   # ── mypy 类型检查（建议级 · 不阻塞） ───────────────────────────────────
   mypy:

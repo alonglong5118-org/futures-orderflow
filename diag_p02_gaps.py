@@ -3,6 +3,7 @@
   (1) 数据里到底有没有换月跳空（|open-prevclose|/prevclose 较大的根）？
   (2) 现有阈值 ROLL_GAP_PCT=1.0% / ROLL_GAP_MULT=1.0*stop 是否曾触发？
 不写回任何文件。"""
+
 import json
 import os
 import sys
@@ -25,9 +26,9 @@ parsed = [p for p in parsed if p and p["id"] in old_ids]
 print(f"扫描信号数 : {len(parsed)}")
 print()
 # 统计每根前向 bar 的 gap 比例分布
-all_gaps = []          # 所有 gap 比例
-gap_by_sym = {}        # 每品种最大 gap
-triggered = 0          # 命中现有阈值的根数
+all_gaps = []  # 所有 gap 比例
+gap_by_sym = {}  # 每品种最大 gap
+triggered = 0  # 命中现有阈值的根数
 for p in parsed:
     symbol = p["symbol"]
     try:
@@ -43,7 +44,8 @@ for p in parsed:
     thr = max(fp.ROLL_GAP_PCT * prev_close, fp.ROLL_GAP_MULT * stop_dist)
     mx = 0.0
     for _, row in seq.iterrows():
-        o = float(row["open"]); c = float(row["close"])
+        o = float(row["open"])
+        c = float(row["close"])
         gap = abs(o - prev_close)
         ratio = gap / prev_close if prev_close else 0
         all_gaps.append(ratio)
@@ -60,13 +62,18 @@ print()
 if all_gaps:
     all_gaps_sorted = sorted(all_gaps)
     n = len(all_gaps_sorted)
-    def pct(q): return all_gaps_sorted[min(n-1, int(q*n))]
-    print(f"gap比例  p50={pct(0.5)*100:.3f}%  p90={pct(0.9)*100:.3f}%  p99={pct(0.99)*100:.3f}%  max={max(all_gaps)*100:.3f}%")
+
+    def pct(q):
+        return all_gaps_sorted[min(n - 1, int(q * n))]
+
+    print(
+        f"gap比例  p50={pct(0.5) * 100:.3f}%  p90={pct(0.9) * 100:.3f}%  p99={pct(0.99) * 100:.3f}%  max={max(all_gaps) * 100:.3f}%"
+    )
 print()
 print(f"{'品种':>4s} | {'前向窗口最大开盘跳变':>22s}")
-print("-"*32)
+print("-" * 32)
 for s in sorted(gap_by_sym):
-    print(f"{s:>4s} | {gap_by_sym[s]*100:>20.3f}%")
+    print(f"{s:>4s} | {gap_by_sym[s] * 100:>20.3f}%")
 
 print()
 print("结论判读:")

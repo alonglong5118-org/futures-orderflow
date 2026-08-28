@@ -14,6 +14,7 @@ da龘 开盘前一键巡检 (preflight_check.py)
 
 退出码: 0=全绿  1=有黄(待处理)  2=有红(异常)
 """
+
 import argparse
 import datetime
 import json
@@ -28,13 +29,13 @@ HOST_DEFAULT = "127.0.0.1:8731"
 # 期货规则：周末休市，且国家法定节假日休市；补班周末(调休)期货仍休市。
 # 每年初按国务院当年放假安排更新此表即可。
 _HOLIDAY_RANGES_2026 = [
-    ("2026-01-01", "2026-01-03"),   # 元旦
-    ("2026-02-16", "2026-02-22"),   # 春节
-    ("2026-04-04", "2026-04-06"),   # 清明
-    ("2026-05-01", "2026-05-05"),   # 劳动
-    ("2026-06-19", "2026-06-21"),   # 端午
-    ("2026-09-25", "2026-09-27"),   # 中秋
-    ("2026-10-01", "2026-10-07"),   # 国庆
+    ("2026-01-01", "2026-01-03"),  # 元旦
+    ("2026-02-16", "2026-02-22"),  # 春节
+    ("2026-04-04", "2026-04-06"),  # 清明
+    ("2026-05-01", "2026-05-05"),  # 劳动
+    ("2026-06-19", "2026-06-21"),  # 端午
+    ("2026-09-25", "2026-09-27"),  # 中秋
+    ("2026-10-01", "2026-10-07"),  # 国庆
 ]
 
 
@@ -55,11 +56,13 @@ HOLIDAY_SET_2026 = _build_holiday_set()
 def is_trading_day(d=None):
     """期货交易日 = 周一~周五 且 非法定节假日（不调休）。"""
     d = d or datetime.date.today()
-    if d.weekday() >= 5:            # 5=周六 6=周日
+    if d.weekday() >= 5:  # 5=周六 6=周日
         return False
     if d.isoformat() in HOLIDAY_SET_2026:
         return False
     return True
+
+
 MAIN6 = ["FG", "JM", "SA", "J", "jd", "lh"]
 POOL_ONLY = ["RM", "CF", "V", "RB", "UR", "P", "PF", "HC"]
 
@@ -102,8 +105,7 @@ def main():
     ap.add_argument("--strict", action="store_true")
     ap.add_argument("--notify", action="store_true")
     ap.add_argument("--no-color", action="store_true")
-    ap.add_argument("--force", action="store_true",
-                    help="强制巡检(忽略交易日判断, 用于测试/特殊日期)")
+    ap.add_argument("--force", action="store_true", help="强制巡检(忽略交易日判断, 用于测试/特殊日期)")
     args = ap.parse_args()
 
     # 交易日判断：休市日(周末/法定节假日)直接跳过并静默退出
@@ -170,8 +172,11 @@ def main():
             add(lvl, "CTP真tick网关", f"已连接但回流延迟: 新鲜={', '.join(fresh) or '无'} 延迟={', '.join(stale)}")
     else:
         lvl = 2 if args.strict else 1
-        add(lvl, "CTP真tick网关",
-            f"{ctp.get('msg','未连接')} — 唤醒 Windows 虚拟机并启动 ctp_gateway.py (1011修复已就位, 连上即回流)")
+        add(
+            lvl,
+            "CTP真tick网关",
+            f"{ctp.get('msg', '未连接')} — 唤醒 Windows 虚拟机并启动 ctp_gateway.py (1011修复已就位, 连上即回流)",
+        )
 
     # ---------- 5. 主6品种 战略层(日线)就绪 ----------
     syms = d.get("symbols", {}) or {}
@@ -193,7 +198,11 @@ def main():
     if pool_noday and live:
         add(1, "稳健池8品种·日线", f"实时tick已订阅但日线缺失: {', '.join(pool_noday)} (开盘后自动补齐)")
     elif pool_noday:
-        add(1, "稳健池8品种·日线", f"周末无日线(预期): {', '.join(pool_noday)} — 开盘自动补齐; 已就绪={len(pool_ready)}/8")
+        add(
+            1,
+            "稳健池8品种·日线",
+            f"周末无日线(预期): {', '.join(pool_noday)} — 开盘自动补齐; 已就绪={len(pool_ready)}/8",
+        )
     else:
         add(0, "稳健池8品种·日线", f"RM/CF/V/RB/UR/P/PF/HC 全部就绪 ({len(pool_ready)}/8)")
 
@@ -228,14 +237,14 @@ def main():
     if args.notify:
         try:
             url = f"http://{args.host}/api/test_alert"
-            req = urllib.request.Request(url, method="POST",
-                                         headers={"Content-Type": "application/json"},
-                                         data=b"{}")
+            req = urllib.request.Request(url, method="POST", headers={"Content-Type": "application/json"}, data=b"{}")
             with urllib.request.urlopen(req, timeout=10) as r:
                 j = json.loads(r.read().decode("utf-8"))
-            add(0 if j.get("ok") else 2, "通知通道",
-                "已触发 test_alert (红横幅+语音+响铃应出现)" if j.get("ok")
-                else f"test_alert 返回: {j}")
+            add(
+                0 if j.get("ok") else 2,
+                "通知通道",
+                "已触发 test_alert (红横幅+语音+响铃应出现)" if j.get("ok") else f"test_alert 返回: {j}",
+            )
         except Exception as e:
             add(2, "通知通道", f"test_alert 调用失败: {e}")
     else:

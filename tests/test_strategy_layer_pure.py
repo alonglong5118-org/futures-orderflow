@@ -40,6 +40,7 @@ from strategy_layer import classify_regime, crossover
 #  1. crossover
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCrossover(unittest.TestCase):
     """crossover 金叉/死叉判断。"""
 
@@ -139,19 +140,22 @@ class TestCrossover(unittest.TestCase):
 #  2. classify_regime
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestClassifyRegime(unittest.TestCase):
     """classify_regime 市场状态分类。"""
 
-    def _make_df(self, n=30, close_start=100, close_step=0,
-                  high_premium=2.0, low_premium=2.0, vol=1000000):
+    def _make_df(self, n=30, close_start=100, close_step=0, high_premium=2.0, low_premium=2.0, vol=1000000):
         """构造测试用 DataFrame。"""
         closes = [close_start + i * close_step for i in range(n)]
-        df = pd.DataFrame({
-            "close": closes,
-            "high": [c + high_premium for c in closes],
-            "low": [c - low_premium for c in closes],
-            "volume": [vol] * n,
-        }, index=pd.date_range("2026-01-01", periods=n, freq="D"))
+        df = pd.DataFrame(
+            {
+                "close": closes,
+                "high": [c + high_premium for c in closes],
+                "low": [c - low_premium for c in closes],
+                "volume": [vol] * n,
+            },
+            index=pd.date_range("2026-01-01", periods=n, freq="D"),
+        )
         return df
 
     def test_insufficient_data_unknown(self):
@@ -260,11 +264,11 @@ class TestClassifyRegime(unittest.TestCase):
         # 把 flat_atr 设得极小 → ATR虽小但仍 > flat_atr → 不满足震荡
         # 同时ATR < atr_thresh，slope < trend_slope → 过渡
         tight_params = {
-            "atr_thresh": 0.025,   # 默认
-            "flat_dev": 0.008,     # 默认
-            "flat_atr": 0.001,     # 极小 → ATR=0.6% > 0.1% → 不满足震荡
+            "atr_thresh": 0.025,  # 默认
+            "flat_dev": 0.008,  # 默认
+            "flat_atr": 0.001,  # 极小 → ATR=0.6% > 0.1% → 不满足震荡
             "trend_slope": 0.003,  # 默认
-            "trend_dev": 0.010,    # 默认
+            "trend_dev": 0.010,  # 默认
         }
         custom_regime, _ = classify_regime(df, params=tight_params)
         self.assertEqual(custom_regime, "过渡")

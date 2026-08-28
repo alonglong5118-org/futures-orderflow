@@ -21,6 +21,7 @@ long_hu_bang.py — 每日龙虎榜（前 20 会员持仓排名）抓取 → cpo
     python long_hu_bang.py --date 20260811
     python long_hu_bang.py --retry-days 6
 """
+
 import datetime
 import json
 import os
@@ -33,15 +34,31 @@ CPOS_JSON = os.path.join(HERE, "cpos_cache.json")
 # ── 四维策略实际覆盖的品种（与 four_dim_strategy.SYMBOLS 对齐，只抓这些）──
 CZCE_SYMS = ["FG", "SA", "MA", "TA", "PF", "PX", "SH", "UR", "PR", "SR", "CF", "RM", "OI", "PK", "AP"]
 SHFE_SYMS = ["cu", "al", "zn", "ni", "sn", "ao", "au", "ag", "rb", "hc", "ss", "bu", "fu", "ru", "sp"]
-DCE_SYMS  = ["J", "JM", "jd", "lh", "i", "eb", "eg", "l", "pp", "v", "pg", "m", "y", "a", "b", "p", "c", "cs", "rr"]
+DCE_SYMS = ["J", "JM", "jd", "lh", "i", "eb", "eg", "l", "pp", "v", "pg", "m", "y", "a", "b", "p", "c", "cs", "rr"]
 GFEX_SYMS = ["si", "lc"]
-INE_SYMS  = ["sc", "ec"]
+INE_SYMS = ["sc", "ec"]
 
 # akshare DCE 用 j/jm 表示焦炭/焦煤；返回时按小写 variety 聚合，再映射回我的 symbol
 DCE_VAR_MAP = {  # 小写 variety -> 我的 symbol
-    "j": "J", "jm": "JM", "jd": "jd", "lh": "lh", "i": "i", "eb": "eb", "eg": "eg",
-    "l": "l", "pp": "pp", "v": "v", "pg": "pg", "m": "m", "y": "y", "a": "a",
-    "b": "b", "p": "p", "c": "c", "cs": "cs", "rr": "rr",
+    "j": "J",
+    "jm": "JM",
+    "jd": "jd",
+    "lh": "lh",
+    "i": "i",
+    "eb": "eb",
+    "eg": "eg",
+    "l": "l",
+    "pp": "pp",
+    "v": "v",
+    "pg": "pg",
+    "m": "m",
+    "y": "y",
+    "a": "a",
+    "b": "b",
+    "p": "p",
+    "c": "c",
+    "cs": "cs",
+    "rr": "rr",
 }
 
 
@@ -64,6 +81,7 @@ def to_num(x):
     因此调用方必须传整列 Series（不要先 .sum()），由本函数逐元素转数后求和。
     """
     import pandas as pd
+
     if isinstance(x, pd.Series):
         s = x.astype(str).str.replace(",", "", regex=False).str.strip()
         return float(pd.to_numeric(s, errors="coerce").fillna(0.0).sum())
@@ -80,6 +98,7 @@ def patch_calendar(date):
     """akshare 内部交易日历可能不含近期日期，给目标日打补丁避免被拒。"""
     try:
         import akshare.futures.cot as cot
+
         cal = list(getattr(cot, "calendar", []))
         if date not in cal:
             cot.calendar = cal + [date]
@@ -104,18 +123,22 @@ def fetch_czce(ak, date):
         if df is None or not hasattr(df, "columns") or len(df) == 0:
             continue
         try:
-            recs.append(dict(
-                symbol=sym, exchange="CZCE",
-                long_oi=int(to_num(df["long_open_interest"])),
-                short_oi=int(to_num(df["short_open_interest"])),
-                long_chg=int(to_num(df["long_open_interest_chg"])),
-                short_chg=int(to_num(df["short_open_interest_chg"])),
-            ))
+            recs.append(
+                dict(
+                    symbol=sym,
+                    exchange="CZCE",
+                    long_oi=int(to_num(df["long_open_interest"])),
+                    short_oi=int(to_num(df["short_open_interest"])),
+                    long_chg=int(to_num(df["long_open_interest_chg"])),
+                    short_chg=int(to_num(df["short_open_interest_chg"])),
+                )
+            )
         except Exception as e:
             print(f"  [CZCE] {sym} 解析失败: {e}")
     # 逐合约龙虎榜（如 SA609 / SA701 / UR703），供远月 / 次主力独立分析。
     # 品种级 "SA" 会把远近月互相抵消而失真，逐合约才能看出 2609 空头回补 vs 2701 空头增仓 的分化。
     import re as _re
+
     for key in d:
         m = _re.match(r"^([A-Z]{1,3})(\d{3})$", str(key))
         if not m:
@@ -126,13 +149,16 @@ def fetch_czce(ak, date):
         if dfc is None or not hasattr(dfc, "columns") or len(dfc) == 0:
             continue
         try:
-            recs.append(dict(
-                symbol=str(key), exchange="CZCE",
-                long_oi=int(to_num(dfc["long_open_interest"])),
-                short_oi=int(to_num(dfc["short_open_interest"])),
-                long_chg=int(to_num(dfc["long_open_interest_chg"])),
-                short_chg=int(to_num(dfc["short_open_interest_chg"])),
-            ))
+            recs.append(
+                dict(
+                    symbol=str(key),
+                    exchange="CZCE",
+                    long_oi=int(to_num(dfc["long_open_interest"])),
+                    short_oi=int(to_num(dfc["short_open_interest"])),
+                    long_chg=int(to_num(dfc["long_open_interest_chg"])),
+                    short_chg=int(to_num(dfc["short_open_interest_chg"])),
+                )
+            )
         except Exception as e:
             print(f"  [CZCE] 逐合约 {key} 解析失败: {e}")
     return recs
@@ -155,10 +181,10 @@ def _top20_net_from_oc(oc, syms):
             inst = str(r.get("INSTRUMENTID", "")).lower()
             if not inst.startswith(prefix):
                 continue
-            if inst.endswith("all"):          # 跳过 rball 等汇总行
+            if inst.endswith("all"):  # 跳过 rball 等汇总行
                 continue
             rank = r.get("RANK")
-            if rank in (-1, 0, 999):          # 跳过汇总/others
+            if rank in (-1, 0, 999):  # 跳过汇总/others
                 continue
             rows.append(r)
         if not rows:
@@ -212,13 +238,16 @@ def fetch_dce(ak, date):
             if mysym is None:
                 continue
             try:
-                recs.append(dict(
-                    symbol=mysym, exchange="DCE",
-                    long_oi=int(to_num(sub["long_open_interest"])),
-                    short_oi=int(to_num(sub["short_open_interest"])),
-                    long_chg=int(to_num(sub["long_open_interest_chg"])),
-                    short_chg=int(to_num(sub["short_open_interest_chg"])),
-                ))
+                recs.append(
+                    dict(
+                        symbol=mysym,
+                        exchange="DCE",
+                        long_oi=int(to_num(sub["long_open_interest"])),
+                        short_oi=int(to_num(sub["short_open_interest"])),
+                        long_chg=int(to_num(sub["long_open_interest_chg"])),
+                        short_chg=int(to_num(sub["short_open_interest_chg"])),
+                    )
+                )
             except Exception:
                 pass
     return recs
@@ -245,13 +274,16 @@ def fetch_gfex(ak, date):
             if sym not in GFEX_SYMS:
                 continue
             try:
-                recs.append(dict(
-                    symbol=sym, exchange="GFEX",
-                    long_oi=int(to_num(sub["long_open_interest"])),
-                    short_oi=int(to_num(sub["short_open_interest"])),
-                    long_chg=int(to_num(sub["long_open_interest_chg"])),
-                    short_chg=int(to_num(sub["short_open_interest_chg"])),
-                ))
+                recs.append(
+                    dict(
+                        symbol=sym,
+                        exchange="GFEX",
+                        long_oi=int(to_num(sub["long_open_interest"])),
+                        short_oi=int(to_num(sub["short_open_interest"])),
+                        long_chg=int(to_num(sub["long_open_interest_chg"])),
+                        short_chg=int(to_num(sub["short_open_interest_chg"])),
+                    )
+                )
             except Exception:
                 pass
     return recs
@@ -316,9 +348,16 @@ def compute_c_score(rec):
     net_score = max(-100.0, min(100.0, net / net_ref * 100))
     # 主信号=净变化方向（规格 §1.3），绝对净持仓作 25% 倾斜
     c = round(0.75 * net_chg_score + 0.25 * net_score, 1)
-    return dict(C_score=c, net=int(net), net_chg=int(net_chg),
-                long_oi=long_oi, short_oi=short_oi,
-                long_chg=long_chg, short_chg=short_chg, total_oi=int(total_oi))
+    return dict(
+        C_score=c,
+        net=int(net),
+        net_chg=int(net_chg),
+        long_oi=long_oi,
+        short_oi=short_oi,
+        long_chg=long_chg,
+        short_chg=short_chg,
+        total_oi=int(total_oi),
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -335,6 +374,7 @@ def load_cache():
 
 def run(date=None, retry_days=4):
     import pandas as pd  # noqa 确保在 to_num 前可用
+
     ak = ensure("akshare")
     requests = ensure("requests")
 
@@ -375,19 +415,27 @@ def run(date=None, retry_days=4):
         cscore = compute_c_score(rec)
         hist = cache.get(sym, {}).get("history", [])
         hist = [h for h in hist if h.get("date") != used_date]
-        hist.append({"date": used_date, "C_score": cscore["C_score"],
-                     "net": cscore["net"], "net_chg": cscore["net_chg"]})
+        hist.append(
+            {"date": used_date, "C_score": cscore["C_score"], "net": cscore["net"], "net_chg": cscore["net_chg"]}
+        )
         hist = hist[-30:]
         cache[sym] = {
-            "date": used_date, "exchange": rec["exchange"],
-            "C_score": cscore["C_score"], "net": cscore["net"], "net_chg": cscore["net_chg"],
-            "long_oi": cscore["long_oi"], "short_oi": cscore["short_oi"],
-            "long_chg": cscore["long_chg"], "short_chg": cscore["short_chg"],
-            "total_oi": cscore["total_oi"], "history": hist,
+            "date": used_date,
+            "exchange": rec["exchange"],
+            "C_score": cscore["C_score"],
+            "net": cscore["net"],
+            "net_chg": cscore["net_chg"],
+            "long_oi": cscore["long_oi"],
+            "short_oi": cscore["short_oi"],
+            "long_chg": cscore["long_chg"],
+            "short_chg": cscore["short_chg"],
+            "total_oi": cscore["total_oi"],
+            "history": hist,
         }
     cache["_meta"] = {
         "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "trade_date": used_date, "count": len(recs),
+        "trade_date": used_date,
+        "count": len(recs),
     }
     with open(CPOS_JSON, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
@@ -396,6 +444,7 @@ def run(date=None, retry_days=4):
 
 if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser(description="每日龙虎榜抓取 → cpos_cache.json")
     p.add_argument("--date", help="指定交易日 YYYYMMDD（默认今天）")
     p.add_argument("--retry-days", type=int, default=4, help="抓不到时回溯天数")

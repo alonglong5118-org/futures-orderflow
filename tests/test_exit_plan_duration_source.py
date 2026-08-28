@@ -55,6 +55,7 @@ from take_profit_utils import calc_exit_plan
 #  1. calc_exit_plan
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcExitPlan(unittest.TestCase):
     """calc_exit_plan 止损/止盈/尾仓参数计算。"""
 
@@ -62,14 +63,14 @@ class TestCalcExitPlan(unittest.TestCase):
         """多单：止损在下方"""
         # entry=100, atr=10, stop_atr_mult=1.5 → stop_dist=15
         r = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5, rr_ratio=2.0)
-        self.assertEqual(r["stop"], 85.0)   # 100 - 15
+        self.assertEqual(r["stop"], 85.0)  # 100 - 15
         self.assertLess(r["stop"], 100)
 
     def test_long_t1_t2_above_entry(self):
         """多单：t1/t2 在上方"""
         r = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5, rr_ratio=2.0)
-        self.assertEqual(r["t1"], 115.0)   # 100 + 15
-        self.assertEqual(r["t2"], 130.0)   # 100 + 30
+        self.assertEqual(r["t1"], 115.0)  # 100 + 15
+        self.assertEqual(r["t2"], 130.0)  # 100 + 30
         self.assertGreater(r["t1"], 100)
         self.assertGreater(r["t2"], r["t1"])
 
@@ -82,24 +83,21 @@ class TestCalcExitPlan(unittest.TestCase):
     def test_short_t1_t2_below_entry(self):
         """空单：t1/t2 在下方"""
         r = calc_exit_plan(entry=100, dir_T=-1, atr_val=10, stop_atr_mult=1.5, rr_ratio=2.0)
-        self.assertEqual(r["t1"], 85.0)    # 100 - 15
-        self.assertEqual(r["t2"], 70.0)    # 100 - 30
+        self.assertEqual(r["t1"], 85.0)  # 100 - 15
+        self.assertEqual(r["t2"], 70.0)  # 100 - 30
         self.assertLess(r["t1"], 100)
         self.assertLess(r["t2"], r["t1"])
 
     def test_stop_dist_formula(self):
         """stop_dist = stop_atr_mult × regime_coef × ATR"""
         # 1.5 * 1.0 * 10 = 15
-        r = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5,
-                           regime_stop_coef=1.0, rr_ratio=2.0)
+        r = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5, regime_stop_coef=1.0, rr_ratio=2.0)
         self.assertEqual(r["stop_dist"], 15.0)
 
     def test_regime_coef_affects_stop(self):
         """regime 系数影响止损距离（1.2 → 更远）"""
-        r1 = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5,
-                            regime_stop_coef=1.0, rr_ratio=2.0)
-        r2 = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5,
-                            regime_stop_coef=1.2, rr_ratio=2.0)
+        r1 = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5, regime_stop_coef=1.0, rr_ratio=2.0)
+        r2 = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5, regime_stop_coef=1.2, rr_ratio=2.0)
         # 1.2 系数 → 止损更远
         self.assertGreater(r2["stop_dist"], r1["stop_dist"])
         # 1.5 * 1.2 * 10 = 18
@@ -119,8 +117,9 @@ class TestCalcExitPlan(unittest.TestCase):
 
     def test_tail_stop_dist_formula(self):
         """尾仓跟踪距离 = tail_trail_R × stop_dist"""
-        r = calc_exit_plan(entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5,
-                           rr_ratio=2.0, tail_enabled=True, tail_trail_R=2.0)
+        r = calc_exit_plan(
+            entry=100, dir_T=1, atr_val=10, stop_atr_mult=1.5, rr_ratio=2.0, tail_enabled=True, tail_trail_R=2.0
+        )
         # stop_dist=15, tail_trail_R=2 → 30
         self.assertEqual(r["tail_stop_dist"], 30.0)
 
@@ -143,8 +142,7 @@ class TestCalcExitPlan(unittest.TestCase):
     def test_return_seven_fields(self):
         """返回 7 字段"""
         r = calc_exit_plan(entry=100, dir_T=1, atr_val=10)
-        for key in ("stop", "t1", "t2", "stop_dist",
-                     "tail_enabled", "tail_stop_dist", "tail_pct"):
+        for key in ("stop", "t1", "t2", "stop_dist", "tail_enabled", "tail_stop_dist", "tail_pct"):
             self.assertIn(key, r)
 
     def test_negative_dir_is_short(self):
@@ -170,6 +168,7 @@ class TestCalcExitPlan(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _duration
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDuration(unittest.TestCase):
     """_duration 持仓时长格式化。"""
@@ -228,6 +227,7 @@ class TestDuration(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _source_label
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSourceLabel(unittest.TestCase):
     """_source_label 信号来源标签。"""

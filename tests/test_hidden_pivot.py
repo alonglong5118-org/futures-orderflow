@@ -54,6 +54,7 @@ from hidden_pivot import find_swings, hidden_pivot, latest_abc, round_tick
 #  1. round_tick
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRoundTick(unittest.TestCase):
     """round_tick tick 取整。"""
 
@@ -90,6 +91,7 @@ class TestRoundTick(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. find_swings
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFindSwings(unittest.TestCase):
     """find_swings ZigZag 摆动点检测。"""
@@ -130,19 +132,20 @@ class TestFindSwings(unittest.TestCase):
         # 构造一个有多个摆动的序列
         n = 30
         import math
+
         highs = [100 + math.sin(i * 0.5) * 10 + 1 for i in range(n)]
         lows = [100 + math.sin(i * 0.5) * 10 - 1 for i in range(n)]
         closes = [100 + math.sin(i * 0.5) * 10 for i in range(n)]
         result = find_swings(highs, lows, closes, deviation=0.01, depth=2)
         # 检查交替
         for i in range(1, len(result)):
-            self.assertNotEqual(result[i][1], result[i - 1][1],
-                                f"连续两个 {result[i][1]} 在位置 {i}")
+            self.assertNotEqual(result[i][1], result[i - 1][1], f"连续两个 {result[i][1]} 在位置 {i}")
 
     def test_returns_sorted_by_index(self):
         """返回结果按索引升序排列"""
         n = 30
         import math
+
         highs = [100 + math.sin(i * 0.5) * 10 + 1 for i in range(n)]
         lows = [100 + math.sin(i * 0.5) * 10 - 1 for i in range(n)]
         closes = [100 + math.sin(i * 0.5) * 10 for i in range(n)]
@@ -154,6 +157,7 @@ class TestFindSwings(unittest.TestCase):
         """deviation 过滤掉小于阈值的波动"""
         n = 20
         import math
+
         # 大波动 + 小毛刺
         highs = [100 + math.sin(i * 0.3) * 15 + 1 for i in range(n)]
         lows = [100 + math.sin(i * 0.3) * 15 - 1 for i in range(n)]
@@ -168,6 +172,7 @@ class TestFindSwings(unittest.TestCase):
         """depth 越大，需要两侧更多根确认，摆动点越少"""
         n = 40
         import math
+
         highs = [100 + math.sin(i * 0.3) * 10 + 1 for i in range(n)]
         lows = [100 + math.sin(i * 0.3) * 10 - 1 for i in range(n)]
         closes = [100 + math.sin(i * 0.3) * 10 for i in range(n)]
@@ -180,6 +185,7 @@ class TestFindSwings(unittest.TestCase):
 #  3. latest_abc
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLatestAbc(unittest.TestCase):
     """latest_abc 最近 a-b-c 结构。"""
 
@@ -191,9 +197,9 @@ class TestLatestAbc(unittest.TestCase):
     def test_bullish_structure(self):
         """多头结构：low-high-low 且 c > a → direction=1"""
         swings = [
-            (0, "low", 100),    # a
-            (5, "high", 120),   # b
-            (10, "low", 105),   # c (higher low: 105 > 100)
+            (0, "low", 100),  # a
+            (5, "high", 120),  # b
+            (10, "low", 105),  # c (higher low: 105 > 100)
         ]
         result = latest_abc(swings)
         self.assertIsNotNone(result)
@@ -206,8 +212,8 @@ class TestLatestAbc(unittest.TestCase):
     def test_bearish_structure(self):
         """空头结构：high-low-high 且 c < a → direction=-1"""
         swings = [
-            (0, "high", 120),   # a
-            (5, "low", 100),    # b
+            (0, "high", 120),  # a
+            (5, "low", 100),  # b
             (10, "high", 110),  # c (lower high: 110 < 120)
         ]
         result = latest_abc(swings)
@@ -251,11 +257,11 @@ class TestLatestAbc(unittest.TestCase):
     def test_finds_latest_structure(self):
         """找最近的结构（从后往前找）"""
         swings = [
-            (0, "low", 100),     # 第一个结构 a
-            (5, "high", 120),    # 第一个结构 b
-            (10, "low", 105),    # 第一个结构 c（valid）
-            (15, "high", 130),   # 第二个结构 b
-            (20, "low", 115),    # 第二个结构 c（higher low: 115 > 105）
+            (0, "low", 100),  # 第一个结构 a
+            (5, "high", 120),  # 第一个结构 b
+            (10, "low", 105),  # 第一个结构 c（valid）
+            (15, "high", 130),  # 第二个结构 b
+            (20, "low", 115),  # 第二个结构 c（higher low: 115 > 105）
         ]
         result = latest_abc(swings)
         self.assertIsNotNone(result)
@@ -287,6 +293,7 @@ class TestLatestAbc(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. hidden_pivot
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHiddenPivot(unittest.TestCase):
     """hidden_pivot 计算目标位与止损。"""
@@ -416,12 +423,14 @@ class TestHiddenPivot(unittest.TestCase):
 #  5. 端到端：find_swings → latest_abc → hidden_pivot
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHiddenPivotEndToEnd(unittest.TestCase):
     """端到端：摆动点检测 → ABC 结构 → 目标位计算。"""
 
     def test_clean_trend_produces_valid_structure(self):
         """正弦波动 → 能检测到摆动点 + ABC 结构 + 目标位"""
         import math
+
         n = 60
         # 正弦波，足够多周期，确保有多个摆动
         closes = [100 + math.sin(i * 0.4) * 15 for i in range(n)]

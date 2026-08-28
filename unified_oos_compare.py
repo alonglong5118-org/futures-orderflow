@@ -13,6 +13,7 @@ D. 5 因子稳健版（剔除 T_seasonal）
 - min_bars: 60
 - 最低交易数: 5 笔/品种
 """
+
 import copy
 import json
 import os
@@ -58,8 +59,7 @@ def eval_weights(data, subfactor_weights=None):
     total_trades = 0
     for sym, df in sorted(data.items()):
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                      min_bars=MIN_BARS, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES:
                 expRs.append(float(r.get("expR", 0)))
@@ -96,7 +96,7 @@ for group in GROUPS:
     for sym, df in sorted(group_data.items()):
         total = len(df)
         train_end = total - TEST_BARS
-        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS):train_end]
+        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS) : train_end]
         test_data[sym] = df.iloc[train_end:]
 
     print(f"  品种数: {len(group_data)}", flush=True)
@@ -160,5 +160,5 @@ for group in GROUPS:
 with open(OUTFILE, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
-print(f"\n{'='*80}", flush=True)
+print(f"\n{'=' * 80}", flush=True)
 print(f"结果已保存到: {OUTFILE}", flush=True)

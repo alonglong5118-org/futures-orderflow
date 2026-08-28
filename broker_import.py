@@ -20,6 +20,7 @@
     bi.import_file(path)           # 预览单文件
     bi.import_file(path, apply=True)   # 真正回灌
 """
+
 from __future__ import annotations
 
 import csv
@@ -87,6 +88,7 @@ def contract_to_symbol(contract):
     raw = m.group(1)
     try:
         import four_dim_strategy as fd
+
         for key in fd.SYMBOLS:
             if key.lower() == raw.lower():
                 return key
@@ -126,6 +128,7 @@ def _read_rows(path):
     if ext in (".xls", ".xlsx"):
         try:
             import pandas as pd
+
             df = pd.read_excel(path, header=None, dtype=str)
             return df.fillna("").values.tolist()
         except Exception as e:
@@ -162,15 +165,17 @@ def parse_file(path):
     if hdr_i is None:
         return [], "未识别到表头（需含 合约/成交价/手数 三列）"
     out = []
-    for r in rows[hdr_i + 1:]:
+    for r in rows[hdr_i + 1 :]:
         if not r or all(not str(x).strip() for x in r):
             continue
+
         def g(f, row=r):
             j = idx.get(f)
             return row[j] if (j is not None and j < len(row)) else ""
+
         contract = str(g("contract")).strip()
         if not contract or not re.search(r"[A-Za-z]", contract):
-            continue      # 合计行/分隔行
+            continue  # 合计行/分隔行
         price = _to_num(g("price"))
         lots = _to_num(g("lots"))
         if price is None or not lots or lots <= 0:
@@ -183,13 +188,21 @@ def parse_file(path):
         tid = str(g("tid")).strip()
         if not tid:
             tid = f"{d}_{contract}_{g('time')}_{price}_{int(lots)}"
-        out.append({
-            "tid": tid, "date": d, "time": str(g("time")).strip(),
-            "symbol": sym, "contract": contract,
-            "side": _parse_side(g("side")), "offset": _parse_offset(g("offset")),
-            "price": price, "lots": int(lots), "fee": _to_num(g("fee")) or 0.0,
-            "source": os.path.basename(path),
-        })
+        out.append(
+            {
+                "tid": tid,
+                "date": d,
+                "time": str(g("time")).strip(),
+                "symbol": sym,
+                "contract": contract,
+                "side": _parse_side(g("side")),
+                "offset": _parse_offset(g("offset")),
+                "price": price,
+                "lots": int(lots),
+                "fee": _to_num(g("fee")) or 0.0,
+                "source": os.path.basename(path),
+            }
+        )
     return out, ("ok" if out else "识别到表头但无有效成交行")
 
 
@@ -221,9 +234,14 @@ def _mark_imported(tids, path, applied):
     ids = set(st.get("imported", []))
     ids.update(tids)
     st["imported"] = sorted(ids)[-5000:]
-    st.setdefault("files", []).append({
-        "file": os.path.basename(path), "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "n": len(tids), "applied": applied})
+    st.setdefault("files", []).append(
+        {
+            "file": os.path.basename(path),
+            "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "n": len(tids),
+            "applied": applied,
+        }
+    )
     st["files"] = st["files"][-100:]
     _save_state(st)
 
@@ -233,6 +251,7 @@ def _apply_fill(f):
     """把一条成交写进 trade_journal + account_tracker。返回 (ok, msg)。"""
     import account_tracker as at
     import trade_journal as tj
+
     sym, lots, px = f["symbol"], f["lots"], f["price"]
     side, offset = f["side"], f["offset"]
     if not side:
@@ -241,8 +260,7 @@ def _apply_fill(f):
         # 无开平列：按当前是否有反向持仓推断（有反向仓 = 平，否则 = 开）
         st = at.load_state()
         pos = st.get("positions", {}).get(sym)
-        if pos and ((pos["direction"] == "多" and side == "卖") or
-                    (pos["direction"] == "空" and side == "买")):
+        if pos and ((pos["direction"] == "多" and side == "卖") or (pos["direction"] == "空" and side == "买")):
             offset = "平"
         else:
             offset = "开"
@@ -283,22 +301,37 @@ def import_file(path, apply=False, skip_imported=True):
         try:
             fills, note = parse_file(path)
         except Exception as e:
-            return {"ok": False, "file": os.path.basename(path), "error": str(e),
-                    "fills": [], "new": 0}
+            return {"ok": False, "file": os.path.basename(path), "error": str(e), "fills": [], "new": 0}
         seen = _imported_ids() if skip_imported else set()
         new = [f for f in fills if f["tid"] not in seen]
-        res = {"ok": True, "file": os.path.basename(path), "path": path,
-               "note": note, "total": len(fills), "new": len(new),
-               "skipped": len(fills) - len(new), "fills": new,
-               "applied": False, "results": []}
+        res = {
+            "ok": True,
+            "file": os.path.basename(path),
+            "path": path,
+            "note": note,
+            "total": len(fills),
+            "new": len(new),
+            "skipped": len(fills) - len(new),
+            "fills": new,
+            "applied": False,
+            "results": [],
+        }
         if apply and new:
             done = errs = 0
             for f in new:
                 ok, m = _apply_fill(f)
                 res["results"].append(
-                    {"tid": f["tid"], "symbol": f["symbol"], "side": f["side"],
-                     "offset": f["offset"], "lots": f["lots"], "price": f["price"],
-                     "ok": ok, "msg": m})
+                    {
+                        "tid": f["tid"],
+                        "symbol": f["symbol"],
+                        "side": f["side"],
+                        "offset": f["offset"],
+                        "lots": f["lots"],
+                        "price": f["price"],
+                        "ok": ok,
+                        "msg": m,
+                    }
+                )
                 done += 1 if ok else 0
                 errs += 0 if ok else 1
             _mark_imported([f["tid"] for f in new], path, True)
@@ -338,14 +371,19 @@ def scan(apply=False, max_files=5):
     files = find_files()[:max_files]
     reports = [import_file(p, apply=apply) for p in files]
     total_new = sum(r.get("new", 0) for r in reports)
-    return {"ok": True, "files": len(files), "new_fills": total_new,
-            "reports": reports,
-            "inbox": INBOX_DIRS,
-            "scanned": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    return {
+        "ok": True,
+        "files": len(files),
+        "new_fills": total_new,
+        "reports": reports,
+        "inbox": INBOX_DIRS,
+        "scanned": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
 
 if __name__ == "__main__":
     import sys
+
     os.makedirs(INBOX_DIRS[0], exist_ok=True)
     if len(sys.argv) > 1 and sys.argv[1] not in ("--scan", "--apply"):
         r = import_file(sys.argv[1], apply=("--apply" in sys.argv))
@@ -355,5 +393,7 @@ if __name__ == "__main__":
         print(f"导入目录: {r['inbox']}")
         print(f"候选文件 {r['files']} 个，新成交 {r['new_fills']} 笔")
         for rep in r["reports"]:
-            print(f"  · {rep['file']}: {rep.get('note') or rep.get('error')} "
-                  f"总{rep.get('total', 0)}/新{rep.get('new', 0)}")
+            print(
+                f"  · {rep['file']}: {rep.get('note') or rep.get('error')} "
+                f"总{rep.get('total', 0)}/新{rep.get('new', 0)}"
+            )

@@ -5,6 +5,7 @@
 
 一次跑完：训练集 GA → 验证集评估 → 与 6 因子对比
 """
+
 import copy
 import json
 import os
@@ -45,7 +46,7 @@ def _ind_to_weights5(ind):
     """染色体 → 5 因子权重字典。"""
     s = sum(max(0, x) for x in ind)
     if s < 1e-6:
-        return {n: 1.0/len(SF5_NAMES) for n in SF5_NAMES}
+        return {n: 1.0 / len(SF5_NAMES) for n in SF5_NAMES}
     norm = [max(0, x) / s for x in ind]
     return {name: round(w, 4) for name, w in zip(SF5_NAMES, norm)}
 
@@ -76,8 +77,7 @@ def _eval_on_data(weights, data_dict):
     total_trades = 0
     for sym, df in data_dict.items():
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                      min_bars=MIN_BARS, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES:
                 expRs.append(float(r.get("expR", 0)))
@@ -117,9 +117,9 @@ def _ga_evaluate(ind, train_data):
 
 def optimize_and_validate(group_name):
     """对单个板块做 5 因子 GA 优化 + OOS 验证。"""
-    print(f"\n{'='*60}", flush=True)
+    print(f"\n{'=' * 60}", flush=True)
     print(f"[5因子] 板块: {group_name}", flush=True)
-    print(f"{'='*60}", flush=True)
+    print(f"{'=' * 60}", flush=True)
 
     # 加载全量数据
     group_data = load_group_data(group_name, min_bars=TRAIN_BARS + TEST_BARS, tail=0)
@@ -135,7 +135,7 @@ def optimize_and_validate(group_name):
     for sym, df in sorted(group_data.items()):
         total = len(df)
         train_end = total - TEST_BARS
-        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS):train_end]
+        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS) : train_end]
         test_data[sym] = df.iloc[train_end:]
 
     # ========== GA 优化（训练集） ==========
@@ -150,8 +150,7 @@ def optimize_and_validate(group_name):
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.Individual5,
-                     toolbox.attr_float, n=len(SF5_NAMES))
+    toolbox.register("individual", tools.initRepeat, creator.Individual5, toolbox.attr_float, n=len(SF5_NAMES))
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval_ind(ind):
@@ -179,8 +178,8 @@ def optimize_and_validate(group_name):
         hof.update(offspring)
         pop = toolbox.select(offspring, k=len(pop))
         record = stats.compile(pop)
-        history.append({"gen": gen+1, "avg": record["avg"], "max": record["max"]})
-        print(f"    Gen {gen+1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}", flush=True)
+        history.append({"gen": gen + 1, "avg": record["avg"], "max": record["max"]})
+        print(f"    Gen {gen + 1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}", flush=True)
         if record["max"] > best_max + 0.001:
             best_max = record["max"]
             stall = 0
@@ -248,8 +247,7 @@ def _eval_base(data_dict):
     total_trades = 0
     for sym, df in data_dict.items():
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                      min_bars=MIN_BARS, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES:
                 expRs.append(float(r.get("expR", 0)))
@@ -277,15 +275,21 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     elapsed = time.time() - t0
-    print(f"\n{'='*70}", flush=True)
-    print(f"全部完成，耗时 {elapsed/60:.1f} 分钟", flush=True)
-    print(f"{'='*70}", flush=True)
-    print(f"{'板块':<8s} {'训练基准':>10s} {'训练5因子':>10s} {'验证基准':>10s} {'验证5因子':>10s} {'过拟合':>8s}", flush=True)
+    print(f"\n{'=' * 70}", flush=True)
+    print(f"全部完成，耗时 {elapsed / 60:.1f} 分钟", flush=True)
+    print(f"{'=' * 70}", flush=True)
+    print(
+        f"{'板块':<8s} {'训练基准':>10s} {'训练5因子':>10s} {'验证基准':>10s} {'验证5因子':>10s} {'过拟合':>8s}",
+        flush=True,
+    )
     print("-" * 60, flush=True)
     for g, r in results.items():
-        print(f"{g:<8s} {r['train']['base_expR']:+.4f}    {r['train']['sf5_expR']:+.4f}    "
-              f"{r['test']['base_expR']:+.4f}    {r['test']['sf5_expR']:+.4f}    "
-              f"{r['overfit_coef']:+.2f}", flush=True)
+        print(
+            f"{g:<8s} {r['train']['base_expR']:+.4f}    {r['train']['sf5_expR']:+.4f}    "
+            f"{r['test']['base_expR']:+.4f}    {r['test']['sf5_expR']:+.4f}    "
+            f"{r['overfit_coef']:+.2f}",
+            flush=True,
+        )
     print(f"\n结果已保存到: {OUTFILE}", flush=True)
 
 

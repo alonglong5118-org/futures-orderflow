@@ -41,19 +41,23 @@ from four_dim_strategy import pipeline
 #  测试数据构造
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _make_daily_df(n=120, start=1000, slope=3, vol=2, seed=42):
     """构造日线趋势数据。"""
     np.random.seed(seed)
     px = start + np.arange(n) * slope + np.cumsum(np.random.randn(n) * vol)
     idx = pd.date_range("2026-01-01", periods=n, freq="D")
-    df = pd.DataFrame({
-        "open": px,
-        "high": px + abs(np.random.randn(n) * 4),
-        "low": px - abs(np.random.randn(n) * 4),
-        "close": px,
-        "volume": 10000 + np.random.randn(n) * 500,
-        "open_interest": 50000 + np.arange(n) * 100,
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": px,
+            "high": px + abs(np.random.randn(n) * 4),
+            "low": px - abs(np.random.randn(n) * 4),
+            "close": px,
+            "volume": 10000 + np.random.randn(n) * 500,
+            "open_interest": 50000 + np.arange(n) * 100,
+        },
+        index=idx,
+    )
     df["high"] = df[["high", "close"]].max(axis=1)
     df["low"] = df[["low", "close"]].min(axis=1)
     return df
@@ -64,13 +68,16 @@ def _make_5m_df(n=120, start=1000, slope=0.5, vol=1, seed=99):
     np.random.seed(seed)
     px = start + np.arange(n) * slope + np.cumsum(np.random.randn(n) * vol)
     idx = pd.date_range("2026-06-01 09:00", periods=n, freq="5min")
-    df = pd.DataFrame({
-        "open": px,
-        "high": px + abs(np.random.randn(n) * 1.5),
-        "low": px - abs(np.random.randn(n) * 1.5),
-        "close": px,
-        "volume": 500 + np.random.randn(n) * 50,
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": px,
+            "high": px + abs(np.random.randn(n) * 1.5),
+            "low": px - abs(np.random.randn(n) * 1.5),
+            "close": px,
+            "volume": 500 + np.random.randn(n) * 50,
+        },
+        index=idx,
+    )
     df["high"] = df[["high", "close"]].max(axis=1)
     df["low"] = df[["low", "close"]].min(axis=1)
     return df
@@ -80,6 +87,7 @@ def _make_5m_df(n=120, start=1000, slope=0.5, vol=1, seed=99):
 #  1. 输出结构
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPipelineOutput(unittest.TestCase):
     """pipeline 输出结构完整性。"""
 
@@ -88,12 +96,24 @@ class TestPipelineOutput(unittest.TestCase):
         df = _make_daily_df()
         result = pipeline("rb", df, F_override=30, c_override=20)
         required = [
-            "F", "T_D", "T_5m", "C",
-            "bias_G", "bias_FC", "dir_T", "dir_T_raw",
-            "regime", "rdesc",
-            "triggered", "T_thresh_eff", "T_thresh_used",
-            "conv", "used_5m", "hard_veto",
-            "corr_action", "bs_mode",
+            "F",
+            "T_D",
+            "T_5m",
+            "C",
+            "bias_G",
+            "bias_FC",
+            "dir_T",
+            "dir_T_raw",
+            "regime",
+            "rdesc",
+            "triggered",
+            "T_thresh_eff",
+            "T_thresh_used",
+            "conv",
+            "used_5m",
+            "hard_veto",
+            "corr_action",
+            "bs_mode",
         ]
         for key in required:
             self.assertIn(key, result, "缺少字段: %s" % key)
@@ -128,6 +148,7 @@ class TestPipelineOutput(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. F/C override 与消融
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPipelineOverridesAndAblation(unittest.TestCase):
     """F/C override 与消融实验。"""
@@ -179,6 +200,7 @@ class TestPipelineOverridesAndAblation(unittest.TestCase):
 #  3. 硬否决（P-C 回归）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPipelineHardVeto(unittest.TestCase):
     """F/C 反向硬否决（P-C 回归测试）。"""
 
@@ -189,10 +211,8 @@ class TestPipelineHardVeto(unittest.TestCase):
         result = pipeline("rb", df, F_override=-80, c_override=-80)
         # T 正 + F/C 强负反向 → 应该被硬否决
         if result["dir_T"] == 1:  # 确认 T 是正的
-            self.assertTrue(result["hard_veto"],
-                "P-C 回归 bug：F/C 强反向应该触发硬否决，但没有！")
-            self.assertFalse(result["triggered"],
-                "硬否决时 triggered 应该为 False")
+            self.assertTrue(result["hard_veto"], "P-C 回归 bug：F/C 强反向应该触发硬否决，但没有！")
+            self.assertFalse(result["triggered"], "硬否决时 triggered 应该为 False")
 
     def test_weak_fc_reverse_no_veto(self):
         """F/C 弱反向 → 不触发硬否决"""
@@ -200,16 +220,14 @@ class TestPipelineHardVeto(unittest.TestCase):
         # F/C 反向但很弱 → 不够硬否决阈值
         result = pipeline("rb", df, F_override=-10, c_override=-10)
         if result["dir_T"] == 1:
-            self.assertFalse(result["hard_veto"],
-                "弱反向不应该触发硬否决")
+            self.assertFalse(result["hard_veto"], "弱反向不应该触发硬否决")
 
     def test_same_direction_no_veto(self):
         """F/C 与 T 同向 → 不否决"""
         df = _make_daily_df(slope=5)
         result = pipeline("rb", df, F_override=60, c_override=60)
         if result["dir_T"] == 1:
-            self.assertFalse(result["hard_veto"],
-                "同向不应该触发硬否决")
+            self.assertFalse(result["hard_veto"], "同向不应该触发硬否决")
 
     def test_hard_veto_blocks_trigger(self):
         """硬否决时 triggered 必为 False"""
@@ -230,6 +248,7 @@ class TestPipelineHardVeto(unittest.TestCase):
 #  4. F/C 同向确认（P-B 回归）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPipelineFCConfirmation(unittest.TestCase):
     """F/C 同向确认降阈值（P-B 回归测试）。"""
 
@@ -240,8 +259,9 @@ class TestPipelineFCConfirmation(unittest.TestCase):
         result = pipeline("rb", df, F_override=80, c_override=60)
         if result["dir_T"] == 1:  # T 正
             # 有确认时，实际使用的阈值应该比有效阈值低
-            self.assertLess(result["T_thresh_used"], result["T_thresh_eff"],
-                "P-B 回归 bug：F/C 同向确认应该降低 T 阈值，但没有！")
+            self.assertLess(
+                result["T_thresh_used"], result["T_thresh_eff"], "P-B 回归 bug：F/C 同向确认应该降低 T 阈值，但没有！"
+            )
 
     def test_no_fc_confirm_threshold_unchanged(self):
         """F/C 不同向（或中性）→ T_thresh_used == T_thresh_eff"""
@@ -249,8 +269,9 @@ class TestPipelineFCConfirmation(unittest.TestCase):
         # C = 0 → 无确认
         result = pipeline("rb", df, F_override=0, c_override=0)
         if result["dir_T"] != 0:
-            self.assertAlmostEqual(result["T_thresh_used"], result["T_thresh_eff"],
-                msg="无 F/C 确认时，使用阈值应等于有效阈值")
+            self.assertAlmostEqual(
+                result["T_thresh_used"], result["T_thresh_eff"], msg="无 F/C 确认时，使用阈值应等于有效阈值"
+            )
 
     def test_fc_confirm_increases_trigger_chance(self):
         """F/C 同向确认 → 更容易触发（triggered 概率更高）
@@ -274,6 +295,7 @@ class TestPipelineFCConfirmation(unittest.TestCase):
 #  5. corr_gate 集成（P1-2 回归）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPipelineCorrGate(unittest.TestCase):
     """corr_gate 在 pipeline 中的集成（P1-2 回归）。"""
 
@@ -282,7 +304,7 @@ class TestPipelineCorrGate(unittest.TestCase):
         np.random.seed(42)
         t = np.random.randn(n) * 30
         # c = corr * t + noise
-        noise = np.random.randn(n) * 30 * np.sqrt(1 - corr ** 2) if abs(corr) < 1 else 0
+        noise = np.random.randn(n) * 30 * np.sqrt(1 - corr**2) if abs(corr) < 1 else 0
         c = corr * t + noise
         return list(zip(t.tolist(), c.tolist()))
 
@@ -294,10 +316,8 @@ class TestPipelineCorrGate(unittest.TestCase):
         result = pipeline("rb", df, F_override=0, c_override=80, corr_hist=hist)
         # T 和 C 高相关，且 T 更弱 → T 应该被降权为 0
         if "降权T" in result["corr_action"]:
-            self.assertEqual(result["T_D"], 0.0,
-                "P1-2 回归 bug：corr_gate 说降了 T，但 T_D 实际没变！")
-            self.assertTrue(result["C"] != 0,
-                "降权 T 时 C 应该保留")
+            self.assertEqual(result["T_D"], 0.0, "P1-2 回归 bug：corr_gate 说降了 T，但 T_D 实际没变！")
+            self.assertTrue(result["C"] != 0, "降权 T 时 C 应该保留")
 
     def test_low_corr_no_action(self):
         """低相关 → 不降权"""
@@ -324,6 +344,7 @@ class TestPipelineCorrGate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. 风控锁定前置拦截
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPipelineRiskLock(unittest.TestCase):
     """风控锁定前置拦截。"""
@@ -356,6 +377,7 @@ class TestPipelineRiskLock(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. HMM / GARCH 阈值调制
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPipelineThresholdModulation(unittest.TestCase):
     """HMM / GARCH 阈值调制。"""
@@ -394,6 +416,7 @@ class TestPipelineThresholdModulation(unittest.TestCase):
 #  8. 5m 数据降级
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPipeline5mFallback(unittest.TestCase):
     """5m 数据降级行为。"""
 
@@ -422,6 +445,7 @@ class TestPipeline5mFallback(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  9. SR 位信号质量调制
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPipelineSRQuality(unittest.TestCase):
     """SR 位信号质量调制（需 sr_analyzer 模块可用）。"""

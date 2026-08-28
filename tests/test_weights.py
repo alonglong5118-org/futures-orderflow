@@ -41,6 +41,7 @@ from strategy_layer import ALL_STRATS, MEAN_STRATS, TREND_STRATS
 #  1. regime_weights — regime 级策略权重
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRegimeWeights(unittest.TestCase):
     """regime_weights — 按 regime 返回各策略权重。"""
 
@@ -93,8 +94,7 @@ class TestRegimeWeights(unittest.TestCase):
         for regime in ["趋势", "震荡", "波动", "未知"]:
             w = regime_weights(regime)
             for s, val in w.items():
-                self.assertGreaterEqual(val, 0,
-                    f"{regime} regime 策略 {s} 权重 = {val} < 0")
+                self.assertGreaterEqual(val, 0, f"{regime} regime 策略 {s} 权重 = {val} < 0")
 
     def test_trend_regime_trend_gt_mean(self):
         """趋势 regime：趋势权重 > 均值权重（符合直觉）"""
@@ -114,6 +114,7 @@ class TestRegimeWeights(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. cluster_weights — 簇权重（P-A 去相关核心）
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClusterWeights(unittest.TestCase):
     """cluster_weights — 簇级权重（P-A 去相关 + P-D 季节性加权）。"""
@@ -154,10 +155,8 @@ class TestClusterWeights(unittest.TestCase):
         """
         cw = cluster_weights("趋势")
         # 趋势簇权重应该 = 1.0（均值），不是 5.0（总和）
-        self.assertAlmostEqual(cw["trend"], 1.0,
-            msg="P-A 回归 bug：簇权重应该是均值，不是总和（共线放大）")
-        self.assertLess(cw["trend"], 2.0,
-            msg="P-A 回归 bug：趋势簇权重不可能超过 1.0")
+        self.assertAlmostEqual(cw["trend"], 1.0, msg="P-A 回归 bug：簇权重应该是均值，不是总和（共线放大）")
+        self.assertLess(cw["trend"], 2.0, msg="P-A 回归 bug：趋势簇权重不可能超过 1.0")
 
     def test_three_clusters_always_present(self):
         """始终返回 3 个簇：trend / mean / seasonal"""
@@ -233,8 +232,9 @@ class TestClusterWeights(unittest.TestCase):
         }
         cw_no_group = cluster_weights("趋势", cfg=custom_cfg, group=None)
         cw_normal = cluster_weights("趋势")
-        self.assertAlmostEqual(cw_no_group["seasonal"], cw_normal["seasonal"],
-            msg="没传 group 时 seasonal_boost 不应该生效")
+        self.assertAlmostEqual(
+            cw_no_group["seasonal"], cw_normal["seasonal"], msg="没传 group 时 seasonal_boost 不应该生效"
+        )
 
     def test_unknown_regime_cluster_weights(self):
         """未知 regime → 所有簇权重 = 0.5（因为所有策略都是 0.5）"""
@@ -248,12 +248,12 @@ class TestClusterWeights(unittest.TestCase):
         for regime in ["趋势", "震荡", "波动", "未知"]:
             cw = cluster_weights(regime)
             for cname, val in cw.items():
-                self.assertGreaterEqual(val, 0,
-                    f"{regime} regime 簇 {cname} 权重 = {val} < 0")
+                self.assertGreaterEqual(val, 0, f"{regime} regime 簇 {cname} 权重 = {val} < 0")
 
     def test_strat_clusters_definition_matches(self):
         """STRAT_CLUSTERS 定义与策略模块的簇划分一致"""
         from strategy_layer import MEAN_STRATS, TREND_STRATS
+
         self.assertEqual(set(STRAT_CLUSTERS["trend"]), set(TREND_STRATS))
         self.assertEqual(set(STRAT_CLUSTERS["mean"]), set(MEAN_STRATS))
         self.assertEqual(STRAT_CLUSTERS["seasonal"], ["seasonal"])
@@ -262,6 +262,7 @@ class TestClusterWeights(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. 权重单调性与对称性
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestWeightMonotonicity(unittest.TestCase):
     """权重的单调性与对称性验证。"""

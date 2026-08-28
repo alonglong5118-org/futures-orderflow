@@ -61,27 +61,54 @@ from four_dim_strategy import (
 #  测试辅助
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _make_pipe(dir_T=1, T_D=60.0, T_5m=70.0, F=20.0, C=15.0,
-               bias_G=0.6, regime="趋势", triggered=True,
-               conv="技术面触发", used_5m=True, corr_action=""):
+
+def _make_pipe(
+    dir_T=1,
+    T_D=60.0,
+    T_5m=70.0,
+    F=20.0,
+    C=15.0,
+    bias_G=0.6,
+    regime="趋势",
+    triggered=True,
+    conv="技术面触发",
+    used_5m=True,
+    corr_action="",
+):
     """构造 pipeline 输出（mock），用于下游集成测试。"""
     return {
-        "F": F, "T_D": T_D, "T_5m": T_5m, "C": C,
-        "bias_G": bias_G, "dir_T": dir_T, "dir_T_raw": dir_T,
-        "regime": regime, "rdesc": f"{regime}市",
-        "garch_label": None, "gbm_garch": None,
-        "risk_scale": 1.0, "macro_bias": None,
-        "triggered": triggered, "T_thresh_eff": 50, "T_thresh_used": 50,
-        "conv": conv, "used_5m": used_5m, "hard_veto": False,
-        "bs_mode": "", "corr_action": corr_action,
-        "risk_blocked": False, "risk_block_reason": "",
-        "sentiment_label": None, "sr_quality_note": "",
+        "F": F,
+        "T_D": T_D,
+        "T_5m": T_5m,
+        "C": C,
+        "bias_G": bias_G,
+        "dir_T": dir_T,
+        "dir_T_raw": dir_T,
+        "regime": regime,
+        "rdesc": f"{regime}市",
+        "garch_label": None,
+        "gbm_garch": None,
+        "risk_scale": 1.0,
+        "macro_bias": None,
+        "triggered": triggered,
+        "T_thresh_eff": 50,
+        "T_thresh_used": 50,
+        "conv": conv,
+        "used_5m": used_5m,
+        "hard_veto": False,
+        "bs_mode": "",
+        "corr_action": corr_action,
+        "risk_blocked": False,
+        "risk_block_reason": "",
+        "sentiment_label": None,
+        "sr_quality_note": "",
     }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 全链路集成：risk_gate + exit_plan + build_signal
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFullSignalPipeline(unittest.TestCase):
     """全链路集成：风控 → 退出计划 → 信号构建。"""
@@ -153,9 +180,22 @@ class TestFullSignalPipeline(unittest.TestCase):
         pipe = _make_pipe(dir_T=1)
         sig = build_signal(self.symbol, pipe, rg, ep, cfg=self.cfg, entry_ref=self.price)
 
-        required_keys = ["symbol", "name", "direction", "stop", "target",
-                         "t1", "t2", "stop_dist", "lots", "pipeline",
-                         "risk_gate", "cost", "exit_plan", "reason"]
+        required_keys = [
+            "symbol",
+            "name",
+            "direction",
+            "stop",
+            "target",
+            "t1",
+            "t2",
+            "stop_dist",
+            "lots",
+            "pipeline",
+            "risk_gate",
+            "cost",
+            "exit_plan",
+            "reason",
+        ]
         for k in required_keys:
             self.assertIn(k, sig, f"missing key: {k}")
 
@@ -163,6 +203,7 @@ class TestFullSignalPipeline(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. SR 放宽止损传播链
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSrWideningPropagation(unittest.TestCase):
     """SR 放宽止损 → 退出计划 → 信号构建 传播链。"""
@@ -175,8 +216,7 @@ class TestSrWideningPropagation(unittest.TestCase):
 
     def test_no_sr_baseline(self):
         """无 SR → 标准退出计划"""
-        ep_no_sr = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势",
-                             cfg=self.cfg, sr_result=None)
+        ep_no_sr = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势", cfg=self.cfg, sr_result=None)
         self.assertFalse(ep_no_sr.get("sr_stop_widen", False))
 
     def test_with_sr_widens_stop(self):
@@ -187,10 +227,8 @@ class TestSrWideningPropagation(unittest.TestCase):
             "nearest_support": {"price": 3300.0, "distance_pct": 5.7},
             "nearest_resistance": {"price": 3700.0, "distance_pct": 5.7},
         }
-        ep_no_sr = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势",
-                             cfg=self.cfg, sr_result=None)
-        ep_with_sr = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势",
-                               cfg=self.cfg, sr_result=sr_result)
+        ep_no_sr = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势", cfg=self.cfg, sr_result=None)
+        ep_with_sr = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势", cfg=self.cfg, sr_result=sr_result)
 
         # 如果 SR 生效了，止损应该更宽（stop 更小，因为多单）
         if ep_with_sr.get("sr_stop_widen"):
@@ -205,8 +243,7 @@ class TestSrWideningPropagation(unittest.TestCase):
             "nearest_resistance": {"price": 3700.0, "distance_pct": 5.7},
         }
         rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg)
-        ep = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势",
-                       cfg=self.cfg, sr_result=sr_result)
+        ep = exit_plan(self.symbol, self.price, 1, self.atr_val, "趋势", cfg=self.cfg, sr_result=sr_result)
         pipe = _make_pipe(dir_T=1)
         sig = build_signal(self.symbol, pipe, rg, ep, cfg=self.cfg, entry_ref=self.price)
 
@@ -220,10 +257,8 @@ class TestSrWideningPropagation(unittest.TestCase):
             "nearest_support": {"price": 3300.0, "distance_pct": 5.7},
             "nearest_resistance": {"price": 3700.0, "distance_pct": 5.7},
         }
-        ep_no_sr = exit_plan(self.symbol, self.price, -1, self.atr_val, "趋势",
-                             cfg=self.cfg, sr_result=None)
-        ep_with_sr = exit_plan(self.symbol, self.price, -1, self.atr_val, "趋势",
-                               cfg=self.cfg, sr_result=sr_result)
+        ep_no_sr = exit_plan(self.symbol, self.price, -1, self.atr_val, "趋势", cfg=self.cfg, sr_result=None)
+        ep_with_sr = exit_plan(self.symbol, self.price, -1, self.atr_val, "趋势", cfg=self.cfg, sr_result=sr_result)
 
         if ep_with_sr.get("sr_stop_widen"):
             # 空单止损放宽 → stop 更高
@@ -234,6 +269,7 @@ class TestSrWideningPropagation(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. 风控锁定 → 空信号
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskLockIntegration(unittest.TestCase):
     """风控锁定 → pipeline/risk_gate 返回空信号。"""
@@ -275,6 +311,7 @@ class TestRiskLockIntegration(unittest.TestCase):
 #  4. Kelly → 风险仓位 传播链
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestKellyPositionIntegration(unittest.TestCase):
     """Kelly 因子 → 风险仓位 → 最终手数 传播链。"""
 
@@ -313,15 +350,14 @@ class TestKellyPositionIntegration(unittest.TestCase):
     def test_n_plan_less_than_max_lots(self):
         """N_plan <= max_lots"""
         rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg)
-        max_lots = self.cfg["account"]["per_symbol_lots"].get(
-            self.symbol, self.cfg["account"]["max_lots"]
-        )
+        max_lots = self.cfg["account"]["per_symbol_lots"].get(self.symbol, self.cfg["account"]["max_lots"])
         self.assertLessEqual(rg["N_plan"], max_lots)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. T 强度缩放 → 仓位调整
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTStrengthScalingIntegration(unittest.TestCase):
     """T 强度缩放 → 仓位调整 集成。"""
@@ -336,10 +372,12 @@ class TestTStrengthScalingIntegration(unittest.TestCase):
     def test_weak_trigger_reduces_position(self):
         """弱过阈（刚到阈值）→ 0.5 倍仓"""
         # t_strength = t_thresh → ratio = 1/1.5 ≈ 0.667，但 min(0.5, ...) → 0.5
-        rg_full = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg,
-                            t_strength=self.t_thresh * 1.5, t_thresh=self.t_thresh)
-        rg_weak = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg,
-                            t_strength=self.t_thresh, t_thresh=self.t_thresh)
+        rg_full = risk_gate(
+            self.symbol, self.price, self.atr_val, cfg=self.cfg, t_strength=self.t_thresh * 1.5, t_thresh=self.t_thresh
+        )
+        rg_weak = risk_gate(
+            self.symbol, self.price, self.atr_val, cfg=self.cfg, t_strength=self.t_thresh, t_thresh=self.t_thresh
+        )
 
         # 满强度应该 >= 弱强度
         self.assertGreaterEqual(rg_full["N_plan"], rg_weak["N_plan"])
@@ -351,8 +389,9 @@ class TestTStrengthScalingIntegration(unittest.TestCase):
 
     def test_strong_trigger_full_position(self):
         """强过阈（1.5×阈值以上）→ 满仓（t_scale = 1.0）"""
-        rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg,
-                       t_strength=self.t_thresh * 2.0, t_thresh=self.t_thresh)
+        rg = risk_gate(
+            self.symbol, self.price, self.atr_val, cfg=self.cfg, t_strength=self.t_thresh * 2.0, t_thresh=self.t_thresh
+        )
         self.assertEqual(rg["t_scale"], 1.0)
 
     def test_no_t_strength_no_scaling(self):
@@ -362,14 +401,14 @@ class TestTStrengthScalingIntegration(unittest.TestCase):
 
     def test_zero_thresh_no_scaling(self):
         """零阈值 → 不缩放"""
-        rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg,
-                       t_strength=100.0, t_thresh=0.0)
+        rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg, t_strength=100.0, t_thresh=0.0)
         self.assertIsNone(rg["t_scale"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. 涨跌停闸门
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestLimitGateIntegration(unittest.TestCase):
     """涨跌停闸门 → 风控否决 集成。"""
@@ -412,6 +451,7 @@ class TestLimitGateIntegration(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. regime 系数 → 退出计划 传播链
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRegimeExitIntegration(unittest.TestCase):
     """regime 系数 → 止损乘数 → 退出计划 传播链。"""
@@ -460,6 +500,7 @@ class TestRegimeExitIntegration(unittest.TestCase):
 #  8. 滑点计算集成
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSlipCostIntegration(unittest.TestCase):
     """滑点 → 成本计算 → 信号构建 集成。"""
 
@@ -502,6 +543,7 @@ class TestSlipCostIntegration(unittest.TestCase):
 #  9. 已有持仓扣减
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHeldLotsDeduction(unittest.TestCase):
     """已有持仓 → 仓位扣减 集成。"""
 
@@ -526,11 +568,8 @@ class TestHeldLotsDeduction(unittest.TestCase):
 
     def test_full_position_no_new(self):
         """持仓已满 → 新仓为 0"""
-        max_lots = self.cfg["account"]["per_symbol_lots"].get(
-            self.symbol, self.cfg["account"]["max_lots"]
-        )
-        rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg,
-                       held_lots=max_lots)
+        max_lots = self.cfg["account"]["per_symbol_lots"].get(self.symbol, self.cfg["account"]["max_lots"])
+        rg = risk_gate(self.symbol, self.price, self.atr_val, cfg=self.cfg, held_lots=max_lots)
         self.assertEqual(rg["N_plan"], 0)
 
     def test_held_lots_nonnegative(self):

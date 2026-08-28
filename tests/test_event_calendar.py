@@ -42,6 +42,7 @@ from event_calendar import _next_occurrence, gate, scale_factor
 #  1. _next_occurrence
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNextOccurrence(unittest.TestCase):
     """_next_occurrence 下一次事件发生时间。"""
 
@@ -55,7 +56,7 @@ class TestNextOccurrence(unittest.TestCase):
     def test_daily_already_passed_tomorrow(self):
         """每日事件，时刻已过 → 明天"""
         now = datetime(2026, 1, 15, 10, 0, 0)  # 10:00
-        ev = {"hh": 9, "mm": 30, "wd": None}   # 每日 09:30
+        ev = {"hh": 9, "mm": 30, "wd": None}  # 每日 09:30
         result = _next_occurrence(ev, now)
         self.assertEqual(result, datetime(2026, 1, 16, 9, 30, 0))
 
@@ -71,7 +72,7 @@ class TestNextOccurrence(unittest.TestCase):
         """周几事件，本周未到 → 本周"""
         # 2026-01-15 是周四（weekday=3）
         now = datetime(2026, 1, 15, 8, 0, 0)  # 周四 08:00
-        ev = {"hh": 20, "mm": 30, "wd": 4}    # 每周五 20:30
+        ev = {"hh": 20, "mm": 30, "wd": 4}  # 每周五 20:30
         result = _next_occurrence(ev, now)
         # 本周五 20:30
         self.assertEqual(result, datetime(2026, 1, 16, 20, 30, 0))
@@ -80,7 +81,7 @@ class TestNextOccurrence(unittest.TestCase):
         """周几事件，今天正好是该日且时刻未到 → 今天"""
         # 2026-01-15 是周四（weekday=3）
         now = datetime(2026, 1, 15, 8, 0, 0)  # 周四 08:00
-        ev = {"hh": 20, "mm": 30, "wd": 3}    # 每周四 20:30
+        ev = {"hh": 20, "mm": 30, "wd": 3}  # 每周四 20:30
         result = _next_occurrence(ev, now)
         self.assertEqual(result, datetime(2026, 1, 15, 20, 30, 0))
 
@@ -88,7 +89,7 @@ class TestNextOccurrence(unittest.TestCase):
         """周几事件，今天正好是该日但时刻已过 → 下周"""
         # 2026-01-15 是周四（weekday=3）
         now = datetime(2026, 1, 15, 21, 0, 0)  # 周四 21:00
-        ev = {"hh": 20, "mm": 30, "wd": 3}     # 每周四 20:30
+        ev = {"hh": 20, "mm": 30, "wd": 3}  # 每周四 20:30
         result = _next_occurrence(ev, now)
         # 下周四 20:30
         self.assertEqual(result, datetime(2026, 1, 22, 20, 30, 0))
@@ -122,6 +123,7 @@ class TestNextOccurrence(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. scale_factor
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestScaleFactor(unittest.TestCase):
     """scale_factor 闸门→手数缩放。"""
@@ -160,6 +162,7 @@ class TestScaleFactor(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. gate
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestGate(unittest.TestCase):
     """gate 闸门建议。"""

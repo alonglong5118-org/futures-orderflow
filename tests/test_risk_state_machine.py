@@ -43,6 +43,7 @@ from risk_state_machine import (
 #  1. risk_guard — 正常状态
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGuardNormal(unittest.TestCase):
     """risk_guard 正常状态。"""
 
@@ -86,6 +87,7 @@ class TestRiskGuardNormal(unittest.TestCase):
 #  2. risk_guard — 红线锁定
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGuardRedLine(unittest.TestCase):
     """risk_guard 保证金红线锁定。"""
 
@@ -123,6 +125,7 @@ class TestRiskGuardRedLine(unittest.TestCase):
 #  3. risk_guard — 日亏停机
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGuardDailyLoss(unittest.TestCase):
     """risk_guard 日亏停机线。"""
 
@@ -153,14 +156,14 @@ class TestRiskGuardDailyLoss(unittest.TestCase):
         current = 95000  # 已经亏了 5%
         loss = 5000  # 日亏 5000
         # 用 opening_equity = 100000 → 日亏 = 5000/100000 = 5% = 停机线
-        result = risk_guard(equity=current, used_margin=10000,
-                            daily_pnl=-loss, opening_equity=opening)
+        result = risk_guard(equity=current, used_margin=10000, daily_pnl=-loss, opening_equity=opening)
         self.assertEqual(result["status"], "LOCK")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. risk_guard — 预警状态
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskGuardWarning(unittest.TestCase):
     """risk_guard 预警状态。"""
@@ -211,6 +214,7 @@ class TestRiskGuardWarning(unittest.TestCase):
 #  5. risk_guard — 分品种覆盖
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGuardPerSymbol(unittest.TestCase):
     """risk_guard 分品种风险覆盖。"""
 
@@ -222,6 +226,7 @@ class TestRiskGuardPerSymbol(unittest.TestCase):
     def test_jm_tightens_single_leg(self):
         """JM（焦煤）→ 收紧单笔上限（低胜率品种）"""
         from risk_state_machine import PER_SYMBOL_RISK
+
         if "JM" not in PER_SYMBOL_RISK:
             self.skipTest("JM 不在分品种风险表中")
 
@@ -234,6 +239,7 @@ class TestRiskGuardPerSymbol(unittest.TestCase):
     def test_low_win_symbol_strict_stop(self):
         """低胜率品种 → strict_stop = True"""
         from risk_state_machine import PER_SYMBOL_RISK
+
         # 找一个有 strict_stop 的品种
         strict_sym = None
         for sym, cfg in PER_SYMBOL_RISK.items():
@@ -249,14 +255,14 @@ class TestRiskGuardPerSymbol(unittest.TestCase):
         # 让 proposed 略超 single_leg，但 used+proposed 还在 warn_line 以下
         proposed = eq * (single_leg + 0.02)
         used = eq * 0.10  # 10% 已用，远低于预警线
-        result = risk_guard(equity=eq, used_margin=used,
-                            proposed_margin=proposed, symbol=strict_sym)
+        result = risk_guard(equity=eq, used_margin=used, proposed_margin=proposed, symbol=strict_sym)
         self.assertTrue(any("强制止损" in r for r in result["reasons"]))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. build_flatten_plan — 平仓计划
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBuildFlattenPlan(unittest.TestCase):
     """build_flatten_plan — 全平仓计划。"""
@@ -268,9 +274,7 @@ class TestBuildFlattenPlan(unittest.TestCase):
 
     def test_long_position_sell_close(self):
         """多单 → 卖出平仓"""
-        positions = [
-            {"symbol": "rb", "direction": "多", "lots": 5}
-        ]
+        positions = [{"symbol": "rb", "direction": "多", "lots": 5}]
         plan = build_flatten_plan(positions)
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0]["symbol"], "rb")
@@ -280,9 +284,7 @@ class TestBuildFlattenPlan(unittest.TestCase):
 
     def test_short_position_buy_close(self):
         """空单 → 买入平仓"""
-        positions = [
-            {"symbol": "rb", "direction": "空", "lots": 3}
-        ]
+        positions = [{"symbol": "rb", "direction": "空", "lots": 3}]
         plan = build_flatten_plan(positions)
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0]["symbol"], "rb")
@@ -309,9 +311,7 @@ class TestBuildFlattenPlan(unittest.TestCase):
 
     def test_zero_volume_skipped(self):
         """零持仓 → 跳过"""
-        positions = [
-            {"symbol": "rb", "direction": "多", "lots": 0}
-        ]
+        positions = [{"symbol": "rb", "direction": "多", "lots": 0}]
         plan = build_flatten_plan(positions)
         self.assertEqual(len(plan), 0)
 

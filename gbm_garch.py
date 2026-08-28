@@ -18,19 +18,21 @@
   3. 滚动波动率计算优化：用 numpy 滑动窗口
   4. 缓存机制改进：LRU 缓存防止内存泄漏
 """
+
 from collections import OrderedDict
 
 import numpy as np
 
 try:
     from scipy.optimize import minimize
+
     _HAVE_SCIPY = True
 except Exception:
     _HAVE_SCIPY = False
 
 _CACHE = OrderedDict()  # sym -> {"params":..., "last_n":..., "ret":...}
-_CACHE_MAX = 128        # 缓存上限，LRU 淘汰
-_LABELS = {}            # sym -> 最近一次 vol_state 字符串
+_CACHE_MAX = 128  # 缓存上限，LRU 淘汰
+_LABELS = {}  # sym -> 最近一次 vol_state 字符串
 
 # 波动率状态 → 触发阈值乘数
 THR_MULT = {"low": 0.97, "normal": 1.00, "high": 1.06, "extreme": 1.12}
@@ -66,7 +68,7 @@ def _garch_nll(params, r):
     for t in range(1, n):
         sigma2[t] = omega + alpha * r[t - 1] ** 2 + beta * sigma2[t - 1]
     sigma2 = np.maximum(sigma2, 1e-12)
-    ll = -0.5 * (np.log(2 * np.pi) + np.log(sigma2) + r ** 2 / sigma2)
+    ll = -0.5 * (np.log(2 * np.pi) + np.log(sigma2) + r**2 / sigma2)
     return -float(np.sum(ll))
 
 
@@ -77,8 +79,7 @@ def _fit_garch(r):
     try:
         x0 = [np.var(r) * 0.05, 0.10, 0.85]
         bnds = [(1e-8, None), (0.0, 0.9), (0.0, 0.99)]
-        res = minimize(_garch_nll, x0, args=(r,), bounds=bnds,
-                       method="L-BFGS-B", options={"maxiter": 200})
+        res = minimize(_garch_nll, x0, args=(r,), bounds=bnds, method="L-BFGS-B", options={"maxiter": 200})
         if res.fun > 1e9:
             return None
         omega, alpha, beta = res.x
@@ -103,7 +104,7 @@ def _rolling_std(arr, window=20):
     if n < window:
         return np.array([])
     csum = np.cumsum(arr)
-    csum2 = np.cumsum(arr ** 2)
+    csum2 = np.cumsum(arr**2)
     csum = np.concatenate(([0], csum))
     csum2 = np.concatenate(([0], csum2))
     starts = np.arange(n - window + 1)
@@ -111,7 +112,7 @@ def _rolling_std(arr, window=20):
     sums = csum[ends] - csum[starts]
     sums2 = csum2[ends] - csum2[starts]
     means = sums / window
-    variances = sums2 / window - means ** 2
+    variances = sums2 / window - means**2
     return np.sqrt(np.maximum(variances, 0))
 
 
@@ -139,15 +140,28 @@ def compute(sym, df, n_sims=2000, horizons=(5, 10, 20), force=False):
             last_sigma = float(np.sqrt(max(sigma2[-1], 1e-12)))
             uncond = float(np.sqrt(omega / (1 - alpha - beta))) if (1 - alpha - beta) > 0 else last_sigma
             halflife = (np.log(0.5) / np.log(alpha + beta)) if 0 < alpha + beta < 1 else None
-            params = {"omega": omega, "alpha": alpha, "beta": beta,
-                      "garch_vol": last_sigma, "persistence": alpha + beta,
-                      "halflife": halflife, "uncond_vol": uncond, "ewma_fallback": False}
+            params = {
+                "omega": omega,
+                "alpha": alpha,
+                "beta": beta,
+                "garch_vol": last_sigma,
+                "persistence": alpha + beta,
+                "halflife": halflife,
+                "uncond_vol": uncond,
+                "ewma_fallback": False,
+            }
         else:
             last_sigma = _ewma_vol(r)
-            params = {"omega": None, "alpha": None, "beta": None,
-                      "garch_vol": last_sigma, "persistence": 0.94,
-                      "halflife": (np.log(0.5) / np.log(0.94)),
-                      "uncond_vol": float(np.std(r)), "ewma_fallback": True}
+            params = {
+                "omega": None,
+                "alpha": None,
+                "beta": None,
+                "garch_vol": last_sigma,
+                "persistence": 0.94,
+                "halflife": (np.log(0.5) / np.log(0.94)),
+                "uncond_vol": float(np.std(r)),
+                "ewma_fallback": True,
+            }
         if sym in _CACHE:
             del _CACHE[sym]
         _CACHE[sym] = {"params": params, "last_n": n, "ret": r}
@@ -177,25 +191,23 @@ def compute(sym, df, n_sims=2000, horizons=(5, 10, 20), force=False):
     mu = float(np.mean(r[-60:])) if len(r) >= 60 else float(np.mean(r))
     S0 = 1.0
     H = max(horizons)
-    seed = sum(ord(c) for c in str(sym)) % (2 ** 32)
+    seed = sum(ord(c) for c in str(sym)) % (2**32)
     rng = np.random.default_rng(seed)
     Z = rng.standard_normal((n_sims, H))
 
     if params.get("omega") is not None:
         omega, alpha, beta = params["omega"], params["alpha"], params["beta"]
         rho = alpha + beta
-        sig2_t = gvol ** 2
+        sig2_t = gvol**2
         uncond = omega / (1 - rho) if (1 - rho) > 0 else sig2_t
         h_indices = np.arange(1, H + 1)
-        rho_powers = rho ** h_indices
-        step_sig = np.sqrt(
-            omega * (1 - rho_powers) / (1 - rho) + rho_powers * sig2_t
-        )
+        rho_powers = rho**h_indices
+        step_sig = np.sqrt(omega * (1 - rho_powers) / (1 - rho) + rho_powers * sig2_t)
         step_sig = np.maximum(step_sig, 1e-12)
     else:
         step_sig = np.full(H, gvol)
 
-    drift = mu - 0.5 * step_sig ** 2
+    drift = mu - 0.5 * step_sig**2
     log_returns = drift + step_sig * Z
     cum_log_returns = np.cumsum(log_returns, axis=1)
     paths = np.empty((n_sims, H + 1))

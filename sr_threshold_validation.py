@@ -60,27 +60,29 @@ def annotate_trades_with_sr(symbol, trades, min_bars=60):
         # 顺向距离：做多→支撑位距离，做空→压力位距离
         # 逆向距离：做多→压力位距离，做空→支撑位距离
         if direction > 0:
-            friendly_dist = sup_dist   # 支撑（做多的朋友）
-            hostile_dist = res_dist    # 压力（做多的敌人）
+            friendly_dist = sup_dist  # 支撑（做多的朋友）
+            hostile_dist = res_dist  # 压力（做多的敌人）
         else:
-            friendly_dist = res_dist   # 压力（做空的朋友）
-            hostile_dist = sup_dist    # 支撑（做空的敌人）
+            friendly_dist = res_dist  # 压力（做空的朋友）
+            hostile_dist = sup_dist  # 支撑（做空的敌人）
 
         nearest_dist = min(sup_dist, res_dist)
         nearest_type = "support" if sup_dist < res_dist else "resistance"
 
-        annotated.append({
-            "symbol": symbol,
-            "direction": direction,
-            "R_adj": t["R_adj"],
-            "sup_dist": sup_dist,
-            "res_dist": res_dist,
-            "friendly_dist": friendly_dist,
-            "hostile_dist": hostile_dist,
-            "nearest_dist": nearest_dist,
-            "nearest_type": nearest_type,
-            "regime": t.get("regime", "?"),
-        })
+        annotated.append(
+            {
+                "symbol": symbol,
+                "direction": direction,
+                "R_adj": t["R_adj"],
+                "sup_dist": sup_dist,
+                "res_dist": res_dist,
+                "friendly_dist": friendly_dist,
+                "hostile_dist": hostile_dist,
+                "nearest_dist": nearest_dist,
+                "nearest_type": nearest_type,
+                "regime": t.get("regime", "?"),
+            }
+        )
 
     return annotated
 
@@ -131,11 +133,17 @@ def analyze_by_zone(trades, near_pct=0.8, grey_pct=1.6, mode="nearest"):
 
 def fine_grained_bins(trades, mode="nearest"):
     """细粒度分档。"""
-    bins = [(0, 0.3, "0-0.3%"), (0.3, 0.5, "0.3-0.5%"),
-            (0.5, 0.8, "0.5-0.8%"), (0.8, 1.2, "0.8-1.2%"),
-            (1.2, 1.6, "1.2-1.6%"), (1.6, 2.0, "1.6-2.0%"),
-            (2.0, 3.0, "2.0-3.0%"), (3.0, 5.0, "3.0-5.0%"),
-            (5.0, 999, ">=5.0%")]
+    bins = [
+        (0, 0.3, "0-0.3%"),
+        (0.3, 0.5, "0.3-0.5%"),
+        (0.5, 0.8, "0.5-0.8%"),
+        (0.8, 1.2, "0.8-1.2%"),
+        (1.2, 1.6, "1.2-1.6%"),
+        (1.6, 2.0, "1.6-2.0%"),
+        (2.0, 3.0, "2.0-3.0%"),
+        (3.0, 5.0, "3.0-5.0%"),
+        (5.0, 999, ">=5.0%"),
+    ]
     stats = []
     for lo, hi, label in bins:
         if mode == "nearest":
@@ -157,8 +165,7 @@ def fine_grained_bins(trades, mode="nearest"):
 
 def main():
     parser = argparse.ArgumentParser(description="SR 阈值验证（方向感知）")
-    parser.add_argument("--symbols", type=str,
-                        default="J,eb,SH,cu,al,zn,sp,ag,au,rb")
+    parser.add_argument("--symbols", type=str, default="J,eb,SH,cu,al,zn,sp,ag,au,rb")
     parser.add_argument("--near", type=float, default=0.8)
     parser.add_argument("--grey", type=float, default=1.6)
     parser.add_argument("--compare-near", type=float, default=1.5)
@@ -176,7 +183,7 @@ def main():
     # 收集数据
     all_trades = []
     for idx, sym in enumerate(symbols):
-        print(f"\n[{idx+1}/{len(symbols)}] {sym} ", end="", flush=True)
+        print(f"\n[{idx + 1}/{len(symbols)}] {sym} ", end="", flush=True)
         bt = walk_forward_backtest(sym, DEFAULT_CONFIG)
         if not bt or bt.get("trades", 0) == 0:
             print(f"无交易")
@@ -194,34 +201,31 @@ def main():
     n_total = len(all_trades)
     overall_expR = sum(t["R_adj"] for t in all_trades) / n_total
     overall_wr = sum(1 for t in all_trades if t["R_adj"] > 0) / n_total
-    print(f"\n{'='*70}")
-    print(f"总计: {n_total} 笔  expR={overall_expR:.4f}  胜率={overall_wr*100:.1f}%")
+    print(f"\n{'=' * 70}")
+    print(f"总计: {n_total} 笔  expR={overall_expR:.4f}  胜率={overall_wr * 100:.1f}%")
 
     # ===== 1. 距最近关键位（不分方向）=====
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("【1】距最近关键位（不分支撑/压力，不分方向）")
-    print(f"{'='*70}")
-    _print_three_zones(all_trades, args.near, args.grey, "nearest",
-                       args.compare_near, args.compare_grey)
+    print(f"{'=' * 70}")
+    _print_three_zones(all_trades, args.near, args.grey, "nearest", args.compare_near, args.compare_grey)
 
     # ===== 2. 距顺向位（做多看支撑、做空看压力）=====
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("【2】距顺向关键位（做多看支撑、做空看压力）→ 越近越好")
-    print(f"{'='*70}")
-    _print_three_zones(all_trades, args.near, args.grey, "friendly",
-                       args.compare_near, args.compare_grey)
+    print(f"{'=' * 70}")
+    _print_three_zones(all_trades, args.near, args.grey, "friendly", args.compare_near, args.compare_grey)
 
     # ===== 3. 距逆向位（做多看压力、做空看支撑）=====
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("【3】距逆向关键位（做多看压力、做空看支撑）→ 越近越差")
-    print(f"{'='*70}")
-    _print_three_zones(all_trades, args.near, args.grey, "hostile",
-                       args.compare_near, args.compare_grey)
+    print(f"{'=' * 70}")
+    _print_three_zones(all_trades, args.near, args.grey, "hostile", args.compare_near, args.compare_grey)
 
     # ===== 4. 细粒度：顺向位 + 逆向位 双维度 =====
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("【4】细粒度分析")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     print("\n顺向位距离分布（做多=支撑, 做空=压力）:")
     friendly_bins = fine_grained_bins(all_trades, "friendly")
@@ -232,9 +236,9 @@ def main():
     _print_bins(hostile_bins)
 
     # ===== 5. 综合结论 =====
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("【5】结论 & 建议")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # 顺向位分析：最近的顺向位 expR 高吗？
     f_near = f"近位区 (<{args.near}%)"
@@ -246,8 +250,8 @@ def main():
     print(f"    灰色地带:        expR={f_zones[f_grey]['expR']:.4f} ({f_zones[f_grey]['trades']}笔)")
     print(f"    远位(靠顺向位远): expR={f_zones[f_far]['expR']:.4f} ({f_zones[f_far]['trades']}笔)")
 
-    if f_zones[f_near]['expR'] > f_zones[f_far]['expR']:
-        diff = f_zones[f_near]['expR'] - f_zones[f_far]['expR']
+    if f_zones[f_near]["expR"] > f_zones[f_far]["expR"]:
+        diff = f_zones[f_near]["expR"] - f_zones[f_far]["expR"]
         print(f"    ✓ 靠近顺向位 expR 更高（+{diff:.4f}），顺向位有支撑/压力作用")
     else:
         print(f"    ⚠ 靠近顺向位 expR 反而更低，顺向位作用不明显")
@@ -259,8 +263,8 @@ def main():
     print(f"    灰色地带:        expR={h_zones[f_grey]['expR']:.4f} ({h_zones[f_grey]['trades']}笔)")
     print(f"    远位(靠逆向位远): expR={h_zones[f_far]['expR']:.4f} ({h_zones[f_far]['trades']}笔)")
 
-    if h_zones[f_near]['expR'] < h_zones[f_far]['expR']:
-        diff = h_zones[f_far]['expR'] - h_zones[f_near]['expR']
+    if h_zones[f_near]["expR"] < h_zones[f_far]["expR"]:
+        diff = h_zones[f_far]["expR"] - h_zones[f_near]["expR"]
         print(f"    ✓ 靠近逆向位 expR 更低（-{diff:.4f}），逆向位有压制/阻挡作用")
     else:
         print(f"    ⚠ 靠近逆向位 expR 反而更高，逆向位作用不明显")
@@ -303,20 +307,26 @@ def _print_three_zones(trades, near, grey, mode, comp_near, comp_grey):
 
 def _print_zone_row(zones):
     keys = list(zones.keys())
-    print(f"    {keys[0]:<28} {zones[keys[0]]['trades']:>4}笔  expR={zones[keys[0]]['expR']:>7.4f}  胜率={zones[keys[0]]['win_rate']*100:>5.1f}%")
-    print(f"    {keys[1]:<28} {zones[keys[1]]['trades']:>4}笔  expR={zones[keys[1]]['expR']:>7.4f}  胜率={zones[keys[1]]['win_rate']*100:>5.1f}%")
-    print(f"    {keys[2]:<28} {zones[keys[2]]['trades']:>4}笔  expR={zones[keys[2]]['expR']:>7.4f}  胜率={zones[keys[2]]['win_rate']*100:>5.1f}%")
+    print(
+        f"    {keys[0]:<28} {zones[keys[0]]['trades']:>4}笔  expR={zones[keys[0]]['expR']:>7.4f}  胜率={zones[keys[0]]['win_rate'] * 100:>5.1f}%"
+    )
+    print(
+        f"    {keys[1]:<28} {zones[keys[1]]['trades']:>4}笔  expR={zones[keys[1]]['expR']:>7.4f}  胜率={zones[keys[1]]['win_rate'] * 100:>5.1f}%"
+    )
+    print(
+        f"    {keys[2]:<28} {zones[keys[2]]['trades']:>4}笔  expR={zones[keys[2]]['expR']:>7.4f}  胜率={zones[keys[2]]['win_rate'] * 100:>5.1f}%"
+    )
 
 
 def _print_bins(bins_data):
     print(f"    {'区间':<12} {'笔数':>5} {'expR':>8} {'胜率':>7}  胜率")
-    print(f"    {'-'*48}")
+    print(f"    {'-' * 48}")
     for label, n, expR, wr in bins_data:
         if n == 0:
             print(f"    {label:<12} {0:>5} {'-':>8} {'-':>7}")
         else:
             bar = "█" * max(1, int(wr * 25))
-            print(f"    {label:<12} {n:>5} {expR:>8.4f} {wr*100:>6.1f}%  {bar}")
+            print(f"    {label:<12} {n:>5} {expR:>8.4f} {wr * 100:>6.1f}%  {bar}")
 
 
 if __name__ == "__main__":

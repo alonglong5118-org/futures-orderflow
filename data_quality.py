@@ -17,6 +17,7 @@ observe() 更新；check() 给出每个品种的健康状态：
     dq.observe(FEED)                 # 每轮行情后
     rep = dq.check()                 # 取健康快照
 """
+
 from __future__ import annotations
 
 import time
@@ -27,15 +28,15 @@ try:
 except Exception:
     SYMBOLS = {}
 
-STALE_TRADING_SEC = 120      # 交易时段：超过 120s 没更新 → 陈旧
-STALE_IDLE_SEC = 600         # 非交易时段：超过 600s → 陈旧
-FROZEN_N = 6                 # 价格连续不变次数（≈ 每轮~数秒，6次≈半分钟卡死）
-JUMP_RATIO = 0.05            # 相邻价格跳变超过 5% → 异常跳变（疑似错误 tick）
+STALE_TRADING_SEC = 120  # 交易时段：超过 120s 没更新 → 陈旧
+STALE_IDLE_SEC = 600  # 非交易时段：超过 600s → 陈旧
+FROZEN_N = 6  # 价格连续不变次数（≈ 每轮~数秒，6次≈半分钟卡死）
+JUMP_RATIO = 0.05  # 相邻价格跳变超过 5% → 异常跳变（疑似错误 tick）
 
-_last_seen = {}              # sym -> wall ts
-_last_price = {}             # sym -> price
-_frozen = {}                 # sym -> 连续不变计数
-_prev_price = {}             # sym -> 上轮价格（用于跳变检测）
+_last_seen = {}  # sym -> wall ts
+_last_price = {}  # sym -> price
+_frozen = {}  # sym -> 连续不变计数
+_prev_price = {}  # sym -> 上轮价格（用于跳变检测）
 _ever_seen = set()
 
 
@@ -69,7 +70,7 @@ def observe(feed, now_ts=None):
         _last_price[sym] = p
 
 
-_jumps = {}                  # sym -> 最近累计跳变（观察窗口内）
+_jumps = {}  # sym -> 最近累计跳变（观察窗口内）
 
 
 def check(now_ts=None, trading=True):
@@ -99,12 +100,16 @@ def check(now_ts=None, trading=True):
                 jump_list.append(sym)
             else:
                 st = "正常"
-        rows.append({
-            "symbol": sym, "name": name, "status": st,
-            "age_sec": round(age, 1) if age is not None else None,
-            "price": _last_price.get(sym),
-            "frozen_n": _frozen.get(sym, 0),
-        })
+        rows.append(
+            {
+                "symbol": sym,
+                "name": name,
+                "status": st,
+                "age_sec": round(age, 1) if age is not None else None,
+                "price": _last_price.get(sym),
+                "frozen_n": _frozen.get(sym, 0),
+            }
+        )
     tracked = [r for r in rows if r["status"] != "未订阅"]
     n_ok = sum(1 for r in tracked if r["status"] == "正常")
     health = round(n_ok / len(tracked) * 100, 1) if tracked else 0.0
@@ -147,8 +152,7 @@ def print_report(rep):
     print(f"  正常{c['正常']} 陈旧{c['陈旧']} 冻结{c['冻结']} 异常{c['异常']} 跳变{c['跳变']} 未订阅{c['未订阅']}")
     if rep["worst"]:
         for r in rep["worst"][:10]:
-            print(f"  ⚠️ {r['symbol']}({r['name']}) {r['status']} "
-                  f"age={r['age_sec']}s price={r['price']}")
+            print(f"  ⚠️ {r['symbol']}({r['name']}) {r['status']} age={r['age_sec']}s price={r['price']}")
     else:
         print("  ✅ 全部品种数据正常")
     print("=" * 56)
@@ -157,10 +161,13 @@ def print_report(rep):
 if __name__ == "__main__":
     # 自测：造一个假 feed
     class FakeFeed:
-        def __init__(self, d): self.d = d
-        def price(self, s): return self.d.get(s)
-    f = FakeFeed({"FG": 1500.0, "SA": 2000.0, "JM": 1700.0, "J": 2300.0,
-                  "jd": 4000.0, "lh": 18000.0})
+        def __init__(self, d):
+            self.d = d
+
+        def price(self, s):
+            return self.d.get(s)
+
+    f = FakeFeed({"FG": 1500.0, "SA": 2000.0, "JM": 1700.0, "J": 2300.0, "jd": 4000.0, "lh": 18000.0})
     observe(f)
     time.sleep(0.1)
     observe(f)

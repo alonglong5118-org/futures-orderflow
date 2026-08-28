@@ -98,6 +98,7 @@ from risk_gate_utils import (
 #  1. calc_risk_lots
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcRiskLots(unittest.TestCase):
     """calc_risk_lots 风险预算手数。"""
 
@@ -149,6 +150,7 @@ class TestCalcRiskLots(unittest.TestCase):
 #  2. calc_min_lot_floor
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMinLotFloor(unittest.TestCase):
     """calc_min_lot_floor 最小 1 手兜底。"""
 
@@ -187,6 +189,7 @@ class TestMinLotFloor(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. apply_kelly_scaling
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestKellyScaling(unittest.TestCase):
     """apply_kelly_scaling Kelly 因子缩放。"""
@@ -232,6 +235,7 @@ class TestKellyScaling(unittest.TestCase):
 #  4. calc_margin_lots
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcMarginLots(unittest.TestCase):
     """calc_margin_lots 保证金约束手数。"""
 
@@ -272,6 +276,7 @@ class TestCalcMarginLots(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. calc_t_strength_scale
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTStrengthScale(unittest.TestCase):
     """calc_t_strength_scale T 强度缩放。"""
@@ -320,13 +325,13 @@ class TestTStrengthScale(unittest.TestCase):
 
     def test_negative_t_uses_abs(self):
         """负 T 取绝对值计算"""
-        self.assertEqual(calc_t_strength_scale(-50, 50),
-                          calc_t_strength_scale(50, 50))
+        self.assertEqual(calc_t_strength_scale(-50, 50), calc_t_strength_scale(50, 50))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. deduct_held_lots
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDeductHeldLots(unittest.TestCase):
     """deduct_held_lots 扣减已有持仓。"""
@@ -370,6 +375,7 @@ class TestDeductHeldLots(unittest.TestCase):
 #  7. check_limit_gate
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCheckLimitGate(unittest.TestCase):
     """check_limit_gate 涨跌停闸门。"""
 
@@ -401,6 +407,7 @@ class TestCheckLimitGate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  8. calc_position_plan
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCalcPositionPlan(unittest.TestCase):
     """calc_position_plan 完整仓位计划。"""
@@ -503,8 +510,7 @@ class TestCalcPositionPlan(unittest.TestCase):
     def test_return_eight_fields(self):
         """返回 8 字段"""
         r = self._base()
-        for key in ("N_risk_raw", "N_risk", "N_margin", "N_plan",
-                     "over_risk", "t_scale", "gate3_ok", "passed"):
+        for key in ("N_risk_raw", "N_risk", "N_margin", "N_plan", "over_risk", "t_scale", "gate3_ok", "passed"):
             self.assertIn(key, r)
 
     def test_full_pipeline(self):
@@ -519,11 +525,20 @@ class TestCalcPositionPlan(unittest.TestCase):
         # 已持 1 → 可用=4, min(3,4) = 3
         # 闸门：stop=10 < 20*0.9=18 → 通过
         r = calc_position_plan(
-            equity=200000, risk_pct=1.0, stop_pts=10, multiplier=10,
-            margin_rate=0.12, price=100, margin_cap_pct=30.0,
-            max_lots=5, kelly_mult=1.2,
-            t_strength=50, t_thresh=50,
-            held_lots=1, limit_pts=20, limit_proximity=0.9,
+            equity=200000,
+            risk_pct=1.0,
+            stop_pts=10,
+            multiplier=10,
+            margin_rate=0.12,
+            price=100,
+            margin_cap_pct=30.0,
+            max_lots=5,
+            kelly_mult=1.2,
+            t_strength=50,
+            t_thresh=50,
+            held_lots=1,
+            limit_pts=20,
+            limit_proximity=0.9,
         )
         self.assertEqual(r["N_risk_raw"], 20)
         self.assertEqual(r["N_risk"], 24)

@@ -195,9 +195,7 @@ class FeatureManager:
                 os.unlink(tmp)
             raise
 
-    def _append_changelog(
-        self, feature: str, enabled: bool, reason: str, operator: str
-    ) -> None:
+    def _append_changelog(self, feature: str, enabled: bool, reason: str, operator: str) -> None:
         try:
             with open(self._changelog_path, "r", encoding="utf-8") as f:
                 logs = json.load(f)

@@ -30,6 +30,7 @@ Regime 漂移后参数逐渐失效（JM 焦煤实盘崩的根因之一：校准�
   python3 four_dim_recalibrate.py --apply    # 仅对高置信品种更新 cur_full_expR 观测字段(备份原文件)
 （默认不写回线上决策参数 T_thresh 等；--apply 只更新观测字段并备份）
 """
+
 from __future__ import annotations
 
 import argparse
@@ -81,6 +82,7 @@ def load_papertrack_gates():
     """读 papertrack 近期真实门控状态，作交叉验证。失败返回 {}。"""
     try:
         import four_dim_papertrack as pt
+
         return pt.compute_symbol_gates()
     except Exception as e:
         print(f"[recalibrate] 加载 papertrack gates 失败: {e}", flush=True)
@@ -117,8 +119,8 @@ def _status_of(cur_expR, mean_oos, gated):
 
 
 # —— #3 漂移闭环：对高置信漂移/失效品种自动产出候选 T_thresh（不自动落盘，需人工一键apply）——
-STAGE_TAIL = 250          # walk-forward 扫描窗口（日线根数，~1年）
-STAGE_MIN_TRADES = 10     # 候选 T 需达到的最小交易数（防过拟合/稀疏误判）
+STAGE_TAIL = 250  # walk-forward 扫描窗口（日线根数，~1年）
+STAGE_MIN_TRADES = 10  # 候选 T 需达到的最小交易数（防过拟合/稀疏误判）
 
 
 def compute_proposed_T(sym, tail=STAGE_TAIL, min_trades=STAGE_MIN_TRADES):
@@ -127,6 +129,7 @@ def compute_proposed_T(sym, tail=STAGE_TAIL, min_trades=STAGE_MIN_TRADES):
     仅在漂移/失效高置信品种上调用，避免全量开销。"""
     try:
         import four_dim_calibrate as fdc
+
         rep = fdc.recalibrate_report([sym], tail=tail, min_trades=min_trades)
         items = rep.get("items") or []
         if not items:
@@ -162,8 +165,9 @@ def stage_candidates(results, calib, tail=STAGE_TAIL, symbols=None):
         cur_T = (calib.get(r["symbol"], {}) or {}).get("T_thresh")
         r["proposed_T"] = pT
         r["proposed_expR"] = round(pExpR, 4) if pExpR is not None else None
-        r["proposed_note"] = (f"漂移候选：当前T={cur_T}→提议{pT}（近期walk-forward期望≈"
-                              f"{pExpR:.3f}）；需人工一键apply落盘")
+        r["proposed_note"] = (
+            f"漂移候选：当前T={cur_T}→提议{pT}（近期walk-forward期望≈{pExpR:.3f}）；需人工一键apply落盘"
+        )
         r["staged_at"] = now
         staged += 1
     return staged
@@ -180,7 +184,9 @@ def main(apply=False, stage=False, stage_symbols=None):
     trades_all = load_papertrack_trades()
     gates = load_papertrack_gates()
     print("=== 四维策略 · 校准漂移检测（P1-4 v2）===")
-    print(f"papertrack 近期窗口={PT_WINDOW} 笔 | walk-forward tail={WF_TAIL} | 漂移系数={DRIFT_FACTOR} | 置信门槛={CONF_MIN}")
+    print(
+        f"papertrack 近期窗口={PT_WINDOW} 笔 | walk-forward tail={WF_TAIL} | 漂移系数={DRIFT_FACTOR} | 置信门槛={CONF_MIN}"
+    )
     print(f"papertrack 可用实判交易: {len(trades_all)} 笔")
     print(f"报告时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
@@ -188,19 +194,28 @@ def main(apply=False, stage=False, stage_symbols=None):
     for sym, c in calib.items():
         # 跳过真正的空占位项：既无校准(mean_oos/T_thresh) 又无 papertrack 真实交易
         pt_preview = papertrack_recent(trades_all, sym)
-        if ("note" in c and "mean_oos" not in c and "T_thresh" not in c
-                and pt_preview is None):
-            results.append({
-                "symbol": sym, "status": "skip", "note": c.get("note", "无候选"),
-                "calibrated_oos": None, "current_expR": None, "current_win_rate": None,
-                "current_trades": 0, "source": "none", "confidence": "n/a",
-                "evidence": "n/a",
-                "papertrack_gated": False, "suggestion": "无校准候选且无真实交易，跳过",
-            })
+        if "note" in c and "mean_oos" not in c and "T_thresh" not in c and pt_preview is None:
+            results.append(
+                {
+                    "symbol": sym,
+                    "status": "skip",
+                    "note": c.get("note", "无候选"),
+                    "calibrated_oos": None,
+                    "current_expR": None,
+                    "current_win_rate": None,
+                    "current_trades": 0,
+                    "source": "none",
+                    "confidence": "n/a",
+                    "evidence": "n/a",
+                    "papertrack_gated": False,
+                    "suggestion": "无校准候选且无真实交易，跳过",
+                }
+            )
             continue
         # note-only 但确有真实交易(如实盘 SA/lh) → 仍评估(mean_oos 视为 0)
         if "mean_oos" not in c:
-            c = dict(c); c["mean_oos"] = 0.0
+            c = dict(c)
+            c["mean_oos"] = 0.0
 
         mean_oos = float(c.get("mean_oos", 0.0) or 0.0)
 
@@ -218,15 +233,21 @@ def main(apply=False, stage=False, stage_symbols=None):
         if pt and pt["n"] >= CONF_MIN:
             cur_expR, cur_wr, cur_n, src = pt["expR"], pt["win_rate"], pt["n"], "papertrack"
         elif wf and int(wf.get("trades", 0) or 0) >= CONF_MIN:
-            cur_expR, cur_wr, cur_n, src = (float(wf.get("expR") or 0.0),
-                                            float(wf.get("win_rate") or 0.0),
-                                            int(wf.get("trades", 0) or 0), "walk_forward")
+            cur_expR, cur_wr, cur_n, src = (
+                float(wf.get("expR") or 0.0),
+                float(wf.get("win_rate") or 0.0),
+                int(wf.get("trades", 0) or 0),
+                "walk_forward",
+            )
         elif pt:
             cur_expR, cur_wr, cur_n, src = pt["expR"], pt["win_rate"], pt["n"], "papertrack(低样本)"
         elif wf:
-            cur_expR, cur_wr, cur_n, src = (float(wf.get("expR") or 0.0),
-                                            float(wf.get("win_rate") or 0.0),
-                                            int(wf.get("trades", 0) or 0), "walk_forward(低样本)")
+            cur_expR, cur_wr, cur_n, src = (
+                float(wf.get("expR") or 0.0),
+                float(wf.get("win_rate") or 0.0),
+                int(wf.get("trades", 0) or 0),
+                "walk_forward(低样本)",
+            )
         else:
             cur_expR, cur_wr, cur_n, src = None, None, 0, "none"
 
@@ -251,34 +272,47 @@ def main(apply=False, stage=False, stage_symbols=None):
             "skip": "无校准候选，跳过",
         }.get(status, "")
 
-        results.append({
-            "symbol": sym,
-            "status": status,
-            "calibrated_oos": round(mean_oos, 4),
-            "current_expR": round(cur_expR, 4) if cur_expR is not None else None,
-            "current_win_rate": round(cur_wr, 3) if cur_wr is not None else None,
-            "current_trades": cur_n,
-            "source": src,
-            "evidence": "real" if src.startswith("papertrack") else "model",
-            "confidence": conf,
-            "papertrack_gated": gated,
-            "suggestion": suggestion,
-            "proposed_T": None, "proposed_expR": None,
-            "proposed_note": None, "staged_at": None,
-        })
+        results.append(
+            {
+                "symbol": sym,
+                "status": status,
+                "calibrated_oos": round(mean_oos, 4),
+                "current_expR": round(cur_expR, 4) if cur_expR is not None else None,
+                "current_win_rate": round(cur_wr, 3) if cur_wr is not None else None,
+                "current_trades": cur_n,
+                "source": src,
+                "evidence": "real" if src.startswith("papertrack") else "model",
+                "confidence": conf,
+                "papertrack_gated": gated,
+                "suggestion": suggestion,
+                "proposed_T": None,
+                "proposed_expR": None,
+                "proposed_note": None,
+                "staged_at": None,
+            }
+        )
 
     # 排序：broken > drift > insufficient > skip > healthy
     order = {"broken": 0, "drift": 1, "insufficient": 2, "skip": 3, "healthy": 4}
     results.sort(key=lambda x: (order.get(x["status"], 9), x["symbol"]))
 
-    print(f"{'品种':5} {'状态':10} {'校准OOS':>8} {'当前expR':>9} {'胜率':>6} {'笔数':>4} {'证据':6} {'源':14} {'置':>3} {'门控':>5}")
+    print(
+        f"{'品种':5} {'状态':10} {'校准OOS':>8} {'当前expR':>9} {'胜率':>6} {'笔数':>4} {'证据':6} {'源':14} {'置':>3} {'门控':>5}"
+    )
     for r in results:
-        tag = {"healthy": "✅健康", "drift": "⚠️漂移", "broken": "❌失效",
-               "insufficient": "⏳样本少", "skip": "⏭跳过"}.get(r["status"], r["status"])
-        print(f"{r['symbol']:5} {tag:10} {str(r['calibrated_oos']):>8} "
-              f"{str(r['current_expR']):>9} {str(r['current_win_rate']):>6} "
-              f"{r['current_trades']:>4} {r['evidence']:6} {r['source']:14} "
-              f"{r['confidence'][:1]:>3} {'🚫' if r.get('papertrack_gated') else '-':>5}")
+        tag = {
+            "healthy": "✅健康",
+            "drift": "⚠️漂移",
+            "broken": "❌失效",
+            "insufficient": "⏳样本少",
+            "skip": "⏭跳过",
+        }.get(r["status"], r["status"])
+        print(
+            f"{r['symbol']:5} {tag:10} {str(r['calibrated_oos']):>8} "
+            f"{str(r['current_expR']):>9} {str(r['current_win_rate']):>6} "
+            f"{r['current_trades']:>4} {r['evidence']:6} {r['source']:14} "
+            f"{r['confidence'][:1]:>3} {'🚫' if r.get('papertrack_gated') else '-':>5}"
+        )
     print()
     for r in results:
         if r["status"] in ("drift", "broken", "insufficient"):
@@ -298,8 +332,10 @@ def main(apply=False, stage=False, stage_symbols=None):
     out = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "params": {
-            "pt_window": PT_WINDOW, "wf_tail": WF_TAIL,
-            "drift_factor": DRIFT_FACTOR, "conf_min": CONF_MIN,
+            "pt_window": PT_WINDOW,
+            "wf_tail": WF_TAIL,
+            "drift_factor": DRIFT_FACTOR,
+            "conf_min": CONF_MIN,
         },
         "summary": {
             "healthy": sum(1 for r in results if r["status"] == "healthy"),
@@ -324,8 +360,7 @@ def main(apply=False, stage=False, stage_symbols=None):
         updated = 0
         for r in results:
             sym = r["symbol"]
-            if (sym in calib and r["current_expR"] is not None
-                    and r["confidence"] == "high" and r["status"] != "skip"):
+            if sym in calib and r["current_expR"] is not None and r["confidence"] == "high" and r["status"] != "skip":
                 calib[sym]["cur_full_expR"] = r["current_expR"]
                 updated += 1
         with open(CALIB_JSON, "w", encoding="utf-8") as f:

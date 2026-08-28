@@ -45,6 +45,7 @@ from sr_widen_sweep import widen_stop_with_sr
 #  1. widen_stop_with_sr
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestWidenStopWithSr(unittest.TestCase):
     """widen_stop_with_sr 用 SR 位放宽止损。"""
 
@@ -179,6 +180,7 @@ class TestWidenStopWithSr(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. simulate_filter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSimulateFilter(unittest.TestCase):
     """simulate_filter 模拟过滤效果。"""

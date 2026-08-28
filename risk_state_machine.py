@@ -18,6 +18,7 @@ LOCKED 时禁止新开仓。
   if info['locked']: ...
   scale = info['combined']
 """
+
 from __future__ import annotations
 
 import json
@@ -26,18 +27,19 @@ import threading
 import time
 
 # ============ 风控闸参数（da哥 原值） ============
-RED_LINE = 0.45          # 保证金使用率红线（禁新开）
-DAILY_LOSS_STOP = 0.05   # 当日亏损停机线（强制冻结）
-WARN_LINE = 0.40         # 预警线
-SINGLE_LEG = 0.30        # 单笔保证金占比上限
-DRAWDOWN_BASE = 0.10      # 回撤基准
-DRAWDOWN_TRIGGER = 0.08   # 回撤 0.8×基准 触发降档（=0.8×10%）
-LOCK_RELEASE_SEC = 300    # LOCKED 解锁冷却（秒）
-WARN_RELEASE_SEC = 120    # WARNING 回 NORMAL 冷却（秒）
-LOSS_DECAY = 0.8          # 连续止损手数缩放
-LOSS_FLOOR = 0.2          # 手数缩放封底
-CONSEC_WARN = 2           # 连续止损 ≥2 笔 → WARNING 软警告（手数降档）
-CONSEC_LOCK = 3           # 连续止损 ≥3 笔 → 当日冻结（LOCKED，禁新开，跨日解除）
+RED_LINE = 0.45  # 保证金使用率红线（禁新开）
+DAILY_LOSS_STOP = 0.05  # 当日亏损停机线（强制冻结）
+WARN_LINE = 0.40  # 预警线
+SINGLE_LEG = 0.30  # 单笔保证金占比上限
+DRAWDOWN_BASE = 0.10  # 回撤基准
+DRAWDOWN_TRIGGER = 0.08  # 回撤 0.8×基准 触发降档（=0.8×10%）
+LOCK_RELEASE_SEC = 300  # LOCKED 解锁冷却（秒）
+WARN_RELEASE_SEC = 120  # WARNING 回 NORMAL 冷却（秒）
+LOSS_DECAY = 0.8  # 连续止损手数缩放
+LOSS_FLOOR = 0.2  # 手数缩放封底
+CONSEC_WARN = 2  # 连续止损 ≥2 笔 → WARNING 软警告（手数降档）
+CONSEC_LOCK = 3  # 连续止损 ≥3 笔 → 当日冻结（LOCKED，禁新开，跨日解除）
+
 
 # 可配置化：从 trade_config.json 读取 consec_loss_gate，缺省回退上述常量
 def _load_consec_gate():
@@ -58,6 +60,7 @@ def _load_consec_gate():
     except Exception:
         pass
 
+
 _load_consec_gate()
 
 # ============ 分品种专项风控（回测结论 2026-08-16） ============
@@ -66,32 +69,39 @@ _load_consec_gate()
 #     → 单笔保证金占比收紧 + 强制止损，防单笔大亏侵蚀期望R。
 #   · SA 对方向源(T_D vs T_5m)最敏感 → 方向质量由 direction_source_monitor 专项盯。
 PER_SYMBOL_RISK = {
-    "JM": {"single_leg": 0.18, "strict_stop": True,
-           "note": "焦煤低胜率(27%)：单笔≤18%、强制止损不可放宽"},
-    "J":  {"single_leg": 0.18, "strict_stop": True,
-           "note": "焦炭低胜率(34%)：单笔≤18%、强制止损不可放宽"},
+    "JM": {"single_leg": 0.18, "strict_stop": True, "note": "焦煤低胜率(27%)：单笔≤18%、强制止损不可放宽"},
+    "J": {"single_leg": 0.18, "strict_stop": True, "note": "焦炭低胜率(34%)：单笔≤18%、强制止损不可放宽"},
 }
-SA_SENSITIVE = True       # SA 方向源最敏感（红线①）
+SA_SENSITIVE = True  # SA 方向源最敏感（红线①）
 
 
 def per_symbol_override(symbol):
     """返回该品种的风控覆盖参数；无覆盖返回 None。供 runner/面板读取。"""
     return PER_SYMBOL_RISK.get(symbol)
 
+
 # ============ 组合级硬熔断 kill-switch（#5） ============
 # 与上面的「软降档」不同：硬熔断是最后一道保险 —— 触发即 **全平 + 停机**，
 # 且 **不自动恢复**（必须人工在面板点「解除熔断」），跨重启持久化。
-KILL_DRAWDOWN = 0.15       # 账户权益自峰值回撤 ≥15% → 硬熔断
-KILL_DAILY_LOSS = 0.08     # 当日亏损占权益 ≥8% → 硬熔断（软停机线是 5%）
-KILL_CONSEC_LOSSES = 6     # 连续止损 ≥6 笔 → 硬熔断
+KILL_DRAWDOWN = 0.15  # 账户权益自峰值回撤 ≥15% → 硬熔断
+KILL_DAILY_LOSS = 0.08  # 当日亏损占权益 ≥8% → 硬熔断（软停机线是 5%）
+KILL_CONSEC_LOSSES = 6  # 连续止损 ≥6 笔 → 硬熔断
 _HERE = os.path.dirname(os.path.abspath(__file__))
 KILL_STATE_FILE = os.path.join(_HERE, "killswitch_state.json")
 
 
-def risk_guard(equity, used_margin=0.0, daily_pnl=0.0, proposed_margin=0.0,
-               red_line=RED_LINE, daily_loss_stop=DAILY_LOSS_STOP,
-               single_leg=SINGLE_LEG, warn_line=WARN_LINE, symbol=None,
-               opening_equity=None):
+def risk_guard(
+    equity,
+    used_margin=0.0,
+    daily_pnl=0.0,
+    proposed_margin=0.0,
+    red_line=RED_LINE,
+    daily_loss_stop=DAILY_LOSS_STOP,
+    single_leg=SINGLE_LEG,
+    warn_line=WARN_LINE,
+    symbol=None,
+    opening_equity=None,
+):
     """da哥 风控闸: 45%红线 / 日亏5%停机 / 单笔30% / 回撤预警。
     返回 {status:'OK'|'WARN'|'LOCK', usage, daily_loss_pct, reasons}。
     proposed_margin 计入红线评估(破线前预警)。
@@ -108,23 +118,29 @@ def risk_guard(equity, used_margin=0.0, daily_pnl=0.0, proposed_margin=0.0,
     status = "OK"
     if usage >= red_line:
         status = "LOCK"
-        reasons.append(f"保证金使用率 {usage*100:.0f}% 破 {red_line*100:.0f}% 红线，禁止新开仓")
+        reasons.append(f"保证金使用率 {usage * 100:.0f}% 破 {red_line * 100:.0f}% 红线，禁止新开仓")
     if daily_loss_pct >= daily_loss_stop:
         status = "LOCK"
-        reasons.append(f"当日亏损 {daily_loss_pct*100:.1f}% 达 {daily_loss_stop*100:.0f}% 停机线，强制冻结")
+        reasons.append(f"当日亏损 {daily_loss_pct * 100:.1f}% 达 {daily_loss_stop * 100:.0f}% 停机线，强制冻结")
     if status == "OK":
         if usage >= warn_line:
             status = "WARN"
-            reasons.append(f"保证金使用率 {usage*100:.0f}% 接近红线，谨慎")
+            reasons.append(f"保证金使用率 {usage * 100:.0f}% 接近红线，谨慎")
         if equity > 0 and proposed_margin / equity >= single_leg:
             status = "WARN" if status == "OK" else status
-            reasons.append(f"单笔保证金占比 {proposed_margin/equity*100:.0f}% 超 {single_leg*100:.0f}%"
-                           + (f"（{symbol}低胜率专项收紧）" if ov else ""))
+            reasons.append(
+                f"单笔保证金占比 {proposed_margin / equity * 100:.0f}% 超 {single_leg * 100:.0f}%"
+                + (f"（{symbol}低胜率专项收紧）" if ov else "")
+            )
         if ov and ov.get("strict_stop"):
-            reasons.append(f"{symbol} 强制止损(低胜率专项)：止损位不可放宽，单笔≤{single_leg*100:.0f}%")
-    return {"status": status, "usage": round(usage, 3),
-            "daily_loss_pct": round(daily_loss_pct, 3), "reasons": reasons,
-            "symbol_override": ov}
+            reasons.append(f"{symbol} 强制止损(低胜率专项)：止损位不可放宽，单笔≤{single_leg * 100:.0f}%")
+    return {
+        "status": status,
+        "usage": round(usage, 3),
+        "daily_loss_pct": round(daily_loss_pct, 3),
+        "reasons": reasons,
+        "symbol_override": ov,
+    }
 
 
 class RiskStateMachine:
@@ -135,6 +151,7 @@ class RiskStateMachine:
     - 回撤0.8底: 权益自峰值回撤 > 8% 触发降档至 WARNING。
     - 恢复: LOCKED 需红线/日亏解除且冷却>300s 才解锁到 WARNING; WARNING 冷却>120s 回 NORMAL。
     """
+
     NORMAL, WARNING, LOCKED = "NORMAL", "WARNING", "LOCKED"
 
     def __init__(self):
@@ -144,12 +161,12 @@ class RiskStateMachine:
         self.peak_equity = None
         self.lock_reason = ""
         self.last_update = 0
-        self.daily_loss_pct = 0.0   # 当日亏损占权益比（由 risk_guard 快照写入）
+        self.daily_loss_pct = 0.0  # 当日亏损占权益比（由 risk_guard 快照写入）
         # 必须初始化：否则「红线触锁」路径下 state==LOCKED 后，update() L158 读
         # self.daily_loss_locked 会 AttributeError（该属性原仅在 reset_daily / 日亏触锁分支赋值；
         # live runner 从不调用 reset_daily_if_new_day → 上线后属性恒未定义 → 红线锁无法自动释放）。
         self.daily_loss_locked = False
-        self.consec_lock = False   # 当日连续止损冻结标记（跨日解除，类似 daily_loss_locked）
+        self.consec_lock = False  # 当日连续止损冻结标记（跨日解除，类似 daily_loss_locked）
         self._lock = threading.RLock()  # 可重入：update() 内调用 summary() 不会死锁
 
     def mark_loss(self):
@@ -160,13 +177,13 @@ class RiskStateMachine:
         with self._lock:
             self.consec_losses = 0
             self.daily_loss_locked = False  # 跨日重置：当日日亏锁解除，新交易日可正常交易
-            self.consec_lock = False   # 跨日解除当日连续止损冻结
+            self.consec_lock = False  # 跨日解除当日连续止损冻结
 
     def scale(self):
         if _kill_halted() or self.state == self.LOCKED:
             return 0.0
         base = 0.5 if self.state == self.WARNING else 1.0
-        loss_factor = max(LOSS_FLOOR, LOSS_DECAY ** self.consec_losses)
+        loss_factor = max(LOSS_FLOOR, LOSS_DECAY**self.consec_losses)
         return round(base * loss_factor, 3)
 
     def update(self, rg, equity=None):
@@ -189,8 +206,12 @@ class RiskStateMachine:
             elif self.state == self.LOCKED:
                 # P0-1：当日日亏触发的软锁，跨日才解除（不因盘中浮亏回吐自动解锁）；
                 # 红线触发的锁仍按原条件(usage<红线+冷却)释放。
-                _can_release = (usage < RED_LINE and (now - self.entered_at) > LOCK_RELEASE_SEC
-                                and not self.daily_loss_locked and not self.consec_lock)
+                _can_release = (
+                    usage < RED_LINE
+                    and (now - self.entered_at) > LOCK_RELEASE_SEC
+                    and not self.daily_loss_locked
+                    and not self.consec_lock
+                )
                 if _can_release:
                     self.state = self.WARNING
                     self.entered_at = now
@@ -239,7 +260,7 @@ class RiskStateMachine:
             try:
                 d["killswitch"] = KILL.summary()
                 if d["killswitch"].get("halted"):
-                    d["state"] = "HALTED"      # 面板显示最高优先级状态
+                    d["state"] = "HALTED"  # 面板显示最高优先级状态
             except Exception:
                 pass
             return d
@@ -278,7 +299,7 @@ def _pos_dir(p):
 def build_flatten_plan(positions):
     """把当前持仓翻译成「一键全平」指令清单（供人工在交易软件执行 / 未来对接下单）。"""
     plan = []
-    for p in (positions or []):
+    for p in positions or []:
         if not isinstance(p, dict):
             continue
         sym = p.get("symbol") or p.get("sym") or p.get("代码") or ""
@@ -286,14 +307,16 @@ def build_flatten_plan(positions):
         if not sym or lots <= 0:
             continue
         d = _pos_dir(p)
-        plan.append({
-            "symbol": sym,
-            "name": p.get("name") or p.get("名称") or sym,
-            "lots": lots,
-            "action": "平多（卖平）" if d > 0 else ("平空（买平）" if d < 0 else "全平"),
-            "side": d,
-            "price": p.get("price") or p.get("last") or p.get("现价"),
-        })
+        plan.append(
+            {
+                "symbol": sym,
+                "name": p.get("name") or p.get("名称") or sym,
+                "lots": lots,
+                "action": "平多（卖平）" if d > 0 else ("平空（买平）" if d < 0 else "全平"),
+                "side": d,
+                "price": p.get("price") or p.get("last") or p.get("现价"),
+            }
+        )
     return plan
 
 
@@ -310,14 +333,14 @@ class KillSwitch:
         self.path = path
         self.halted = False
         self.reason = ""
-        self.triggers = []          # 命中的硬线列表
+        self.triggers = []  # 命中的硬线列表
         self.triggered_at = 0.0
         self.metrics = {}
         self.flatten_plan = []
-        self.history = []           # 历次熔断/解除记录
-        self.ack = False            # 用户是否已确认（已按清单全平）
+        self.history = []  # 历次熔断/解除记录
+        self.ack = False  # 用户是否已确认（已按清单全平）
         self._opening_equity = None  # P0-7 fix: 日初权益(固定值)，稳定风控阈值
-        self.reset_at = None        # 最近一次人工解除熔断的时间戳
+        self.reset_at = None  # 最近一次人工解除熔断的时间戳
         self._lock = threading.RLock()
         self._load()
 
@@ -344,21 +367,29 @@ class KillSwitch:
         try:
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({
-                    "halted": self.halted, "reason": self.reason,
-                    "triggers": self.triggers, "triggered_at": self.triggered_at,
-                    "metrics": self.metrics, "flatten_plan": self.flatten_plan,
-                    "history": self.history[-50:], "ack": self.ack,
-                    "_opening_equity": self._opening_equity,
-                    "reset_at": self.reset_at,
-                }, f, ensure_ascii=False, indent=2)
+                json.dump(
+                    {
+                        "halted": self.halted,
+                        "reason": self.reason,
+                        "triggers": self.triggers,
+                        "triggered_at": self.triggered_at,
+                        "metrics": self.metrics,
+                        "flatten_plan": self.flatten_plan,
+                        "history": self.history[-50:],
+                        "ack": self.ack,
+                        "_opening_equity": self._opening_equity,
+                        "reset_at": self.reset_at,
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
             os.replace(tmp, self.path)
         except Exception as e:
             print(f"[熔断] 状态落盘失败(忽略): {repr(e)[:80]}")
 
     # ---------- 核心判定 ----------
-    def check(self, equity, peak_equity=None, daily_pnl=0.0,
-              consec_losses=0, positions=None):
+    def check(self, equity, peak_equity=None, daily_pnl=0.0, consec_losses=0, positions=None):
         """每轮调用。返回 {halted, newly, reason, triggers, plan, metrics}。"""
         with self._lock:
             dd = 0.0
@@ -369,14 +400,18 @@ class KillSwitch:
             cl = int(consec_losses or 0)
             trig = []
             if dd >= KILL_DRAWDOWN:
-                trig.append(f"账户自峰值回撤 {dd*100:.1f}% ≥ 硬线 {KILL_DRAWDOWN*100:.0f}%")
+                trig.append(f"账户自峰值回撤 {dd * 100:.1f}% ≥ 硬线 {KILL_DRAWDOWN * 100:.0f}%")
             if dlp >= KILL_DAILY_LOSS:
-                trig.append(f"当日亏损 {dlp*100:.1f}% ≥ 硬线 {KILL_DAILY_LOSS*100:.0f}%")
+                trig.append(f"当日亏损 {dlp * 100:.1f}% ≥ 硬线 {KILL_DAILY_LOSS * 100:.0f}%")
             if cl >= KILL_CONSEC_LOSSES:
                 trig.append(f"连续止损 {cl} 笔 ≥ 硬线 {KILL_CONSEC_LOSSES} 笔")
-            self.metrics = {"equity": equity, "peak_equity": peak_equity,
-                            "drawdown": round(dd, 4), "daily_loss_pct": round(dlp, 4),
-                            "consec_losses": cl}
+            self.metrics = {
+                "equity": equity,
+                "peak_equity": peak_equity,
+                "drawdown": round(dd, 4),
+                "daily_loss_pct": round(dlp, 4),
+                "consec_losses": cl,
+            }
             newly = False
             if trig and not self.halted:
                 self.halted = True
@@ -385,9 +420,14 @@ class KillSwitch:
                 self.reason = "；".join(trig)
                 self.triggered_at = time.time()
                 self.flatten_plan = build_flatten_plan(positions)
-                self.history.append({"t": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                     "event": "TRIGGER", "reason": self.reason,
-                                     "metrics": dict(self.metrics)})
+                self.history.append(
+                    {
+                        "t": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "event": "TRIGGER",
+                        "reason": self.reason,
+                        "metrics": dict(self.metrics),
+                    }
+                )
                 self._save()
                 newly = True
             elif trig and self.halted:
@@ -396,9 +436,14 @@ class KillSwitch:
             # P1-12 fix: 尝试自动恢复（熔断条件已解除 + 冷却足够）
             if not trig and self.halted and self.ack:
                 self._maybe_recover(equity, peak_equity, daily_pnl, consec_losses)
-            return {"halted": self.halted, "newly": newly, "reason": self.reason,
-                    "triggers": list(self.triggers), "plan": list(self.flatten_plan),
-                    "metrics": dict(self.metrics)}
+            return {
+                "halted": self.halted,
+                "newly": newly,
+                "reason": self.reason,
+                "triggers": list(self.triggers),
+                "plan": list(self.flatten_plan),
+                "metrics": dict(self.metrics),
+            }
 
     def _maybe_recover(self, equity, peak_equity, daily_pnl, consec_losses):
         """P1-12 深度重审补上：熔断自动恢复（原修复遗漏了方法体，属空转）。
@@ -412,7 +457,7 @@ class KillSwitch:
         """
         RECOVER_COOLDOWN_SEC = 3600  # 1h 冷却
         RECOVER_EQUITY_RATIO = 0.92  # 权益需维持在熔断峰值 92% 以上
-        RECOVER_CONSEC_MAX = 2       # 连亏不得超过 2 笔
+        RECOVER_CONSEC_MAX = 2  # 连亏不得超过 2 笔
         RECOVER_DAILY_PNL_TOLERANCE = 0.01  # 当日盈亏与熔断时的偏离容忍
 
         if not (self.halted and self.ack):
@@ -438,9 +483,13 @@ class KillSwitch:
         self.triggers = []
         self.triggered_at = 0.0
         self.flatten_plan = []
-        self.history.append({"t": time.strftime("%Y-%m-%d %H:%M:%S"),
-                             "event": "AUTO_RECOVER",
-                             "note": f"熔断自动恢复（冷却{int(now - self.triggered_at)}s + 权益{equity:.0f} + 连亏{consec_losses}）"})
+        self.history.append(
+            {
+                "t": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "AUTO_RECOVER",
+                "note": f"熔断自动恢复（冷却{int(now - self.triggered_at)}s + 权益{equity:.0f} + 连亏{consec_losses}）",
+            }
+        )
         self._save()
 
     def acknowledge(self):
@@ -448,8 +497,7 @@ class KillSwitch:
         with self._lock:
             if self.halted:
                 self.ack = True
-                self.history.append({"t": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                     "event": "ACK"})
+                self.history.append({"t": time.strftime("%Y-%m-%d %H:%M:%S"), "event": "ACK"})
                 self._save()
             return self.summary()
 
@@ -464,12 +512,9 @@ class KillSwitch:
             self.triggers = []
             self.flatten_plan = []
             # 清除旧 metrics 快照：防止非熔断态检查误报"数据不新鲜"
-            self.metrics = {"equity": 0, "peak_equity": 0,
-                            "drawdown": 0.0, "daily_loss_pct": 0.0,
-                            "consec_losses": 0}
+            self.metrics = {"equity": 0, "peak_equity": 0, "drawdown": 0.0, "daily_loss_pct": 0.0, "consec_losses": 0}
             if was:
-                self.history.append({"t": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                     "event": "RESET", "note": note})
+                self.history.append({"t": time.strftime("%Y-%m-%d %H:%M:%S"), "event": "RESET", "note": note})
             self._save()
             if reset_peak_to:
                 try:
@@ -487,14 +532,15 @@ class KillSwitch:
                 "ack": self.ack,
                 "metrics": dict(self.metrics),
                 "flatten_plan": list(self.flatten_plan),
-                "thresholds": {"drawdown": KILL_DRAWDOWN,
-                               "daily_loss": KILL_DAILY_LOSS,
-                               "consec_losses": KILL_CONSEC_LOSSES},
+                "thresholds": {
+                    "drawdown": KILL_DRAWDOWN,
+                    "daily_loss": KILL_DAILY_LOSS,
+                    "consec_losses": KILL_CONSEC_LOSSES,
+                },
                 "history": self.history[-10:],
             }
             if self.triggered_at:
-                d["triggered_at"] = time.strftime("%Y-%m-%d %H:%M:%S",
-                                                  time.localtime(self.triggered_at))
+                d["triggered_at"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.triggered_at))
                 d["halted_min"] = round((time.time() - self.triggered_at) / 60, 1)
             return d
 
@@ -511,9 +557,16 @@ def _kill_halted():
         return False
 
 
-def update_risk_state(equity, used_margin=0.0, daily_pnl=0.0,
-                      consec_losses=None, proposed_margin=0.0, positions=None,
-                      peak_equity=None, symbol=None):
+def update_risk_state(
+    equity,
+    used_margin=0.0,
+    daily_pnl=0.0,
+    consec_losses=None,
+    proposed_margin=0.0,
+    positions=None,
+    peak_equity=None,
+    symbol=None,
+):
     """runner 每轮调用：用账户快照推进状态机 + 组合级硬熔断判定。
     - equity: 当前权益（来自 account_tracker 或账户监控）
     - used_margin: 已占用保证金
@@ -538,15 +591,13 @@ def update_risk_state(equity, used_margin=0.0, daily_pnl=0.0,
             pass
     rg = risk_guard(equity, used_margin, daily_pnl, proposed_margin, symbol=symbol)
     RISK_FSM.update(rg, equity=equity)
-    ks = KILL.check(equity, RISK_FSM.peak_equity, daily_pnl,
-                    RISK_FSM.consec_losses, positions)
+    ks = KILL.check(equity, RISK_FSM.peak_equity, daily_pnl, RISK_FSM.consec_losses, positions)
     out = RISK_FSM.summary()
     out["kill_newly"] = ks.get("newly", False)
     if rg.get("symbol_override"):
         out["symbol_override"] = rg["symbol_override"]
         out["symbol"] = symbol
     return out
-
 
 
 # ===========================================================================
@@ -574,7 +625,7 @@ _DUAL_TRACK_INIT = False
 
 def init_dual_track():
     """P1-15: 启动时初始化双轨风控系统。
-    
+
     必须在 runner 主循环开始前调用一次，确保 drawdown_guard 加载水位线配置。
     幂等：重复调用不会重复初始化。"""
     global _DUAL_TRACK_INIT
@@ -582,6 +633,7 @@ def init_dual_track():
         return
     try:
         import drawdown_guard as _ddg
+
         _ddg.init_from_config()
         _DUAL_TRACK_INIT = True
     except Exception as e:
@@ -590,7 +642,7 @@ def init_dual_track():
 
 def get_combined_risk_scale():
     """P1-15: 获取双轨风控合并后的手数缩放系数。
-    
+
     返回 dict:
       - combined: 合并后的缩放系数（= min(rsm_scale, ddg_scale)，取较严者）
       - rsm_scale: risk_state_machine 侧缩放（0.0=LOCKED/HALTED, 0.5=WARNING, 1.0=NORMAL）
@@ -604,11 +656,11 @@ def get_combined_risk_scale():
     """
     global _DUAL_TRACK_INIT
     reasons = []
-    
+
     # 1. risk_state_machine 侧
     rsm_scale = RISK_FSM.scale()
     rsm_state = RISK_FSM.state
-    rsm_locked = (rsm_state == RiskStateMachine.LOCKED)
+    rsm_locked = rsm_state == RiskStateMachine.LOCKED
     if _kill_halted():
         rsm_locked = True
         rsm_scale = 0.0
@@ -617,7 +669,7 @@ def get_combined_risk_scale():
         reasons.append(f"状态机锁定(LOCKED): {RISK_FSM.lock_reason}")
     elif rsm_state == RiskStateMachine.WARNING:
         reasons.append("状态机预警(WARNING): 手数按 0.5x 缩放")
-    
+
     # 2. drawdown_guard 侧
     ddg_scale = 1.0
     dd_tier = 0
@@ -625,6 +677,7 @@ def get_combined_risk_scale():
     if _DUAL_TRACK_INIT:
         try:
             import drawdown_guard as _ddg
+
             _st = _ddg.current()
             ddg_scale = float(_st.get("scale", 1.0))
             dd_tier = int(_st.get("tier", 0))
@@ -633,13 +686,14 @@ def get_combined_risk_scale():
                 reasons.append(f"回撤降险: {dd_pct:.1f}% -> 档位{dd_tier}(系数{ddg_scale})")
         except Exception:
             pass
-    
+
     # 3. 市场情绪侧（#8）：极端情绪→缩仓
     sent_scale = 1.0
     sent_label = "中性"
     sent_score = 50.0
     try:
         import sentiment_engine as _se
+
         _snap = _se.get_snapshot()
         sent_scale = float(_snap.get("scale", 1.0))
         sent_label = _snap.get("label", "中性")
@@ -668,6 +722,7 @@ def get_combined_risk_scale():
         "reasons": reasons,
     }
 
+
 def is_locked():
     """禁止新开仓（软锁 LOCKED 或 硬熔断 HALTED 任一成立）。"""
     return _kill_halted() or RISK_FSM.state == RiskStateMachine.LOCKED
@@ -686,6 +741,7 @@ def reset_daily_if_new_day(last_day_str):
         # P0-7 fix: 同时记录日初权益
         try:
             import account_tracker as at
+
             st = at.load_state()
             eq = st.get("equity", 0) if st else 0
             if eq > 0:
@@ -700,6 +756,7 @@ def reset_daily_if_new_day(last_day_str):
 if __name__ == "__main__":
     # 自测：软层降档 + 硬熔断全流程（用临时状态文件，不污染真实熔断态）
     import tempfile
+
     KILL.path = os.path.join(tempfile.gettempdir(), "killswitch_selftest.json")
     KILL.reset("自测起始")
     print("初始:", RISK_FSM.summary()["state"], "scale=", RISK_FSM.scale())
@@ -707,10 +764,11 @@ if __name__ == "__main__":
     print("红线破:", s["state"], "scale=", s["scale"], "锁定?", is_locked())
 
     # 硬熔断：权益从 100 万峰值掉到 84 万（-16% > 15% 硬线）
-    pos = [{"symbol": "FG", "name": "玻璃", "direction": "多", "lots": 3, "price": 1200},
-           {"symbol": "jd", "name": "鸡蛋", "side": "short", "qty": 2, "price": 3400}]
-    s2 = update_risk_state(840000, used_margin=100000, daily_pnl=-20000,
-                           consec_losses=1, positions=pos)
+    pos = [
+        {"symbol": "FG", "name": "玻璃", "direction": "多", "lots": 3, "price": 1200},
+        {"symbol": "jd", "name": "鸡蛋", "side": "short", "qty": 2, "price": 3400},
+    ]
+    s2 = update_risk_state(840000, used_margin=100000, daily_pnl=-20000, consec_losses=1, positions=pos)
     ks = s2["killswitch"]
     print("硬熔断?", ks["halted"], "| 原因:", ks["reason"])
     print("全平清单:", ks["flatten_plan"])
@@ -719,8 +777,7 @@ if __name__ == "__main__":
     # 权益回升也不自动解除（必须人工）
     s3 = update_risk_state(990000, used_margin=0, daily_pnl=0, consec_losses=0)
     print("回升后仍熔断?", s3["killswitch"]["halted"], "state=", s3["state"])
-    print("人工解除:", KILL.reset("自测解除", reset_peak_to=990000)["halted"],
-          "| 恢复 scale=", RISK_FSM.scale())
+    print("人工解除:", KILL.reset("自测解除", reset_peak_to=990000)["halted"], "| 恢复 scale=", RISK_FSM.scale())
 
     # —— P-连损自测（2026-08-19 模板H）：consec=2→WARNING / consec=3→LOCKED+consec_lock / reset_daily 解锁 ——
     _consec_ok = True

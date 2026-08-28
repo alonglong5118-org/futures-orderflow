@@ -36,13 +36,15 @@ def make_price_df(prices):
     """从收盘价数组构造一个简单的 OHLC DataFrame（用于 regime 分类）。
     用 close 填充高/低，确保 ATR 计算不报错。"""
     n = len(prices)
-    df = pd.DataFrame({
-        "open": prices,
-        "high": prices,
-        "low": prices,
-        "close": prices,
-        "volume": [1000] * n,
-    })
+    df = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": [1000] * n,
+        }
+    )
     return df
 
 
@@ -85,6 +87,7 @@ def make_volatile_df(base=100, atr_pct=0.04, n=60, seed=42):
 # ═══════════════════════════════════════════════════════════════════════════
 #  基本分类正确性
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRegimeClassification(unittest.TestCase):
     """regime 分类基本正确性。"""
@@ -135,6 +138,7 @@ class TestRegimeClassification(unittest.TestCase):
 #  优先级测试（最容易出 bug 的地方）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRegimePriority(unittest.TestCase):
     """regime 判断的优先级：波动 > 震荡 > 趋势 > 过渡。
 
@@ -155,8 +159,7 @@ class TestRegimePriority(unittest.TestCase):
         df = make_price_df(prices)
         regime, _ = classify_regime(df)
         # ATR 高 → 波动（即使有趋势）
-        self.assertEqual(regime, "波动",
-                         "高波动 + 趋势 → 应该判为波动（波动优先级更高）")
+        self.assertEqual(regime, "波动", "高波动 + 趋势 → 应该判为波动（波动优先级更高）")
 
     def test_flat_beats_trend(self):
         """震荡（低波动+低偏离）+ 微趋势 → 震荡（震荡优先级更高）"""
@@ -170,13 +173,13 @@ class TestRegimePriority(unittest.TestCase):
         # 价格整体在中间，但波动很大 → ATR 高 → 判波动
         df = make_volatile_df(base=100, atr_pct=0.04, n=60, seed=99)
         regime, _ = classify_regime(df)
-        self.assertEqual(regime, "波动",
-                         "高波动即使偏离不大，也应该判波动（优先级更高）")
+        self.assertEqual(regime, "波动", "高波动即使偏离不大，也应该判波动（优先级更高）")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  边界条件
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRegimeBoundaries(unittest.TestCase):
     """regime 分类的边界条件。"""
@@ -195,11 +198,11 @@ class TestRegimeBoundaries(unittest.TestCase):
         regime, _ = classify_regime(df)
         # 可能是趋势或过渡，取决于参数。我们用自定义参数来确保落到过渡
         custom_params = {
-            "atr_thresh": 0.05,    # 提高波动门槛 → 不容易判波动
-            "flat_dev": 0.002,     # 降低震荡门槛？不，提高门槛让震荡更难
+            "atr_thresh": 0.05,  # 提高波动门槛 → 不容易判波动
+            "flat_dev": 0.002,  # 降低震荡门槛？不，提高门槛让震荡更难
             "flat_atr": 0.003,
-            "trend_slope": 0.01,   # 提高趋势斜率门槛 → 不容易判趋势
-            "trend_dev": 0.05,     # 提高趋势偏离门槛
+            "trend_slope": 0.01,  # 提高趋势斜率门槛 → 不容易判趋势
+            "trend_dev": 0.05,  # 提高趋势偏离门槛
         }
         regime, desc = classify_regime(df, params=custom_params)
         self.assertEqual(regime, "过渡")
@@ -215,12 +218,11 @@ class TestRegimeBoundaries(unittest.TestCase):
         # 把趋势斜率和偏离门槛设得很高 → 同样的数据不再是趋势
         custom = dict(REGIME_THRESHOLDS)
         custom["trend_slope"] = 0.03  # 3%，高于实际 ~2%
-        custom["trend_dev"] = 0.06    # 6%，高于实际 ~4.8%
-        custom["atr_thresh"] = 0.05   # 波动门槛也提高，避免落到波动
+        custom["trend_dev"] = 0.06  # 6%，高于实际 ~4.8%
+        custom["atr_thresh"] = 0.05  # 波动门槛也提高，避免落到波动
         regime_custom, _ = classify_regime(df, params=custom)
 
-        self.assertNotEqual(regime_default, regime_custom,
-                            "P-F：调整参数应该能改变 regime 分类结果")
+        self.assertNotEqual(regime_default, regime_custom, "P-F：调整参数应该能改变 regime 分类结果")
 
     def test_default_params_match_constant(self):
         """不传 params 时使用 REGIME_THRESHOLDS 默认值"""
@@ -243,6 +245,7 @@ class TestRegimeBoundaries(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  P-F 分品种阈值回归测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPerSymbolRegimeParams(unittest.TestCase):
     """P-F：分品种 regime 阈值 — 验证参数调整能改变分类结果。
@@ -271,8 +274,7 @@ class TestPerSymbolRegimeParams(unittest.TestCase):
         # 提高门槛后，不应该还是波动（除非波动确实很大）
         # 至少结果可能从"波动"变成其他
         if regime_default == "波动":
-            self.assertNotEqual(regime_higher, "波动",
-                "P-F 回归：提高 atr_thresh 应该减少'波动'判定")
+            self.assertNotEqual(regime_higher, "波动", "P-F 回归：提高 atr_thresh 应该减少'波动'判定")
 
     def test_lower_flat_dev_reduces_flat_regime(self):
         """降低 flat_dev 门槛 → 更少被判为震荡（偏离容忍度更低）
@@ -288,12 +290,11 @@ class TestPerSymbolRegimeParams(unittest.TestCase):
 
         # 降低 flat_dev 到 0.3%（比实际 0.49% 小）→ 不再满足震荡条件
         custom = dict(REGIME_THRESHOLDS)
-        custom["flat_dev"] = 0.003   # 从 0.8% 降到 0.3%
-        custom["flat_atr"] = 0.005   # 同步降低 flat_atr 到 0.5%（实际 0.62%）
+        custom["flat_dev"] = 0.003  # 从 0.8% 降到 0.3%
+        custom["flat_atr"] = 0.005  # 同步降低 flat_atr 到 0.5%（实际 0.62%）
         regime_custom, _ = classify_regime(df, params=custom)
 
-        self.assertNotEqual(regime_custom, "震荡",
-            "降低 flat_dev 应该减少'震荡'判定")
+        self.assertNotEqual(regime_custom, "震荡", "降低 flat_dev 应该减少'震荡'判定")
 
     def test_higher_trend_slope_makes_trend_harder(self):
         """提高 trend_slope 门槛 → 更难被判为趋势"""
@@ -306,17 +307,17 @@ class TestPerSymbolRegimeParams(unittest.TestCase):
         # 提高趋势斜率门槛到 3%（高于实际 ~2%）+ 提高偏离门槛
         custom = dict(REGIME_THRESHOLDS)
         custom["trend_slope"] = 0.03  # 从 0.3% 提到 3%
-        custom["trend_dev"] = 0.06    # 从 1% 提到 6%
-        custom["atr_thresh"] = 0.05   # 波动门槛也提高
+        custom["trend_dev"] = 0.06  # 从 1% 提到 6%
+        custom["atr_thresh"] = 0.05  # 波动门槛也提高
         regime_custom, _ = classify_regime(df, params=custom)
 
-        self.assertNotEqual(regime_custom, "趋势",
-            "提高 trend_slope 应该减少'趋势'判定")
+        self.assertNotEqual(regime_custom, "趋势", "提高 trend_slope 应该减少'趋势'判定")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  回归：数值稳定性
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRegimeNumericalStability(unittest.TestCase):
     """数值稳定性测试。"""
@@ -345,8 +346,7 @@ class TestRegimeNumericalStability(unittest.TestCase):
         r_small, _ = classify_regime(df_small)
         r_large, _ = classify_regime(df_large)
         # 相同斜率比例，分类结果应该一致
-        self.assertEqual(r_small, r_large,
-                         "regime 是比例计算，不受价格绝对值影响")
+        self.assertEqual(r_small, r_large, "regime 是比例计算，不受价格绝对值影响")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

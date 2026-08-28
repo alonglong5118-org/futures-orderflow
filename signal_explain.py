@@ -15,6 +15,7 @@ signal_explain.py · #4 信号解释（确定性 driver 解释器 + 可选 LLM �
   "llm_prompt": 可直接喂 LLM 的结构化提示(若日后接入真实 LLM)
 }
 """
+
 import json
 import os
 import time
@@ -49,8 +50,7 @@ def _drift_status(symbol):
 
 # P1-② 门控品种定性提示（确定性文字，无需 LLM）：让被动态门控暂停发信号的品种
 # 也能在解释层/面板露出"为什么没信号 + 定性建议"，补覆盖缺口。
-_SYMBOL_CN = {"jd": "鸡蛋", "lh": "生猪", "FG": "玻璃", "SA": "纯碱",
-              "JM": "焦煤", "J": "焦炭"}
+_SYMBOL_CN = {"jd": "鸡蛋", "lh": "生猪", "FG": "玻璃", "SA": "纯碱", "JM": "焦煤", "J": "焦炭"}
 
 
 def explain_gated(symbol):
@@ -65,20 +65,30 @@ def explain_gated(symbol):
     oos = d.get("calibrated_oos")
     bullets = [
         "校准漂移状态：broken（近期表现已判失效，动态门控已暂停发信号，风险已控）。",
-        "期望R(current_expR)=%s，近期胜率=%s%%%s" % (
-            expR, (wr * 100) if wr is not None else "?",
-            ("，校准外样本期望R(calibrated_oos)=%s" % oos) if oos is not None else ""),
+        "期望R(current_expR)=%s，近期胜率=%s%%%s"
+        % (
+            expR,
+            (wr * 100) if wr is not None else "?",
+            ("，校准外样本期望R(calibrated_oos)=%s" % oos) if oos is not None else "",
+        ),
         "门控原因：papertrack 近期胜率<1/3 或累计R<0，自动暂停发信号（守住房门，非模型故障）。",
         "定性建议：当前模型对该品种不提供做多信号——勿追多；若已有持仓建议观望/择机减；"
         "如需做空须另寻独立证据链（本模型当前不覆盖）。",
     ]
-    summary = ("%s(%s) 模型当前判负向（期望R=%s），动态门控已暂停发信号；"
-               "定性建议：勿追多、持仓观望，做空需另寻证据。（情景分析，非确定性预测）") % (
-        name, symbol, expR)
+    summary = (
+        "%s(%s) 模型当前判负向（期望R=%s），动态门控已暂停发信号；"
+        "定性建议：勿追多、持仓观望，做空需另寻证据。（情景分析，非确定性预测）"
+    ) % (name, symbol, expR)
     return {
-        "symbol": symbol, "name": name, "status": "broken", "gated": True,
-        "expR": expR, "win_rate": wr, "calibrated_oos": oos,
-        "summary": summary, "bullets": bullets,
+        "symbol": symbol,
+        "name": name,
+        "status": "broken",
+        "gated": True,
+        "expR": expR,
+        "win_rate": wr,
+        "calibrated_oos": oos,
+        "summary": summary,
+        "bullets": bullets,
         "advice": "勿追多；已有持仓建议观望/择机减；如需做空须另寻独立证据链，本模型当前不提供做多信号。",
     }
 
@@ -136,7 +146,8 @@ def _explain(sig, pipe):
             items = ia.get("items", [])
             if items:
                 info_part = "；信息维度近况：" + "；".join(
-                    f"{it.get('text', '')}({it.get('score', 0):+.2f})" for it in items[:3])
+                    f"{it.get('text', '')}({it.get('score', 0):+.2f})" for it in items[:3]
+                )
     f_word = "偏多" if (f_bias or 0) > 0 else ("偏空" if (f_bias or 0) < 0 else "中性")
     bullets.append(f"基本面 F={f_bias}（{f_word}）{info_part}。")
 
@@ -155,15 +166,23 @@ def _explain(sig, pipe):
     if sig.get("risk_scale") is not None and sig["risk_scale"] < 1.0:
         extra += f"；事件/回撤闸门缩放×{sig['risk_scale']}"
     bullets.append(
-        f"风控：闸门{gate_word}，凯利缩放×{kelly}，"
-        f"计划 {lots} 手；止损距 {sig.get('stop_dist')} 点{extra}。"
+        f"风控：闸门{gate_word}，凯利缩放×{kelly}，计划 {lots} 手；止损距 {sig.get('stop_dist')} 点{extra}。"
     )
 
     # ④b GBM/GARCH 波动率动力学与降仓（#7 续，live 专属）
     gbm = sig.get("gbm_garch")
     if gbm:
-        _VMAP = {"normal": "正常", "low": "低", "low-vol": "低", "mid": "中",
-                 "中": "中", "high": "高", "高": "高", "extreme": "极高", "极高": "极高"}
+        _VMAP = {
+            "normal": "正常",
+            "low": "低",
+            "low-vol": "低",
+            "mid": "中",
+            "中": "中",
+            "high": "高",
+            "高": "高",
+            "extreme": "极高",
+            "极高": "极高",
+        }
         vs = gbm.get("vol_state")
         vs_cn = _VMAP.get(vs, vs or "?")
         gv = gbm.get("garch_vol")
@@ -177,7 +196,9 @@ def _explain(sig, pipe):
         if tm is not None:
             _parts.append(f"触发阈值乘数×{tm}")
         if f5:
-            _parts.append(f"5日情景：期望{f5.get('exp_ret')}%/下行VaR{f5.get('var95')}%/价格区间{f5.get('lo')}~{f5.get('hi')}%")
+            _parts.append(
+                f"5日情景：期望{f5.get('exp_ret')}%/下行VaR{f5.get('var95')}%/价格区间{f5.get('lo')}~{f5.get('hi')}%"
+            )
         bullets.append("GBM/GARCH 波动率动力学：" + "；".join(_parts) + "。")
 
     # ⑤ 校准漂移状态（来自 #3 漂移闭环报告）
@@ -185,27 +206,32 @@ def _explain(sig, pipe):
     if drift:
         st = drift.get("status")
         if st == "broken":
-            bullets.append("⚠️ 校准漂移：该品种近期表现已判为「失效(broken)」，本信号依赖动态门控，"
-                           "建议谨慎轻仓或观望，勿盲目加注。")
+            bullets.append(
+                "⚠️ 校准漂移：该品种近期表现已判为「失效(broken)」，本信号依赖动态门控，建议谨慎轻仓或观望，勿盲目加注。"
+            )
         elif st == "drift":
             bullets.append("⚠️ 校准漂移：该品种近期表现衰减(drift)，参数可能需重校，注意仓位收敛。")
         elif st == "healthy":
             bullets.append("校准状态：近期表现符合校准(healthy)，模型可信度正常。")
 
     # 综合一句话（结论先行）
-    summary = (f"{name}({sym}) 触发{dir_word}信号：技术面 {bias_g} 共振 + 基本面{f_word}"
-               f" + 资金面{c_word}，风控放行计划 {lots} 手。"
-               f"（情景分析，非确定性预测）")
+    summary = (
+        f"{name}({sym}) 触发{dir_word}信号：技术面 {bias_g} 共振 + 基本面{f_word}"
+        f" + 资金面{c_word}，风控放行计划 {lots} 手。"
+        f"（情景分析，非确定性预测）"
+    )
 
     llm_prompt = _build_llm_prompt(sig, p, bullets)
     return {"summary": summary, "bullets": bullets, "llm_prompt": llm_prompt}
 
 
 def _build_llm_prompt(sig, p, bullets):
-    return ("你是期货风控教练。基于以下确定性信号因子，用中文口语化解释这笔信号的"
-            "触发逻辑与主要风险（不超过120字，结论先行，并明确标注为情景分析而非确定性预测）：\n"
-            + "\n".join(bullets)
-            + f"\n\n原始信号摘要：{sig.get('reason', '')}")
+    return (
+        "你是期货风控教练。基于以下确定性信号因子，用中文口语化解释这笔信号的"
+        "触发逻辑与主要风险（不超过120字，结论先行，并明确标注为情景分析而非确定性预测）：\n"
+        + "\n".join(bullets)
+        + f"\n\n原始信号摘要：{sig.get('reason', '')}"
+    )
 
 
 def llm_explain(prompt):
@@ -218,14 +244,18 @@ def llm_explain(prompt):
     url = base + "/chat/completions"
     try:
         import urllib.request
-        payload = json.dumps({
-            "model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 200, "temperature": 0.3,
-        }).encode("utf-8")
-        req = urllib.request.Request(url, data=payload, headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {key}"})
+
+        payload = json.dumps(
+            {
+                "model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200,
+                "temperature": 0.3,
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+        )
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
         return data["choices"][0]["message"]["content"].strip()

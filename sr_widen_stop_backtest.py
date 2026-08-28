@@ -8,6 +8,7 @@
   - tighten: 收紧止损（当前方案，已验证有害）
   - widen: 放宽止损（新方案）
 """
+
 import json
 import math
 import os
@@ -93,7 +94,7 @@ def walk_forward_sr_mode(symbol, mode="none", tail=400, min_bars=60, cooldown_ba
     last_trade_i = -999
 
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         current_price = float(df["close"].iloc[i])
 
         sr_result = None
@@ -122,8 +123,7 @@ def walk_forward_sr_mode(symbol, mode="none", tail=400, min_bars=60, cooldown_ba
             dir_T = pipe["dir_T"]
 
             # 基础出场
-            ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], DEFAULT_CONFIG,
-                           sr_result=None)
+            ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], DEFAULT_CONFIG, sr_result=None)
 
             # SR 调整
             if mode != "none" and sr_result and sr_result.get("levels"):
@@ -154,27 +154,35 @@ def walk_forward_sr_mode(symbol, mode="none", tail=400, min_bars=60, cooldown_ba
                 if tail_active:
                     if dir_T > 0:
                         if lo <= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
                     else:
                         if hi >= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
                     continue
                 if dir_T > 0:
                     if lo <= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if hi >= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
                 else:
                     if hi >= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if lo <= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
             if exit_price is None:
                 exit_price, reason = float(df["close"].iloc[-1]), "期末平"
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
@@ -182,11 +190,15 @@ def walk_forward_sr_mode(symbol, mode="none", tail=400, min_bars=60, cooldown_ba
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
 
-            trades.append({
-                "dir": dir_T, "R_adj": round(R_adj, 3),
-                "reason": reason, "regime": pipe["regime"],
-                "stop_dist": round(sd, 2),
-            })
+            trades.append(
+                {
+                    "dir": dir_T,
+                    "R_adj": round(R_adj, 3),
+                    "reason": reason,
+                    "regime": pipe["regime"],
+                    "stop_dist": round(sd, 2),
+                }
+            )
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1
             continue
@@ -206,7 +218,8 @@ def walk_forward_sr_mode(symbol, mode="none", tail=400, min_bars=60, cooldown_ba
     rr_ratio = round(avg_win / avg_lose, 3) if avg_lose > 0 else 0
 
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
         "trades": len(trades),
         "expR": round(float(np.mean(Rs)), 4),
         "win_rate": round(len(wins) / len(Rs), 3),
@@ -218,6 +231,7 @@ def walk_forward_sr_mode(symbol, mode="none", tail=400, min_bars=60, cooldown_ba
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--tail", type=int, default=400)
     args = parser.parse_args()
@@ -246,8 +260,10 @@ def main():
     # 汇总
     print()
     print("=" * 90)
-    print(f"{'模式':<18} {'有效':>4} {'提升':>4} {'下降':>4} {'持平':>4} "
-          f"{'expR':>8} {'变化%':>8} {'胜率':>6} {'盈亏比':>6}")
+    print(
+        f"{'模式':<18} {'有效':>4} {'提升':>4} {'下降':>4} {'持平':>4} "
+        f"{'expR':>8} {'变化%':>8} {'胜率':>6} {'盈亏比':>6}"
+    )
     print("-" * 90)
 
     base_valid = [r for r in all_results["none"] if "expR" in r]
@@ -279,8 +295,10 @@ def main():
         delta_pct = (delta / abs(base_avg) * 100) if base_avg != 0 else 0
 
         label = mode_labels[mode]
-        print(f"{label:<18} {len(valid):>4} {improved:>4} {worsened:>4} {unchanged:>4} "
-              f"{avg:>+8.4f} {delta_pct:>+7.1f}%  {avg_wr:>5.1%}  {avg_rr:>5.2f}")
+        print(
+            f"{label:<18} {len(valid):>4} {improved:>4} {worsened:>4} {unchanged:>4} "
+            f"{avg:>+8.4f} {delta_pct:>+7.1f}%  {avg_wr:>5.1%}  {avg_rr:>5.2f}"
+        )
 
         summary[mode] = {
             "count": len(valid),
@@ -307,10 +325,18 @@ def main():
         if grp not in groups:
             groups[grp] = []
         d = r["expR"] - base_r["expR"]
-        groups[grp].append({"sym": r["symbol"], "delta": d,
-                            "base": base_r["expR"], "sr": r["expR"],
-                            "base_wr": base_r["win_rate"], "sr_wr": r["win_rate"],
-                            "base_rr": base_r["rr_ratio"], "sr_rr": r["rr_ratio"]})
+        groups[grp].append(
+            {
+                "sym": r["symbol"],
+                "delta": d,
+                "base": base_r["expR"],
+                "sr": r["expR"],
+                "base_wr": base_r["win_rate"],
+                "sr_wr": r["win_rate"],
+                "base_rr": base_r["rr_ratio"],
+                "sr_rr": r["rr_ratio"],
+            }
+        )
 
     for grp in sorted(groups.keys()):
         items = groups[grp]
@@ -318,12 +344,12 @@ def main():
         avg_base = sum(x["base"] for x in items) / len(items)
         pct = (avg_d / abs(avg_base) * 100) if avg_base != 0 else 0
         imp = sum(1 for x in items if x["delta"] > 0.001)
-        wr_chg = (sum(x["sr_wr"] for x in items) / len(items) -
-                  sum(x["base_wr"] for x in items) / len(items)) * 100
-        rr_chg = (sum(x["sr_rr"] for x in items) / len(items) -
-                  sum(x["base_rr"] for x in items) / len(items))
-        print(f"  {grp:<8} {len(items):>2}品种  expR={avg_d:+.4f} ({pct:+.1f}%)  "
-              f"胜率{wr_chg:+.1f}%  盈亏比{rr_chg:+.2f}  提升{imp}")
+        wr_chg = (sum(x["sr_wr"] for x in items) / len(items) - sum(x["base_wr"] for x in items) / len(items)) * 100
+        rr_chg = sum(x["sr_rr"] for x in items) / len(items) - sum(x["base_rr"] for x in items) / len(items)
+        print(
+            f"  {grp:<8} {len(items):>2}品种  expR={avg_d:+.4f} ({pct:+.1f}%)  "
+            f"胜率{wr_chg:+.1f}%  盈亏比{rr_chg:+.2f}  提升{imp}"
+        )
 
     # 提升 Top 10
     print()
@@ -333,27 +359,37 @@ def main():
     for r in widen_valid:
         if r["symbol"] in base_map:
             d = r["expR"] - base_map[r["symbol"]]["expR"]
-            widen_with_delta.append({**r, "delta": d,
-                                     "delta_pct": (d / abs(base_map[r["symbol"]]["expR"]) * 100)
-                                     if base_map[r["symbol"]]["expR"] != 0 else 0})
+            widen_with_delta.append(
+                {
+                    **r,
+                    "delta": d,
+                    "delta_pct": (d / abs(base_map[r["symbol"]]["expR"]) * 100)
+                    if base_map[r["symbol"]]["expR"] != 0
+                    else 0,
+                }
+            )
     widen_sorted = sorted(widen_with_delta, key=lambda x: -x["delta_pct"])
     for r in widen_sorted[:10]:
         if r["delta"] > 0.001:
-            print(f"  {r['symbol']:>5} {r['name']:>6}  "
-                  f"基准 {base_map[r['symbol']]['expR']:+.4f} → 放宽 {r['expR']:+.4f}  "
-                  f"({r['delta_pct']:+.1f}%)  "
-                  f"胜率 {base_map[r['symbol']]['win_rate']:.0%}→{r['win_rate']:.0%}  "
-                  f"盈亏比 {base_map[r['symbol']]['rr_ratio']:.2f}→{r['rr_ratio']:.2f}")
+            print(
+                f"  {r['symbol']:>5} {r['name']:>6}  "
+                f"基准 {base_map[r['symbol']]['expR']:+.4f} → 放宽 {r['expR']:+.4f}  "
+                f"({r['delta_pct']:+.1f}%)  "
+                f"胜率 {base_map[r['symbol']]['win_rate']:.0%}→{r['win_rate']:.0%}  "
+                f"盈亏比 {base_map[r['symbol']]['rr_ratio']:.2f}→{r['rr_ratio']:.2f}"
+            )
 
     print()
     print("【放宽止损 - 下降 Top 10】")
     for r in reversed(widen_sorted[-10:]):
         if r["delta"] < -0.001:
-            print(f"  {r['symbol']:>5} {r['name']:>6}  "
-                  f"基准 {base_map[r['symbol']]['expR']:+.4f} → 放宽 {r['expR']:+.4f}  "
-                  f"({r['delta_pct']:+.1f}%)  "
-                  f"胜率 {base_map[r['symbol']]['win_rate']:.0%}→{r['win_rate']:.0%}  "
-                  f"盈亏比 {base_map[r['symbol']]['rr_ratio']:.2f}→{r['rr_ratio']:.2f}")
+            print(
+                f"  {r['symbol']:>5} {r['name']:>6}  "
+                f"基准 {base_map[r['symbol']]['expR']:+.4f} → 放宽 {r['expR']:+.4f}  "
+                f"({r['delta_pct']:+.1f}%)  "
+                f"胜率 {base_map[r['symbol']]['win_rate']:.0%}→{r['win_rate']:.0%}  "
+                f"盈亏比 {base_map[r['symbol']]['rr_ratio']:.2f}→{r['rr_ratio']:.2f}"
+            )
 
     # 保存
     out = {

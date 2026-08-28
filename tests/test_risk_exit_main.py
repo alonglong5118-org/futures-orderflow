@@ -43,6 +43,7 @@ from four_dim_strategy import (
 #  1. risk_gate — 基本仓位计算
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGateBasic(unittest.TestCase):
     """risk_gate 基本仓位计算。"""
 
@@ -50,9 +51,16 @@ class TestRiskGateBasic(unittest.TestCase):
         """返回所有必要字段"""
         result = risk_gate("rb", price=3500, atr_val=50)
         required = [
-            "passed", "N_risk", "N_margin", "N_plan",
-            "stop_pts", "limit_pts", "gate3_ok",
-            "over_risk", "kelly_mult", "t_scale",
+            "passed",
+            "N_risk",
+            "N_margin",
+            "N_plan",
+            "stop_pts",
+            "limit_pts",
+            "gate3_ok",
+            "over_risk",
+            "kelly_mult",
+            "t_scale",
         ]
         for key in required:
             self.assertIn(key, result, "缺少字段: %s" % key)
@@ -91,6 +99,7 @@ class TestRiskGateBasic(unittest.TestCase):
 #  2. risk_gate — 最小 1 手兜底
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGateMinLot(unittest.TestCase):
     """最小 1 手兜底（超风险标注）。"""
 
@@ -102,8 +111,7 @@ class TestRiskGateMinLot(unittest.TestCase):
         # risk_hand = 1.5 * 500 * 10 = 7500
         # 100000 * 0.015 = 1500 → 1500 // 7500 = 0 → 兜底 1 手
         self.assertEqual(result["N_risk"], 1)
-        self.assertTrue(result["over_risk"],
-            "超风险预算时应该标注 over_risk=True")
+        self.assertTrue(result["over_risk"], "超风险预算时应该标注 over_risk=True")
 
     def test_normal_atr_no_over_risk(self):
         """正常 ATR → 不超风险"""
@@ -115,6 +123,7 @@ class TestRiskGateMinLot(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. risk_gate — Kelly 因子缩放
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskGateKelly(unittest.TestCase):
     """Kelly 因子缩放。"""
@@ -151,6 +160,7 @@ class TestRiskGateKelly(unittest.TestCase):
 #  4. risk_gate — T 强度随动
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGateTStrength(unittest.TestCase):
     """T 强度随动缩放。"""
 
@@ -158,10 +168,8 @@ class TestRiskGateTStrength(unittest.TestCase):
         """弱 T（刚过阈值）→ 仓位减半（0.5x）"""
         thresh = 50.0
         # T 刚过阈值：强度 = 阈值本身 → ratio = 1 / 1.5 = 0.667 → 取 max(0.5, 0.667) = 0.667
-        r_weak = risk_gate("rb", price=3500, atr_val=50,
-                           t_strength=50.0, t_thresh=thresh)
-        r_full = risk_gate("rb", price=3500, atr_val=50,
-                           t_strength=150.0, t_thresh=thresh)
+        r_weak = risk_gate("rb", price=3500, atr_val=50, t_strength=50.0, t_thresh=thresh)
+        r_full = risk_gate("rb", price=3500, atr_val=50, t_strength=150.0, t_thresh=thresh)
         # 弱 T 的 t_scale 应该 < 1.0
         self.assertIsNotNone(r_weak["t_scale"])
         self.assertLess(r_weak["t_scale"], 1.0)
@@ -170,8 +178,7 @@ class TestRiskGateTStrength(unittest.TestCase):
 
     def test_very_strong_t_full_size(self):
         """T 远大于 1.5×阈值 → t_scale = 1.0（满仓）"""
-        result = risk_gate("rb", price=3500, atr_val=50,
-                           t_strength=200.0, t_thresh=50.0)
+        result = risk_gate("rb", price=3500, atr_val=50, t_strength=200.0, t_thresh=50.0)
         self.assertAlmostEqual(result["t_scale"], 1.0)
 
     def test_no_t_strength_no_scaling(self):
@@ -181,14 +188,14 @@ class TestRiskGateTStrength(unittest.TestCase):
 
     def test_t_scale_floor_05(self):
         """t_scale 下限 0.5"""
-        result = risk_gate("rb", price=3500, atr_val=50,
-                           t_strength=1.0, t_thresh=100.0)  # 极弱 T
+        result = risk_gate("rb", price=3500, atr_val=50, t_strength=1.0, t_thresh=100.0)  # 极弱 T
         self.assertGreaterEqual(result["t_scale"], 0.5)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. risk_gate — 持仓扣减
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskGateHeldLots(unittest.TestCase):
     """已有持仓扣减。"""
@@ -217,6 +224,7 @@ class TestRiskGateHeldLots(unittest.TestCase):
 #  6. risk_gate — 涨跌停闸门
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskGateLimitGate(unittest.TestCase):
     """涨跌停第三道闸门。"""
 
@@ -233,8 +241,7 @@ class TestRiskGateLimitGate(unittest.TestCase):
         # stop_pts = 450, limit_pts = 3500*0.09 = 315, gate = 0.9*315 = 283.5
         # 450 > 283.5 → gate3_ok = False
         self.assertFalse(result["gate3_ok"])
-        self.assertFalse(result["passed"],
-            "涨跌停闸门关闭时 passed 应该为 False")
+        self.assertFalse(result["passed"], "涨跌停闸门关闭时 passed 应该为 False")
 
     def test_limit_pts_formula(self):
         """limit_pts = price * limit_pct"""
@@ -248,6 +255,7 @@ class TestRiskGateLimitGate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. risk_gate — 风控锁定
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskGateRiskLock(unittest.TestCase):
     """风控锁定前置拦截。"""
@@ -274,6 +282,7 @@ class TestRiskGateRiskLock(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  8. exit_plan — 基本出场计算
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestExitPlanBasic(unittest.TestCase):
     """exit_plan 基本出场计算。"""
@@ -310,9 +319,16 @@ class TestExitPlanBasic(unittest.TestCase):
         """返回所有必要字段"""
         ep = exit_plan("rb", entry=3500, dir_T=1, atr_val=50, regime="趋势")
         required = [
-            "stop", "t1", "t2", "stop_dist",
-            "trailing", "style", "tail_enabled",
-            "tail_stop_dist", "tail_pct", "sr_note",
+            "stop",
+            "t1",
+            "t2",
+            "stop_dist",
+            "trailing",
+            "style",
+            "tail_enabled",
+            "tail_stop_dist",
+            "tail_pct",
+            "sr_note",
         ]
         for key in required:
             self.assertIn(key, ep, "缺少字段: %s" % key)
@@ -321,6 +337,7 @@ class TestExitPlanBasic(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  9. exit_plan — regime 调制
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestExitPlanRegime(unittest.TestCase):
     """exit_plan 的 regime 调制。"""
@@ -359,6 +376,7 @@ class TestExitPlanRegime(unittest.TestCase):
 #  10. exit_plan — 尾仓参数
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestExitPlanTrailingTail(unittest.TestCase):
     """exit_plan 尾仓参数。"""
 
@@ -384,6 +402,7 @@ class TestExitPlanTrailingTail(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  11. risk_gate — 未知品种兜底
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskGateFallbackSpec(unittest.TestCase):
     """未知品种用 _FALLBACK_SPEC 兜底。"""

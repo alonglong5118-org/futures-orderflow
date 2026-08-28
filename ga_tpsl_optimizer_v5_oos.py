@@ -25,6 +25,7 @@ ga_tpsl_optimizer_v5_oos.py — OOS 感知 GA 优化器（Phase 3.5）
 用法:
     python3 ga_tpsl_optimizer_v5_oos.py --symbol rb --shrink --l1 --fast --full --oos-weight 0.2
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,9 +37,9 @@ import sys
 import time
 
 # 防止 numpy/pandas 内部多线程与 multiprocessing 争抢 CPU
-os.environ.setdefault('OMP_NUM_THREADS', '1')
-os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
-os.environ.setdefault('MKL_NUM_THREADS', '1')
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 import numpy as np
 
@@ -58,19 +59,25 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 # [1] stop_atr_mult: 止损 ATR 倍数
 # [2] rr_ratio:      盈亏比
 PARAM_BOUNDS = [
-    (0.5, 1.8),    # gene[0]: T_thresh_mult
-    (0.8, 3.0),    # gene[1]: stop_atr_mult
-    (1.2, 4.0),    # gene[2]: rr_ratio
+    (0.5, 1.8),  # gene[0]: T_thresh_mult
+    (0.8, 3.0),  # gene[1]: stop_atr_mult
+    (1.2, 4.0),  # gene[2]: rr_ratio
 ]
 PARAM_NAMES = [
-    "T_thresh_mult", "stop_atr_mult", "rr_ratio",
+    "T_thresh_mult",
+    "stop_atr_mult",
+    "rr_ratio",
 ]
 N_PARAMS = len(PARAM_BOUNDS)
 
 # 固定为基线的参数（不参与优化）
 FIXED_PARAM_NAMES = [
-    "fc_confirm", "fc_hard", "cooldown_bars",
-    "tail_pct", "tail_trail_R", "min_profit_R",
+    "fc_confirm",
+    "fc_hard",
+    "cooldown_bars",
+    "tail_pct",
+    "tail_trail_R",
+    "min_profit_R",
 ]
 
 # GA 参数
@@ -110,7 +117,7 @@ REG_L1_WEIGHT = 0.5
 REG_L1_TARGETS = [0, 1]
 
 # OOS 感知适应度
-DEFAULT_OOS_WEIGHT = 0.2   # OOS 在适应度中的权重（0=纯IS，1=纯OOS）
+DEFAULT_OOS_WEIGHT = 0.2  # OOS 在适应度中的权重（0=纯IS，1=纯OOS）
 
 # 参数范围收缩
 SHRINK_PCT = 0.40
@@ -122,8 +129,19 @@ _eval_cache = {}
 _worker_data = {}
 
 
-def _init_worker(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, data_slice_id,
-                 baseline_ind=None, bounds=None, use_l1=False, oos_weight=0.0):
+def _init_worker(
+    symbol,
+    df_is,
+    df_oos,
+    train_bars,
+    valid_bars,
+    step_bars,
+    data_slice_id,
+    baseline_ind=None,
+    bounds=None,
+    use_l1=False,
+    oos_weight=0.0,
+):
     """Pool initializer：在每个 worker 进程中设置全局数据。"""
     global _worker_data
     _worker_data = {
@@ -167,6 +185,7 @@ def _cache_key(params_tuple, symbol, data_slice_id):
 # ============================================================================
 # 基线参数获取
 # ============================================================================
+
 
 def _get_baseline_params(symbol):
     """获取某品种的基线参数值（所有 9 个参数）。"""
@@ -215,7 +234,7 @@ def _get_baseline_params(symbol):
 def _baseline_to_optimized_individual(baseline):
     """把基线参数字典转成 3 参数优化 individual。"""
     return [
-        1.0,                    # T_thresh_mult = 1.0 (基线倍率)
+        1.0,  # T_thresh_mult = 1.0 (基线倍率)
         baseline["stop_atr_mult"],
         baseline["rr_ratio"],
     ]
@@ -228,15 +247,15 @@ def _full_params_from_individual(individual, baseline):
     """
     T_thresh_mult, stop_atr_mult, rr_ratio = individual
     return [
-        T_thresh_mult,                     # 0: T_thresh_mult
-        baseline["fc_confirm"],            # 1: fc_confirm (固定)
-        baseline["fc_hard"],               # 2: fc_hard (固定)
-        baseline["cooldown_bars"],         # 3: cooldown_bars (固定)
-        stop_atr_mult,                     # 4: stop_atr_mult
-        rr_ratio,                          # 5: rr_ratio
-        baseline["tail_pct"],              # 6: tail_pct (固定)
-        baseline["tail_trail_R"],          # 7: tail_trail_R (固定)
-        baseline["min_profit_R"],          # 8: min_profit_R (固定)
+        T_thresh_mult,  # 0: T_thresh_mult
+        baseline["fc_confirm"],  # 1: fc_confirm (固定)
+        baseline["fc_hard"],  # 2: fc_hard (固定)
+        baseline["cooldown_bars"],  # 3: cooldown_bars (固定)
+        stop_atr_mult,  # 4: stop_atr_mult
+        rr_ratio,  # 5: rr_ratio
+        baseline["tail_pct"],  # 6: tail_pct (固定)
+        baseline["tail_trail_R"],  # 7: tail_trail_R (固定)
+        baseline["min_profit_R"],  # 8: min_profit_R (固定)
     ]
 
 
@@ -275,6 +294,7 @@ def _get_shrunk_bounds(baseline_ind, shrink_pct=SHRINK_PCT):
 # 配置生成
 # ============================================================================
 
+
 def _make_config(individual, symbol, base_cfg=DEFAULT_CONFIG):
     """根据 3 个优化参数 + 基线固定参数生成配置。
     返回 (cfg, cooldown_bars) 元组。
@@ -282,8 +302,9 @@ def _make_config(individual, symbol, base_cfg=DEFAULT_CONFIG):
     baseline = _get_baseline_params(symbol)
     full_params = _full_params_from_individual(individual, baseline)
 
-    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars,
-     stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = full_params
+    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars, stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = (
+        full_params
+    )
 
     cfg = copy.deepcopy(base_cfg)
 
@@ -317,6 +338,7 @@ def _make_config(individual, symbol, base_cfg=DEFAULT_CONFIG):
 # ============================================================================
 # 指标计算
 # ============================================================================
+
 
 def _calc_max_drawdown(R_list):
     if not R_list:
@@ -364,6 +386,7 @@ def _calc_metrics(result):
 # Walk-Forward 适应度评估
 # ============================================================================
 
+
 def _slice_data(df, start_i, end_i):
     return df.iloc[start_i:end_i].copy()
 
@@ -372,14 +395,27 @@ def single_evaluate(individual, symbol, df):
     """在单个数据集上做完整回测，返回详细指标。"""
     cfg, cooldown = _make_config(individual, symbol)
     result = walk_forward_backtest(
-        symbol, cfg=cfg, df_in=df,
-        min_bars=60, cooldown_bars=cooldown,
+        symbol,
+        cfg=cfg,
+        df_in=df,
+        min_bars=60,
+        cooldown_bars=cooldown,
     )
     return _calc_metrics(result)
 
 
-def wf_evaluate(individual, symbol, df, train_bars, valid_bars, step_bars,
-                data_slice_id="IS_WF", baseline_ind=None, bounds=None, use_l1=False):
+def wf_evaluate(
+    individual,
+    symbol,
+    df,
+    train_bars,
+    valid_bars,
+    step_bars,
+    data_slice_id="IS_WF",
+    baseline_ind=None,
+    bounds=None,
+    use_l1=False,
+):
     """Walk-Forward 评估：滚动窗口内的验证期表现作为适应度。
 
     使用中位数（而非均值），更稳健，不受极端值影响。
@@ -403,7 +439,9 @@ def wf_evaluate(individual, symbol, df, train_bars, valid_bars, step_bars,
 
         df_segment = df.iloc[start:valid_end].copy()
         result = walk_forward_backtest(
-            symbol, cfg=cfg, df_in=df_segment,
+            symbol,
+            cfg=cfg,
+            df_in=df_segment,
             min_bars=train_bars - 10,
             cooldown_bars=cooldown,
         )
@@ -448,9 +486,20 @@ def wf_evaluate(individual, symbol, df, train_bars, valid_bars, step_bars,
     return result
 
 
-def oos_aware_evaluate(individual, symbol, df_is, df_oos, train_bars, valid_bars, step_bars,
-                       data_slice_id="IS_OOS_BLEND", baseline_ind=None, bounds=None,
-                       use_l1=False, oos_weight=0.0):
+def oos_aware_evaluate(
+    individual,
+    symbol,
+    df_is,
+    df_oos,
+    train_bars,
+    valid_bars,
+    step_bars,
+    data_slice_id="IS_OOS_BLEND",
+    baseline_ind=None,
+    bounds=None,
+    use_l1=False,
+    oos_weight=0.0,
+):
     """OOS 感知适应度：混合 IS_WF 表现 + OOS 表现。
 
     当 oos_weight = 0 时，退化为纯 WF 适应度（与 v4 一致）。
@@ -461,8 +510,16 @@ def oos_aware_evaluate(individual, symbol, df_is, df_oos, train_bars, valid_bars
     """
     # IS_WF 适应度
     is_fit = wf_evaluate(
-        individual, symbol, df_is, train_bars, valid_bars, step_bars,
-        data_slice_id + "_IS", baseline_ind, bounds, use_l1,
+        individual,
+        symbol,
+        df_is,
+        train_bars,
+        valid_bars,
+        step_bars,
+        data_slice_id + "_IS",
+        baseline_ind,
+        bounds,
+        use_l1,
     )
 
     if oos_weight <= 0.0:
@@ -501,8 +558,10 @@ def oos_aware_evaluate(individual, symbol, df_is, df_oos, train_bars, valid_bars
 # DEAP 初始化
 # ============================================================================
 
-def setup_deap_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_size,
-                     use_shrink=False, use_l1=False, oos_weight=0.0):
+
+def setup_deap_nsga2(
+    symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_size, use_shrink=False, use_l1=False, oos_weight=0.0
+):
     """初始化 NSGA-II 多目标优化（OOS 感知版）。"""
     for name in ["FitnessMulti", "Individual"]:
         if name in creator.__dict__:
@@ -521,35 +580,52 @@ def setup_deap_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, p
     toolbox = base.Toolbox()
 
     for i in range(N_PARAMS):
+
         def _attr_factory(idx):
             def _f():
                 low, high = actual_bounds[idx]
                 return random.uniform(low, high)
+
             return _f
+
         toolbox.register(f"attr_float_{i}", _attr_factory(i))
 
     attr_funcs = [getattr(toolbox, f"attr_float_{i}") for i in range(N_PARAMS)]
-    toolbox.register("individual", tools.initCycle, creator.Individual,
-                     tuple(attr_funcs), n=1)
+    toolbox.register("individual", tools.initCycle, creator.Individual, tuple(attr_funcs), n=1)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-    toolbox.register("evaluate", oos_aware_evaluate, symbol=symbol,
-                     df_is=df_is, df_oos=df_oos,
-                     train_bars=train_bars, valid_bars=valid_bars,
-                     step_bars=step_bars, data_slice_id="GA",
-                     baseline_ind=baseline_ind, bounds=actual_bounds,
-                     use_l1=use_l1, oos_weight=oos_weight)
+    toolbox.register(
+        "evaluate",
+        oos_aware_evaluate,
+        symbol=symbol,
+        df_is=df_is,
+        df_oos=df_oos,
+        train_bars=train_bars,
+        valid_bars=valid_bars,
+        step_bars=step_bars,
+        data_slice_id="GA",
+        baseline_ind=baseline_ind,
+        bounds=actual_bounds,
+        use_l1=use_l1,
+        oos_weight=oos_weight,
+    )
 
-    toolbox.register("mate", tools.cxSimulatedBinaryBounded,
-                     low=[b[0] for b in actual_bounds],
-                     up=[b[1] for b in actual_bounds],
-                     eta=SBX_ETA)
+    toolbox.register(
+        "mate",
+        tools.cxSimulatedBinaryBounded,
+        low=[b[0] for b in actual_bounds],
+        up=[b[1] for b in actual_bounds],
+        eta=SBX_ETA,
+    )
 
-    toolbox.register("mutate", tools.mutPolynomialBounded,
-                     low=[b[0] for b in actual_bounds],
-                     up=[b[1] for b in actual_bounds],
-                     eta=PM_ETA,
-                     indpb=MUTPB)
+    toolbox.register(
+        "mutate",
+        tools.mutPolynomialBounded,
+        low=[b[0] for b in actual_bounds],
+        up=[b[1] for b in actual_bounds],
+        eta=PM_ETA,
+        indpb=MUTPB,
+    )
 
     toolbox.register("select", tools.selNSGA2)
 
@@ -566,6 +642,7 @@ def setup_deap_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, p
 # ============================================================================
 # 帕累托前沿分析
 # ============================================================================
+
 
 def select_candidates(pareto_front):
     """从帕累托前沿中选出 4 个代表性候选方案。"""
@@ -624,12 +701,35 @@ def select_candidates(pareto_front):
 # GA 主循环
 # ============================================================================
 
-def run_ga_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_size, gen_count,
-                 use_shrink=False, use_l1=False, n_jobs=DEFAULT_N_JOBS,
-                 early_stop_patience=EARLY_STOP_PATIENCE, oos_weight=0.0):
+
+def run_ga_nsga2(
+    symbol,
+    df_is,
+    df_oos,
+    train_bars,
+    valid_bars,
+    step_bars,
+    pop_size,
+    gen_count,
+    use_shrink=False,
+    use_l1=False,
+    n_jobs=DEFAULT_N_JOBS,
+    early_stop_patience=EARLY_STOP_PATIENCE,
+    oos_weight=0.0,
+):
     """运行 NSGA-II 优化，带移民、早停、并行评估（OOS 感知版）。"""
-    toolbox = setup_deap_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_size,
-                               use_shrink=use_shrink, use_l1=use_l1, oos_weight=oos_weight)
+    toolbox = setup_deap_nsga2(
+        symbol,
+        df_is,
+        df_oos,
+        train_bars,
+        valid_bars,
+        step_bars,
+        pop_size,
+        use_shrink=use_shrink,
+        use_l1=use_l1,
+        oos_weight=oos_weight,
+    )
 
     # 确保种群是 4 的倍数（selNSGA2 要求）
     if pop_size % 4 != 0:
@@ -637,13 +737,25 @@ def run_ga_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_s
 
     # 并行评估
     from multiprocessing import Pool
+
     pool = None
     if n_jobs and n_jobs > 1:
         pool = Pool(
             processes=n_jobs,
             initializer=_init_worker,
-            initargs=(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, "GA",
-                      toolbox.baseline_ind, toolbox.actual_bounds, use_l1, oos_weight),
+            initargs=(
+                symbol,
+                df_is,
+                df_oos,
+                train_bars,
+                valid_bars,
+                step_bars,
+                "GA",
+                toolbox.baseline_ind,
+                toolbox.actual_bounds,
+                use_l1,
+                oos_weight,
+            ),
         )
         toolbox.register("map", pool.map)
 
@@ -680,16 +792,21 @@ def run_ga_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_s
     best_calmar = max(ind.fitness.values[1] for ind in pop)
     best_stab = max(ind.fitness.values[2] for ind in pop)
 
-    logbook.record(gen=0, evals=len(invalid_ind),
-                   best_expR=round(best_expR, 4),
-                   best_calmar=round(best_calmar, 2),
-                   best_stability=round(best_stab, 4),
-                   pareto_size=len(pareto_front))
+    logbook.record(
+        gen=0,
+        evals=len(invalid_ind),
+        best_expR=round(best_expR, 4),
+        best_calmar=round(best_calmar, 2),
+        best_stability=round(best_stab, 4),
+        pareto_size=len(pareto_front),
+    )
     best_expR_history.append(best_expR)
     pareto_sizes.append(len(pareto_front))
 
-    print(f"  Gen 0: best_expR={best_expR:.4f}, best_calmar={best_calmar:.2f}, "
-          f"best_stability={best_stab:.4f}, pareto_size={len(pareto_front)}")
+    print(
+        f"  Gen 0: best_expR={best_expR:.4f}, best_calmar={best_calmar:.2f}, "
+        f"best_stability={best_stab:.4f}, pareto_size={len(pareto_front)}"
+    )
 
     # 进化主循环
     for gen in range(1, gen_count + 1):
@@ -738,20 +855,25 @@ def run_ga_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_s
         best_stab = max(ind.fitness.values[2] for ind in pop)
 
         gen_time = time.time() - t_gen
-        logbook.record(gen=gen, evals=len(invalid_ind),
-                       best_expR=round(best_expR, 4),
-                       best_calmar=round(best_calmar, 2),
-                       best_stability=round(best_stab, 4),
-                       pareto_size=len(pareto_front))
+        logbook.record(
+            gen=gen,
+            evals=len(invalid_ind),
+            best_expR=round(best_expR, 4),
+            best_calmar=round(best_calmar, 2),
+            best_stability=round(best_stab, 4),
+            pareto_size=len(pareto_front),
+        )
         best_expR_history.append(best_expR)
         pareto_sizes.append(len(pareto_front))
 
-        print(f"  Gen {gen:2d}: best_expR={best_expR:.4f}, best_calmar={best_calmar:.2f}, "
-              f"pareto_size={len(pareto_front)}  ({gen_time:.1f}s)")
+        print(
+            f"  Gen {gen:2d}: best_expR={best_expR:.4f}, best_calmar={best_calmar:.2f}, "
+            f"pareto_size={len(pareto_front)}  ({gen_time:.1f}s)"
+        )
 
         # 早停
         if len(best_expR_history) > early_stop_patience:
-            window = best_expR_history[-(early_stop_patience + 1):]
+            window = best_expR_history[-(early_stop_patience + 1) :]
             improvement = window[-1] - window[0]
             if improvement < EARLY_STOP_MIN_IMPROVE:
                 print(f"\n⏹️  早停触发：连续 {early_stop_patience} 代 expR 提升不足 {EARLY_STOP_MIN_IMPROVE}")
@@ -780,6 +902,7 @@ def run_ga_nsga2(symbol, df_is, df_oos, train_bars, valid_bars, step_bars, pop_s
 # OOS 验证
 # ============================================================================
 
+
 def evaluate_full_period(individual, symbol, df, baseline_ind=None, bounds=None, use_l1=False):
     """在完整数据集上评估（用于 IS 和 OOS 的单段评估）。"""
     return single_evaluate(individual, symbol, df)
@@ -794,14 +917,12 @@ def run_oos_validation(candidates, symbol, df_is, df_oos, toolbox):
         for i in range(N_PARAMS):
             ind[i] = ind_list[i]
 
-        is_metrics = evaluate_full_period(ind, symbol, df_is,
-                                          toolbox.baseline_ind,
-                                          toolbox.actual_bounds,
-                                          toolbox.use_l1)
-        oos_metrics = evaluate_full_period(ind, symbol, df_oos,
-                                           toolbox.baseline_ind,
-                                           toolbox.actual_bounds,
-                                           toolbox.use_l1)
+        is_metrics = evaluate_full_period(
+            ind, symbol, df_is, toolbox.baseline_ind, toolbox.actual_bounds, toolbox.use_l1
+        )
+        oos_metrics = evaluate_full_period(
+            ind, symbol, df_oos, toolbox.baseline_ind, toolbox.actual_bounds, toolbox.use_l1
+        )
 
         # 退化率
         degradation = {}
@@ -836,6 +957,7 @@ def run_oos_validation(candidates, symbol, df_is, df_oos, toolbox):
 # 稳健性检验
 # ============================================================================
 
+
 def run_robustness_test(candidates, symbol, df, toolbox):
     """参数稳健性检验：每个参数 ±20% 扰动，看表现变化。"""
     results = {}
@@ -843,11 +965,18 @@ def run_robustness_test(candidates, symbol, df, toolbox):
 
     for key, cand in candidates.items():
         ind_list = [cand["params"][name] for name in PARAM_NAMES]
-        base_metrics = wf_evaluate(ind_list, symbol, df,
-                                   toolbox.actual_bounds and DEFAULT_TRAIN_BARS or DEFAULT_TRAIN_BARS,
-                                   DEFAULT_VALID_BARS, DEFAULT_STEP_BARS,
-                                   "robust_base",
-                                   toolbox.baseline_ind, bounds, toolbox.use_l1)
+        base_metrics = wf_evaluate(
+            ind_list,
+            symbol,
+            df,
+            toolbox.actual_bounds and DEFAULT_TRAIN_BARS or DEFAULT_TRAIN_BARS,
+            DEFAULT_VALID_BARS,
+            DEFAULT_STEP_BARS,
+            "robust_base",
+            toolbox.baseline_ind,
+            bounds,
+            toolbox.use_l1,
+        )
 
         param_scores = []
         for i in range(N_PARAMS):
@@ -855,20 +984,24 @@ def run_robustness_test(candidates, symbol, df, toolbox):
             base_val = ind_list[i]
             perturb_range = (hi - lo) * ROBUST_PERTURB
 
-            test_vals = np.linspace(
-                max(lo, base_val - perturb_range),
-                min(hi, base_val + perturb_range),
-                ROBUST_POINTS
-            )
+            test_vals = np.linspace(max(lo, base_val - perturb_range), min(hi, base_val + perturb_range), ROBUST_POINTS)
 
             expR_vals = []
             for v in test_vals:
                 test_ind = list(ind_list)
                 test_ind[i] = float(v)
-                fit = wf_evaluate(test_ind, symbol, df,
-                                  DEFAULT_TRAIN_BARS, DEFAULT_VALID_BARS, DEFAULT_STEP_BARS,
-                                  f"robust_{key}_{i}_{round(v, 4)}",
-                                  toolbox.baseline_ind, bounds, toolbox.use_l1)
+                fit = wf_evaluate(
+                    test_ind,
+                    symbol,
+                    df,
+                    DEFAULT_TRAIN_BARS,
+                    DEFAULT_VALID_BARS,
+                    DEFAULT_STEP_BARS,
+                    f"robust_{key}_{i}_{round(v, 4)}",
+                    toolbox.baseline_ind,
+                    bounds,
+                    toolbox.use_l1,
+                )
                 expR_vals.append(fit[0])
 
             # 稳健性得分：变异系数的倒数（越稳定分越高）
@@ -894,9 +1027,23 @@ def run_robustness_test(candidates, symbol, df, toolbox):
 # 报告生成
 # ============================================================================
 
-def generate_html_report(symbol, result, oos_results, robust_results, baseline_is, baseline_oos,
-                         output_dir, train_bars, valid_bars, step_bars,
-                         use_shrink, use_l1, is_fast, oos_weight=0.0):
+
+def generate_html_report(
+    symbol,
+    result,
+    oos_results,
+    robust_results,
+    baseline_is,
+    baseline_oos,
+    output_dir,
+    train_bars,
+    valid_bars,
+    step_bars,
+    use_shrink,
+    use_l1,
+    is_fast,
+    oos_weight=0.0,
+):
     """生成 HTML 报告。"""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -919,7 +1066,7 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
         param_str = "<br>".join([f"{name}: {p[name]}" for name in PARAM_NAMES])
         cand_rows += f"""
         <tr>
-            <td><strong>{cand['label']}</strong></td>
+            <td><strong>{cand["label"]}</strong></td>
             <td>{param_str}</td>
             <td>{f[0]:.4f}</td>
             <td>{f[1]:.2f}</td>
@@ -939,10 +1086,10 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
         oos_calmar = oos["oos"].get("calmar", 0)
         oos_rows += f"""
         <tr>
-            <td><strong>{oos['label']}</strong></td>
+            <td><strong>{oos["label"]}</strong></td>
             <td>{is_expR:.4f}</td>
             <td>{oos_expR:.4f}</td>
-            <td>{deg_expR*100:.1f}%</td>
+            <td>{deg_expR * 100:.1f}%</td>
             <td>{is_trades}</td>
             <td>{oos_trades}</td>
             <td>{is_calmar:.2f}</td>
@@ -958,8 +1105,8 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
         ps_str = "<br>".join([f"{name}: {ps.get(name, 0):.2f}" for name in PARAM_NAMES])
         rob_rows += f"""
         <tr>
-            <td><strong>{rob['label']}</strong></td>
-            <td>{rob['overall_score']:.3f}</td>
+            <td><strong>{rob["label"]}</strong></td>
+            <td>{rob["overall_score"]:.3f}</td>
             <td>{ps_str}</td>
             <td>{status}</td>
         </tr>"""
@@ -973,7 +1120,7 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
     # 配置标签
     config_tags = []
     if use_shrink:
-        config_tags.append(f'<span class="tag tag-shrink">收缩范围 ±{int(SHRINK_PCT*100)}%</span>')
+        config_tags.append(f'<span class="tag tag-shrink">收缩范围 ±{int(SHRINK_PCT * 100)}%</span>')
     if use_l1:
         config_tags.append(f'<span class="tag tag-l1">L1 正则 w={REG_L1_WEIGHT}</span>')
     if is_fast:
@@ -1108,7 +1255,7 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
     <h1>🔬 GA 参数优化报告 — {symbol}</h1>
     <div class="subtitle">
         Phase 3.5 · OOS 感知适应度 · 3 参数联合优化 ·
-        总耗时 {total_time:.1f}s ({total_time/60:.1f}min) ·
+        总耗时 {total_time:.1f}s ({total_time / 60:.1f}min) ·
         {config_tags_str}
     </div>
 
@@ -1169,10 +1316,10 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
         <h2>🔬 纯 OOS 样本外验证</h2>
         <div class="note">
             <strong>基线对比：</strong>
-            IS expR = {baseline_is.get('expR', 0):.4f} ·
-            OOS expR = {baseline_oos.get('expR', 0):.4f} ·
-            IS 交易数 = {baseline_is.get('trades', 0)} ·
-            OOS 交易数 = {baseline_oos.get('trades', 0)}
+            IS expR = {baseline_is.get("expR", 0):.4f} ·
+            OOS expR = {baseline_oos.get("expR", 0):.4f} ·
+            IS 交易数 = {baseline_is.get("trades", 0)} ·
+            OOS 交易数 = {baseline_oos.get("trades", 0)}
         </div>
         <table>
             <thead>
@@ -1216,19 +1363,19 @@ def generate_html_report(symbol, result, oos_results, robust_results, baseline_i
         <table>
             <tr><th>项目</th><th>值</th></tr>
             <tr><td>品种</td><td>{symbol}</td></tr>
-            <tr><td>优化参数</td><td>{', '.join(PARAM_NAMES)}</td></tr>
-            <tr><td>固定参数</td><td>{', '.join(FIXED_PARAM_NAMES)}</td></tr>
+            <tr><td>优化参数</td><td>{", ".join(PARAM_NAMES)}</td></tr>
+            <tr><td>固定参数</td><td>{", ".join(FIXED_PARAM_NAMES)}</td></tr>
             <tr><td>算法</td><td>NSGA-II 多目标遗传算法</td></tr>
-            <tr><td>种群大小</td><td>{len(result['pop'])}</td></tr>
+            <tr><td>种群大小</td><td>{len(result["pop"])}</td></tr>
             <tr><td>进化代数</td><td>{len(gen_nums)}</td></tr>
             <tr><td>交叉概率</td><td>{CXPB}</td></tr>
             <tr><td>变异概率</td><td>{MUTPB}</td></tr>
             <tr><td>训练窗口</td><td>{train_bars} 根</td></tr>
             <tr><td>验证窗口</td><td>{valid_bars} 根</td></tr>
             <tr><td>滚动步长</td><td>{step_bars} 根</td></tr>
-            <tr><td>参数范围收缩</td><td>{'是 (±' + str(int(SHRINK_PCT*100)) + '%)' if use_shrink else '否'}</td></tr>
-            <tr><td>L1 正则</td><td>{'是 (w=' + str(REG_L1_WEIGHT) + ')' if use_l1 else '否'}</td></tr>
-            <tr><td>IS 数据量</td><td>{len(_eval_cache) > 0 and 'N/A' or 'N/A'} 根</td></tr>
+            <tr><td>参数范围收缩</td><td>{"是 (±" + str(int(SHRINK_PCT * 100)) + "%)" if use_shrink else "否"}</td></tr>
+            <tr><td>L1 正则</td><td>{"是 (w=" + str(REG_L1_WEIGHT) + ")" if use_l1 else "否"}</td></tr>
+            <tr><td>IS 数据量</td><td>{len(_eval_cache) > 0 and "N/A" or "N/A"} 根</td></tr>
         </table>
     </div>
 
@@ -1254,9 +1401,9 @@ def _generate_pareto_svg(pareto_front):
     calmar_vals = [ind.fitness.values[1] for ind in pareto_front]
 
     width, height = 700, 350
-    margin = {'l': 60, 'r': 30, 't': 30, 'b': 50}
-    pw = width - margin['l'] - margin['r']
-    ph = height - margin['t'] - margin['b']
+    margin = {"l": 60, "r": 30, "t": 30, "b": 50}
+    pw = width - margin["l"] - margin["r"]
+    ph = height - margin["t"] - margin["b"]
 
     e_min, e_max = min(expR_vals) * 0.9, max(expR_vals) * 1.1
     c_min, c_max = min(calmar_vals) * 0.9, max(calmar_vals) * 1.1
@@ -1265,25 +1412,30 @@ def _generate_pareto_svg(pareto_front):
     if c_max == c_min:
         c_max = c_min + 0.5
 
-    def sx(v): return margin['l'] + (v - e_min) / (e_max - e_min) * pw
-    def sy(v): return margin['t'] + ph - (v - c_min) / (c_max - c_min) * ph
+    def sx(v):
+        return margin["l"] + (v - e_min) / (e_max - e_min) * pw
+
+    def sy(v):
+        return margin["t"] + ph - (v - c_min) / (c_max - c_min) * ph
 
     dots = ""
     for i, ind in enumerate(pareto_front):
         x = sx(ind.fitness.values[0])
         y = sy(ind.fitness.values[1])
-        dots += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/>'
+        dots += (
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/>'
+        )
 
     # 坐标轴
     axes = f"""
-    <line x1="{margin['l']}" y1="{margin['t']}" x2="{margin['l']}" y2="{height-margin['b']}" stroke="#ccc" stroke-width="1"/>
-    <line x1="{margin['l']}" y1="{height-margin['b']}" x2="{width-margin['r']}" y2="{height-margin['b']}" stroke="#ccc" stroke-width="1"/>
-    <text x="{width/2}" y="{height-12}" text-anchor="middle" fill="#666" font-size="12">expR</text>
-    <text x="15" y="{height/2}" text-anchor="middle" fill="#666" font-size="12" transform="rotate(-90 15 {height/2})">Calmar</text>
-    <text x="{margin['l']}" y="{height-margin['b']+15}" text-anchor="start" fill="#999" font-size="10">{e_min:.3f}</text>
-    <text x="{width-margin['r']}" y="{height-margin['b']+15}" text-anchor="end" fill="#999" font-size="10">{e_max:.3f}</text>
-    <text x="{margin['l']-5}" y="{margin['t']+5}" text-anchor="end" fill="#999" font-size="10">{c_max:.1f}</text>
-    <text x="{margin['l']-5}" y="{height-margin['b']+5}" text-anchor="end" fill="#999" font-size="10">{c_min:.1f}</text>
+    <line x1="{margin["l"]}" y1="{margin["t"]}" x2="{margin["l"]}" y2="{height - margin["b"]}" stroke="#ccc" stroke-width="1"/>
+    <line x1="{margin["l"]}" y1="{height - margin["b"]}" x2="{width - margin["r"]}" y2="{height - margin["b"]}" stroke="#ccc" stroke-width="1"/>
+    <text x="{width / 2}" y="{height - 12}" text-anchor="middle" fill="#666" font-size="12">expR</text>
+    <text x="15" y="{height / 2}" text-anchor="middle" fill="#666" font-size="12" transform="rotate(-90 15 {height / 2})">Calmar</text>
+    <text x="{margin["l"]}" y="{height - margin["b"] + 15}" text-anchor="start" fill="#999" font-size="10">{e_min:.3f}</text>
+    <text x="{width - margin["r"]}" y="{height - margin["b"] + 15}" text-anchor="end" fill="#999" font-size="10">{e_max:.3f}</text>
+    <text x="{margin["l"] - 5}" y="{margin["t"] + 5}" text-anchor="end" fill="#999" font-size="10">{c_max:.1f}</text>
+    <text x="{margin["l"] - 5}" y="{height - margin["b"] + 5}" text-anchor="end" fill="#999" font-size="10">{c_min:.1f}</text>
     """
 
     return f'<svg viewBox="0 0 {width} {height}" width="100%" style="max-width:{width}px">{axes}{dots}</svg>'
@@ -1292,9 +1444,9 @@ def _generate_pareto_svg(pareto_front):
 def _generate_curve_svg(gens, expR_curve, calmar_curve, pareto_curve):
     """生成进化曲线 SVG。"""
     width, height = 700, 300
-    margin = {'l': 55, 'r': 55, 't': 25, 'b': 40}
-    pw = width - margin['l'] - margin['r']
-    ph = height - margin['t'] - margin['b']
+    margin = {"l": 55, "r": 55, "t": 25, "b": 40}
+    pw = width - margin["l"] - margin["r"]
+    ph = height - margin["t"] - margin["b"]
 
     n = len(gens)
     if n == 0:
@@ -1307,9 +1459,14 @@ def _generate_curve_svg(gens, expR_curve, calmar_curve, pareto_curve):
     if c_max == c_min:
         c_max = c_min + 0.5
 
-    def sx(i): return margin['l'] + i / max(n - 1, 1) * pw
-    def sy_expR(v): return margin['t'] + ph - (v - e_min) / (e_max - e_min) * ph
-    def sy_calmar(v): return margin['t'] + ph - (v - c_min) / (c_max - c_min) * ph
+    def sx(i):
+        return margin["l"] + i / max(n - 1, 1) * pw
+
+    def sy_expR(v):
+        return margin["t"] + ph - (v - e_min) / (e_max - e_min) * ph
+
+    def sy_calmar(v):
+        return margin["t"] + ph - (v - c_min) / (c_max - c_min) * ph
 
     # expR 曲线
     expR_path = ""
@@ -1327,26 +1484,26 @@ def _generate_curve_svg(gens, expR_curve, calmar_curve, pareto_curve):
 
     # 坐标轴
     axes = f"""
-    <line x1="{margin['l']}" y1="{margin['t']}" x2="{margin['l']}" y2="{height-margin['b']}" stroke="#ccc" stroke-width="1"/>
-    <line x1="{margin['l']}" y1="{height-margin['b']}" x2="{width-margin['r']}" y2="{height-margin['b']}" stroke="#ccc" stroke-width="1"/>
-    <text x="{margin['l'] + pw/2}" y="{height-10}" text-anchor="middle" fill="#666" font-size="12">代数</text>
-    <text x="20" y="{height/2}" text-anchor="middle" fill="#1976d2" font-size="12" transform="rotate(-90 20 {height/2})">expR</text>
-    <text x="{width-15}" y="{height/2}" text-anchor="middle" fill="#388e3c" font-size="12" transform="rotate(90 15 {height/2})">Calmar</text>
-    <text x="{margin['l']}" y="{height-margin['b']+12}" text-anchor="start" fill="#999" font-size="10">0</text>
-    <text x="{width-margin['r']}" y="{height-margin['b']+12}" text-anchor="end" fill="#999" font-size="10">{gens[-1]}</text>
+    <line x1="{margin["l"]}" y1="{margin["t"]}" x2="{margin["l"]}" y2="{height - margin["b"]}" stroke="#ccc" stroke-width="1"/>
+    <line x1="{margin["l"]}" y1="{height - margin["b"]}" x2="{width - margin["r"]}" y2="{height - margin["b"]}" stroke="#ccc" stroke-width="1"/>
+    <text x="{margin["l"] + pw / 2}" y="{height - 10}" text-anchor="middle" fill="#666" font-size="12">代数</text>
+    <text x="20" y="{height / 2}" text-anchor="middle" fill="#1976d2" font-size="12" transform="rotate(-90 20 {height / 2})">expR</text>
+    <text x="{width - 15}" y="{height / 2}" text-anchor="middle" fill="#388e3c" font-size="12" transform="rotate(90 15 {height / 2})">Calmar</text>
+    <text x="{margin["l"]}" y="{height - margin["b"] + 12}" text-anchor="start" fill="#999" font-size="10">0</text>
+    <text x="{width - margin["r"]}" y="{height - margin["b"] + 12}" text-anchor="end" fill="#999" font-size="10">{gens[-1]}</text>
     """
 
     # 网格线
     grid = ""
     for gi in range(5):
-        y = margin['t'] + gi / 4 * ph
-        grid += f'<line x1="{margin["l"]}" y1="{y:.1f}" x2="{width-margin["r"]}" y2="{y:.1f}" stroke="#f0f0f0" stroke-width="1"/>'
+        y = margin["t"] + gi / 4 * ph
+        grid += f'<line x1="{margin["l"]}" y1="{y:.1f}" x2="{width - margin["r"]}" y2="{y:.1f}" stroke="#f0f0f0" stroke-width="1"/>'
 
     legend = f"""
-    <rect x="{margin['l']+10}" y="8" width="12" height="3" fill="#1976d2"/>
-    <text x="{margin['l']+28}" y="13" fill="#1976d2" font-size="11">best expR</text>
-    <rect x="{margin['l']+110}" y="8" width="12" height="3" fill="#388e3c"/>
-    <text x="{margin['l']+128}" y="13" fill="#388e3c" font-size="11">best Calmar</text>
+    <rect x="{margin["l"] + 10}" y="8" width="12" height="3" fill="#1976d2"/>
+    <text x="{margin["l"] + 28}" y="13" fill="#1976d2" font-size="11">best expR</text>
+    <rect x="{margin["l"] + 110}" y="8" width="12" height="3" fill="#388e3c"/>
+    <text x="{margin["l"] + 128}" y="13" fill="#388e3c" font-size="11">best Calmar</text>
     """
 
     return f'''<svg viewBox="0 0 {width} {height}" width="100%" style="max-width:{width}px">
@@ -1361,6 +1518,7 @@ def _generate_curve_svg(gens, expR_curve, calmar_curve, pareto_curve):
 # 主函数
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="OOS 感知 GA 优化器（Phase 3.5）")
     parser.add_argument("--symbol", type=str, default="rb", help="品种代码")
@@ -1373,13 +1531,16 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--output", type=str, default=None, help="输出目录")
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="并行评估进程数")
-    parser.add_argument("--early-stop-patience", type=int, default=EARLY_STOP_PATIENCE,
-                        help="早停耐心代数")
+    parser.add_argument("--early-stop-patience", type=int, default=EARLY_STOP_PATIENCE, help="早停耐心代数")
     parser.add_argument("--fast", action="store_true", help="快速模式：步长翻倍")
     parser.add_argument("--shrink", action="store_true", help="参数范围收缩模式")
     parser.add_argument("--l1", action="store_true", help="启用 L1 正则惩罚")
-    parser.add_argument("--oos-weight", type=float, default=DEFAULT_OOS_WEIGHT,
-                        help=f"OOS 感知适应度权重（0~1，默认 {DEFAULT_OOS_WEIGHT}）")
+    parser.add_argument(
+        "--oos-weight",
+        type=float,
+        default=DEFAULT_OOS_WEIGHT,
+        help=f"OOS 感知适应度权重（0~1，默认 {DEFAULT_OOS_WEIGHT}）",
+    )
 
     args = parser.parse_args()
 
@@ -1442,10 +1603,14 @@ def main():
     print(f"\n📊 基线 IS 全量评估...")
     base_is_m = evaluate_full_period(baseline_ind, symbol, df_is)
     base_oos_m = evaluate_full_period(baseline_ind, symbol, df_oos)
-    print(f"   IS: expR={base_is_m['expR']:.4f}, trades={base_is_m['trades']}, "
-          f"winrate={base_is_m['win_rate']:.2%}, calmar={base_is_m['calmar']:.2f}")
-    print(f"   OOS: expR={base_oos_m['expR']:.4f}, trades={base_oos_m['trades']}, "
-          f"winrate={base_oos_m['win_rate']:.2%}, calmar={base_oos_m['calmar']:.2f}")
+    print(
+        f"   IS: expR={base_is_m['expR']:.4f}, trades={base_is_m['trades']}, "
+        f"winrate={base_is_m['win_rate']:.2%}, calmar={base_is_m['calmar']:.2f}"
+    )
+    print(
+        f"   OOS: expR={base_oos_m['expR']:.4f}, trades={base_oos_m['trades']}, "
+        f"winrate={base_oos_m['win_rate']:.2%}, calmar={base_oos_m['calmar']:.2f}"
+    )
 
     # WF 配置打印
     print(f"\n🔄 Walk-Forward 配置:")
@@ -1454,8 +1619,14 @@ def main():
     # 运行 GA
     print(f"\n🧬 开始 GA 优化...")
     result = run_ga_nsga2(
-        symbol, df_is, df_oos, train_bars, valid_bars, step_bars,
-        pop_size, gen_count,
+        symbol,
+        df_is,
+        df_oos,
+        train_bars,
+        valid_bars,
+        step_bars,
+        pop_size,
+        gen_count,
         use_shrink=args.shrink,
         use_l1=args.l1,
         n_jobs=n_jobs,
@@ -1463,7 +1634,7 @@ def main():
         oos_weight=args.oos_weight,
     )
 
-    print(f"\n✅ 优化完成，用时 {result['total_time']:.1f} 秒 ({result['total_time']/60:.1f} 分钟)")
+    print(f"\n✅ 优化完成，用时 {result['total_time']:.1f} 秒 ({result['total_time'] / 60:.1f} 分钟)")
     print(f"   帕累托前沿大小: {len(result['pareto_front'])} 个解")
 
     # 候选方案
@@ -1478,20 +1649,18 @@ def main():
 
     # OOS 验证
     print(f"\n🔬 纯 OOS 验证:")
-    oos_results = run_oos_validation(
-        result["candidates"], symbol, df_is, df_oos, result["toolbox"]
-    )
+    oos_results = run_oos_validation(result["candidates"], symbol, df_is, df_oos, result["toolbox"])
     for key, oos in oos_results.items():
         status = "✅ 通过" if oos["passed"] else "❌ 失败"
         print(f"   [{oos['label']}] {status}")
-        print(f"     IS expR={oos['is']['expR']:.4f} → OOS expR={oos['oos']['expR']:.4f}  "
-              f"(退化 {oos['degradation'].get('expR', 0)*100:.1f}%)")
+        print(
+            f"     IS expR={oos['is']['expR']:.4f} → OOS expR={oos['oos']['expR']:.4f}  "
+            f"(退化 {oos['degradation'].get('expR', 0) * 100:.1f}%)"
+        )
 
     # 稳健性检验
     print(f"\n🔍 参数稳健性检验:")
-    robust_results = run_robustness_test(
-        result["candidates"], symbol, df_is, result["toolbox"]
-    )
+    robust_results = run_robustness_test(result["candidates"], symbol, df_is, result["toolbox"])
     for key, rob in robust_results.items():
         status = "✅ 稳健" if rob["robust"] else "⚠️ 敏感"
         print(f"   [{rob['label']}] {status}  综合得分={rob['overall_score']:.3f}")
@@ -1499,10 +1668,19 @@ def main():
     # 生成报告
     print(f"\n📝 生成 HTML 报告...")
     report_path = generate_html_report(
-        symbol, result, oos_results, robust_results,
-        base_is_m, base_oos_m, output_dir,
-        train_bars, valid_bars, step_bars,
-        args.shrink, args.l1, args.fast,
+        symbol,
+        result,
+        oos_results,
+        robust_results,
+        base_is_m,
+        base_oos_m,
+        output_dir,
+        train_bars,
+        valid_bars,
+        step_bars,
+        args.shrink,
+        args.l1,
+        args.fast,
         args.oos_weight,
     )
     print(f"   报告已保存: {report_path}")

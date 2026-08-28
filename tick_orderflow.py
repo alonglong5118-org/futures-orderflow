@@ -17,6 +17,7 @@ tick 输入格式（每笔，由接入层产生）：
 
 本模块纯计算，不负责网络；网络接入在 four_dim_live_runner 的 TickFeedConnector。
 """
+
 import math
 import time
 
@@ -40,8 +41,8 @@ class TickOrderflow:
     def __init__(self, symbol, window=600):
         self.sym = symbol
         self.window = window
-        self.ticks = []          # (ts, signed_vol, bid_vol, ask_vol)
-        self.cum_delta = 0.0     # 窗口内累计 Delta（带符号量）
+        self.ticks = []  # (ts, signed_vol, bid_vol, ask_vol)
+        self.cum_delta = 0.0  # 窗口内累计 Delta（带符号量）
         self.last_price = None
         self.last_ts = None
 
@@ -109,15 +110,19 @@ class TickOrderflow:
 
     def as_dict(self):
         return {
-            "symbol": self.sym, "delta": self.delta_score(),
-            "imbalance": self.imbalance_score(), "absorption": self.absorption_score(),
-            "score": self.score(), "ticks": len(self.ticks),
+            "symbol": self.sym,
+            "delta": self.delta_score(),
+            "imbalance": self.imbalance_score(),
+            "absorption": self.absorption_score(),
+            "score": self.score(),
+            "ticks": len(self.ticks),
         }
 
 
 def ticks_from_jsonl(path, symbol=None, limit=None):
     """从 tick 流文件(jsonl) 读取并灌入 TickOrderflow（测试/回放用）。"""
     import json
+
     tof = TickOrderflow(symbol or "TEST")
     n = 0
     with open(path) as f:
@@ -131,8 +136,7 @@ def ticks_from_jsonl(path, symbol=None, limit=None):
                 continue
             if symbol and t.get("symbol") != symbol:
                 continue
-            tof.push(t.get("price", 0), t.get("vol", 0), t.get("side"),
-                     t.get("bid_vol"), t.get("ask_vol"), t.get("ts"))
+            tof.push(t.get("price", 0), t.get("vol", 0), t.get("side"), t.get("bid_vol"), t.get("ask_vol"), t.get("ts"))
             n += 1
             if limit and n >= limit:
                 break
@@ -143,14 +147,20 @@ if __name__ == "__main__":
     # 合成自测：强主动买单流 → 分数应明显为正
     tof = TickOrderflow("FG")
     import random
+
     random.seed(1)
     p = 1500.0
     for i in range(200):
         # 70% 主动买，价格缓涨
         buy = random.random() < 0.7
         p += 0.2 if buy else -0.2
-        tof.push(p, random.uniform(5, 20), "B" if buy else "S",
-                 bid_vol=random.uniform(100, 300), ask_vol=random.uniform(100, 300))
+        tof.push(
+            p,
+            random.uniform(5, 20),
+            "B" if buy else "S",
+            bid_vol=random.uniform(100, 300),
+            ask_vol=random.uniform(100, 300),
+        )
     print("合成主动买单流自测:", tof.as_dict())
     assert tof.score() > 10, "强买流分数应为正"
     print("✅ tick_orderflow 自测通过（强买流 → 正分）")

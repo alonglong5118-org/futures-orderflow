@@ -54,6 +54,7 @@ from account_tracker import (
 #  1. _dir_sign
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDirSignAcc(unittest.TestCase):
     """_dir_sign 方向符号。"""
 
@@ -76,6 +77,7 @@ class TestDirSignAcc(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _fmt_price
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFmtPrice(unittest.TestCase):
     """_fmt_price 价格格式化。"""
@@ -114,6 +116,7 @@ class TestFmtPrice(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _to_float
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestToFloat(unittest.TestCase):
     """_to_float 安全转 float。"""
@@ -158,6 +161,7 @@ class TestToFloat(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _validate_levels
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestValidateLevels(unittest.TestCase):
     """_validate_levels 持仓档位校验修正。"""
@@ -213,11 +217,12 @@ class TestValidateLevels(unittest.TestCase):
     def test_multiple_levels_fixed_simultaneously(self):
         """多档位同时修正（stop + target + t1 + t2 都错）"""
         pos = {
-            "direction": "多", "avg": 100.0,
-            "stop": 105.0,     # 错：应该在下方
-            "target": 95.0,    # 错：应该在上方
-            "t1": 90.0,        # 错：应该在上方
-            "t2": 85.0,        # 错：应该在上方
+            "direction": "多",
+            "avg": 100.0,
+            "stop": 105.0,  # 错：应该在下方
+            "target": 95.0,  # 错：应该在上方
+            "t1": 90.0,  # 错：应该在上方
+            "t2": 85.0,  # 错：应该在上方
         }
         changed, reason = _validate_levels(pos)
         self.assertEqual(len(changed), 4)

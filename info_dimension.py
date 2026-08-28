@@ -14,6 +14,7 @@
   · 任何采集失败都不影响 live：缓存缺失/损坏 → 返回中性分(0)，runner 照常运行。
   · score 幅度有界，且仅作为「F 的定性加分/减分」，不直接改方向/手数（防失控）。
 """
+
 from __future__ import annotations
 
 import json
@@ -21,7 +22,7 @@ import os
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(HERE, "info_dimension.json")       # 自动采集（fetch_info_dimension.py 写）
+CACHE = os.path.join(HERE, "info_dimension.json")  # 自动采集（fetch_info_dimension.py 写）
 MANUAL = os.path.join(HERE, "info_dimension_manual.json")  # 人工补充（限产/疫情/USDA 等）
 
 # 信息分对 F(∈[-100,100]，与 score_F 同尺度) 的最大平移权重：
@@ -41,7 +42,7 @@ SYMBOL_TAGS = {
     "FG": ["玻璃", "浮法", "光伏玻璃", "竣工", "地产", "建材", "沙河"],
     "SA": ["纯碱", "碱", "轻碱", "重碱", "光伏", "玻璃", "地产"],
     "JM": ["焦煤", "蒙煤", "安监", "煤矿", "洗煤", "蒙煤通关"],
-    "J":  ["焦炭", "焦化", "钢厂", "粗钢", "限产", "环保", "焦煤"],
+    "J": ["焦炭", "焦化", "钢厂", "粗钢", "限产", "环保", "焦煤"],
 }
 # 宏观项（无特定品种）→ 影响全部 6 品种（幅度打折）
 MACRO_SYMBOLS = ["jd", "lh", "FG", "SA", "JM", "J"]
@@ -129,9 +130,9 @@ def info_adj(symbol):
                 w = af * (MACRO_WEIGHT if it.get("macro") else 1.0) * (0.6 if src is manual else 1.0)
                 vsum += s * w
                 wsum += w
-                items.append({"text": text[:80], "score": round(s, 2),
-                               "source": it.get("source", "?"),
-                               "manual": src is manual})
+                items.append(
+                    {"text": text[:80], "score": round(s, 2), "source": it.get("source", "?"), "manual": src is manual}
+                )
         score = round(max(-1.0, min(1.0, vsum / wsum)), 3) if wsum > 0 else 0.0
         return {
             "score": score,
@@ -141,8 +142,7 @@ def info_adj(symbol):
             "divergence_note": None,
         }
     except Exception:
-        return {"score": 0.0, "items": [], "updated": None, "manual": False,
-                "divergence_note": None}
+        return {"score": 0.0, "items": [], "updated": None, "manual": False, "divergence_note": None}
 
 
 def f_override_for(symbol, base_F):
@@ -162,12 +162,12 @@ def refresh():
     非阻塞思路：调用方自行决定频率；本函数失败静默返回 False，绝不抛。"""
     try:
         import subprocess
+
         py = "/usr/bin/python3"
         sc = os.path.join(HERE, "fetch_info_dimension.py")
         if not os.path.exists(sc):
             return False
-        subprocess.Popen([py, sc], stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
+        subprocess.Popen([py, sc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except Exception:
         return False
@@ -184,4 +184,5 @@ def summary():
 
 if __name__ == "__main__":
     import pprint
+
     pprint.pprint(summary())

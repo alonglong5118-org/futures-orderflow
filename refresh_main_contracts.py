@@ -24,6 +24,7 @@ refresh_main_contracts.py — 换月期全市场主力合约实时核对与强�
   python3 refresh_main_contracts.py --report   # 同上（显式）
   python3 refresh_main_contracts.py --apply    # 报告 + 用 akshare 近月强制锁定并更新缓存
 """
+
 import argparse
 import json
 import os
@@ -35,7 +36,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "minishare_hot_contracts.json")
 LOG_FILE = os.path.join(HERE, "main_contract_refresh.log")
 ALERT_STATE = os.path.join(HERE, "main_contract_alert_state.json")
-_NOTIFY_COOLDOWN = 7 * 24 * 3600   # 非紧急类(源失败/临界当月): 仅在状态变化时推送, 避免刷屏
+_NOTIFY_COOLDOWN = 7 * 24 * 3600  # 非紧急类(源失败/临界当月): 仅在状态变化时推送, 避免刷屏
 _NOTIFY_COOLDOWN_URGENT = 6 * 3600  # 紧急类(异常旧合约): 每 6h 提醒一次, 直至修复
 
 
@@ -55,10 +56,9 @@ def _notify(title, msg):
     """macOS 通知中心推送(用户 gui 会话)。失败静默忽略。"""
     try:
         import subprocess
+
         _safe = msg.replace('"', "'")
-        subprocess.run(["osascript", "-e",
-                        f'display notification "{_safe}" with title "{title}"'],
-                       timeout=10)
+        subprocess.run(["osascript", "-e", f'display notification "{_safe}" with title "{title}"'], timeout=10)
     except Exception:
         pass
 
@@ -107,7 +107,8 @@ def ym_of(code):
     if not m:
         return None
     d = m.group(2)
-    yy = int(d[:2]); mm = int(d[2:])
+    yy = int(d[:2])
+    mm = int(d[2:])
     yy += 2000 if yy < 70 else 1900
     return yy * 100 + mm
 
@@ -133,43 +134,42 @@ def _next_month_code(old_code, now_ym):
     return f"{prefix}{yy:02d}{mm:02d}"
 
 
-
 def _get_ine_main():
     """INE(上海国际能源交易中心) 主力合约获取。
-    
-    akshare match_main_contract 对 ine 无效(新浪源不支持), 
+
+    akshare match_main_contract 对 ine 无效(新浪源不支持),
     改用 futures_settle_ine 获取交易所官方结算数据, 选取近月活跃合约。
     INE 目前仅上市 SC(原油) 一个品种。
     """
     from datetime import datetime
 
     import akshare as ak
-    
+
     out = {}
     today = datetime.now().strftime("%Y%m%d")
-    
+
     for attempt in range(3):
         try:
             df = ak.futures_settle_ine(date=today)
             if df is None or len(df) == 0:
                 time.sleep(1.5)
                 continue
-            
+
             # 提取所有合约, 按 YYMM 排序
-            syms = df['symbol'].unique().tolist()
-            
+            syms = df["symbol"].unique().tolist()
+
             def _ym(code):
                 """sc2609 -> 2609 (YYMM 整数)"""
                 code = str(code).lower()
                 # 提取品种前缀 + YYMM
-                m = re.match(r'^([a-z]+)(\d{4})$', code)
+                m = re.match(r"^([a-z]+)(\d{4})$", code)
                 if m:
                     return int(m.group(2))
                 return 0
-            
+
             # 转换为 YYMM 进行比较
             now_ym = datetime.now().year % 100 * 100 + datetime.now().month
-            
+
             # 找每个品种的近月主力
             variety_map = {}
             for sym in syms:
@@ -177,37 +177,35 @@ def _get_ine_main():
                 if ym == 0:
                     continue
                 # 计算品种前缀 (如 sc)
-                prefix = re.match(r'^([a-z]+)', str(sym).lower())
+                prefix = re.match(r"^([a-z]+)", str(sym).lower())
                 if not prefix:
                     continue
                 pfx = prefix.group(1)
-                
+
                 if pfx not in variety_map:
                     # 找第一个 >= 当前月的合约 (即近月主力)
                     if ym >= now_ym:
                         variety_map[pfx] = (ym, sym.upper())
-            
+
             # 如果没找到 >= 当前月的, 用最大的 (最远月也比没有好)
             for pfx in set(sym[:2].lower() for sym in syms):
                 if pfx not in variety_map:
-                    candidates = [(ym, s.upper()) for s in syms 
-                                  if s.lower().startswith(pfx) and _ym(s) > 0]
+                    candidates = [(ym, s.upper()) for s in syms if s.lower().startswith(pfx) and _ym(s) > 0]
                     if candidates:
                         candidates.sort()
                         variety_map[pfx] = candidates[0]
-            
+
             # ine 独有品种白名单: 只有 sc(原油) 是 ine 独有
             # lu/nr/bc/ec 等品种虽出现在 ine 结算数据中, 但实际归属 SHFE
             # 必须过滤掉, 避免覆盖 SHFE 的正确主力合约
             _INE_ONLY = {"sc"}
-            out = {pfx: code for pfx, (_, code) in variety_map.items() 
-                   if pfx in _INE_ONLY}
+            out = {pfx: code for pfx, (_, code) in variety_map.items() if pfx in _INE_ONLY}
             if out:
                 break
         except Exception:
             if attempt < 2:
                 time.sleep(1.5)
-    
+
     return out
 
 
@@ -217,6 +215,7 @@ def ak_main_all():
     每交易所重试 3 次（akshare match_main_contract 偶发空响应）。
     ine 使用独立的 _get_ine_main() 函数（新浪源不支持 ine）。"""
     import akshare as ak
+
     out = {}
     failed = []
     for ex in ("dce", "czce", "shfe", "cffex"):
@@ -236,7 +235,7 @@ def ak_main_all():
         else:
             print(f"  [warn] akshare {ex} 连续失败，跳过", file=sys.stderr)
             failed.append(ex)
-    
+
     # ine: 使用独立函数 (新浪源不支持 ine)
     try:
         ine_out = _get_ine_main()
@@ -244,7 +243,7 @@ def ak_main_all():
     except Exception:
         print(f"  [warn] ine 主力获取失败，跳过", file=sys.stderr)
         failed.append("ine")
-    
+
     return out, failed
 
 
@@ -252,8 +251,9 @@ def main():
     ap = argparse.ArgumentParser(description="换月期全市场主力合约核对/强制更新")
     ap.add_argument("--apply", action="store_true", help="用 akshare 近月主力强制锁定(写 forced=True)")
     ap.add_argument("--report", action="store_true", help="仅报告（默认行为）")
-    ap.add_argument("--dump-akmap", action="store_true",
-                    help="仅打印 akshare 全市场真主力映射(JSON)后退出，不读缓存/不写文件")
+    ap.add_argument(
+        "--dump-akmap", action="store_true", help="仅打印 akshare 全市场真主力映射(JSON)后退出，不读缓存/不写文件"
+    )
     args = ap.parse_args()
 
     # --dump-akmap：轻量只读查询，供 runner(3.13 无 akshare)经 subprocess 取「交易所真实主力」。
@@ -261,8 +261,7 @@ def main():
     if args.dump_akmap:
         try:
             ak_main, failed = ak_main_all()
-            print(json.dumps({"ok": True, "main": ak_main,
-                              "failed_exchanges": failed}, ensure_ascii=False))
+            print(json.dumps({"ok": True, "main": ak_main, "failed_exchanges": failed}, ensure_ascii=False))
             sys.exit(0)
         except Exception as _e:
             print(json.dumps({"ok": False, "error": str(_e)}, ensure_ascii=False))
@@ -346,7 +345,7 @@ def main():
         print(f"[refresh_main_contracts] 同步 contract_specs 失败: {_e}")
 
     # —— 异常监测：刷新失败交易所 + 卡在过往月份的旧合约 + 停在当月交割月(临界) ——
-    _abn = []        # 卡在过往月份(ym < now_ym)，确定性异常
+    _abn = []  # 卡在过往月份(ym < now_ym)，确定性异常
     _cur_month = []  # 停在当月交割月(ym == now_ym)，临界需核对
     for v, code in override.items():
         ym = ym_of(code)

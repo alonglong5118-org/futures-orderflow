@@ -41,8 +41,7 @@ def run_backtest_on_slice(df_slice, symbol, weights_dict, window=200):
             "max_drawdown": round(float(r.get("max_drawdown", 0)), 4),
         }
     except Exception as e:
-        return {"expR": 0, "win_rate": 0, "trades": 0, "total_R": 0,
-                "max_drawdown": 0, "error": str(e)}
+        return {"expR": 0, "win_rate": 0, "trades": 0, "total_R": 0, "max_drawdown": 0, "error": str(e)}
 
 
 def main():
@@ -54,8 +53,7 @@ def main():
     parser.add_argument("--window", type=int, default=200, help="walk-forward窗口")
     parser.add_argument("--min-bars", type=int, default=600, help="最少总日线数")
     parser.add_argument("--only-ga", action="store_true", help="只跑当前缓存里有的品种")
-    parser.add_argument("--output", type=str, default="logs/ga_oos_validation.json",
-                        help="结果输出文件")
+    parser.add_argument("--output", type=str, default="logs/ga_oos_validation.json", help="结果输出文件")
     args = parser.parse_args()
 
     total_bars = args.train_bars + args.oos_bars
@@ -92,7 +90,7 @@ def main():
                 status = "✗"
         except Exception:
             status = "✗"
-        print(f"  [{i+1}/{len(all_syms)}] {sym} {status}", end="\r", flush=True)
+        print(f"  [{i + 1}/{len(all_syms)}] {sym} {status}", end="\r", flush=True)
     print()
 
     if not valid_syms:
@@ -113,7 +111,7 @@ def main():
         df = df_full.tail(total_bars).copy()
 
         # 训练集：前 train_bars 根
-        df_train = df.iloc[:args.train_bars].copy()
+        df_train = df.iloc[: args.train_bars].copy()
         # 验证集：从 train_bars - window 开始（给 walk-forward 留 warmup），到末尾
         # 即 window 根 warmup + oos_bars 根 OOS
         oos_start = args.train_bars - args.window
@@ -122,9 +120,12 @@ def main():
         # 1. 在训练集上跑 GA 优化
         try:
             ga_result = gfm.optimize_weights(
-                sym, df_daily=df_train,
-                pop_size=args.pop, n_gen=args.gen,
-                verbose=False, tail=None,  # tail=None 因为 df_train 已经是训练集
+                sym,
+                df_daily=df_train,
+                pop_size=args.pop,
+                n_gen=args.gen,
+                verbose=False,
+                tail=None,  # tail=None 因为 df_train 已经是训练集
             )
             ga_w = ga_result.get("best_weights", {}).get("base", default_w)
             train_expR = ga_result.get("best_expR", 0)
@@ -135,7 +136,7 @@ def main():
             train_expR = 0
             train_robust = 0
             ga_ok = False
-            print(f"  [{idx+1}/{len(valid_syms)}] {sym}: GA训练失败: {e}", flush=True)
+            print(f"  [{idx + 1}/{len(valid_syms)}] {sym}: GA训练失败: {e}", flush=True)
 
         # 2. 在训练集上跑默认权重（样本内对比）
         r_train_default = run_backtest_on_slice(df_train, sym, default_w, window=args.window)
@@ -169,29 +170,33 @@ def main():
         if oos_d != 0:
             delta_pct = delta / abs(oos_d) * 100
         elif oos_g > 0:
-            delta_pct = float('inf')
+            delta_pct = float("inf")
         else:
             delta_pct = 0
 
         arrow = "↑" if delta > 0.01 else ("↓" if delta < -0.01 else "→")
 
-        print(f"  [{idx+1}/{len(valid_syms)}] {sym:<6} {group:<4} "
-              f"训练:默认={r_train_default['expR']:>7.4f}/GA={train_expR:>7.4f} | "
-              f"OOS:默认={oos_d:>7.4f}/GA={oos_g:>7.4f} {arrow}{delta:+.4f} ({delta_pct:+.0f}%)",
-              flush=True)
+        print(
+            f"  [{idx + 1}/{len(valid_syms)}] {sym:<6} {group:<4} "
+            f"训练:默认={r_train_default['expR']:>7.4f}/GA={train_expR:>7.4f} | "
+            f"OOS:默认={oos_d:>7.4f}/GA={oos_g:>7.4f} {arrow}{delta:+.4f} ({delta_pct:+.0f}%)",
+            flush=True,
+        )
 
     total_time = time.time() - t_start
 
     # 汇总
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"[3/4] OOS 汇总")
-    print(f"{'='*80}")
-    print(f"总品种: {len(valid_syms)} | 总耗时: {total_time/60:.1f}min")
+    print(f"{'=' * 80}")
+    print(f"总品种: {len(valid_syms)} | 总耗时: {total_time / 60:.1f}min")
 
     # OOS 对比
     print(f"\n--- 样本外（OOS）对比 ---")
-    print(f"{'品种':<6} {'板块':<5} {'OOS默认':>9} {'OOS_GA':>9} {'差值':>8} {'变化%':>8} "
-          f"{'IS默认':>9} {'IS_GA':>9} {'过拟合':>8}")
+    print(
+        f"{'品种':<6} {'板块':<5} {'OOS默认':>9} {'OOS_GA':>9} {'差值':>8} {'变化%':>8} "
+        f"{'IS默认':>9} {'IS_GA':>9} {'过拟合':>8}"
+    )
     print("-" * 85)
 
     improved_oos = 0
@@ -201,8 +206,9 @@ def main():
     total_oos_ga = 0
     overfit_count = 0  # IS提升但OOS下降
 
-    for sym in sorted(results.keys(),
-                      key=lambda s: -(results[s]["oos"]["ga"]["expR"] - results[s]["oos"]["default"]["expR"])):
+    for sym in sorted(
+        results.keys(), key=lambda s: -(results[s]["oos"]["ga"]["expR"] - results[s]["oos"]["default"]["expR"])
+    ):
         r = results[sym]
         oos_d = r["oos"]["default"]["expR"]
         oos_g = r["oos"]["ga"]["expR"]
@@ -233,9 +239,11 @@ def main():
         total_oos_default += oos_d
         total_oos_ga += oos_g
 
-        print(f"{sym:<6} {r['group']:<5} {oos_d:>9.4f} {oos_g:>9.4f} "
-              f"{delta_oos:>+8.4f} {delta_pct:>+7.0f}% "
-              f"{is_d:>9.4f} {is_g:>9.4f} {of_tag:>8}")
+        print(
+            f"{sym:<6} {r['group']:<5} {oos_d:>9.4f} {oos_g:>9.4f} "
+            f"{delta_oos:>+8.4f} {delta_pct:>+7.0f}% "
+            f"{is_d:>9.4f} {is_g:>9.4f} {of_tag:>8}"
+        )
 
     n = len(results)
     avg_oos_default = total_oos_default / n
@@ -244,8 +252,7 @@ def main():
     avg_delta_pct = (avg_delta / abs(avg_oos_default) * 100) if avg_oos_default != 0 else 0
 
     print("-" * 85)
-    print(f"{'平均':<6} {'':<5} {avg_oos_default:>9.4f} {avg_oos_ga:>9.4f} "
-          f"{avg_delta:>+8.4f} {avg_delta_pct:>+7.0f}%")
+    print(f"{'平均':<6} {'':<5} {avg_oos_default:>9.4f} {avg_oos_ga:>9.4f} {avg_delta:>+8.4f} {avg_delta_pct:>+7.0f}%")
     print()
     print(f"  OOS 提升: {improved_oos} 个 | 下降: {worsened_oos} 个 | 持平: {unchanged_oos} 个")
     print(f"  OOS 平均 expR 变化: {avg_delta:+.4f} ({avg_delta_pct:+.1f}%)")
@@ -253,6 +260,7 @@ def main():
 
     # 按板块 OOS 对比
     from collections import defaultdict
+
     groups = defaultdict(lambda: {"default": [], "ga": []})
     for sym, r in results.items():
         groups[r["group"]]["default"].append(r["oos"]["default"]["expR"])
@@ -261,40 +269,44 @@ def main():
     print(f"\n--- 板块 OOS 平均 expR ---")
     print(f"{'板块':<6} {'品种数':>6} {'默认avg':>9} {'GA avg':>9} {'变化':>8} {'变化%':>8}")
     print("-" * 55)
-    for grp in sorted(groups.keys(), key=lambda g: -(sum(groups[g]["ga"])/max(len(groups[g]["ga"]),1))):
+    for grp in sorted(groups.keys(), key=lambda g: -(sum(groups[g]["ga"]) / max(len(groups[g]["ga"]), 1))):
         data = groups[grp]
         n_g = len(data["default"])
         d_avg = sum(data["default"]) / n_g
         g_avg = sum(data["ga"]) / n_g
         delta = g_avg - d_avg
         delta_pct = (delta / abs(d_avg) * 100) if d_avg != 0 else 0
-        print(f"{grp:<6} {n_g:>6} {d_avg:>9.4f} {g_avg:>9.4f} "
-              f"{delta:>+8.4f} {delta_pct:>+7.0f}%")
+        print(f"{grp:<6} {n_g:>6} {d_avg:>9.4f} {g_avg:>9.4f} {delta:>+8.4f} {delta_pct:>+7.0f}%")
 
     # 保存
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
-        json.dump({
-            "config": {
-                "train_bars": args.train_bars,
-                "oos_bars": args.oos_bars,
-                "window": args.window,
-                "pop": args.pop,
-                "gen": args.gen,
+        json.dump(
+            {
+                "config": {
+                    "train_bars": args.train_bars,
+                    "oos_bars": args.oos_bars,
+                    "window": args.window,
+                    "pop": args.pop,
+                    "gen": args.gen,
+                },
+                "summary": {
+                    "total": n,
+                    "improved_oos": improved_oos,
+                    "worsened_oos": worsened_oos,
+                    "unchanged_oos": unchanged_oos,
+                    "overfit_count": overfit_count,
+                    "avg_oos_default": round(avg_oos_default, 4),
+                    "avg_oos_ga": round(avg_oos_ga, 4),
+                    "avg_delta": round(avg_delta, 4),
+                    "avg_delta_pct": round(avg_delta_pct, 2),
+                },
+                "results": results,
             },
-            "summary": {
-                "total": n,
-                "improved_oos": improved_oos,
-                "worsened_oos": worsened_oos,
-                "unchanged_oos": unchanged_oos,
-                "overfit_count": overfit_count,
-                "avg_oos_default": round(avg_oos_default, 4),
-                "avg_oos_ga": round(avg_oos_ga, 4),
-                "avg_delta": round(avg_delta, 4),
-                "avg_delta_pct": round(avg_delta_pct, 2),
-            },
-            "results": results,
-        }, f, ensure_ascii=False, indent=2)
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     print(f"\n详细结果已保存到: {args.output}")
 

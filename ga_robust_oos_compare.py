@@ -3,6 +3,7 @@
 直接用 ga_group_six_factor_robust.py 得到的最优权重，在验证集上评估。
 同时与无约束版、基准版做三方对比。
 """
+
 import copy
 import json
 import os
@@ -76,7 +77,7 @@ for group, r_robust in robust_results.items():
     for sym, df in sorted(group_data.items()):
         total = len(df)
         train_end = total - TEST_BARS
-        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS):train_end]
+        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS) : train_end]
         test_data[sym] = df.iloc[train_end:]
 
     w = r_robust["best_weights"]
@@ -122,9 +123,9 @@ for group, r_robust in robust_results.items():
 with open(OUTFILE, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
-print(f"\n{'='*70}", flush=True)
+print(f"\n{'=' * 70}", flush=True)
 print("汇总：过拟合系数对比", flush=True)
-print(f"{'='*70}", flush=True)
+print(f"{'=' * 70}", flush=True)
 print(f"{'板块':<8s} {'无约束':>10s} {'稳健版':>10s} {'改善':>10s}", flush=True)
 print("-" * 42, flush=True)
 for g, r in results.items():

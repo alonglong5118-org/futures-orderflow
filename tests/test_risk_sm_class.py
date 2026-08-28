@@ -44,6 +44,7 @@ from risk_state_machine import (
 #  1. 初始状态
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskSMInit(unittest.TestCase):
     """初始状态。"""
 
@@ -71,14 +72,22 @@ class TestRiskSMInit(unittest.TestCase):
         """summary 返回所有必要字段"""
         sm = RiskStateMachine()
         s = sm.summary()
-        for key in ["state", "scale", "consec_losses", "peak_equity",
-                    "lock_reason", "daily_loss_pct", "daily_loss_stop"]:
+        for key in [
+            "state",
+            "scale",
+            "consec_losses",
+            "peak_equity",
+            "lock_reason",
+            "daily_loss_pct",
+            "daily_loss_stop",
+        ]:
             self.assertIn(key, s)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. 状态流转：NORMAL → WARN → LOCKED
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskSMStateTransitions(unittest.TestCase):
     """状态流转。"""
@@ -102,8 +111,7 @@ class TestRiskSMStateTransitions(unittest.TestCase):
     def test_lock_status_moves_to_locked(self):
         """LOCK → NORMAL → LOCKED"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "LOCK", "usage": 0.50,
-                            "daily_loss_pct": 0, "reasons": ["保证金红线"]})
+            self.sm.update({"status": "LOCK", "usage": 0.50, "daily_loss_pct": 0, "reasons": ["保证金红线"]})
         self.assertEqual(self.sm.state, "LOCKED")
         self.assertEqual(self.sm.scale(), 0.0)
         self.assertIn("红线", self.sm.lock_reason)
@@ -140,8 +148,7 @@ class TestRiskSMStateTransitions(unittest.TestCase):
     def test_locked_then_ok_still_locked_no_cooldown(self):
         """LOCK → OK，但冷却不够 + 红线已解除 → 仍 LOCKED"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "LOCK", "usage": 0.50,
-                            "daily_loss_pct": 0, "reasons": ["保证金红线"]})
+            self.sm.update({"status": "LOCK", "usage": 0.50, "daily_loss_pct": 0, "reasons": ["保证金红线"]})
         self.assertEqual(self.sm.state, "LOCKED")
         # 只过了 10 秒
         self._tick(10)
@@ -152,8 +159,7 @@ class TestRiskSMStateTransitions(unittest.TestCase):
     def test_locked_releases_to_warning_after_cooldown(self):
         """LOCK → OK，冷却足够 + 红线解除 → 降级到 WARNING"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "LOCK", "usage": 0.50,
-                            "daily_loss_pct": 0, "reasons": ["保证金红线"]})
+            self.sm.update({"status": "LOCK", "usage": 0.50, "daily_loss_pct": 0, "reasons": ["保证金红线"]})
         self.assertEqual(self.sm.state, "LOCKED")
         # 过了 LOCK_RELEASE_SEC + 10 秒
         self._tick(LOCK_RELEASE_SEC + 10)
@@ -167,6 +173,7 @@ class TestRiskSMStateTransitions(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. 日亏锁 — 跨日才解除
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskSMDailyLossLock(unittest.TestCase):
     """日亏锁：当日不自动解锁，需 reset_daily。"""
@@ -182,18 +189,18 @@ class TestRiskSMDailyLossLock(unittest.TestCase):
     def test_daily_loss_marks_daily_loss_locked(self):
         """日亏触发锁定 → daily_loss_locked = True"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "LOCK", "usage": 0.30,
-                            "daily_loss_pct": DAILY_LOSS_STOP,
-                            "reasons": ["日亏达停机线"]})
+            self.sm.update(
+                {"status": "LOCK", "usage": 0.30, "daily_loss_pct": DAILY_LOSS_STOP, "reasons": ["日亏达停机线"]}
+            )
         self.assertTrue(self.sm.daily_loss_locked)
         self.assertEqual(self.sm.state, "LOCKED")
 
     def test_daily_loss_lock_not_released_same_day(self):
         """日亏锁：当日即使浮亏回吐 + 冷却够 → 也不解锁"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "LOCK", "usage": 0.30,
-                            "daily_loss_pct": DAILY_LOSS_STOP,
-                            "reasons": ["日亏达停机线"]})
+            self.sm.update(
+                {"status": "LOCK", "usage": 0.30, "daily_loss_pct": DAILY_LOSS_STOP, "reasons": ["日亏达停机线"]}
+            )
         self.assertTrue(self.sm.daily_loss_locked)
 
         # 过了很久，usage 也下来了
@@ -206,9 +213,9 @@ class TestRiskSMDailyLossLock(unittest.TestCase):
     def test_daily_loss_lock_released_after_reset(self):
         """日亏锁：reset_daily 后 + 冷却足够 → 可以解锁"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "LOCK", "usage": 0.30,
-                            "daily_loss_pct": DAILY_LOSS_STOP,
-                            "reasons": ["日亏达停机线"]})
+            self.sm.update(
+                {"status": "LOCK", "usage": 0.30, "daily_loss_pct": DAILY_LOSS_STOP, "reasons": ["日亏达停机线"]}
+            )
         self.assertTrue(self.sm.daily_loss_locked)
 
         # 跨日重置
@@ -225,6 +232,7 @@ class TestRiskSMDailyLossLock(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. 连续止损
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskSMConsecutiveLosses(unittest.TestCase):
     """连续止损：2 笔警告，3 笔冻结。"""
@@ -295,11 +303,10 @@ class TestRiskSMConsecutiveLosses(unittest.TestCase):
         for i in range(1, 6):
             self.sm.mark_loss()
             expected_base = 1.0
-            expected_factor = max(LOSS_FLOOR, LOSS_DECAY ** i)
+            expected_factor = max(LOSS_FLOOR, LOSS_DECAY**i)
             expected_scale = round(expected_base * expected_factor, 3)
             actual = self.sm.scale()
-            self.assertAlmostEqual(actual, expected_scale, places=3,
-                msg=f"第 {i} 次止损后 scale 不对")
+            self.assertAlmostEqual(actual, expected_scale, places=3, msg=f"第 {i} 次止损后 scale 不对")
 
     def test_loss_factor_floor(self):
         """连续止损很多次 → 封底在 LOSS_FLOOR"""
@@ -314,6 +321,7 @@ class TestRiskSMConsecutiveLosses(unittest.TestCase):
 #  5. peak_equity 追踪
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskSMPeakEquity(unittest.TestCase):
     """peak_equity 追踪。"""
 
@@ -324,8 +332,7 @@ class TestRiskSMPeakEquity(unittest.TestCase):
     def test_peak_equity_first_update(self):
         """首次 update → 设置 peak_equity"""
         with patch("risk_state_machine.time.time", return_value=self._t):
-            self.sm.update({"status": "OK", "usage": 0.20, "daily_loss_pct": 0},
-                           equity=100000)
+            self.sm.update({"status": "OK", "usage": 0.20, "daily_loss_pct": 0}, equity=100000)
         self.assertEqual(self.sm.peak_equity, 100000)
 
     def test_peak_equity_only_goes_up(self):

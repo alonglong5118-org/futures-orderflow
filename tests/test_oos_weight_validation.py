@@ -54,6 +54,7 @@ from oos_weight_validation import _deep_merge, _metric, split_is_oos
 #  1. _deep_merge
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDeepMerge(unittest.TestCase):
     """_deep_merge 递归深度合并 dict。"""
 
@@ -143,6 +144,7 @@ class TestDeepMerge(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. split_is_oos
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSplitIsOos(unittest.TestCase):
     """split_is_oos 时间序列 IS/OOS 切分。"""
@@ -240,6 +242,7 @@ class TestSplitIsOos(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _metric
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestMetric(unittest.TestCase):
     """_metric 从回测结果提取 (expR, trades)。"""

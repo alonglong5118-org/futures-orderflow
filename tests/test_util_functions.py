@@ -37,6 +37,7 @@ from preflight_check import HOLIDAY_SET_2026, is_trading_day, parse_ts
 #  1. is_trading_day — 交易日判断
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsTradingDay(unittest.TestCase):
     """is_trading_day — 交易日判断。"""
 
@@ -95,6 +96,7 @@ class TestIsTradingDay(unittest.TestCase):
 #  2. parse_ts — 时间戳解析
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseTs(unittest.TestCase):
     """parse_ts — 秒/毫秒时间戳解析。"""
 
@@ -151,12 +153,14 @@ class TestParseTs(unittest.TestCase):
 #  3. variety_of — 品种映射补充
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestVarietyOfCompleteness(unittest.TestCase):
     """variety_of 补充测试。"""
 
     def test_all_variety_keys_in_symbols(self):
         """VARIETY_OF 中的品种 key 大部分在 SYMBOLS 里"""
         from four_dim_strategy import SYMBOLS
+
         valid = 0
         for contract, variety in VARIETY_OF.items():
             if variety in SYMBOLS:
@@ -165,8 +169,7 @@ class TestVarietyOfCompleteness(unittest.TestCase):
         # 允许有 20% 不在（可能是过期合约或新品种）
         if total > 0:
             ratio = valid / total
-            self.assertGreater(ratio, 0.7,
-                f"VARIETY_OF 中只有 {ratio:.0%} 的品种在 SYMBOLS 里")
+            self.assertGreater(ratio, 0.7, f"VARIETY_OF 中只有 {ratio:.0%} 的品种在 SYMBOLS 里")
 
     def test_variety_of_upper_lower_consistency(self):
         """大小写合约名映射到同一个品种"""

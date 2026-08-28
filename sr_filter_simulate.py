@@ -66,16 +66,18 @@ def annotate_trades(symbol, trades, min_bars=60):
 
         nearest_dist = min(sup_dist, res_dist)
 
-        annotated.append({
-            "symbol": symbol,
-            "direction": direction,
-            "R_adj": t["R_adj"],
-            "T_D": t.get("T_D", 0),
-            "nearest_dist": nearest_dist,
-            "friendly_dist": friendly_dist,
-            "hostile_dist": hostile_dist,
-            "regime": t.get("regime", "?"),
-        })
+        annotated.append(
+            {
+                "symbol": symbol,
+                "direction": direction,
+                "R_adj": t["R_adj"],
+                "T_D": t.get("T_D", 0),
+                "nearest_dist": nearest_dist,
+                "friendly_dist": friendly_dist,
+                "hostile_dist": hostile_dist,
+                "regime": t.get("regime", "?"),
+            }
+        )
 
     return annotated
 
@@ -86,8 +88,7 @@ def simulate_filter(trades, filter_name, is_filtered_fn):
     filtered_out = len(trades) - len(kept)
 
     if not kept:
-        return {"name": filter_name, "trades": 0, "expR": 0, "win_rate": 0,
-                "filtered": filtered_out}
+        return {"name": filter_name, "trades": 0, "expR": 0, "win_rate": 0, "filtered": filtered_out}
 
     expR = sum(t["R_adj"] for t in kept) / len(kept)
     wr = sum(1 for t in kept if t["R_adj"] > 0) / len(kept)
@@ -103,8 +104,7 @@ def simulate_filter(trades, filter_name, is_filtered_fn):
 
 def main():
     parser = argparse.ArgumentParser(description="SR 过滤效果模拟")
-    parser.add_argument("--symbols", type=str,
-                        default="J,eb,SH,cu,al,zn,sp,ag,au,rb")
+    parser.add_argument("--symbols", type=str, default="J,eb,SH,cu,al,zn,sp,ag,au,rb")
     args = parser.parse_args()
 
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
@@ -117,7 +117,7 @@ def main():
     # 收集所有标注交易
     all_trades = []
     for idx, sym in enumerate(symbols):
-        print(f"\n[{idx+1}/{len(symbols)}] {sym} ", end="", flush=True)
+        print(f"\n[{idx + 1}/{len(symbols)}] {sym} ", end="", flush=True)
         bt = walk_forward_backtest(sym, DEFAULT_CONFIG)
         if not bt or bt.get("trades", 0) == 0:
             print(f"无交易")
@@ -136,41 +136,29 @@ def main():
     base_expR = sum(t["R_adj"] for t in all_trades) / n_total
     base_wr = sum(1 for t in all_trades if t["R_adj"] > 0) / n_total
 
-    print(f"\n{'='*75}")
-    print(f"基准: {n_total} 笔  expR={base_expR:.4f}  胜率={base_wr*100:.1f}%")
+    print(f"\n{'=' * 75}")
+    print(f"基准: {n_total} 笔  expR={base_expR:.4f}  胜率={base_wr * 100:.1f}%")
 
     # 定义各种过滤方案
     filters = [
         ("无过滤（基准）", lambda t: False),
-
         # 旧方案：灰色地带 1.5~3.0%（不分方向）
-        ("旧灰色地带 1.5~3.0%",
-         lambda t: 1.5 <= t["nearest_dist"] < 3.0),
-
+        ("旧灰色地带 1.5~3.0%", lambda t: 1.5 <= t["nearest_dist"] < 3.0),
         # 旧方案+：近位区也过滤 0~1.5%（不分方向）
-        ("旧近位+灰色 0~3.0%",
-         lambda t: t["nearest_dist"] < 3.0),
-
+        ("旧近位+灰色 0~3.0%", lambda t: t["nearest_dist"] < 3.0),
         # 新方案：逆向位危险区 0.3~1.0%
-        ("逆向危险区 0.3~1.0%",
-         lambda t: 0.3 <= t["hostile_dist"] < 1.0),
-
+        ("逆向危险区 0.3~1.0%", lambda t: 0.3 <= t["hostile_dist"] < 1.0),
         # 新方案扩展：逆向位 0.3~1.5%
-        ("逆向危险区 0.3~1.5%",
-         lambda t: 0.3 <= t["hostile_dist"] < 1.5),
-
+        ("逆向危险区 0.3~1.5%", lambda t: 0.3 <= t["hostile_dist"] < 1.5),
         # 逆向位极近+危险 0~1.0%
-        ("逆向近位全过滤 0~1.0%",
-         lambda t: t["hostile_dist"] < 1.0),
-
+        ("逆向近位全过滤 0~1.0%", lambda t: t["hostile_dist"] < 1.0),
         # 逆向位危险 + 顺向位也近（双近位，最模糊的情况）
-        ("双近位 都<1.0%",
-         lambda t: t["hostile_dist"] < 1.0 and t["friendly_dist"] < 1.0),
+        ("双近位 都<1.0%", lambda t: t["hostile_dist"] < 1.0 and t["friendly_dist"] < 1.0),
     ]
 
-    print(f"\n{'='*75}")
+    print(f"\n{'=' * 75}")
     print("过滤方案对比")
-    print(f"{'='*75}")
+    print(f"{'=' * 75}")
     print(f"{'方案':<25} {'保留笔数':>8} {'过滤掉':>6} {'expR':>8} {'胜率':>8} {'expR变化':>10}")
     print("-" * 68)
 
@@ -184,13 +172,15 @@ def main():
         diff = r["expR"] - base_expR
         diff_pct = diff / abs(base_expR) * 100 if base_expR != 0 else 0
         diff_str = f"{diff:+.4f} ({diff_pct:+.1f}%)"
-        print(f"{name:<25} {r['trades']:>8} {r['filtered']:>6} "
-              f"{r['expR']:>8.4f} {r['win_rate']*100:>7.1f}% {diff_str:>10}")
+        print(
+            f"{name:<25} {r['trades']:>8} {r['filtered']:>6} "
+            f"{r['expR']:>8.4f} {r['win_rate'] * 100:>7.1f}% {diff_str:>10}"
+        )
 
     # 逐品种：逆向危险区 0.3~1.0% 的效果
-    print(f"\n{'='*75}")
+    print(f"\n{'=' * 75}")
     print("逐品种对比：逆向危险区 0.3~1.0% 过滤效果")
-    print(f"{'='*75}")
+    print(f"{'=' * 75}")
     print(f"{'品种':<6} {'基准expR':>10} {'基准笔数':>8} {'过滤后expR':>12} {'过滤笔数':>8} {'变化':>10}")
     print("-" * 62)
 
@@ -220,29 +210,35 @@ def main():
         elif diff < 0:
             n_worse += 1
 
-        print(f"{sym:<6} {base_e:>10.4f} {len(sym_trades):>8} "
-              f"{new_e:>12.4f} {len(sym_trades)-len(kept):>8} {diff_str:>10}")
+        print(
+            f"{sym:<6} {base_e:>10.4f} {len(sym_trades):>8} "
+            f"{new_e:>12.4f} {len(sym_trades) - len(kept):>8} {diff_str:>10}"
+        )
 
-    print(f"\n  提升品种: {n_better}  下降品种: {n_worse}  持平/无数据: {len(symbols)-n_better-n_worse}")
+    print(f"\n  提升品种: {n_better}  下降品种: {n_worse}  持平/无数据: {len(symbols) - n_better - n_worse}")
 
     # 结论
-    print(f"\n{'='*75}")
+    print(f"\n{'=' * 75}")
     print("结论")
-    print(f"{'='*75}")
+    print(f"{'=' * 75}")
 
     best = max(results[1:], key=lambda r: r["expR"] if r["trades"] > 10 else -999)
     print(f"\n  expR 最高的方案: {best['name']} (expR={best['expR']:.4f}, 保留{best['trades']}笔)")
-    print(f"  相对基准提升: {(best['expR']-base_expR)/abs(base_expR)*100 if base_expR else 0:+.1f}%")
+    print(f"  相对基准提升: {(best['expR'] - base_expR) / abs(base_expR) * 100 if base_expR else 0:+.1f}%")
 
     # 推荐方案
     print(f"\n  推荐方案评估:")
     hostile_r = [r for r in results if "逆向危险区 0.3~1.0%" in r["name"]][0]
     old_r = [r for r in results if "旧灰色地带 1.5~3.0%" in r["name"]][0]
 
-    print(f"    逆向危险区 0.3~1.0%: expR={hostile_r['expR']:.4f} "
-          f"({(hostile_r['expR']-base_expR)/abs(base_expR)*100 if base_expR else 0:+.1f}%)")
-    print(f"    旧灰色地带 1.5~3.0%:  expR={old_r['expR']:.4f} "
-          f"({(old_r['expR']-base_expR)/abs(base_expR)*100 if base_expR else 0:+.1f}%)")
+    print(
+        f"    逆向危险区 0.3~1.0%: expR={hostile_r['expR']:.4f} "
+        f"({(hostile_r['expR'] - base_expR) / abs(base_expR) * 100 if base_expR else 0:+.1f}%)"
+    )
+    print(
+        f"    旧灰色地带 1.5~3.0%:  expR={old_r['expR']:.4f} "
+        f"({(old_r['expR'] - base_expR) / abs(base_expR) * 100 if base_expR else 0:+.1f}%)"
+    )
 
     if hostile_r["expR"] > old_r["expR"] and hostile_r["expR"] > base_expR:
         print(f"  ✓ 逆向位危险区方案胜出，且优于基准")

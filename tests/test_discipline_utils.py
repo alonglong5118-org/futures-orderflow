@@ -44,50 +44,33 @@ from discipline_review import _duration, _friday_of, _is_last_trading_day
 #  1. _duration
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDuration(unittest.TestCase):
     """_duration 持仓时长格式化。"""
 
     def test_less_than_one_hour(self):
         """不足 1 小时 → "X分钟" """
-        self.assertEqual(
-            _duration("2026-01-15 09:30:00", "2026-01-15 09:45:00"),
-            "15分钟"
-        )
+        self.assertEqual(_duration("2026-01-15 09:30:00", "2026-01-15 09:45:00"), "15分钟")
 
     def test_exact_hours(self):
         """整小时 → "X小时" """
-        self.assertEqual(
-            _duration("2026-01-15 09:30:00", "2026-01-15 11:30:00"),
-            "2小时"
-        )
+        self.assertEqual(_duration("2026-01-15 09:30:00", "2026-01-15 11:30:00"), "2小时")
 
     def test_hours_and_minutes(self):
         """小时+分钟 → "X小时Y分" """
-        self.assertEqual(
-            _duration("2026-01-15 09:30:00", "2026-01-15 12:45:00"),
-            "3小时15分"
-        )
+        self.assertEqual(_duration("2026-01-15 09:30:00", "2026-01-15 12:45:00"), "3小时15分")
 
     def test_zero_minutes(self):
         """0 分钟 → "0分钟" """
-        self.assertEqual(
-            _duration("2026-01-15 09:30:00", "2026-01-15 09:30:00"),
-            "0分钟"
-        )
+        self.assertEqual(_duration("2026-01-15 09:30:00", "2026-01-15 09:30:00"), "0分钟")
 
     def test_one_minute(self):
         """1 分钟 → "1分钟" """
-        self.assertEqual(
-            _duration("2026-01-15 09:30:00", "2026-01-15 09:31:00"),
-            "1分钟"
-        )
+        self.assertEqual(_duration("2026-01-15 09:30:00", "2026-01-15 09:31:00"), "1分钟")
 
     def test_negative_duration_empty(self):
         """结束早于开始 → "" """
-        self.assertEqual(
-            _duration("2026-01-15 10:30:00", "2026-01-15 09:30:00"),
-            ""
-        )
+        self.assertEqual(_duration("2026-01-15 10:30:00", "2026-01-15 09:30:00"), "")
 
     def test_bad_format_empty(self):
         """格式错误 → "" """
@@ -96,36 +79,25 @@ class TestDuration(unittest.TestCase):
 
     def test_overnight_duration(self):
         """跨天计算"""
-        self.assertEqual(
-            _duration("2026-01-15 22:00:00", "2026-01-16 10:30:00"),
-            "12小时30分"
-        )
+        self.assertEqual(_duration("2026-01-15 22:00:00", "2026-01-16 10:30:00"), "12小时30分")
 
     def test_multi_day_duration(self):
         """多日持仓"""
-        self.assertEqual(
-            _duration("2026-01-15 09:30:00", "2026-01-17 15:00:00"),
-            "53小时30分"
-        )
+        self.assertEqual(_duration("2026-01-15 09:30:00", "2026-01-17 15:00:00"), "53小时30分")
 
     def test_fifty_nine_minutes(self):
         """59 分钟 → "59分钟"（边界）"""
-        self.assertEqual(
-            _duration("2026-01-15 09:00:00", "2026-01-15 09:59:00"),
-            "59分钟"
-        )
+        self.assertEqual(_duration("2026-01-15 09:00:00", "2026-01-15 09:59:00"), "59分钟")
 
     def test_sixty_minutes_is_one_hour(self):
         """60 分钟 → "1小时"（边界）"""
-        self.assertEqual(
-            _duration("2026-01-15 09:00:00", "2026-01-15 10:00:00"),
-            "1小时"
-        )
+        self.assertEqual(_duration("2026-01-15 09:00:00", "2026-01-15 10:00:00"), "1小时")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _friday_of
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFridayOf(unittest.TestCase):
     """_friday_of 所在周的周五。"""
@@ -188,6 +160,7 @@ class TestFridayOf(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _is_last_trading_day
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestIsLastTradingDay(unittest.TestCase):
     """_is_last_trading_day 当月最后交易日。"""

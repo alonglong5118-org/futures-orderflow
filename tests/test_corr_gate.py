@@ -31,6 +31,7 @@ from corr_gate_utils import _pearson_corr, apply_corr_gate
 #  工具：生成指定相关系数的测试数据
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def make_corr_hist(target_corr, n=20, T_base=70.0, C_base=60.0, T_scale=10.0):
     """
     生成精确目标相关系数的 T/C 历史序列。
@@ -80,7 +81,7 @@ def make_corr_hist(target_corr, n=20, T_base=70.0, C_base=60.0, T_scale=10.0):
     # r^2 = var_T / (var_T + b^2 * var_Z)
     # b^2 = var_T * (1/r^2 - 1) / var_Z
 
-    r_sq = target_corr ** 2
+    r_sq = target_corr**2
     sign = 1 if target_corr >= 0 else -1
 
     if var_z <= 0:
@@ -97,10 +98,7 @@ def make_corr_hist(target_corr, n=20, T_base=70.0, C_base=60.0, T_scale=10.0):
     else:
         z_scale = 1.0
 
-    C_vals = [
-        C_base + sign * (T_vals[i] - T_base) + b * (z_orth[i] - mean_z)
-        for i in range(n)
-    ]
+    C_vals = [C_base + sign * (T_vals[i] - T_base) + b * (z_orth[i] - mean_z) for i in range(n)]
 
     return [[T_vals[i], C_vals[i]] for i in range(n)]
 
@@ -108,6 +106,7 @@ def make_corr_hist(target_corr, n=20, T_base=70.0, C_base=60.0, T_scale=10.0):
 # ═══════════════════════════════════════════════════════════════════════════
 #  皮尔逊相关系数内部函数测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPearsonCorr(unittest.TestCase):
     """_pearson_corr 函数的基础测试。"""
@@ -165,6 +164,7 @@ class TestPearsonCorr(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  不触发降权的场景
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNoAction(unittest.TestCase):
     """不触发降权的各种场景。"""
@@ -233,6 +233,7 @@ class TestNoAction(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  触发降权的场景
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDropWeakerDimension(unittest.TestCase):
     """触发降权：高相关时降权较弱维度。"""
@@ -324,6 +325,7 @@ class TestDropWeakerDimension(unittest.TestCase):
 #  历史 bug 回归测试（决策 26：corr_gate 空转修复）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHistoricalBugRegression(unittest.TestCase):
     """
     历史 bug 回归测试 —— 确保 corr_gate 不再"空转"。
@@ -339,24 +341,15 @@ class TestHistoricalBugRegression(unittest.TestCase):
         result = apply_corr_gate(T_score=50.0, C_score=90.0, corr_hist=hist, gate=0.7)
 
         # 核心断言：T 必须真正是 0
-        self.assertAlmostEqual(
-            result["T"], 0.0, places=5,
-            msg="corr_gate 空转 bug 复发：T 应该被降为 0，但实际没变！"
-        )
-        self.assertTrue(
-            result["applied"],
-            msg="corr_gate 空转 bug 复发：applied 应该为 True"
-        )
+        self.assertAlmostEqual(result["T"], 0.0, places=5, msg="corr_gate 空转 bug 复发：T 应该被降为 0，但实际没变！")
+        self.assertTrue(result["applied"], msg="corr_gate 空转 bug 复发：applied 应该为 True")
 
     def test_high_corr_C_weak_C_must_be_zero(self):
         """回归：高相关 + C 弱 → C 必须真正变为 0"""
         hist = make_corr_hist(0.95, n=30)
         result = apply_corr_gate(T_score=90.0, C_score=50.0, corr_hist=hist, gate=0.7)
 
-        self.assertAlmostEqual(
-            result["C"], 0.0, places=5,
-            msg="corr_gate 空转 bug 复发：C 应该被降为 0，但实际没变！"
-        )
+        self.assertAlmostEqual(result["C"], 0.0, places=5, msg="corr_gate 空转 bug 复发：C 应该被降为 0，但实际没变！")
         self.assertTrue(result["applied"])
 
     def test_low_corr_both_preserved(self):
@@ -367,10 +360,8 @@ class TestHistoricalBugRegression(unittest.TestCase):
         result = apply_corr_gate(T_score=T_orig, C_score=C_orig, corr_hist=hist, gate=0.7)
 
         self.assertFalse(result["applied"])
-        self.assertAlmostEqual(result["T"], T_orig, places=2,
-                               msg="低相关时 T 不应被修改")
-        self.assertAlmostEqual(result["C"], C_orig, places=2,
-                               msg="低相关时 C 不应被修改")
+        self.assertAlmostEqual(result["T"], T_orig, places=2, msg="低相关时 T 不应被修改")
+        self.assertAlmostEqual(result["C"], C_orig, places=2, msg="低相关时 C 不应被修改")
 
     def test_action_text_matches_actual_state(self):
         """回归：action 文本描述必须与实际状态一致（不能"说降了但没降"）"""
@@ -379,23 +370,18 @@ class TestHistoricalBugRegression(unittest.TestCase):
 
         # 如果 action 说降了 T，那 T 必须真的是 0
         if "降权T" in result["action"]:
-            self.assertAlmostEqual(
-                result["T"], 0.0, places=5,
-                msg="action 说降了 T，但 T 没变 → 空转 bug！"
-            )
+            self.assertAlmostEqual(result["T"], 0.0, places=5, msg="action 说降了 T，但 T 没变 → 空转 bug！")
             self.assertEqual(result["dropped"], "T")
 
         if "降权C" in result["action"]:
-            self.assertAlmostEqual(
-                result["C"], 0.0, places=5,
-                msg="action 说降了 C，但 C 没变 → 空转 bug！"
-            )
+            self.assertAlmostEqual(result["C"], 0.0, places=5, msg="action 说降了 C，但 C 没变 → 空转 bug！")
             self.assertEqual(result["dropped"], "C")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  参数 & 边界
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestParamsAndEdges(unittest.TestCase):
     """参数和边界情况测试。"""
@@ -431,8 +417,7 @@ class TestParamsAndEdges(unittest.TestCase):
     def test_custom_min_history(self):
         """自定义 min_history = 5 → 5 条数据就够"""
         hist = make_corr_hist(0.9, n=5)
-        result = apply_corr_gate(T_score=70.0, C_score=90.0, corr_hist=hist,
-                                 gate=0.7, min_history=5)
+        result = apply_corr_gate(T_score=70.0, C_score=90.0, corr_hist=hist, gate=0.7, min_history=5)
         self.assertTrue(result["applied"], "min_history=5 时 5 条数据应触发")
 
     def test_bad_data_format_no_crash(self):

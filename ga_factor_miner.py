@@ -22,6 +22,7 @@
   import ga_factor_miner as gfm
   result = gfm.optimize_weights("jd", df_daily)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,6 +41,7 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 try:
     from deap import base, creator, tools
+
     _HAVE_DEAP = True
 except Exception:
     _HAVE_DEAP = False
@@ -132,9 +134,7 @@ def _evaluate_weights(ind, symbol, df_daily, train_start, train_end, tail=None):
         df_use = df_daily
         if tail and df_use is not None and len(df_use) > tail:
             df_use = df_use.tail(tail).copy()
-        r = walk_forward_backtest(symbol, cfg=cfg, window=300,
-                                  df_in=df_use,
-                                  tail=tail)
+        r = walk_forward_backtest(symbol, cfg=cfg, window=300, df_in=df_use, tail=tail)
         expR = float(r.get("expR", 0))
         win_rate = float(r.get("win_rate", 0))
         n_trades = int(r.get("trades", 0))
@@ -146,8 +146,7 @@ def _evaluate_weights(ind, symbol, df_daily, train_start, train_end, tail=None):
         return -10.0, 0.0, 0
 
 
-def optimize_weights(symbol, df_daily=None, pop_size=WEIGHT_POP, n_gen=WEIGHT_GEN,
-                     verbose=True, tail=None):
+def optimize_weights(symbol, df_daily=None, pop_size=WEIGHT_POP, n_gen=WEIGHT_GEN, verbose=True, tail=None):
     """对指定品种运行 GA 权重优化。
 
     返回 dict:
@@ -173,8 +172,7 @@ def optimize_weights(symbol, df_daily=None, pop_size=WEIGHT_POP, n_gen=WEIGHT_GE
     train_end = n
 
     if verbose:
-        print(f"[GA权重] {symbol}: pop={pop_size} gen={n_gen} bars={n}"
-              f"{' tail='+str(tail) if tail else ''}")
+        print(f"[GA权重] {symbol}: pop={pop_size} gen={n_gen} bars={n}{' tail=' + str(tail) if tail else ''}")
 
     # 创建 fitness（多目标：最大化 expR + 最大化 calmar）
     if "FitnessWeight" in dir(creator):
@@ -195,16 +193,27 @@ def optimize_weights(symbol, df_daily=None, pop_size=WEIGHT_POP, n_gen=WEIGHT_GE
     toolbox.register("attr_range_T", random.uniform, *REGIME_ADJUST_BOUNDS["range_T"])
     toolbox.register("attr_range_F", random.uniform, *REGIME_ADJUST_BOUNDS["range_F"])
 
-    toolbox.register("individual", tools.initCycle, creator.IndividualWeight,
-                     (toolbox.attr_T, toolbox.attr_F, toolbox.attr_C,
-                      toolbox.attr_trend_T, toolbox.attr_trend_F,
-                      toolbox.attr_vol_T, toolbox.attr_vol_F,
-                      toolbox.attr_range_T, toolbox.attr_range_F), n=1)
+    toolbox.register(
+        "individual",
+        tools.initCycle,
+        creator.IndividualWeight,
+        (
+            toolbox.attr_T,
+            toolbox.attr_F,
+            toolbox.attr_C,
+            toolbox.attr_trend_T,
+            toolbox.attr_trend_F,
+            toolbox.attr_vol_T,
+            toolbox.attr_vol_F,
+            toolbox.attr_range_T,
+            toolbox.attr_range_F,
+        ),
+        n=1,
+    )
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval(ind):
-        expR, calmar, n_tr = _evaluate_weights(
-            ind, symbol, df_daily, train_start, train_end, tail=tail)
+        expR, calmar, n_tr = _evaluate_weights(ind, symbol, df_daily, train_start, train_end, tail=tail)
         return (expR, calmar)
 
     toolbox.register("evaluate", _eval)
@@ -230,7 +239,9 @@ def optimize_weights(symbol, df_daily=None, pop_size=WEIGHT_POP, n_gen=WEIGHT_GE
 
         for i in range(1, len(offspring), 2):
             if random.random() < WEIGHT_CXPB:
-                offspring[i - 1:i + 1] = toolbox.mate(offspring[i - 1], offspring[i + 1] if i + 1 < len(offspring) else offspring[i - 1])
+                offspring[i - 1 : i + 1] = toolbox.mate(
+                    offspring[i - 1], offspring[i + 1] if i + 1 < len(offspring) else offspring[i - 1]
+                )
                 del offspring[i - 1].fitness.values, offspring[i].fitness.values
 
         for i in range(len(offspring)):
@@ -292,7 +303,7 @@ def _robust_test(ind, symbol, df_daily, n_perturb=7, tail=None):
     for _ in range(n_perturb):
         perturbed = list(ind)
         for i in range(len(perturbed)):
-            perturbed[i] *= (1.0 + random.uniform(-0.2, 0.2))
+            perturbed[i] *= 1.0 + random.uniform(-0.2, 0.2)
         expR, _, _ = _evaluate_weights(perturbed, symbol, df_daily, 0, 0, tail=tail)
         results.append(expR)
     mean_r = float(np.mean(results))
@@ -329,16 +340,16 @@ def load_weights(symbol):
 
 # 候选因子（来自 strategy_layer 的 8 策略 + 扩展）
 CANDIDATE_FACTORS = [
-    "ma_break",    # MA 突破
-    "dma",         # 双均线
-    "turtle",      # 海龟
-    "donchian",    # 通道突破
-    "pullback",    # 回踩
-    "boll",        # 布林带
-    "rsi",         # RSI
-    "seasonal",    # 季节性
-    "momentum",    # 动量（扩展）
-    "vol_break",   # 波动率突破（扩展）
+    "ma_break",  # MA 突破
+    "dma",  # 双均线
+    "turtle",  # 海龟
+    "donchian",  # 通道突破
+    "pullback",  # 回踩
+    "boll",  # 布林带
+    "rsi",  # RSI
+    "seasonal",  # 季节性
+    "momentum",  # 动量（扩展）
+    "vol_break",  # 波动率突破（扩展）
 ]
 
 # 因子组合方式
@@ -475,7 +486,7 @@ def mine_factors(symbol, df_daily=None, pop_size=FACTOR_POP, n_gen=FACTOR_GEN, v
         for i in range(1, len(offspring), 2):
             if random.random() < FACTOR_CXPB and i + 1 < len(offspring):
                 a, b = offspring[i - 1], offspring[i + 1]
-                offspring[i - 1:i + 1] = toolbox.mate(a, b)
+                offspring[i - 1 : i + 1] = toolbox.mate(a, b)
                 if offspring[i - 1].fitness.valid:
                     del offspring[i - 1].fitness.values
                 if i < len(offspring) and offspring[i].fitness.valid:
@@ -483,7 +494,7 @@ def mine_factors(symbol, df_daily=None, pop_size=FACTOR_POP, n_gen=FACTOR_GEN, v
 
         for i in range(len(offspring)):
             if random.random() < FACTOR_MUTPB:
-                offspring[i], = toolbox.mutate(offspring[i])
+                (offspring[i],) = toolbox.mutate(offspring[i])
                 if offspring[i].fitness.valid:
                     del offspring[i].fitness.values
 
@@ -529,8 +540,10 @@ def _fallback_weights(symbol):
     """无 DEAP 时的兜底。"""
     return {
         "symbol": symbol,
-        "best_weights": {"base": BASE_WEIGHTS, "regime_adjust": {
-            "趋势": {"T": 0, "F": 0}, "波动": {"T": 0, "F": 0}, "震荡": {"T": 0, "F": 0}}},
+        "best_weights": {
+            "base": BASE_WEIGHTS,
+            "regime_adjust": {"趋势": {"T": 0, "F": 0}, "波动": {"T": 0, "F": 0}, "震荡": {"T": 0, "F": 0}},
+        },
         "best_expR": 0.0,
         "best_calmar": 0.0,
         "robust_score": 1.0,
@@ -544,10 +557,12 @@ def _fallback_weights(symbol):
 # CLI
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="GA 因子挖掘与权重优化")
-    parser.add_argument("--mode", choices=["weight", "factor"], default="weight",
-                        help="weight=权重优化, factor=因子挖掘")
+    parser.add_argument(
+        "--mode", choices=["weight", "factor"], default="weight", help="weight=权重优化, factor=因子挖掘"
+    )
     parser.add_argument("--symbol", required=True, help="品种代号")
     parser.add_argument("--pop", type=int, default=60, help="种群大小")
     parser.add_argument("--gen", type=int, default=20, help="迭代代数")

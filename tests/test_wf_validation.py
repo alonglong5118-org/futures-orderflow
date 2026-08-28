@@ -40,6 +40,7 @@ from wf_validation import _calc_max_drawdown, rolling_windows
 #  1. _calc_max_drawdown
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcMaxDrawdown(unittest.TestCase):
     """_calc_max_drawdown 最大回撤计算。"""
 
@@ -118,16 +119,19 @@ class TestCalcMaxDrawdown(unittest.TestCase):
 #  2. rolling_windows
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRollingWindows(unittest.TestCase):
     """rolling_windows 滚动窗口切片。"""
 
     def _make_df(self, n):
         """构造 n 根 K 线的 DataFrame"""
-        return pd.DataFrame({
-            "close": range(100, 100 + n),
-            "high": range(101, 101 + n),
-            "low": range(99, 99 + n),
-        })
+        return pd.DataFrame(
+            {
+                "close": range(100, 100 + n),
+                "high": range(101, 101 + n),
+                "low": range(99, 99 + n),
+            }
+        )
 
     def test_exact_one_window(self):
         """数据正好 = 窗口 → 1 个窗口"""
@@ -172,7 +176,7 @@ class TestRollingWindows(unittest.TestCase):
         df = self._make_df(30)
         windows = rolling_windows(df, window_bars=10, step_bars=5)
         for i in range(len(windows) - 1):
-            self.assertEqual(windows[i+1][0] - windows[i][0], 5)
+            self.assertEqual(windows[i + 1][0] - windows[i][0], 5)
 
     def test_returns_triples(self):
         """返回 (start, end, df_slice) 三元组"""
@@ -191,7 +195,7 @@ class TestRollingWindows(unittest.TestCase):
         # 窗口 [0:10], [10:20], [20:30]
         self.assertEqual(len(windows), 3)
         for i in range(len(windows) - 1):
-            self.assertEqual(windows[i][1], windows[i+1][0])
+            self.assertEqual(windows[i][1], windows[i + 1][0])
 
     def test_first_window_starts_at_zero(self):
         """第一个窗口从 0 开始"""

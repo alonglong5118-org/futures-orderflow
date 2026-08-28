@@ -62,6 +62,7 @@ from risk_state_machine import _pos_dir, _pos_lots, build_flatten_plan
 #  1. _pos_lots
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPosLots(unittest.TestCase):
     """_pos_lots 从持仓 dict 提取手数。"""
 
@@ -132,6 +133,7 @@ class TestPosLots(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _pos_dir
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPosDir(unittest.TestCase):
     """_pos_dir 从持仓 dict 提取方向。"""
@@ -251,6 +253,7 @@ class TestPosDir(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. build_flatten_plan
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBuildFlattenPlan(unittest.TestCase):
     """build_flatten_plan 一键全平计划。"""

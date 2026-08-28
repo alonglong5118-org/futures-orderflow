@@ -48,6 +48,7 @@ from perf_breakdown import _MIN_N, _hold_bucket, _hold_minutes, _stat, _weekday
 #  1. _hold_minutes
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHoldMinutes(unittest.TestCase):
     """_hold_minutes 持仓时长（分钟）。"""
 
@@ -114,6 +115,7 @@ class TestHoldMinutes(unittest.TestCase):
 #  2. _hold_bucket
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHoldBucket(unittest.TestCase):
     """_hold_bucket 持仓时长分桶。"""
 
@@ -165,6 +167,7 @@ class TestHoldBucket(unittest.TestCase):
 #  3. _weekday
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestWeekday(unittest.TestCase):
     """_weekday 交易日是周几。"""
 
@@ -215,6 +218,7 @@ class TestWeekday(unittest.TestCase):
 #  4. _stat
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestStat(unittest.TestCase):
     """_stat 交易统计指标。"""
 
@@ -253,11 +257,11 @@ class TestStat(unittest.TestCase):
     def test_mixed_win_rate(self):
         """有赚有亏 → 胜率计算正确"""
         trades = [
-            self._make_trade(1000, 2.0),   # win
+            self._make_trade(1000, 2.0),  # win
             self._make_trade(-500, -1.0),  # loss
-            self._make_trade(300, 0.5),    # win
+            self._make_trade(300, 0.5),  # win
             self._make_trade(-200, -0.4),  # loss
-            self._make_trade(100, 0.2),    # win
+            self._make_trade(100, 0.2),  # win
         ]
         s = _stat(trades)
         self.assertEqual(s["n"], 5)
@@ -266,8 +270,8 @@ class TestStat(unittest.TestCase):
     def test_profit_factor(self):
         """盈亏比 = 总盈利 / 总亏损"""
         trades = [
-            self._make_trade(2000, 4.0),   # win: 2000
-            self._make_trade(-1000, -2.0), # loss: 1000
+            self._make_trade(2000, 4.0),  # win: 2000
+            self._make_trade(-1000, -2.0),  # loss: 1000
         ]
         s = _stat(trades)
         self.assertEqual(s["pf"], 2.0)  # 2000/1000 = 2.0

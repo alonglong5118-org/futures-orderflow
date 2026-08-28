@@ -17,6 +17,7 @@ fundamentals.json / info_dimension.json 的「外部写/内部读」隔离模式
 
 用法：/usr/bin/python3 fetch_macro_context.py
 """
+
 import json
 import os
 import time
@@ -40,6 +41,7 @@ def _fetch_crude_series():
     try:
         ak = __import__("akshare")
         from datetime import datetime, timedelta
+
         end = datetime.now().strftime("%Y%m%d")
         start = (datetime.now() - timedelta(days=900)).strftime("%Y%m%d")
         df = ak.futures_main_sina(symbol="sc0", start_date=start, end_date=end)
@@ -51,9 +53,12 @@ def _fetch_crude_series():
     try:
         import json as _json
         import urllib.request
-        url = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
-               "?fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
-               "&klt=101&fqt=0&secid=114.sc0&beg=0&end=20500101")
+
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+            "?fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
+            "&klt=101&fqt=0&secid=114.sc0&beg=0&end=20500101"
+        )
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         data = _json.loads(urllib.request.urlopen(req, timeout=12).read().decode("utf-8"))
         kls = (data.get("data") or {}).get("klines") or []
@@ -139,8 +144,7 @@ def main():
         except Exception:
             pass
 
-    payload = {"as_of": time.strftime("%Y-%m-%d"),
-               "series": series}
+    payload = {"as_of": time.strftime("%Y-%m-%d"), "series": series}
     json.dump(payload, open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     summary = {k: (len(v) if isinstance(v, list) else v) for k, v in series.items()}
     print(f"[fetch_macro_context] 已写出 {OUT}")

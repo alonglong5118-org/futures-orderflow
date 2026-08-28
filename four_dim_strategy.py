@@ -20,6 +20,7 @@
 
 详见 四维策略_规格草案.md (v1.1)。
 """
+
 from __future__ import annotations
 
 import bisect
@@ -59,18 +60,21 @@ from strategy_layer import atr as strat_atr
 # 回测模式下 _LIVE_RISK_STATE 为 None，不影响回测逻辑
 _LIVE_RISK_STATE = None  # None=回测/未设置；dict=live 实时状态
 
+
 def set_live_risk_state(state_dict):
     """P1-16: runner 设置实时风控状态（每轮 update_risk_state 后调用）。"""
     global _LIVE_RISK_STATE
     _LIVE_RISK_STATE = state_dict if isinstance(state_dict, dict) else None
 
+
 def get_live_risk_state():
     """P1-16: 获取当前实时风控状态（供 pipeline/risk_gate 读取）。"""
     return _LIVE_RISK_STATE
 
+
 def _is_risk_locked(risk_state=None):
     """P1-16: 检查风控是否锁定/熔断。
-    
+
     返回 (locked, reason) tuple。locked=True 表示禁止开仓。
     """
     rs = risk_state if risk_state is not None else _LIVE_RISK_STATE
@@ -97,73 +101,91 @@ os.makedirs(DATA_5M_DIR, exist_ok=True)
 
 SYMBOLS = {
     # ── 上期所 SHFE ──
-    "cu": {"name": "沪铜",   "group": "有色",      "exchange": "SHFE"},
-    "al": {"name": "沪铝",   "group": "有色",      "exchange": "SHFE"},
-    "zn": {"name": "沪锌",   "group": "有色",      "exchange": "SHFE"},
-    "ni": {"name": "沪镍",   "group": "有色",      "exchange": "SHFE"},
-    "sn": {"name": "沪锡",   "group": "有色",      "exchange": "SHFE"},
-    "ao": {"name": "氧化铝", "group": "有色",      "exchange": "SHFE"},
-    "au": {"name": "沪金",   "group": "贵金属",    "exchange": "SHFE"},
-    "ag": {"name": "沪银",   "group": "贵金属",    "exchange": "SHFE"},
-    "rb": {"name": "螺纹钢", "group": "黑系",      "exchange": "SHFE"},
-    "hc": {"name": "热卷",   "group": "黑系",      "exchange": "SHFE"},
-    "ss": {"name": "不锈钢", "group": "黑系",      "exchange": "SHFE"},
-    "bu": {"name": "沥青",   "group": "能源",      "exchange": "SHFE"},
-    "fu": {"name": "燃油",   "group": "能源",      "exchange": "SHFE"},
-    "ru": {"name": "橡胶",   "group": "化工",      "exchange": "SHFE"},
-    "sp": {"name": "纸浆",   "group": "化工",      "exchange": "SHFE"},
+    "cu": {"name": "沪铜", "group": "有色", "exchange": "SHFE"},
+    "al": {"name": "沪铝", "group": "有色", "exchange": "SHFE"},
+    "zn": {"name": "沪锌", "group": "有色", "exchange": "SHFE"},
+    "ni": {"name": "沪镍", "group": "有色", "exchange": "SHFE"},
+    "sn": {"name": "沪锡", "group": "有色", "exchange": "SHFE"},
+    "ao": {"name": "氧化铝", "group": "有色", "exchange": "SHFE"},
+    "au": {"name": "沪金", "group": "贵金属", "exchange": "SHFE"},
+    "ag": {"name": "沪银", "group": "贵金属", "exchange": "SHFE"},
+    "rb": {"name": "螺纹钢", "group": "黑系", "exchange": "SHFE"},
+    "hc": {"name": "热卷", "group": "黑系", "exchange": "SHFE"},
+    "ss": {"name": "不锈钢", "group": "黑系", "exchange": "SHFE"},
+    "bu": {"name": "沥青", "group": "能源", "exchange": "SHFE"},
+    "fu": {"name": "燃油", "group": "能源", "exchange": "SHFE"},
+    "ru": {"name": "橡胶", "group": "化工", "exchange": "SHFE"},
+    "sp": {"name": "纸浆", "group": "化工", "exchange": "SHFE"},
     # ── 上期能源 INE ──
-    "sc": {"name": "原油",   "group": "能源",      "exchange": "INE"},
-    "ec": {"name": "欧线",   "group": "航运",      "exchange": "INE"},
+    "sc": {"name": "原油", "group": "能源", "exchange": "INE"},
+    "ec": {"name": "欧线", "group": "航运", "exchange": "INE"},
     # ── 大商所 DCE ──
-    "i":  {"name": "铁矿石", "group": "黑系",      "exchange": "DCE"},
-    "J":  {"name": "焦炭",   "group": "黑系",      "exchange": "DCE"},
-    "JM": {"name": "焦煤",   "group": "黑系",      "exchange": "DCE"},
-    "eb": {"name": "苯乙烯", "group": "化工",      "exchange": "DCE"},
-    "eg": {"name": "乙二醇", "group": "化工",      "exchange": "DCE"},
-    "l":  {"name": "塑料",   "group": "化工",      "exchange": "DCE"},
-    "pp": {"name": "聚丙烯", "group": "化工",      "exchange": "DCE"},
-    "v":  {"name": "PVC",    "group": "化工",      "exchange": "DCE"},
-    "pg": {"name": "液化气", "group": "能源",      "exchange": "DCE"},
-    "m":  {"name": "豆粕",   "group": "农产品",    "exchange": "DCE"},
-    "y":  {"name": "豆油",   "group": "农产品",    "exchange": "DCE"},
-    "a":  {"name": "豆一",   "group": "农产品",    "exchange": "DCE"},
-    "b":  {"name": "豆二",   "group": "农产品",    "exchange": "DCE"},
-    "p":  {"name": "棕榈油", "group": "农产品",    "exchange": "DCE"},
-    "c":  {"name": "玉米",   "group": "农产品",    "exchange": "DCE"},
-    "cs": {"name": "淀粉",   "group": "农产品",    "exchange": "DCE"},
-    "jd": {"name": "鸡蛋",   "group": "农产品",    "exchange": "DCE"},
-    "lh": {"name": "生猪",   "group": "农产品",    "exchange": "DCE"},
-    "rr": {"name": "粳米",   "group": "农产品",    "exchange": "DCE"},
+    "i": {"name": "铁矿石", "group": "黑系", "exchange": "DCE"},
+    "J": {"name": "焦炭", "group": "黑系", "exchange": "DCE"},
+    "JM": {"name": "焦煤", "group": "黑系", "exchange": "DCE"},
+    "eb": {"name": "苯乙烯", "group": "化工", "exchange": "DCE"},
+    "eg": {"name": "乙二醇", "group": "化工", "exchange": "DCE"},
+    "l": {"name": "塑料", "group": "化工", "exchange": "DCE"},
+    "pp": {"name": "聚丙烯", "group": "化工", "exchange": "DCE"},
+    "v": {"name": "PVC", "group": "化工", "exchange": "DCE"},
+    "pg": {"name": "液化气", "group": "能源", "exchange": "DCE"},
+    "m": {"name": "豆粕", "group": "农产品", "exchange": "DCE"},
+    "y": {"name": "豆油", "group": "农产品", "exchange": "DCE"},
+    "a": {"name": "豆一", "group": "农产品", "exchange": "DCE"},
+    "b": {"name": "豆二", "group": "农产品", "exchange": "DCE"},
+    "p": {"name": "棕榈油", "group": "农产品", "exchange": "DCE"},
+    "c": {"name": "玉米", "group": "农产品", "exchange": "DCE"},
+    "cs": {"name": "淀粉", "group": "农产品", "exchange": "DCE"},
+    "jd": {"name": "鸡蛋", "group": "农产品", "exchange": "DCE"},
+    "lh": {"name": "生猪", "group": "农产品", "exchange": "DCE"},
+    "rr": {"name": "粳米", "group": "农产品", "exchange": "DCE"},
     # ── 郑商所 CZCE ──
-    "FG": {"name": "玻璃",   "group": "化工",      "exchange": "CZCE"},
-    "SA": {"name": "纯碱",   "group": "化工",      "exchange": "CZCE"},
+    "FG": {"name": "玻璃", "group": "化工", "exchange": "CZCE"},
+    "SA": {"name": "纯碱", "group": "化工", "exchange": "CZCE"},
     # ── 纯碱具体交割合约（独立实时盘中卡；09/01 各接真实逐合约龙虎榜 SA609/SA701）──
-    "SA01": {"name": "纯碱2701", "group": "化工",  "exchange": "CZCE"},
-    "MA": {"name": "甲醇",   "group": "化工",      "exchange": "CZCE"},
-    "TA": {"name": "PTA",    "group": "化工",      "exchange": "CZCE"},
-    "PF": {"name": "短纤",   "group": "化工",      "exchange": "CZCE"},
-    "PX": {"name": "对二甲苯","group":"化工",      "exchange": "CZCE"},
-    "SH": {"name": "烧碱",   "group": "化工",      "exchange": "CZCE"},
-    "UR": {"name": "尿素",   "group": "化工",      "exchange": "CZCE"},
-    "PR": {"name": "瓶片",   "group": "化工",      "exchange": "CZCE"},
-    "SR": {"name": "白糖",   "group": "农产品",    "exchange": "CZCE"},
-    "CF": {"name": "棉花",   "group": "农产品",    "exchange": "CZCE"},
-    "RM": {"name": "菜粕",   "group": "农产品",    "exchange": "CZCE"},
-    "OI": {"name": "菜油",   "group": "农产品",    "exchange": "CZCE"},
-    "PK": {"name": "花生",   "group": "农产品",    "exchange": "CZCE"},
-    "AP": {"name": "苹果",   "group": "农产品",    "exchange": "CZCE"},
+    "SA01": {"name": "纯碱2701", "group": "化工", "exchange": "CZCE"},
+    "MA": {"name": "甲醇", "group": "化工", "exchange": "CZCE"},
+    "TA": {"name": "PTA", "group": "化工", "exchange": "CZCE"},
+    "PF": {"name": "短纤", "group": "化工", "exchange": "CZCE"},
+    "PX": {"name": "对二甲苯", "group": "化工", "exchange": "CZCE"},
+    "SH": {"name": "烧碱", "group": "化工", "exchange": "CZCE"},
+    "UR": {"name": "尿素", "group": "化工", "exchange": "CZCE"},
+    "PR": {"name": "瓶片", "group": "化工", "exchange": "CZCE"},
+    "SR": {"name": "白糖", "group": "农产品", "exchange": "CZCE"},
+    "CF": {"name": "棉花", "group": "农产品", "exchange": "CZCE"},
+    "RM": {"name": "菜粕", "group": "农产品", "exchange": "CZCE"},
+    "OI": {"name": "菜油", "group": "农产品", "exchange": "CZCE"},
+    "PK": {"name": "花生", "group": "农产品", "exchange": "CZCE"},
+    "AP": {"name": "苹果", "group": "农产品", "exchange": "CZCE"},
     # ── 广期所 GFEX ──
-    "si": {"name": "工业硅", "group": "有色",      "exchange": "GFEX"},
-    "lc": {"name": "碳酸锂", "group": "有色",      "exchange": "GFEX"},
+    "si": {"name": "工业硅", "group": "有色", "exchange": "GFEX"},
+    "lc": {"name": "碳酸锂", "group": "有色", "exchange": "GFEX"},
 }
 
 # —— G4 日/夜盘统一真值源 ——
 # 不逐个改 55 个字面量，用循环注入 night 字段：有夜盘=True，无夜盘=False。
 # 已知：鸡蛋(jd)/生猪(lh) 等无夜盘；玻璃(FG)/纯碱(SA)/焦煤(JM)/焦炭(J) 有夜盘 21:00–23:00。
-NO_NIGHT_DEFAULT = {"jd", "lh", "AP", "CJ", "PK", "RS", "PM", "WH", "JR", "LR", "CS", "rr",
-                    "lc", "si", "UR", "RM", "OI", "c"}   # 2026-08-19 22:45 修复：广期所碳酸锂(lc)/工业硅(si) 无夜盘，此前漏标导致夜盘用冻结数据误发信号
-                                  # 2026-08-20 修正：ss(不锈钢)/sp(纸浆) 上期所有夜盘 21:00–23:00，误在集合内导致夜盘漏推，已移除
+NO_NIGHT_DEFAULT = {
+    "jd",
+    "lh",
+    "AP",
+    "CJ",
+    "PK",
+    "RS",
+    "PM",
+    "WH",
+    "JR",
+    "LR",
+    "CS",
+    "rr",
+    "lc",
+    "si",
+    "UR",
+    "RM",
+    "OI",
+    "c",
+}  # 2026-08-19 22:45 修复：广期所碳酸锂(lc)/工业硅(si) 无夜盘，此前漏标导致夜盘用冻结数据误发信号
+# 2026-08-20 修正：ss(不锈钢)/sp(纸浆) 上期所有夜盘 21:00–23:00，误在集合内导致夜盘漏推，已移除
 for _s, _m in SYMBOLS.items():
     _m.setdefault("night", _s not in NO_NIGHT_DEFAULT)
 
@@ -184,9 +206,12 @@ AUTO_RECOVER_SYMBOLS = {"hc"}
 # akshare sina 主力连续代码映射（symbol → sina code）
 _AKSHARE_MAP = {s: s.upper() + "0" for s in SYMBOLS}
 # 特殊调整
-_AKSHARE_MAP.update({
-    "jd": "JD0", "lh": "LH0",  # 原名即大写首字母
-})
+_AKSHARE_MAP.update(
+    {
+        "jd": "JD0",
+        "lh": "LH0",  # 原名即大写首字母
+    }
+)
 
 # ── 具体交割合约映射（四维面板按合约维度独立出信号）──
 # sym_key -> akshare/sina 具体合约代码（日线/5m 用）
@@ -198,18 +223,24 @@ VARIETY_OF = {"SA01": "SA"}
 # 逐合约龙虎榜缓存键：akshare 实际按合约返回 SA609/SA701（非品种级 SA），远月需独立取数
 _CONTRACT_CPOS_KEY = {"SA01": "SA701"}
 
+
 def variety_of(sym):
     """具体合约 -> 所属品种 key（F/龙虎榜复用品种级，避免逐合约另建基本面/持仓库）。"""
     return VARIETY_OF.get(sym, sym)
+
 
 # ----------------------------------------------------------------------------
 # 默认配置（§2.2 + §1.6 + §1.7）
 # ----------------------------------------------------------------------------
 DEFAULT_CONFIG = {
     "account": {
-        "equity": 100000, "risk_pct": 1.5, "margin_cap_pct": 30,
-        "max_lots": 5, "per_symbol_lots": {},
-        "portfolio_margin_cap_pct": 60, "max_total_lots": 15,
+        "equity": 100000,
+        "risk_pct": 1.5,
+        "margin_cap_pct": 30,
+        "max_lots": 5,
+        "per_symbol_lots": {},
+        "portfolio_margin_cap_pct": 60,
+        "max_total_lots": 15,
         "use_realtime_margin": True,
     },
     # 出场粒度（回测结论 2026-08-16：全市场5m出场 94%改善，默认开启）
@@ -217,10 +248,14 @@ DEFAULT_CONFIG = {
     # 此旗标固化"默认 on"口径，walk_forward_backtest_5m_exit 与之同源。
     "use_5m_exit": True,
     "risk_gate": {
-        "stop_atr_mult": 1.5, "rr_ratio": 2.0, "limit_proximity": 0.9,
-        "consec_loss_lock": 3, "slip_pts": 1,
-        "kelly_slope": 2.0,        # #4 fractional-Kelly：edge→仓位缩放斜率（越大越激进）
-        "kelly_min": 0.6, "kelly_max": 1.2,   # 缩放区间（低edge收缩/高edge放大，封顶1.2x防过押；P1-2整改：原1.6x在弱/中置信品种上过度自信→反向加杠杆）
+        "stop_atr_mult": 1.5,
+        "rr_ratio": 2.0,
+        "limit_proximity": 0.9,
+        "consec_loss_lock": 3,
+        "slip_pts": 1,
+        "kelly_slope": 2.0,  # #4 fractional-Kelly：edge→仓位缩放斜率（越大越激进）
+        "kelly_min": 0.6,
+        "kelly_max": 1.2,  # 缩放区间（低edge收缩/高edge放大，封顶1.2x防过押；P1-2整改：原1.6x在弱/中置信品种上过度自信→反向加杠杆）
     },
     # 逐品种止损/止盈覆盖（2026-08-13 联合校准，见 four_dim_calibrate.sweep_stop_rr）
     # 缺省用 risk_gate 全局值；命中此处则覆盖 stop_atr_mult / rr_ratio。
@@ -250,83 +285,83 @@ DEFAULT_CONFIG = {
         # 低胜率品种专项（回测结论 2026-08-16）：单笔保证金占比收紧至 18%，
         # 与 risk_state_machine.PER_SYMBOL_RISK 同步（账户级状态机 + 信号级手数双重约束）。
         "JM": {"margin_cap_pct": 18, "note": "焦煤低胜率(27%)：单笔占比≤18%"},
-        "J":  {"margin_cap_pct": 18, "note": "焦炭低胜率(34%)：单笔占比≤18%"},
+        "J": {"margin_cap_pct": 18, "note": "焦炭低胜率(34%)：单笔占比≤18%"},
     },
     # 合约参数（§2.1 占位；fee=单边每手元近似，回测扣费用）
     "contract_specs": {
         # 上期所 SHFE
-        "cu": {"multiplier": 5,  "margin_rate": 0.12, "limit_pct": 0.06, "fee": 36.0},
-        "al": {"multiplier": 5,  "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
-        "zn": {"multiplier": 5,  "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
-        "ni": {"multiplier": 1,  "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
-        "sn": {"multiplier": 1,  "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
+        "cu": {"multiplier": 5, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 36.0},
+        "al": {"multiplier": 5, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
+        "zn": {"multiplier": 5, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
+        "ni": {"multiplier": 1, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
+        "sn": {"multiplier": 1, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
         "ao": {"multiplier": 20, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
-        "au": {"multiplier": 1000,"margin_rate":0.10, "limit_pct": 0.06, "fee": 10.0},
+        "au": {"multiplier": 1000, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 10.0},
         "ag": {"multiplier": 15, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 7.5},
         "rb": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 4.0},
         "hc": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 4.0},
-        "ss": {"multiplier": 5,  "margin_rate": 0.10, "limit_pct": 0.06, "fee": 8.0},
+        "ss": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 8.0},
         "bu": {"multiplier": 10, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 4.0},
         "fu": {"multiplier": 10, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
         "ru": {"multiplier": 10, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
         "sp": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 4.0},
         # 上期能源 INE
-        "sc": {"multiplier": 1000,"margin_rate":0.15, "limit_pct": 0.08, "fee": 20.0},
+        "sc": {"multiplier": 1000, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 20.0},
         "ec": {"multiplier": 50, "margin_rate": 0.18, "limit_pct": 0.10, "fee": 30.0},
         # 大商所 DCE
-        "i":  {"multiplier": 100, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 8.0},
-        "J":  {"multiplier": 100, "margin_rate": 0.13, "limit_pct": 0.08, "fee": 28.45},
-        "JM": {"multiplier": 60,  "margin_rate": 0.12, "limit_pct": 0.08, "fee": 8.07},
-        "eb": {"multiplier": 5,   "margin_rate": 0.12, "limit_pct": 0.08, "fee": 3.0},
-        "eg": {"multiplier": 10,  "margin_rate": 0.12, "limit_pct": 0.08, "fee": 4.0},
-        "l":  {"multiplier": 5,   "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
-        "pp": {"multiplier": 5,   "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
-        "v":  {"multiplier": 5,   "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
-        "pg": {"multiplier": 20,  "margin_rate": 0.12, "limit_pct": 0.08, "fee": 6.0},
-        "m":  {"multiplier": 10,  "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
-        "y":  {"multiplier": 10,  "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
-        "a":  {"multiplier": 10,  "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
-        "b":  {"multiplier": 10,  "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
-        "p":  {"multiplier": 10,  "margin_rate": 0.12, "limit_pct": 0.08, "fee": 2.5},
-        "c":  {"multiplier": 10,  "margin_rate": 0.10, "limit_pct": 0.05, "fee": 1.5},
-        "cs": {"multiplier": 10,  "margin_rate": 0.10, "limit_pct": 0.05, "fee": 1.5},
-        "jd": {"multiplier": 10,  "margin_rate": 0.07, "limit_pct": 0.08, "fee": 5.0},
-        "lh": {"multiplier": 16,  "margin_rate": 0.12, "limit_pct": 0.08, "fee": 30.0},
-        "rr": {"multiplier": 10,  "margin_rate": 0.08, "limit_pct": 0.05, "fee": 1.5},
+        "i": {"multiplier": 100, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 8.0},
+        "J": {"multiplier": 100, "margin_rate": 0.13, "limit_pct": 0.08, "fee": 28.45},
+        "JM": {"multiplier": 60, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 8.07},
+        "eb": {"multiplier": 5, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 3.0},
+        "eg": {"multiplier": 10, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 4.0},
+        "l": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
+        "pp": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
+        "v": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
+        "pg": {"multiplier": 20, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 6.0},
+        "m": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
+        "y": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
+        "a": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
+        "b": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.5},
+        "p": {"multiplier": 10, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 2.5},
+        "c": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 1.5},
+        "cs": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 1.5},
+        "jd": {"multiplier": 10, "margin_rate": 0.07, "limit_pct": 0.08, "fee": 5.0},
+        "lh": {"multiplier": 16, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 30.0},
+        "rr": {"multiplier": 10, "margin_rate": 0.08, "limit_pct": 0.05, "fee": 1.5},
         # 郑商所 CZCE
         "FG": {"multiplier": 20, "margin_rate": 0.13, "limit_pct": 0.04, "fee": 2.3},
         "SA": {"multiplier": 20, "margin_rate": 0.09, "limit_pct": 0.04, "fee": 4.0},
         "SA01": {"multiplier": 20, "margin_rate": 0.09, "limit_pct": 0.04, "fee": 4.0},
         "MA": {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
-        "TA": {"multiplier": 5,  "margin_rate": 0.09, "limit_pct": 0.05, "fee": 3.0},
-        "PF": {"multiplier": 5,  "margin_rate": 0.10, "limit_pct": 0.05, "fee": 2.0},
-        "PX": {"multiplier": 5,  "margin_rate": 0.12, "limit_pct": 0.06, "fee": 3.0},
+        "TA": {"multiplier": 5, "margin_rate": 0.09, "limit_pct": 0.05, "fee": 3.0},
+        "PF": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 2.0},
+        "PX": {"multiplier": 5, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 3.0},
         "SH": {"multiplier": 30, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 6.0},
         "UR": {"multiplier": 20, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 4.0},
-        "PR": {"multiplier": 5,  "margin_rate": 0.10, "limit_pct": 0.05, "fee": 2.0},
+        "PR": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 2.0},
         "SR": {"multiplier": 10, "margin_rate": 0.09, "limit_pct": 0.06, "fee": 3.0},
-        "CF": {"multiplier": 5,  "margin_rate": 0.09, "limit_pct": 0.06, "fee": 4.3},
+        "CF": {"multiplier": 5, "margin_rate": 0.09, "limit_pct": 0.06, "fee": 4.3},
         "RM": {"multiplier": 10, "margin_rate": 0.09, "limit_pct": 0.06, "fee": 2.5},
         "OI": {"multiplier": 10, "margin_rate": 0.09, "limit_pct": 0.06, "fee": 2.0},
-        "PK": {"multiplier": 5,  "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
+        "PK": {"multiplier": 5, "margin_rate": 0.10, "limit_pct": 0.06, "fee": 2.0},
         "AP": {"multiplier": 10, "margin_rate": 0.12, "limit_pct": 0.08, "fee": 5.0},
         # 广期所 GFEX
-        "si": {"multiplier": 5,  "margin_rate": 0.12, "limit_pct": 0.06, "fee": 4.0},
-        "lc": {"multiplier": 1,  "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
+        "si": {"multiplier": 5, "margin_rate": 0.12, "limit_pct": 0.06, "fee": 4.0},
+        "lc": {"multiplier": 1, "margin_rate": 0.15, "limit_pct": 0.08, "fee": 3.0},
     },
     # 阈值（§1.6 初值；2026-08-11 经嵌套 walk-forward OOS 校准，见 four_dim_calibrate.py）
-  # 实测：8 策略日线合成的 T_D 实际 max 仅 ≈50（p80≈25, p90≈33），原稿 40/45/55 基于
-  # "T_D 可达100" 的错误假设，实际几乎不可达（|T_D|>=45 仅占 0.2%）。初值下调到
-  # 黑系/化工 22、农产品 25（对应 |T_D| p80 附近，仍属"少而精"，约 25% 时间触发）。
-  # OOS 校准后为按品种覆盖（见 thresholds_by_symbol）。
+    # 实测：8 策略日线合成的 T_D 实际 max 仅 ≈50（p80≈25, p90≈33），原稿 40/45/55 基于
+    # "T_D 可达100" 的错误假设，实际几乎不可达（|T_D|>=45 仅占 0.2%）。初值下调到
+    # 黑系/化工 22、农产品 25（对应 |T_D| p80 附近，仍属"少而精"，约 25% 时间触发）。
+    # OOS 校准后为按品种覆盖（见 thresholds_by_symbol）。
     "thresholds": {
-        "黑系":    {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 50, "bias_hard": 60},
-        "化工":    {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 55, "bias_hard": 60},
-        "农产品":  {"T_thresh": 25, "T_small_thresh": 18, "conv_thresh": 60, "bias_hard": 50},
-        "有色":    {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 55, "bias_hard": 55},
-        "贵金属":  {"T_thresh": 20, "T_small_thresh": 14, "conv_thresh": 55, "bias_hard": 55},
-        "能源":    {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 55, "bias_hard": 60},
-        "航运":    {"T_thresh": 24, "T_small_thresh": 17, "conv_thresh": 60, "bias_hard": 65},
+        "黑系": {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 50, "bias_hard": 60},
+        "化工": {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 55, "bias_hard": 60},
+        "农产品": {"T_thresh": 25, "T_small_thresh": 18, "conv_thresh": 60, "bias_hard": 50},
+        "有色": {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 55, "bias_hard": 55},
+        "贵金属": {"T_thresh": 20, "T_small_thresh": 14, "conv_thresh": 55, "bias_hard": 55},
+        "能源": {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 55, "bias_hard": 60},
+        "航运": {"T_thresh": 24, "T_small_thresh": 17, "conv_thresh": 60, "bias_hard": 65},
     },
     # Regime 自适应系数（§1.7）
     "regime_coef": {
@@ -345,13 +380,13 @@ DEFAULT_CONFIG = {
     #       · 反向强否决(|bias_FC|>=fc_hard 且反向) → 硬否决（阈值降到可达区间，P-C）
     #   direction_mode="combined"(可选/需回测)：dir=sign(T_5m + direction_alpha·bias_G)，F/C 可直接翻转方向
     "bias_synthesis": {
-        "direction_mode": "threshold",   # "threshold" | "combined"
-        "direction_alpha": 0.5,          # combined 模式：bias_G 相对 T_5m 的权重
-        "fc_confirm": 25,                # |bias_FC| 达此且同向 → 降 T 阈值（正向加成）
-        "confirm_relief": 0.85,          # 同向确认时 T 阈值折让（0.85=降15%）
-        "fc_hard": 25,                   # |bias_FC| 达此且反向 → 硬否决（替代原偏高的 bias_hard）
+        "direction_mode": "threshold",  # "threshold" | "combined"
+        "direction_alpha": 0.5,  # combined 模式：bias_G 相对 T_5m 的权重
+        "fc_confirm": 25,  # |bias_FC| 达此且同向 → 降 T 阈值（正向加成）
+        "confirm_relief": 0.85,  # 同向确认时 T 阈值折让（0.85=降15%）
+        "fc_hard": 25,  # |bias_FC| 达此且反向 → 硬否决（替代原偏高的 bias_hard）
         "fc_hard_regime_offset": {"趋势": 0, "波动": 5, "震荡": 10},
-        "bias_g_min": 50,                # combined 模式：|bias_G| 达此且 T_5m 弱时亦可触发
+        "bias_g_min": 50,  # combined 模式：|bias_G| 达此且 T_5m 弱时亦可触发
     },
     # 背景偏置合成权重（P2-④ 新增，供 OOS 扫参）。默认值与原硬编码 0.6/0.25/0.15 一致。
     "combine_weights": {"T": 0.6, "F": 0.25, "C": 0.15},
@@ -361,10 +396,10 @@ DEFAULT_CONFIG = {
     #   ⚠️ 改动会系统性平移 T 分布（峰值与触发频次变化），上线前必须在 walk-forward / papertrack
     #      上做一轮 OOS 对比，并按新分布重校准 T_thresh（参数见 four_dim_calibrate）。
     "decorrelate": {
-        "enabled": True,                 # True=启用去相关合成；False=旧逻辑
-        "crowd_penalty": 0.35,           # 趋势簇拥挤降权强度（0=关闭）：一致度超阈时该簇贡献最多×0.65
-        "crowd_thresh": 0.8,             # 趋势簇内部同向占比超此（如≥80%）才触发降权
-        "contrarian_damp": 0.25,         # 趋势 vs 均值回归 反向时的整体 T 幅值阻尼（0=关闭）
+        "enabled": True,  # True=启用去相关合成；False=旧逻辑
+        "crowd_penalty": 0.35,  # 趋势簇拥挤降权强度（0=关闭）：一致度超阈时该簇贡献最多×0.65
+        "crowd_thresh": 0.8,  # 趋势簇内部同向占比超此（如≥80%）才触发降权
+        "contrarian_damp": 0.25,  # 趋势 vs 均值回归 反向时的整体 T 幅值阻尼（0=关闭）
     },
     # 季节性加权（P-D，2026-08-14）：按品种分组提升 T 内 seasonal 簇权重。
     #   鸡蛋/生猪(农产品) 与 玻璃/纯碱(化工) 为强季节性品种；原 seasonal 簇权重仅 0.1~0.3 几乎不起作用。
@@ -372,8 +407,8 @@ DEFAULT_CONFIG = {
     #   enabled=False 即不提升（退回原 uniform 弱权重）。注意：仅影响 T 内 seasonal 簇；
     #   F 内季节性分量提升见 fundamental_feed.SEASONAL_F_WEIGHT（两套独立杠杆）。
     "seasonal_boost": {
-        "enabled": True,                 # True=按组提升 seasonal 簇权重
-        "global_mult": 1.5,             # 全局倍率
+        "enabled": True,  # True=按组提升 seasonal 簇权重
+        "global_mult": 1.5,  # 全局倍率
         "by_group": {"农产品": 1.8, "化工": 1.4},  # 分组额外倍率（命中才乘）
     },
     # 趋势市尾仓 trailing（P-G，2026-08-14）：解决 t2=2R 强制全平截断利润的问题。
@@ -383,11 +418,11 @@ DEFAULT_CONFIG = {
     #   trend_only=True：仅趋势 regime 启用；波动/震荡仍 t2 全平（保住既得利）。
     #   enabled=False 即退回旧逻辑（t2 全平），A-B 对照 / 一键回退。
     "trailing_tail": {
-        "enabled": True,                 # True=趋势市 t2 后保留尾仓跟出
-        "trend_only": True,              # 仅趋势 regime 启用（波动/震荡仍 t2 全平）
-        "tail_pct": 0.25,               # 尾仓比例（已平 75%，留 25%）
-        "tail_trail_R": 2.0,            # 尾仓跟踪距离 = 2×1R（比原 1R 跟踪宽一倍，让利润奔跑）
-        "min_profit_R": 2.0,            # 达到此 R(原 t2) 才进入尾仓态
+        "enabled": True,  # True=趋势市 t2 后保留尾仓跟出
+        "trend_only": True,  # 仅趋势 regime 启用（波动/震荡仍 t2 全平）
+        "tail_pct": 0.25,  # 尾仓比例（已平 75%，留 25%）
+        "tail_trail_R": 2.0,  # 尾仓跟踪距离 = 2×1R（比原 1R 跟踪宽一倍，让利润奔跑）
+        "min_profit_R": 2.0,  # 达到此 R(原 t2) 才进入尾仓态
     },
     # 分品种 regime 阈值（P-F，2026-08-14）：解决 classify_regime 全局阈值导致跨品种 regime 错配。
     #   焦煤(黑系) ATR/c 常态远高于鸡蛋(农产品)，统一 atr_thresh=0.025 会让高波动品种长期被分"波动"、
@@ -397,45 +432,101 @@ DEFAULT_CONFIG = {
     #        default → by_group[group] → by_symbol[sym] 逐级覆盖（后者优先）。
     #   注意：仅影响 classify_regime 的 regime 判定；T_score 计算/权重/触发阈值不在此处。
     "regime_params": {
-        "enabled": True,                 # True=启用分品种 regime 阈值；False=全部回落 default(旧行为)
-        "default": {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012,
-                    "trend_slope": 0.003, "trend_dev": 0.010},
+        "enabled": True,  # True=启用分品种 regime 阈值；False=全部回落 default(旧行为)
+        "default": {
+            "atr_thresh": 0.025,
+            "flat_dev": 0.008,
+            "flat_atr": 0.012,
+            "trend_slope": 0.003,
+            "trend_dev": 0.010,
+        },
         # 分组覆盖：按该组典型 ATR/c 相对基线缩放（行业常识初值，需 walk-forward 组内校准）。
         #   黑系/能源/航运波动大→阈值放大；农产品波动小→阈值缩小；其余接近基线。
         "by_group": {
-            "黑系":   {"atr_thresh": 0.035, "flat_dev": 0.010, "flat_atr": 0.018, "trend_slope": 0.0035, "trend_dev": 0.012},
-            "化工":   {"atr_thresh": 0.029, "flat_dev": 0.009, "flat_atr": 0.014, "trend_slope": 0.0032, "trend_dev": 0.011},
-            "农产品": {"atr_thresh": 0.021, "flat_dev": 0.006, "flat_atr": 0.009, "trend_slope": 0.0025, "trend_dev": 0.008},
-            "有色":   {"atr_thresh": 0.026, "flat_dev": 0.008, "flat_atr": 0.012, "trend_slope": 0.0030, "trend_dev": 0.010},
-            "贵金属": {"atr_thresh": 0.028, "flat_dev": 0.009, "flat_atr": 0.013, "trend_slope": 0.0032, "trend_dev": 0.011},
-            "能源":   {"atr_thresh": 0.032, "flat_dev": 0.009, "flat_atr": 0.016, "trend_slope": 0.0034, "trend_dev": 0.012},
-            "航运":   {"atr_thresh": 0.038, "flat_dev": 0.011, "flat_atr": 0.020, "trend_slope": 0.0038, "trend_dev": 0.013},
+            "黑系": {
+                "atr_thresh": 0.035,
+                "flat_dev": 0.010,
+                "flat_atr": 0.018,
+                "trend_slope": 0.0035,
+                "trend_dev": 0.012,
+            },
+            "化工": {
+                "atr_thresh": 0.029,
+                "flat_dev": 0.009,
+                "flat_atr": 0.014,
+                "trend_slope": 0.0032,
+                "trend_dev": 0.011,
+            },
+            "农产品": {
+                "atr_thresh": 0.021,
+                "flat_dev": 0.006,
+                "flat_atr": 0.009,
+                "trend_slope": 0.0025,
+                "trend_dev": 0.008,
+            },
+            "有色": {
+                "atr_thresh": 0.026,
+                "flat_dev": 0.008,
+                "flat_atr": 0.012,
+                "trend_slope": 0.0030,
+                "trend_dev": 0.010,
+            },
+            "贵金属": {
+                "atr_thresh": 0.028,
+                "flat_dev": 0.009,
+                "flat_atr": 0.013,
+                "trend_slope": 0.0032,
+                "trend_dev": 0.011,
+            },
+            "能源": {
+                "atr_thresh": 0.032,
+                "flat_dev": 0.009,
+                "flat_atr": 0.016,
+                "trend_slope": 0.0034,
+                "trend_dev": 0.012,
+            },
+            "航运": {
+                "atr_thresh": 0.038,
+                "flat_dev": 0.011,
+                "flat_atr": 0.020,
+                "trend_slope": 0.0038,
+                "trend_dev": 0.013,
+            },
         },
         # 逐品种微调（优先级最高；OOS 校准后填写，例：某品种常态波动偏离分组可单独标）。
         "by_symbol": {},
     },
     # P-H (2026-08-14): 稳健池准入门槛动态回灌(依赖 four_dim_recalibrate 产出的 calibration_drift.json)
     "robust_pool_gate": {
-        "enabled": True,            # False=严格 v12(锁死 0.70/0.15, 忽略回灌文件)
-        "auto_adapt": False,        # True=重校准调度时回灌并应用(默认关, 上线前需 OOS 验证)
-        "relax_pp": 0.5,            # ensemble 近期 expR 低于 v12 门槛时, 放松量=缺口×此系数
-        "max_relax": 0.05,          # 单次最多放松(相对 v12 门槛 0.15)
-        "floor_oos": 0.10,          # OOS_expR 门槛硬下限(永不低于此; 仍高于 0 避免无脑放行)
+        "enabled": True,  # False=严格 v12(锁死 0.70/0.15, 忽略回灌文件)
+        "auto_adapt": False,  # True=重校准调度时回灌并应用(默认关, 上线前需 OOS 验证)
+        "relax_pp": 0.5,  # ensemble 近期 expR 低于 v12 门槛时, 放松量=缺口×此系数
+        "max_relax": 0.05,  # 单次最多放松(相对 v12 门槛 0.15)
+        "floor_oos": 0.10,  # OOS_expR 门槛硬下限(永不低于此; 仍高于 0 避免无脑放行)
     },
     # 按品种校准覆盖（2026-08-11 嵌套 walk-forward OOS 校准 v2，全市场 53 品种）。
     # ✅=稳健(OOS正期望+胜率≥保本线), ⚠️=无稳健候选含池内最优供参考, 其余沿用 group 阈值。
     "thresholds_by_symbol": {
         # ── 上期所 SHFE ──
         "cu": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.195 胜42%
-        "al": {"T_thresh": 12, "bias_hard_base": 50},  # 🔧2026-08-13重校准: 28→12 放宽后样本充足且正期望(+0.26/胜40%)→解除门控
-        "zn": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-08-13重校准: 12→34 严格化后近期walk-forward转正(+0.007/胜40%)
+        "al": {
+            "T_thresh": 12,
+            "bias_hard_base": 50,
+        },  # 🔧2026-08-13重校准: 28→12 放宽后样本充足且正期望(+0.26/胜40%)→解除门控
+        "zn": {
+            "T_thresh": 34,
+            "bias_hard_base": 50,
+        },  # 🔧2026-08-13重校准: 12→34 严格化后近期walk-forward转正(+0.007/胜40%)
         "ni": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.229 胜45%
         # sn: 交易数不足(锡) → 沿用 group 有色
         # ao: 交易数不足(氧化铝) → 沿用 group 有色
         "au": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.302(无稳健)
         "ag": {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.059(无稳健)
         "rb": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.123 胜41%
-        "hc": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.62)，模型实盘双确认衰减→维持门控/建议剔除
+        "hc": {
+            "T_thresh": 14,
+            "bias_hard_base": 50,
+        },  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.62)，模型实盘双确认衰减→维持门控/建议剔除
         "ss": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.100(无稳健)
         "bu": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.008(无稳健)
         "fu": {"T_thresh": 14, "bias_hard_base": 50},  # ✅ OOS+0.149 胜41%
@@ -445,21 +536,27 @@ DEFAULT_CONFIG = {
         # ── 上期能源 INE ──
         # ec: 交易数不足(欧线) → 沿用 group 航运
         # ── 大商所 DCE ──
-        "i":  {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.016(无稳健)
-        "J":  {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.273 胜45%
-        "JM": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.97/胜0%)，模型实盘双确认衰减→维持门控/建议剔除
-        "eb": {"T_thresh": 16, "bias_hard_base": 50},  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控
+        "i": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.016(无稳健)
+        "J": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.273 胜45%
+        "JM": {
+            "T_thresh": 14,
+            "bias_hard_base": 50,
+        },  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.97/胜0%)，模型实盘双确认衰减→维持门控/建议剔除
+        "eb": {
+            "T_thresh": 16,
+            "bias_hard_base": 50,
+        },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控
         "eg": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.180(无稳健)
-        "l":  {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.064 胜38%
+        "l": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.064 胜38%
         "pp": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.029 胜37%
-        "v":  {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.189 胜42%
+        "v": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.189 胜42%
         # pg: 交易数不足(液化气) → 沿用 group 能源
-        "m":  {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.029(无稳健)
-        "y":  {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.154 胜41%
-        "a":  {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.084(无稳健)
-        "b":  {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.099(无稳健)
-        "p":  {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.089 胜40%
-        "c":  {"T_thresh": 26, "bias_hard_base": 50},  # ✅ OOS+0.226 胜45%
+        "m": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.029(无稳健)
+        "y": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.154 胜41%
+        "a": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.084(无稳健)
+        "b": {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.099(无稳健)
+        "p": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.089 胜40%
+        "c": {"T_thresh": 26, "bias_hard_base": 50},  # ✅ OOS+0.226 胜45%
         "cs": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.145 胜41%
         "jd": {"T_thresh": 30, "bias_hard_base": 50},  # ✅ OOS+0.066 胜39%
         # lh: 交易数不足(生猪) → 沿用 group 农产品
@@ -486,8 +583,16 @@ DEFAULT_CONFIG = {
     },
 }
 
-COLMAP = {"日期": "date", "开盘价": "open", "最高价": "high", "最低价": "low",
-          "收盘价": "close", "成交量": "volume", "持仓量": "oi", "动态结算价": "settlement"}
+COLMAP = {
+    "日期": "date",
+    "开盘价": "open",
+    "最高价": "high",
+    "最低价": "low",
+    "收盘价": "close",
+    "成交量": "volume",
+    "持仓量": "oi",
+    "动态结算价": "settlement",
+}
 
 
 # ----------------------------------------------------------------------------
@@ -505,16 +610,27 @@ def load_daily(code):
     return None
 
 
-_DAILY_CACHE = {}   # symbol -> (df, timestamp) 进程内缓存
+_DAILY_CACHE = {}  # symbol -> (df, timestamp) 进程内缓存
 
 
 def _norm_daily_cols(raw):
     """把 sina(英/中) 或 东财(中) 的日线 DataFrame 统一为标准列并设 date 索引。"""
     if raw is None or len(raw) == 0:
         return raw
-    ren = {"hold": "oi", "settle": "settlement", "open_interest": "oi",
-           "日期": "date", "开盘": "open", "最高": "high", "最低": "low", "收盘": "close",
-           "成交量": "volume", "持仓量": "oi", "开盘价": "open", "收盘价": "close"}
+    ren = {
+        "hold": "oi",
+        "settle": "settlement",
+        "open_interest": "oi",
+        "日期": "date",
+        "开盘": "open",
+        "最高": "high",
+        "最低": "low",
+        "收盘": "close",
+        "成交量": "volume",
+        "持仓量": "oi",
+        "开盘价": "open",
+        "收盘价": "close",
+    }
     raw = raw.rename(columns=ren)
     if "date" in raw.columns:
         raw["date"] = pd.to_datetime(raw["date"])
@@ -526,10 +642,13 @@ def _fetch_daily_eastmoney(code):
     """东财期货主连日K（公开 HTTP，无需 token；best-effort）。返回已标准化(date索引)的 df。"""
     import json as _json
     import urllib.request
+
     secid = "114." + code.lower()
-    url = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
-           "?fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
-           f"&klt=101&fqt=0&secid={secid}&beg=0&end=20500101")
+    url = (
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+        "?fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
+        f"&klt=101&fqt=0&secid={secid}&beg=0&end=20500101"
+    )
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     data = _json.loads(urllib.request.urlopen(req, timeout=12).read().decode("utf-8"))
     kls = (data.get("data") or {}).get("klines") or []
@@ -538,9 +657,17 @@ def _fetch_daily_eastmoney(code):
         p = kl.split(",")
         if len(p) < 7:
             continue
-        rows.append({"date": p[0], "open": float(p[1]), "close": float(p[2]),
-                     "high": float(p[3]), "low": float(p[4]),
-                     "volume": float(p[5]), "oi": float(p[6])})
+        rows.append(
+            {
+                "date": p[0],
+                "open": float(p[1]),
+                "close": float(p[2]),
+                "high": float(p[3]),
+                "low": float(p[4]),
+                "volume": float(p[5]),
+                "oi": float(p[6]),
+            }
+        )
     if not rows:
         raise RuntimeError("东财返回空")
     return _norm_daily_cols(pd.DataFrame(rows))
@@ -552,6 +679,7 @@ def _fetch_daily_robust(code):
     from datetime import datetime, timedelta
 
     import akshare as ak
+
     last_err = None
     # ① sina 主源（现有逻辑）
     try:
@@ -591,6 +719,7 @@ def load_daily_refreshed(symbol, ttl=1800):
       - 消除重复 import time as _t
       - 缓存检查仅保留一处（函数开头），不再在中间重复判断"""
     import time as _t
+
     cached = _DAILY_CACHE.get(symbol)
     if cached and (_t.time() - cached[1]) < ttl:
         return cached[0]
@@ -639,6 +768,7 @@ def load_min5(code, fetch_if_missing=True, live=False):
     if live:
         try:
             import minishare_live as ml
+
             df = ml.build_min5_live(code)
             if df is not None and len(df) >= 1:
                 return df
@@ -669,6 +799,7 @@ def load_min5(code, fetch_if_missing=True, live=False):
 def _fetch_min5_sina(code):
     """sina 拉 5m 主连（具体合约如 FG2509），落盘到 data_5m/_XX0_min5.csv。仅近 ~1023 根。"""
     import akshare as ak
+
     # 主连代码 -> 近期主力合约（用当前年份 9 月 / 次年 1 月近似；实盘应跟换月，回测取最近即可）
     yr = datetime.now().year % 100
     contract = f"{code}{yr}09"
@@ -682,8 +813,9 @@ def _fetch_min5_sina(code):
     df = df.rename(columns={"datetime": "date"})
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date").sort_index()
-    df = df.rename(columns={"hold": "oi", "volume": "volume", "open": "open",
-                             "high": "high", "low": "low", "close": "close"})
+    df = df.rename(
+        columns={"hold": "oi", "volume": "volume", "open": "open", "high": "high", "low": "low", "close": "close"}
+    )
     out = df[["open", "high", "low", "close", "volume", "oi"]].copy()
     out.to_csv(os.path.join(DATA_5M_DIR, f"_{code}0_min5.csv"))
     print(f"  已缓存 {code} 5m -> {len(out)} 根")
@@ -736,15 +868,15 @@ class FlowAggregator:
     def __init__(self, symbol, window=30):
         self.sym = symbol
         self.window = window
-        self.snaps = []          # (ts, last, oi, vol)
-        self.deltas = []         # 净流入速率分量序列
-        self.tick_delta = 0.0    # da龘 tick 订单流累计（最新一窗）
+        self.snaps = []  # (ts, last, oi, vol)
+        self.deltas = []  # 净流入速率分量序列
+        self.tick_delta = 0.0  # da龘 tick 订单流累计（最新一窗）
 
     def push_minishare(self, last, oi=None, vol=None, ts=None):
         ts = ts or time.time()
         if self.snaps:
             p_last, p_oi, p_vol = self.snaps[-1][1], self.snaps[-1][2], self.snaps[-1][3]
-            dP = (last - p_last)
+            dP = last - p_last
             dOI = (oi - p_oi) if (oi is not None and p_oi is not None) else 0.0
             dVol = (vol - p_vol) if (vol is not None and p_vol is not None) else 0.0
             # 净流入代理 = 价格变动 × 持仓变动（双增=资金流入accumulation，看多）
@@ -763,7 +895,7 @@ class FlowAggregator:
         """返回 C_flow ∈ [-100,100]：近 window 个净流分量的累计方向 + da龘 tick 加权。"""
         if len(self.deltas) < 3:
             return 0.0
-        recent = self.deltas[-self.window:]
+        recent = self.deltas[-self.window :]
         s = sum(recent)
         mag = max(1e-9, max(abs(x) for x in recent))
         base = max(-100.0, min(100.0, s / (mag * self.window) * 100))
@@ -789,9 +921,9 @@ def compute_C_flow(symbol, snapshots):
 #   同簇策略高度共线（5 个趋势都是"价在均线上/突破"变体），不再各自加权累加，
 #   而是先坍缩为「簇投票」(簇内 mean signal)，簇间再加权合成 → 消除共线放大。
 STRAT_CLUSTERS = {
-    "trend": TREND_STRATS,        # ma_break / dma / turtle / donchian / pullback
-    "mean": MEAN_STRATS,          # boll / rsi
-    "seasonal": ["seasonal"],     # seasonal
+    "trend": TREND_STRATS,  # ma_break / dma / turtle / donchian / pullback
+    "mean": MEAN_STRATS,  # boll / rsi
+    "seasonal": ["seasonal"],  # seasonal
 }
 
 
@@ -837,7 +969,7 @@ def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
     sb_enabled = None
     if feat_mgr is not None:
         try:
-            sb_enabled = feat_mgr.is_enabled('seasonal_boost')
+            sb_enabled = feat_mgr.is_enabled("seasonal_boost")
         except Exception:
             sb_enabled = None
     if sb_enabled is None:
@@ -849,7 +981,8 @@ def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
     return cw
 
 
-_DECORR_OFF_WARNED = [False]   # P2a 守卫：decorrelate.enabled=False 时一次性告警
+_DECORR_OFF_WARNED = [False]  # P2a 守卫：decorrelate.enabled=False 时一次性告警
+
 
 def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
     """8 策略 → regime 加权 → 去相关合成 → T_score ∈ [-100,100]（P-A 整改，2026-08-14）。
@@ -880,7 +1013,7 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
     enabled = None
     if feat_mgr is not None:
         try:
-            enabled = feat_mgr.is_enabled('decorrelate')
+            enabled = feat_mgr.is_enabled("decorrelate")
         except Exception:
             enabled = None
     if enabled is None:
@@ -900,9 +1033,11 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
         # P2a 守卫（2026-08-19）：退回旧逐策略累加路径=共线放大、信号更激进，非有意关闭应告警
         if not _DECORR_OFF_WARNED[0]:
             _DECORR_OFF_WARNED[0] = True
-            print("[RISK-WARN] compute_T: decorrelate.enabled=False → 退回旧逐策略累加路径"
-                  "（5个共线趋势策略=5票放大，信号更激进）。若非有意关闭，请检查 trade_config.json。",
-                  flush=True)
+            print(
+                "[RISK-WARN] compute_T: decorrelate.enabled=False → 退回旧逐策略累加路径"
+                "（5个共线趋势策略=5票放大，信号更激进）。若非有意关闭，请检查 trade_config.json。",
+                flush=True,
+            )
         w = regime_weights(regime)
         score = sum(sig[k] * w[k] for k in STRATS)
         maxw = sum(abs(w[k]) for k in STRATS)
@@ -1012,7 +1147,7 @@ def combine_bias(F, T, C, cfg=DEFAULT_CONFIG):
     则用 GA 权重覆盖默认权重（仅 live 路径；回测走 cfg 不受影响）。"""
     w = (cfg or DEFAULT_CONFIG).get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
     # #10: GA 权重覆盖（live 路径，set_ga_weights_for_symbol 设置当前品种权重）
-    _ga_current = getattr(combine_bias, '_ga_current', None)
+    _ga_current = getattr(combine_bias, "_ga_current", None)
     if _ga_current:
         ga_w = _ga_current.get("best_weights", {})
         base = ga_w.get("base", {})
@@ -1041,11 +1176,11 @@ def set_ga_weights_for_symbol(symbol):
     自动检测 ga_weights_cache.json 文件变化并重新加载。"""
     _path = os.path.join(HERE, "ga_weights_cache.json")
     _mtime = os.path.getmtime(_path) if os.path.exists(_path) else 0
-    _last_mtime = getattr(combine_bias, '_ga_mtime', 0)
-    if _mtime > _last_mtime or not hasattr(combine_bias, '_ga_cache'):
+    _last_mtime = getattr(combine_bias, "_ga_mtime", 0)
+    if _mtime > _last_mtime or not hasattr(combine_bias, "_ga_cache"):
         _load_ga_weights()
         combine_bias._ga_mtime = _mtime
-    _cache = getattr(combine_bias, '_ga_cache', {})
+    _cache = getattr(combine_bias, "_ga_cache", {})
     if symbol in _cache:
         combine_bias._ga_current = _cache[symbol]
     else:
@@ -1062,7 +1197,7 @@ def effective_params(symbol, cfg=DEFAULT_CONFIG):
     else:
         th = cfg["thresholds"][SYMBOLS[symbol]["group"]]
         T_base = th["T_thresh"]
-        bh_base = th["bias_hard"]   # 用 group 级 bias_hard（如农产品=50），而非固定取 60
+        bh_base = th["bias_hard"]  # 用 group 级 bias_hard（如农产品=50），而非固定取 60
     bhd = {"趋势": bh_base, "波动": bh_base + 5, "震荡": bh_base + 10}
     return T_base, bhd
 
@@ -1072,7 +1207,7 @@ def regime_params_for(symbol, cfg=DEFAULT_CONFIG, feat_mgr=None):
 
     覆盖层级：default → by_group[group] → by_symbol[sym]（后者优先）。
     返回 dict（含 atr_thresh/flat_dev/flat_atr/trend_slope/trend_dev），可直接喂 classify_regime(params=...)。
-    
+
     开关优先级（从高到低）：
       1. feature_flags.market_state_engine （特性开关，新）
       2. regime_params.enabled （trade_config 旧位置，向后兼容）
@@ -1080,25 +1215,30 @@ def regime_params_for(symbol, cfg=DEFAULT_CONFIG, feat_mgr=None):
     任一关闭 → 回落 default（=旧全局阈值行为，便于 A-B 对照）。
     """
     rp = (cfg or DEFAULT_CONFIG).get("regime_params", {})
-    
+
     # 优先级1：特性开关（新）
     enabled = None
     if feat_mgr is not None:
         try:
-            enabled = feat_mgr.is_enabled('market_state_engine')
+            enabled = feat_mgr.is_enabled("market_state_engine")
         except Exception:
             enabled = None
-    
+
     # 优先级2：旧配置（向后兼容）
     if enabled is None:
         enabled = bool(rp.get("enabled", True))
-    
+
     if not enabled:
         # 关闭分品种：全部回落 default（即 classify_regime 旧全局行为）
-        return dict(rp.get("default", {"atr_thresh": 0.025, "flat_dev": 0.008,
-                                        "flat_atr": 0.012, "trend_slope": 0.003, "trend_dev": 0.010}))
-    default = rp.get("default", {"atr_thresh": 0.025, "flat_dev": 0.008,
-                                 "flat_atr": 0.012, "trend_slope": 0.003, "trend_dev": 0.010})
+        return dict(
+            rp.get(
+                "default",
+                {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012, "trend_slope": 0.003, "trend_dev": 0.010},
+            )
+        )
+    default = rp.get(
+        "default", {"atr_thresh": 0.025, "flat_dev": 0.008, "flat_atr": 0.012, "trend_slope": 0.003, "trend_dev": 0.010}
+    )
     merged = dict(default)
     grp = SYMBOLS.get(symbol, {}).get("group")
     by_group = rp.get("by_group", {})
@@ -1123,18 +1263,61 @@ def regime_params_for(symbol, cfg=DEFAULT_CONFIG, feat_mgr=None):
 LIQUIDITY_SLIP = {
     # ── A 档·超流动（1.0 点）── 2026-08-13 按近60日日均成交额重排(recompute_liquidity_tiers)
     #   注意：键名必须与 SYMBOLS 主键严格同大小写(全小写)，否则 get_slip_pts  miss → 回退全局1.0
-    "au": 1.0, "ag": 1.0, "sn": 1.0, "jm": 1.0, "p": 1.0, "ru": 1.0,
-    "cu": 1.0, "lc": 1.0, "sc": 1.0, "cf": 1.0, "ni": 1.0, "m": 1.0,
-    "pp": 1.0, "lh": 1.0, "ta": 1.0, "oi": 1.0, "ma": 1.0, "v": 1.0,
-    "al": 1.0, "jd": 1.0, "sh": 1.0, "y": 1.0, "bu": 1.0, "rb": 1.0,
+    "au": 1.0,
+    "ag": 1.0,
+    "sn": 1.0,
+    "jm": 1.0,
+    "p": 1.0,
+    "ru": 1.0,
+    "cu": 1.0,
+    "lc": 1.0,
+    "sc": 1.0,
+    "cf": 1.0,
+    "ni": 1.0,
+    "m": 1.0,
+    "pp": 1.0,
+    "lh": 1.0,
+    "ta": 1.0,
+    "oi": 1.0,
+    "ma": 1.0,
+    "v": 1.0,
+    "al": 1.0,
+    "jd": 1.0,
+    "sh": 1.0,
+    "y": 1.0,
+    "bu": 1.0,
+    "rb": 1.0,
     # ── B 档·中流动（1.5 点）── 成交中等，盘口适中
-    "fg": 1.5, "l": 1.5, "sr": 1.5, "eg": 1.5, "eb": 1.5, "i": 1.5,
-    "ao": 1.5, "rm": 1.5, "fu": 1.5, "sa": 1.5, "hc": 1.5, "c": 1.5,
-    "zn": 1.5, "ss": 1.5, "sp": 1.5, "a": 1.5, "pg": 1.5, "si": 1.5,
+    "fg": 1.5,
+    "l": 1.5,
+    "sr": 1.5,
+    "eg": 1.5,
+    "eb": 1.5,
+    "i": 1.5,
+    "ao": 1.5,
+    "rm": 1.5,
+    "fu": 1.5,
+    "sa": 1.5,
+    "hc": 1.5,
+    "c": 1.5,
+    "zn": 1.5,
+    "ss": 1.5,
+    "sp": 1.5,
+    "a": 1.5,
+    "pg": 1.5,
+    "si": 1.5,
     "ur": 1.5,
     # ── C 档·低流动（2.0 点）── 盘口薄/大合约/远月，冲击成本高
-    "ap": 2.0, "j": 2.0, "pf": 2.0, "px": 2.0, "b": 2.0, "cs": 2.0,
-    "pk": 2.0, "pr": 2.0, "ec": 2.0, "rr": 2.0,
+    "ap": 2.0,
+    "j": 2.0,
+    "pf": 2.0,
+    "px": 2.0,
+    "b": 2.0,
+    "cs": 2.0,
+    "pk": 2.0,
+    "pr": 2.0,
+    "ec": 2.0,
+    "rr": 2.0,
 }
 
 
@@ -1143,12 +1326,12 @@ def get_slip_pts(symbol, cfg=DEFAULT_CONFIG):
     返回该品种单腿成交应计的滑点（点数）。实盘下单双向各滑一次。
     查表对大小写不敏感（SYMBOLS 主键大小写不统一：J/JM/FG/SA 大写，其余小写）。"""
     sp = cfg.get("contract_specs", {}).get(symbol, {})
-    if sp.get("slip") is not None:           # ① 逐合约微调优先
+    if sp.get("slip") is not None:  # ① 逐合约微调优先
         return float(sp["slip"])
     key = symbol.lower()
-    if key in LIQUIDITY_SLIP:                # ② 流动性分级表（键统一小写）
+    if key in LIQUIDITY_SLIP:  # ② 流动性分级表（键统一小写）
         return LIQUIDITY_SLIP[key]
-    if symbol in LIQUIDITY_SLIP:             # ② 兜底原大小写
+    if symbol in LIQUIDITY_SLIP:  # ② 兜底原大小写
         return LIQUIDITY_SLIP[symbol]
     return float(cfg.get("risk_gate", {}).get("slip_pts", 1))  # ③ 全局兜底
 
@@ -1184,7 +1367,25 @@ def recompute_liquidity_tiers(tail: int = 60, top_n: int = 12):
     return out
 
 
-def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, date=None, c_override=None, ablate=None, F_override=None, hmm_label=None, macro_label=None, garch_label=None, gbm_garch=None, risk_state=None, feat_mgr=None, sentiment_label=None, sr_result=None):
+def pipeline(
+    symbol,
+    df_daily,
+    df_5m=None,
+    cfg=DEFAULT_CONFIG,
+    corr_hist=None,
+    date=None,
+    c_override=None,
+    ablate=None,
+    F_override=None,
+    hmm_label=None,
+    macro_label=None,
+    garch_label=None,
+    gbm_garch=None,
+    risk_state=None,
+    feat_mgr=None,
+    sentiment_label=None,
+    sr_result=None,
+):
     """算三维修分 + 流水线合成，返回触发判定与中间量。
     date: 当前交易日(YYYYMMDD)，用于查真实基本面 F（缺失→中性）。
     c_override: 实盘可传实时 C_flow 评分覆盖 score_C（默认 None=用 score_C）。
@@ -1193,24 +1394,41 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
     hmm_label: #7 HMM 市场状态标签（live 专属）。传入则在 T_thresh_eff 上按市况调制触发阈值
              （trend_up/down×0.90、choppy×1.15、high_vol×1.25）。默认 None，回测三处调用不传参，
              HMM 永不进入回测路径（无前视偏差红线）。"""
-    group = SYMBOLS.get(symbol, {}).get("group")   # 用于 P-D seasonal_boost 分组加权
-    
+    group = SYMBOLS.get(symbol, {}).get("group")  # 用于 P-D seasonal_boost 分组加权
+
     # P1-16: 实时风控前置检查 —— live 模式下若已锁定/熔断，直接返回空信号
     _locked, _lock_reason = _is_risk_locked(risk_state)
     if _locked:
         return {
-            "F": 0.0, "T_D": 0.0, "T_5m": 0.0, "C": 0.0,
-            "bias_G": 0.0, "bias_FC": 0.0, "dir_T": 0, "dir_T_raw": 0,
-            "regime": "", "rdesc": "", "regime_hmm": None,
-            "garch_label": None, "gbm_garch": None,
-            "risk_scale": 1.0, "macro_bias": None,
-            "triggered": False, "T_thresh_eff": 0, "T_thresh_used": 0,
-            "conv": "风控锁定", "used_5m": False, "hard_veto": True,
-            "bs_mode": "", "corr_action": "",
-            "risk_blocked": True, "risk_block_reason": _lock_reason,
-            "sentiment_label": None, "sr_quality_note": "",
+            "F": 0.0,
+            "T_D": 0.0,
+            "T_5m": 0.0,
+            "C": 0.0,
+            "bias_G": 0.0,
+            "bias_FC": 0.0,
+            "dir_T": 0,
+            "dir_T_raw": 0,
+            "regime": "",
+            "rdesc": "",
+            "regime_hmm": None,
+            "garch_label": None,
+            "gbm_garch": None,
+            "risk_scale": 1.0,
+            "macro_bias": None,
+            "triggered": False,
+            "T_thresh_eff": 0,
+            "T_thresh_used": 0,
+            "conv": "风控锁定",
+            "used_5m": False,
+            "hard_veto": True,
+            "bs_mode": "",
+            "corr_action": "",
+            "risk_blocked": True,
+            "risk_block_reason": _lock_reason,
+            "sentiment_label": None,
+            "sr_quality_note": "",
         }
-    
+
     T_D, regime, rdesc = compute_T(df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
     if date is None:
         date = df_daily.index[-1].strftime("%Y%m%d") if len(df_daily) else None
@@ -1232,8 +1450,10 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
     if _sf_w:
         try:
             _t_trend, _t_mean, _t_seas, _, _ = compute_T_subfactors(
-                df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
+                df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr
+            )
             import fundamental_feed as _ff
+
             _f_basis, _f_seas = _ff.compute_F_subfactors(symbol, date)
             # ablate 兼容
             if ablate == "T":
@@ -1250,6 +1470,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
             if "SR_breakout" in _sf_w:
                 try:
                     import sr_analyzer as _sra
+
                     _sr_res = _sra.find_sr_levels(df_daily, symbol=symbol)
                     if _sr_res and _sr_res.get("levels"):
                         _cur = float(df_daily["close"].iloc[-1])
@@ -1264,13 +1485,15 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
                 except Exception:
                     _sr_breakout = 0.0
 
-            _bias = (_sf_w.get("T_trend", 0) * _t_trend
-                     + _sf_w.get("T_mean", 0) * _t_mean
-                     + _sf_w.get("T_seasonal", 0) * _t_seas
-                     + _sf_w.get("F_basis", 0) * _f_basis
-                     + _sf_w.get("F_seasonal", 0) * _f_seas
-                     + _sf_w.get("C", 0) * C_sf
-                     + _sf_w.get("SR_breakout", 0) * _sr_breakout)
+            _bias = (
+                _sf_w.get("T_trend", 0) * _t_trend
+                + _sf_w.get("T_mean", 0) * _t_mean
+                + _sf_w.get("T_seasonal", 0) * _t_seas
+                + _sf_w.get("F_basis", 0) * _f_basis
+                + _sf_w.get("F_seasonal", 0) * _f_seas
+                + _sf_w.get("C", 0) * C_sf
+                + _sf_w.get("SR_breakout", 0) * _sr_breakout
+            )
             bias_G = round(max(-100.0, min(100.0, _bias)), 1)
         except Exception:
             pass  # 子因子计算失败时回退到原 bias_G
@@ -1312,6 +1535,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
     # sentiment_label 是 sentiment_engine.compute() 返回的 band 字符串。
     if sentiment_label is not None:
         import sentiment_engine as _se
+
         _s_mult = _se.get_thr_mult(dir_T_raw)  # dir_T_raw 此时已由 T_5m 决定
         T_thresh_eff = round(T_thresh_eff * _s_mult, 1)
 
@@ -1321,6 +1545,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
     sr_quality_note = ""
     if sr_result is not None:
         import sr_analyzer as _sra
+
         _sr_boost, _sr_reason = _sra.signal_quality_boost(sr_result, dir_T_raw)
         if _sr_boost != 0.0:
             T_thresh_eff = round(T_thresh_eff * (1.0 - _sr_boost), 1)
@@ -1364,6 +1589,7 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
         # #8 情绪硬过滤：极端情绪期直接禁止某个方向
         if not hard_veto and sentiment_label is not None:
             import sentiment_engine as _se
+
             _sf, _sf_reason = _se.is_hard_filtered(sentiment_label, dir_T)
             if _sf:
                 hard_veto = True
@@ -1413,15 +1639,27 @@ def pipeline(symbol, df_daily, df_5m=None, cfg=DEFAULT_CONFIG, corr_hist=None, d
                     corr_action = f"corr(T,C)={ctc:.2f}>gate,降权C(|C|={abs(C_orig):.1f}<|T|={abs(T_D):.1f})"
 
     return {
-        "F": F, "T_D": T_D, "T_5m": T_5m, "C": C,
-        "bias_G": bias_G, "bias_FC": bias_FC, "dir_T": dir_T, "dir_T_raw": dir_T_raw,
-        "regime": regime, "rdesc": rdesc, "regime_hmm": hmm_label,
-        "garch_label": garch_label, "gbm_garch": gbm_garch,
+        "F": F,
+        "T_D": T_D,
+        "T_5m": T_5m,
+        "C": C,
+        "bias_G": bias_G,
+        "bias_FC": bias_FC,
+        "dir_T": dir_T,
+        "dir_T_raw": dir_T_raw,
+        "regime": regime,
+        "rdesc": rdesc,
+        "regime_hmm": hmm_label,
+        "garch_label": garch_label,
+        "gbm_garch": gbm_garch,
         "risk_scale": (gbm_garch or {}).get("risk_scale", 1.0),
         "macro_bias": macro_bias_applied,
-        "triggered": triggered, "T_thresh_eff": round(T_thresh_eff, 1),
+        "triggered": triggered,
+        "T_thresh_eff": round(T_thresh_eff, 1),
         "T_thresh_used": round(_thr, 1),
-        "conv": conv, "used_5m": used_5m, "hard_veto": hard_veto,
+        "conv": conv,
+        "used_5m": used_5m,
+        "hard_veto": hard_veto,
         "hard_veto_reason": hard_veto_reason,
         "bs_mode": direction_mode,
         "corr_action": corr_action,
@@ -1440,6 +1678,8 @@ _FALLBACK_SPEC = {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee
 
 # —— #4 fractional-Kelly 仓位缩放：用 walk-forward edge(mean_oos) 放大/缩小风险预算仓位 ——
 _CALIB_CACHE = {}
+
+
 def _load_calib_params():
     global _CALIB_CACHE
     if not _CALIB_CACHE:
@@ -1449,10 +1689,13 @@ def _load_calib_params():
             _CALIB_CACHE = {}
     return _CALIB_CACHE
 
+
 # —— ③ (2026-08-16) 阈值全参数化：kelly_min/kelly_max 可由 trade_config.json 顶层覆盖 ——
 # 与 runner 的 _tc_num 同源自洽（均读 trade_config.json 顶层，带 60s 缓存）。
 # 必须 strategy 内自带读取：回测路径直接 compute_kelly_factor(cfg=DEFAULT_CONFIG)，不经过 runner 合并。
 _TC_CACHE = {"t": 0.0, "v": None}
+
+
 def _load_tc():
     """读取 trade_config.json 顶层（60s 缓存），供阈值参数化。"""
     global _TC_CACHE
@@ -1466,6 +1709,7 @@ def _load_tc():
     _TC_CACHE = {"t": _now, "v": v}
     return v
 
+
 def _tc_num(key, default):
     """从 trade_config.json 顶层读数值型风控阈值，非数值/缺失则回退 default。"""
     try:
@@ -1475,6 +1719,7 @@ def _tc_num(key, default):
     except Exception:
         pass
     return default
+
 
 def compute_kelly_factor(symbol, cfg=DEFAULT_CONFIG):
     """由 walk-forward edge(mean_oos) 推导 fractional-Kelly 仓位缩放系数 ∈ [kelly_min, kelly_max]。
@@ -1505,18 +1750,26 @@ def compute_kelly_factor(symbol, cfg=DEFAULT_CONFIG):
         mult = min(mult, 1.0)
     return mult
 
+
 def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thresh=None, held_lots=0, risk_state=None):
     # P1-16: 实时风控前置检查 —— 锁定/熔断时直接否决
     _locked, _lock_reason = _is_risk_locked(risk_state)
     if _locked:
         return {
-            "passed": False, "N_risk": 0, "N_margin": 0,
-            "N_plan": 0, "stop_pts": 0, "limit_pts": 0,
-            "gate3_ok": False, "over_risk": False,
-            "kelly_mult": 0.0, "t_scale": None,
-            "risk_blocked": True, "risk_block_reason": _lock_reason,
+            "passed": False,
+            "N_risk": 0,
+            "N_margin": 0,
+            "N_plan": 0,
+            "stop_pts": 0,
+            "limit_pts": 0,
+            "gate3_ok": False,
+            "over_risk": False,
+            "kelly_mult": 0.0,
+            "t_scale": None,
+            "risk_blocked": True,
+            "risk_block_reason": _lock_reason,
         }
-    
+
     ac, sp = cfg["account"], cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
     # 逐品种覆盖：命中 per_symbol_risk 则改写 stop_atr_mult / rr_ratio
     rg = dict(cfg["risk_gate"])
@@ -1530,7 +1783,7 @@ def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thr
     N_risk_raw = int(equity * ac["risk_pct"] / 100 // risk_hand) if risk_hand > 0 else 0
     over_risk = False
     if N_risk_raw < 1 and risk_hand > 0:
-        N_risk = 1          # 最小 1 手（超风险预算，标注⚠️，不裸奔但不超加仓）
+        N_risk = 1  # 最小 1 手（超风险预算，标注⚠️，不裸奔但不超加仓）
         over_risk = True
     else:
         N_risk = N_risk_raw
@@ -1558,10 +1811,15 @@ def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thr
     gate3_ok = (stop_pts < limit_pts * rg["limit_proximity"]) if limit_pts > 0 else True
     passed = (N_plan >= 1) and gate3_ok
     return {
-        "passed": passed, "N_risk": N_risk, "N_margin": N_margin,
-        "N_plan": max(0, N_plan), "stop_pts": round(stop_pts, 2),
-        "limit_pts": round(limit_pts, 2), "gate3_ok": gate3_ok,
-        "over_risk": over_risk, "kelly_mult": round(kelly_mult, 3),
+        "passed": passed,
+        "N_risk": N_risk,
+        "N_margin": N_margin,
+        "N_plan": max(0, N_plan),
+        "stop_pts": round(stop_pts, 2),
+        "limit_pts": round(limit_pts, 2),
+        "gate3_ok": gate3_ok,
+        "over_risk": over_risk,
+        "kelly_mult": round(kelly_mult, 3),
         "t_scale": round(t_scale, 3) if t_scale is not None else None,
     }
 
@@ -1587,6 +1845,7 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
     sr_note = ""
     if sr_result is not None and sr_result.get("levels"):
         import sr_analyzer as _sra
+
         _sym_meta = SYMBOLS.get(symbol, {})
         _widen_mult = _sra.get_widen_stop_mult(symbol, _sym_meta)
         if _widen_mult is not None:
@@ -1609,7 +1868,7 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
     tail_on = None
     if feat_mgr is not None:
         try:
-            tail_on = feat_mgr.is_enabled('trailing_stop')
+            tail_on = feat_mgr.is_enabled("trailing_stop")
         except Exception:
             tail_on = None
     if tail_on is None:
@@ -1618,9 +1877,11 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
     tail_enabled = tail_on and (not trend_only or regime == "趋势")
     tail_trail_R = float(tt.get("tail_trail_R", 2.0))
     tail_pct = float(tt.get("tail_pct", 0.25))
-    tail_stop_dist = tail_trail_R * stop_dist   # 尾仓跟踪距离（×1R=stop_dist）
+    tail_stop_dist = tail_trail_R * stop_dist  # 尾仓跟踪距离（×1R=stop_dist）
     return {
-        "stop": round(stop, 2), "t1": round(t1, 2), "t2": round(t2, 2),
+        "stop": round(stop, 2),
+        "t1": round(t1, 2),
+        "t2": round(t2, 2),
         "stop_dist": round(stop_dist, 2),
         "trailing": regime in ("趋势", "波动"),
         "style": "单批(震荡)" if regime == "震荡" else "两批+移动止损",
@@ -1638,31 +1899,53 @@ def build_signal(symbol, pipe, rg, ep, cfg=DEFAULT_CONFIG, entry_ref=None):
     direction = "多" if pipe["dir_T"] > 0 else ("空" if pipe["dir_T"] < 0 else "中性")
     slip = get_slip_pts(symbol, cfg)
     slip_cost_r = 2 * slip / ep["stop_dist"] if ep["stop_dist"] > 0 else 0.0
-    reason = (f"技术面触发偏{'多' if pipe['dir_T']>0 else '空'}(T_5m={pipe['T_5m']}，"
-              f"regime={pipe['regime']})；背景偏置 bias_G={pipe['bias_G']}"
-              f"({'同向放行' if pipe['triggered'] else '抑制/否决'})；"
-              f"{pipe['conv']}；风控{'通过' if rg['passed'] else '未过→温和提示'}，"
-              f"建议{pipe['dir_T'] and rg['N_plan']}手，"
-              f"止损{ep['stop']}(距{ep['stop_dist']})；"
-              f"分批 t1={ep['t1']}(1R平半)→t2={ep['t2']}(2R全平)"
-              f"{'，趋势/波动开启移动止损' if ep['trailing'] else ''}。")
+    reason = (
+        f"技术面触发偏{'多' if pipe['dir_T'] > 0 else '空'}(T_5m={pipe['T_5m']}，"
+        f"regime={pipe['regime']})；背景偏置 bias_G={pipe['bias_G']}"
+        f"({'同向放行' if pipe['triggered'] else '抑制/否决'})；"
+        f"{pipe['conv']}；风控{'通过' if rg['passed'] else '未过→温和提示'}，"
+        f"建议{pipe['dir_T'] and rg['N_plan']}手，"
+        f"止损{ep['stop']}(距{ep['stop_dist']})；"
+        f"分批 t1={ep['t1']}(1R平半)→t2={ep['t2']}(2R全平)"
+        f"{'，趋势/波动开启移动止损' if ep['trailing'] else ''}。"
+    )
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
-        "direction": direction, "entry_ref": (float(entry_ref) if entry_ref is not None else None),
-        "stop": ep["stop"], "target": ep["t2"], "t1": ep["t1"], "t2": ep["t2"],
-        "stop_dist": ep["stop_dist"], "lots": rg["N_plan"],
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
+        "direction": direction,
+        "entry_ref": (float(entry_ref) if entry_ref is not None else None),
+        "stop": ep["stop"],
+        "target": ep["t2"],
+        "t1": ep["t1"],
+        "t2": ep["t2"],
+        "stop_dist": ep["stop_dist"],
+        "lots": rg["N_plan"],
         "pipeline": {
-            "F_bias": pipe["F"], "T_D": pipe["T_D"], "T_5m": pipe["T_5m"],
-            "C_score": pipe["C"], "bias_G": pipe["bias_G"], "regime": pipe["regime"],
-            "conv": pipe["conv"], "corr_gate": pipe["corr_action"], "used_5m": pipe["used_5m"],
+            "F_bias": pipe["F"],
+            "T_D": pipe["T_D"],
+            "T_5m": pipe["T_5m"],
+            "C_score": pipe["C"],
+            "bias_G": pipe["bias_G"],
+            "regime": pipe["regime"],
+            "conv": pipe["conv"],
+            "corr_gate": pipe["corr_action"],
+            "used_5m": pipe["used_5m"],
         },
-        "risk_gate": {"pass": rg["passed"], "N_risk": rg["N_risk"],
-                      "N_margin": rg["N_margin"], "N_plan": rg["N_plan"],
-                      "kelly_mult": rg["kelly_mult"],
-                      "limit_check": "ok" if rg["gate3_ok"] else "near_limit"},
-        "cost": {"slip_pts": slip, "slip_cost_r": round(slip_cost_r, 4),
-                 "note": f"流动性敏感滑点 {slip} 点(双向)，约占止损距 {slip_cost_r*100:.1f}%(回测已扣)"},
-        "exit_plan": ep, "reason": reason,
+        "risk_gate": {
+            "pass": rg["passed"],
+            "N_risk": rg["N_risk"],
+            "N_margin": rg["N_margin"],
+            "N_plan": rg["N_plan"],
+            "kelly_mult": rg["kelly_mult"],
+            "limit_check": "ok" if rg["gate3_ok"] else "near_limit",
+        },
+        "cost": {
+            "slip_pts": slip,
+            "slip_cost_r": round(slip_cost_r, 4),
+            "note": f"流动性敏感滑点 {slip} 点(双向)，约占止损距 {slip_cost_r * 100:.1f}%(回测已扣)",
+        },
+        "exit_plan": ep,
+        "reason": reason,
     }
 
 
@@ -1678,10 +1961,20 @@ ROLL_GAP_PCT = 0.010
 ROLL_GAP_MULT = 1.0
 
 
-def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, tail=None,
-                          cooldown_bars=5, ablate=None,
-                          F_override=None, hmm_label=None, macro_label=None, garch_label=None,
-                          df_in=None):
+def walk_forward_backtest(
+    symbol,
+    cfg=DEFAULT_CONFIG,
+    min_bars=60,
+    window=300,
+    tail=None,
+    cooldown_bars=5,
+    ablate=None,
+    F_override=None,
+    hmm_label=None,
+    macro_label=None,
+    garch_label=None,
+    df_in=None,
+):
     """逐 bar 推进：用截至当日数据算 pipeline（含真实基本面 F），下一根开盘入场，stop/2R 出场，扣费扣滑点。
     触发用日线 T_D（5m 历史仅近 ~10 日，不足以跨年回测；T@5m 实盘另走 minishare 快照聚合）。
     冷却：触发入场后冷却 cooldown_bars 根日线才允许下一次信号（无论方向），
@@ -1692,7 +1985,9 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
     必须全为 None；任何非 None 调用立即抛错，永久锁死"info 不喂回测"红线。
     df_in: 可选预切分 DataFrame（OOS harness 注入 IS/OOS 切片用）；None=内部 load_daily。"""
     assert F_override is None, "walk_forward_backtest 禁止 F_override（info 维度不得进回测）"
-    assert hmm_label is None and macro_label is None and garch_label is None,         "walk_forward_backtest 禁止 hmm/macro/garch_label（live 专属维度不得进回测）"
+    assert hmm_label is None and macro_label is None and garch_label is None, (
+        "walk_forward_backtest 禁止 hmm/macro/garch_label（live 专属维度不得进回测）"
+    )
     df = df_in if df_in is not None else load_daily(symbol)
     if df is None:
         return {"symbol": symbol, "trades": 0, "note": "数据不足"}
@@ -1708,7 +2003,7 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
     i = min_bars
     last_trade_i = -999
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         date_str = df.index[i].strftime("%Y%m%d")
         try:
             pipe = pipeline(symbol, hist, None, cfg, date=date_str, ablate=ablate)
@@ -1746,11 +2041,13 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
                 if tail_active:
                     if dir_T > 0:
                         if lo <= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
                     else:
                         if hi >= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
                     continue
                 if dir_T > 0:
@@ -1761,7 +2058,8 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
                         if ep["tail_enabled"]:
                             tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
                             continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
                 else:
                     if hi >= ep["stop"]:
                         exit_price, reason = ep["stop"], "止损"
@@ -1770,17 +2068,27 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
                         if ep["tail_enabled"]:
                             tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
                             continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
             if exit_price is None:
                 exit_price, reason = float(df["close"].iloc[-1]), "期末平"
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
-            trades.append({"dir": dir_T, "R": round(R, 3), "R_adj": round(R_adj, 3),
-                           "reason": reason, "regime": pipe["regime"],
-                           "entry_date": df.index[i + 1],
-                           "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"]})
+            trades.append(
+                {
+                    "dir": dir_T,
+                    "R": round(R, 3),
+                    "R_adj": round(R_adj, 3),
+                    "reason": reason,
+                    "regime": pipe["regime"],
+                    "entry_date": df.index[i + 1],
+                    "F": pipe["F"],
+                    "T_D": pipe["T_D"],
+                    "C": pipe["C"],
+                }
+            )
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1
             continue
@@ -1796,10 +2104,12 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
     for t in trades:
         reasons[t["reason"]] = reasons.get(t["reason"], 0) + 1
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
-        "trades": len(trades), "expR": round(float(np.mean(Rs)), 4),
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
+        "trades": len(trades),
+        "expR": round(float(np.mean(Rs)), 4),
         "win_rate": round(len(wins) / len(Rs), 3),
-        "trades_detail": trades,   # 逐笔明细(含 R_adj/方向/reason/regime)，供 OOS 对比算最大回撤
+        "trades_detail": trades,  # 逐笔明细(含 R_adj/方向/reason/regime)，供 OOS 对比算最大回撤
         "by_regime": {k: round(float(np.mean(v)), 4) for k, v in by_regime.items()},
         "exit_reasons": reasons,
         "roll_skipped": roll_skipped,
@@ -1808,7 +2118,7 @@ def walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, t
 
 def _sim_exit_5m(df5_seg, dir_T, entry, ep, sd):
     """在 5m 序列上逐 bar 做 stop / t2 / 尾仓(P-G) 出场，返回 (exit_price, reason, exit_idx)。
-    
+
     P0-2 fix: 额外返回退出 bar 索引，使回测可正确跳过持仓期内的日线。"""
     tail_active, tail_stop = False, None
     for j in range(len(df5_seg)):
@@ -1854,16 +2164,17 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     仅统计细粒度数据覆盖窗口（约近 3 周）内入场、且有序列可做出场的信号。
     返回结构与 walk_forward_backtest 一致（含 trades_detail / by_regime / exit_reasons）。"""
     df = load_daily(symbol)
-    df5 = load_min5(symbol, fetch_if_missing=False)   # 仅本地，不联网
+    df5 = load_min5(symbol, fetch_if_missing=False)  # 仅本地，不联网
     if df is None:
         return {"symbol": symbol, "trades": 0, "note": "日线不足"}
     if df5 is None or len(df5) < 60:
         return {"symbol": symbol, "trades": 0, "note": "5m不足"}
     if tf == "1h":
-        df5 = df5.resample("1h").agg(
-            {"open": "first", "high": "max", "low": "min",
-             "close": "last", "volume": "sum", "oi": "sum"}
-        ).dropna()
+        df5 = (
+            df5.resample("1h")
+            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum", "oi": "sum"})
+            .dropna()
+        )
     if len(df5) < 60:
         return {"symbol": symbol, "trades": 0, "note": "1h(resample)不足"}
     n = len(df)
@@ -1874,7 +2185,7 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     i = min_bars
     last_trade_i = -999
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         date_str = df.index[i].strftime("%Y%m%d")
         try:
             pipe = pipeline(symbol, hist, None, cfg, date=date_str, ablate=ablate)
@@ -1910,12 +2221,21 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
             # P0-2 fix: 计算退出日期，将 i 推进到至少退出日的下一天
-            exit_date = seg.index[min(exit_idx, len(seg)-1)]
-            trades.append({"dir": dir_T, "R": round(R, 3), "R_adj": round(R_adj, 3),
-                           "reason": reason, "regime": pipe["regime"],
-                           "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"],
-                           "entry_date": entry_date.strftime("%Y-%m-%d"),
-                           "exit_date": exit_date.strftime("%Y-%m-%d")})
+            exit_date = seg.index[min(exit_idx, len(seg) - 1)]
+            trades.append(
+                {
+                    "dir": dir_T,
+                    "R": round(R, 3),
+                    "R_adj": round(R_adj, 3),
+                    "reason": reason,
+                    "regime": pipe["regime"],
+                    "F": pipe["F"],
+                    "T_D": pipe["T_D"],
+                    "C": pipe["C"],
+                    "entry_date": entry_date.strftime("%Y-%m-%d"),
+                    "exit_date": exit_date.strftime("%Y-%m-%d"),
+                }
+            )
             last_trade_i = i
             # P0-2 fix (强化): 用 bisect 精确定位退出日，跳过持仓期内所有日线
             # 原 Bug: range(i+1, min(i+30, n)) 上限 30 天，持仓>30天的趋势单漏跳
@@ -1926,7 +2246,7 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
             if pos < n:
                 i = pos + 1  # 退出日的下一天
             else:
-                i = n - 1   # 兜底：退出日在日线窗口外，跳到末尾
+                i = n - 1  # 兜底：退出日在日线窗口外，跳到末尾
             roll_skipped += max(0, pos - i) if pos > i else 0
             continue
         i += 1
@@ -1941,8 +2261,10 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     for t in trades:
         reasons[t["reason"]] = reasons.get(t["reason"], 0) + 1
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
-        "trades": len(trades), "expR": round(float(np.mean(Rs)), 4),
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
+        "trades": len(trades),
+        "expR": round(float(np.mean(Rs)), 4),
         "win_rate": round(len(wins) / len(Rs), 3),
         "trades_detail": trades,
         "by_regime": {k: round(float(np.mean(v)), 4) for k, v in by_regime.items()},
@@ -1957,11 +2279,13 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
 # ----------------------------------------------------------------------------
 def run_backtest_all(cfg=DEFAULT_CONFIG):
     print("################ 四维策略 walk-forward 回测自检（F+T 两维，C 中性）################")
-    print(f"权益={cfg['account']['equity']} 风险%={cfg['account']['risk_pct']} "
-          f"止损ATR×{cfg['risk_gate']['stop_atr_mult']} 风险回报={cfg['risk_gate']['rr_ratio']}\n")
+    print(
+        f"权益={cfg['account']['equity']} 风险%={cfg['account']['risk_pct']} "
+        f"止损ATR×{cfg['risk_gate']['stop_atr_mult']} 风险回报={cfg['risk_gate']['rr_ratio']}\n"
+    )
     rows = []
     for sym in SYMBOLS:
-        if sym in DISABLED_SYMBOLS:   # 校准判死刑的品种不参与回测
+        if sym in DISABLED_SYMBOLS:  # 校准判死刑的品种不参与回测
             continue
         try:
             r = walk_forward_backtest(sym, cfg)
@@ -1969,11 +2293,13 @@ def run_backtest_all(cfg=DEFAULT_CONFIG):
             r = {"symbol": sym, "trades": 0, "note": f"异常:{repr(e)[:50]}"}
         rows.append(r)
         if r.get("trades", 0) == 0:
-            print(f"  {sym:3} {SYMBOLS[sym]['name']:4} 无信号/数据不足 {r.get('note','')}")
+            print(f"  {sym:3} {SYMBOLS[sym]['name']:4} 无信号/数据不足 {r.get('note', '')}")
         else:
             br = " ".join(f"{k}:{v}" for k, v in r["by_regime"].items())
-            print(f"  {sym:3} {SYMBOLS[sym]['name']:4} 笔={r['trades']:>4} "
-                  f"期望R={r['expR']:>7} 胜率={r['win_rate']*100:>5.1f}%  regime[{br}]")
+            print(
+                f"  {sym:3} {SYMBOLS[sym]['name']:4} 笔={r['trades']:>4} "
+                f"期望R={r['expR']:>7} 胜率={r['win_rate'] * 100:>5.1f}%  regime[{br}]"
+            )
     return rows
 
 
@@ -1984,8 +2310,7 @@ if __name__ == "__main__":
 # ----------------------------------------------------------------------------
 # 自适应恢复判定（2026-08-13）：被禁品种，当近期 walk-forward 重新转正时自动解禁
 # ----------------------------------------------------------------------------
-def recovery_check(symbol, cfg=DEFAULT_CONFIG, tail=250, min_trades=10,
-                   min_expr=0.0, min_win=0.45):
+def recovery_check(symbol, cfg=DEFAULT_CONFIG, tail=250, min_trades=10, min_expr=0.0, min_win=0.45):
     """对当前被禁品种跑近期 walk-forward，判断是否值得恢复交易。
 
     对称于 DISABLED_SYMBOLS 的入禁逻辑（walk-forward OOS 负期望→禁）；
@@ -1998,24 +2323,42 @@ def recovery_check(symbol, cfg=DEFAULT_CONFIG, tail=250, min_trades=10,
     try:
         r = walk_forward_backtest(symbol, cfg, tail=tail)
     except Exception as e:
-        return {"recover": False, "symbol": symbol,
-                "note": f"回测异常:{repr(e)[:60]}", "expR": None, "win_rate": None, "trades": 0}
+        return {
+            "recover": False,
+            "symbol": symbol,
+            "note": f"回测异常:{repr(e)[:60]}",
+            "expR": None,
+            "win_rate": None,
+            "trades": 0,
+        }
     tr = int(r.get("trades", 0))
     if tr < min_trades:
-        return {"recover": False, "symbol": symbol, "expR": r.get("expR"),
-                "win_rate": r.get("win_rate"), "trades": tr,
-                "note": f"样本不足({tr}<{min_trades})，暂不恢复"}
+        return {
+            "recover": False,
+            "symbol": symbol,
+            "expR": r.get("expR"),
+            "win_rate": r.get("win_rate"),
+            "trades": tr,
+            "note": f"样本不足({tr}<{min_trades})，暂不恢复",
+        }
     expR = float(r.get("expR") or 0)
     win = float(r.get("win_rate") or 0)
     ok = (expR >= min_expr) and (win >= min_win)
-    note = ("转正·可恢复" if ok else f"仍负(expR={expR:.3f}/胜{win*100:.0f}%)·维持屏蔽")
-    return {"recover": ok, "symbol": symbol, "expR": round(expR, 4),
-            "win_rate": round(win, 4), "trades": tr, "note": note}
+    note = "转正·可恢复" if ok else f"仍负(expR={expR:.3f}/胜{win * 100:.0f}%)·维持屏蔽"
+    return {
+        "recover": ok,
+        "symbol": symbol,
+        "expR": round(expR, 4),
+        "win_rate": round(win, 4),
+        "trades": tr,
+        "note": note,
+    }
 
 
 # ----------------------------------------------------------------------------
 # 模型健康分解（2026-08-13 · #2）：留一维度消融，定位 F/T/C 谁在退化
 # ----------------------------------------------------------------------------
+
 
 def decompose_model_health(symbol, cfg=DEFAULT_CONFIG, tail=250, min_trades=8):
     """模型健康分解（#2）：双视角定位 F/T/C 谁在退化。
@@ -2044,7 +2387,7 @@ def decompose_model_health(symbol, cfg=DEFAULT_CONFIG, tail=250, min_trades=8):
             v = t.get(dim, 0) or 0
             if v == 0:
                 continue
-            match = (math.copysign(1, v) == math.copysign(1, t["dir"]))
+            match = math.copysign(1, v) == math.copysign(1, t["dir"])
             (same if match else diff).append(t["R_adj"])
         avg_same = float(np.mean(same)) if same else 0.0
         avg_diff = float(np.mean(diff)) if diff else 0.0
@@ -2058,8 +2401,15 @@ def decompose_model_health(symbol, cfg=DEFAULT_CONFIG, tail=250, min_trades=8):
         deg = sorted(neg.items(), key=lambda kv: kv[1])
         parts = [f"{k}({v:+.3f})" for k, v in deg]
         verdict = "退化维: " + " · ".join(parts) + " → 优先重训 " + "、".join(k for k, _ in deg)
-    return {"symbol": symbol, "full_expR": round(fe, 4), "full_trades": ft,
-            "contrib": contrib, "agree": agree, "worst": worst, "verdict": verdict}
+    return {
+        "symbol": symbol,
+        "full_expR": round(fe, 4),
+        "full_trades": ft,
+        "contrib": contrib,
+        "agree": agree,
+        "worst": worst,
+        "verdict": verdict,
+    }
 
 
 def _wf_trades_detail(symbol, cfg=DEFAULT_CONFIG, tail=250, min_bars=60, cooldown_bars=5):
@@ -2074,7 +2424,7 @@ def _wf_trades_detail(symbol, cfg=DEFAULT_CONFIG, tail=250, min_bars=60, cooldow
     i = min_bars
     last_trade_i = -999
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         date_str = df.index[i].strftime("%Y%m%d")
         try:
             pipe = pipeline(symbol, hist, None, cfg, date=date_str)
@@ -2107,27 +2457,35 @@ def _wf_trades_detail(symbol, cfg=DEFAULT_CONFIG, tail=250, min_bars=60, cooldow
                 if tail_active:
                     if dir_T > 0:
                         if lo <= tail_stop:
-                            exit_price = tail_stop; break
+                            exit_price = tail_stop
+                            break
                         tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
                     else:
                         if hi >= tail_stop:
-                            exit_price = tail_stop; break
+                            exit_price = tail_stop
+                            break
                         tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
                     continue
                 if dir_T > 0:
                     if lo <= ep["stop"]:
-                        exit_price = ep["stop"]; break
+                        exit_price = ep["stop"]
+                        break
                     if hi >= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]; continue
-                        exit_price = ep["t2"]; break
+                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
+                            continue
+                        exit_price = ep["t2"]
+                        break
                 else:
                     if hi >= ep["stop"]:
-                        exit_price = ep["stop"]; break
+                        exit_price = ep["stop"]
+                        break
                     if lo <= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]; continue
-                        exit_price = ep["t2"]; break
+                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
+                            continue
+                        exit_price = ep["t2"]
+                        break
             if exit_price is None:
                 exit_price = float(df["close"].iloc[-1])
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
@@ -2135,11 +2493,9 @@ def _wf_trades_detail(symbol, cfg=DEFAULT_CONFIG, tail=250, min_bars=60, cooldow
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * sp["fee"] / (sd * sp["multiplier"]) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
-            trades.append({"dir": dir_T, "R_adj": round(R_adj, 3),
-                           "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"]})
+            trades.append({"dir": dir_T, "R_adj": round(R_adj, 3), "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"]})
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1
             continue
         i += 1
     return trades
-

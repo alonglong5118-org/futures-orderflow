@@ -17,6 +17,7 @@ pipeline，触发即出信号（红横幅+语音+日志+Web 面板）。
   python four_dim_live_runner.py --port 8741     # 面板端口
 依赖：four_dim_strategy / minishare_live / fundamental_feed / strategy_layer
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,8 +52,10 @@ APP_VERSION = "v3.4.0"
 # 策略：非 TTY 且能定位 launchd 日志路径时，用「行缓冲 + 按大小轮转」流替换 stdout/stderr；
 # 否则退化为强制行缓冲。并装 sys.excepthook 把未捕获异常另存 crash.log 双保险。
 
+
 class _RotatingLogStream:
     """行缓冲 + 按大小轮转的文本流，用于接管 sys.stdout/stderr。"""
+
     def __init__(self, path, cap=5 * 1024 * 1024, backups=3):
         self.path = path
         self.cap = cap
@@ -60,8 +63,10 @@ class _RotatingLogStream:
         self.encoding = "utf-8"
         self.errors = "strict"
         self._open()
+
     def _open(self):
         self._f = open(self.path, "a", encoding="utf-8", buffering=1)  # 行缓冲
+
     def write(self, s):
         try:
             self._f.write(s)
@@ -70,6 +75,7 @@ class _RotatingLogStream:
                 self._rotate()
         except Exception:
             pass
+
     def _rotate(self):
         try:
             self._f.close()
@@ -78,24 +84,36 @@ class _RotatingLogStream:
         for i in range(self.backups - 1, 0, -1):
             _src, _dst = f"{self.path}.{i}", f"{self.path}.{i + 1}"
             if os.path.exists(_src):
-                try: os.replace(_src, _dst)
-                except Exception: pass
+                try:
+                    os.replace(_src, _dst)
+                except Exception:
+                    pass
         if os.path.exists(self.path):
-            try: os.replace(self.path, f"{self.path}.1")
-            except Exception: pass
+            try:
+                os.replace(self.path, f"{self.path}.1")
+            except Exception:
+                pass
         self._open()
+
     def flush(self):
-        try: self._f.flush()
-        except Exception: pass
+        try:
+            self._f.flush()
+        except Exception:
+            pass
+
     def fileno(self):
         return self._f.fileno()
+
     def isatty(self):
         return False
+
     def writable(self):
         return True
+
     def writelines(self, lines):
         for _ln in lines:
             self.write(_ln)
+
     @property
     def closed(self):
         return False
@@ -110,16 +128,21 @@ def _install_rotating_logs():
     _out = _err = None
     try:
         import plistlib
+
         _d = plistlib.load(open(_plist, "rb"))
         _out, _err = _d.get("StandardOutPath"), _d.get("StandardErrorPath")
     except Exception:
         pass
     if _out and os.path.isfile(_out):
-        try: sys.stdout = _RotatingLogStream(_out)
-        except Exception: pass
+        try:
+            sys.stdout = _RotatingLogStream(_out)
+        except Exception:
+            pass
     if _err and os.path.isfile(_err):
-        try: sys.stderr = _RotatingLogStream(_err)
-        except Exception: pass
+        try:
+            sys.stderr = _RotatingLogStream(_err)
+        except Exception:
+            pass
 
 
 def _harden_logging():
@@ -137,6 +160,7 @@ def _harden_logging():
 
 def _crash_excepthook(etype, exc, tb):
     import traceback as _tb
+
     _ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _msg = f"[{_ts}] [FATAL] 未捕获异常:\n" + "".join(_tb.format_exception(etype, exc, tb))
     try:
@@ -195,8 +219,16 @@ try:
     _tc_all = json.load(open(os.path.join(HERE, "trade_config.json"), encoding="utf-8")) or {}
 except Exception:
     _tc_all = {}
-for _blk in ("decorrelate", "seasonal_boost", "regime_params", "trailing_tail",
-             "account", "risk_gate", "contract_specs", "per_symbol_risk"):
+for _blk in (
+    "decorrelate",
+    "seasonal_boost",
+    "regime_params",
+    "trailing_tail",
+    "account",
+    "risk_gate",
+    "contract_specs",
+    "per_symbol_risk",
+):
     _tc_blk = _tc_all.get(_blk)
     if isinstance(_tc_blk, dict):
         _STRAT_CFG[_blk] = {**DEFAULT_CONFIG.get(_blk, {}), **_tc_blk}
@@ -265,12 +297,9 @@ import viz_upgrade as viz  # #11 回测可视化增强(Plotly)
 # 后台线程运行（避免阻塞 HTTP 处理），结果落 tools_state.json 供面板回看。
 # ---------------------------------------------------------------------------
 _TOOL_DEFS = {
-    "calibrate":      {"mod": fdc, "fn": "main", "label": "真重校准扫描",
-                       "args": (), "kwargs": {}},
-    "recalibrate":    {"mod": fdr, "fn": "main", "label": "校准漂移检测",
-                       "args": (), "kwargs": {"apply": False}},
-    "papertrack_html": {"mod": gph, "fn": "main", "label": "生成回测可视化HTML",
-                        "args": (), "kwargs": {}},
+    "calibrate": {"mod": fdc, "fn": "main", "label": "真重校准扫描", "args": (), "kwargs": {}},
+    "recalibrate": {"mod": fdr, "fn": "main", "label": "校准漂移检测", "args": (), "kwargs": {"apply": False}},
+    "papertrack_html": {"mod": gph, "fn": "main", "label": "生成回测可视化HTML", "args": (), "kwargs": {}},
 }
 _TOOL_STATE = {"running": None, "last": {}}
 _TOOL_LOCK = threading.Lock()
@@ -289,6 +318,7 @@ def _run_tool_thread(name):
     import contextlib
     import io
     import traceback
+
     spec = _TOOL_DEFS.get(name)
     if not spec:
         return
@@ -298,18 +328,19 @@ def _run_tool_thread(name):
         with contextlib.redirect_stdout(buf):
             fn(*spec.get("args", ()), **spec.get("kwargs", {}))
         out = buf.getvalue()
-        res = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "ok": True,
-               "output": out[-4000:], "error": None}
+        res = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "ok": True, "output": out[-4000:], "error": None}
     except Exception:
-        res = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "ok": False,
-               "output": buf.getvalue()[-2000:],
-               "error": traceback.format_exc()[-2000:]}
+        res = {
+            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": False,
+            "output": buf.getvalue()[-2000:],
+            "error": traceback.format_exc()[-2000:],
+        }
     with _TOOL_LOCK:
         _TOOL_STATE["last"][name] = res
         _TOOL_STATE["running"] = None
         try:
-            json.dump({"last": _TOOL_STATE["last"]},
-                      open(_TOOLS_STATE_FILE, "w"), ensure_ascii=False, indent=2)
+            json.dump({"last": _TOOL_STATE["last"]}, open(_TOOLS_STATE_FILE, "w"), ensure_ascii=False, indent=2)
         except Exception:
             pass
 
@@ -324,33 +355,35 @@ def run_tool(name):
     t.start()
     return True, f"已启动 {_TOOL_DEFS.get(name, {}).get('label', name)}"
 
+
 # ── 运行时禁用集合（自适应恢复）：初始化为 DISABLED_SYMBOLS，恢复期自动移除 ──
 # 硬禁(au/ag/.../RM)永不自动恢复；AUTO_RECOVER_SYMBOLS(JM/hc)周期性检查，walk-forward
 # 转正即从本集合移除→重新参与信号评估。重启后重置回 DISABLED_SYMBOLS 重新评估。
 RUNTIME_DISABLED = set(DISABLED_SYMBOLS)
-RECOVERY_SEC = 3600          # 自适应恢复检查周期（秒）
-last_recover = 0.0           # 上次恢复检查时间戳（=0 让启动即检一次）           # 管住手复盘卡（日/周/月纪律评分）
+RECOVERY_SEC = 3600  # 自适应恢复检查周期（秒）
+last_recover = 0.0  # 上次恢复检查时间戳（=0 让启动即检一次）           # 管住手复盘卡（日/周/月纪律评分）
 
 # —— 动态表现门控：某品种近期真实回测转负则自动暂停发信号（卡片保留），恢复后自动解除 ——
 GATE_CACHE = {"ts": 0.0, "gates": {}}
 
 FEED = None  # 全局实时行情实例，main 启动时赋值，供 Web 接口算浮动盈亏
-FEED_LAST_UPDATE = 0.0   # 最近一次成功 poll 的时间戳（行情健康指示用）
-FEED_AVAILABLE = False    # 行情源是否可用（minishare 接口可达）
+FEED_LAST_UPDATE = 0.0  # 最近一次成功 poll 的时间戳（行情健康指示用）
+FEED_AVAILABLE = False  # 行情源是否可用（minishare 接口可达）
 
 # ★ 2026-08-27: akshare 实时行情（分钟级，新浪数据源）
-_AK_PRICES = {}          # {symbol: price} 最新 akshare 价格
-_AK_PRICE_TS = 0.0       # akshare 最近更新时间戳
-_AK_AVAILABLE = False    # akshare 数据源是否可用
-_AK_SYMBOLS = []         # 需要监控的品种列表
+_AK_PRICES = {}  # {symbol: price} 最新 akshare 价格
+_AK_PRICE_TS = 0.0  # akshare 最近更新时间戳
+_AK_AVAILABLE = False  # akshare 数据源是否可用
+_AK_SYMBOLS = []  # 需要监控的品种列表
 _AK_LOCK = threading.Lock()
 
 # ★ 2026-08-28: Tushare Pro 主数据源（Tushare → akshare 自动降级）
-_TS_PRICES = {}          # {symbol: price} 最新 Tushare 价格
-_TS_PRICE_TS = 0.0       # Tushare 最近更新时间戳
-_TS_AVAILABLE = False    # Tushare 数据源是否可用
-_TS_SYMBOLS = []         # 需要监控的品种列表
+_TS_PRICES = {}  # {symbol: price} 最新 Tushare 价格
+_TS_PRICE_TS = 0.0  # Tushare 最近更新时间戳
+_TS_AVAILABLE = False  # Tushare 数据源是否可用
+_TS_SYMBOLS = []  # 需要监控的品种列表
 _TS_LOCK = threading.Lock()
+
 
 def _ak_poller():
     """后台线程：每 5 秒轮询 akshare 实时行情（分钟级，新浪数据源）。"""
@@ -366,7 +399,7 @@ def _ak_poller():
             snap = _AK_FEED.poll()
             if snap:
                 with _AK_LOCK:
-                    _AK_PRICES = {s: d.get('close', 0) for s, d in snap.items() if d and d.get('close', 0) > 0}
+                    _AK_PRICES = {s: d.get("close", 0) for s, d in snap.items() if d and d.get("close", 0) > 0}
                     _AK_PRICE_TS = time.time()
                     _AK_AVAILABLE = True
                 _ak_errors = 0
@@ -380,9 +413,10 @@ def _ak_poller():
                 _AK_AVAILABLE = False
         time.sleep(5)
 
+
 def _ts_poller():
     """后台线程：每 5 秒轮询 minishare rt_fut_k 快照（非交易时段回退源）。
-    
+
     ⚠️ 2026-08-28 修复：minishare rt_fut_k 仅在收盘时更新数据，盘中返回的是
     上一收盘价（stale）。因此本线程不再覆盖 _AK_PRICES（新浪实时缓存），
     只维护 _TS_PRICES 供非交易时段回退使用。
@@ -403,7 +437,7 @@ def _ts_poller():
             snap = _ms_feed.poll()
             if snap:
                 with _TS_LOCK:
-                    _TS_PRICES = {s: d.get('close', 0) for s, d in snap.items() if d and d.get('close', 0) > 0}
+                    _TS_PRICES = {s: d.get("close", 0) for s, d in snap.items() if d and d.get("close", 0) > 0}
                     _TS_PRICE_TS = time.time()
                     _TS_AVAILABLE = True
                 _ts_errors = 0
@@ -417,9 +451,11 @@ def _ts_poller():
                 _TS_AVAILABLE = False
         time.sleep(5)
 
+
 def _is_trading_hours():
     """判断当前是否在期货交易时段（夜盘 21:00-23:00/02:30，日盘 9:00-15:00）。"""
     from datetime import datetime as _dt
+
     now = _dt.now()
     h, m = now.hour, now.minute
     t = h * 60 + m
@@ -431,20 +467,21 @@ def _is_trading_hours():
         return True
     return False
 
+
 def get_realtime_price(sym):
     """获取实时价格。
-    
+
     ⚠️ 2026-08-28 修复：minishare rt_fut_k 盘中返回上一收盘价（stale），
     而 akshare（新浪财经）提供盘中实时数据。因此盘中优先 akshare，
     非交易时段或 akshare 不可用时回退 minishare。
-    
+
     优先级：
     1) 交易时段：akshare（新浪实时）→ minishare → account_state
     2) 非交易时段：minishare → akshare → account_state
     """
     sym_lower = sym.lower()
     trading = _is_trading_hours()
-    
+
     if trading:
         # 交易时段：优先 akshare（新浪实时）
         if _AK_AVAILABLE and _AK_PRICE_TS > 0 and (time.time() - _AK_PRICE_TS) < 60:
@@ -453,13 +490,14 @@ def get_realtime_price(sym):
         # 按需从 akshare 拉取（缓存未命中时）
         try:
             import akshare_live as _al_on_demand
+
             _f = _al_on_demand.feed()
             if _f.available():
                 _code = _al_on_demand.ALL_CONTRACTS.get(sym_lower, _al_on_demand.ALL_CONTRACTS.get(sym.upper()))
                 if _code:
                     _snap = _f.poll([sym_lower])
                     if _snap and sym_lower in _snap:
-                        _px = _snap[sym_lower].get('close', 0)
+                        _px = _snap[sym_lower].get("close", 0)
                         if _px and _px > 0:
                             return _px
         except Exception:
@@ -485,20 +523,22 @@ def get_realtime_price(sym):
         if _AK_AVAILABLE and _AK_PRICE_TS > 0:
             if sym_lower in _AK_PRICES and _AK_PRICES[sym_lower] > 0:
                 return _AK_PRICES[sym_lower]
-    
+
     # 最终回退：account_state 存储价
     try:
         st = at.load_state()
-        pos = st['positions'].get(sym_lower, st['positions'].get(sym.upper(), {}))
-        return pos.get('price', 0) or 0
+        pos = st["positions"].get(sym_lower, st["positions"].get(sym.upper(), {}))
+        return pos.get("price", 0) or 0
     except Exception:
         return 0
 
+
 # —— #16 进程看门狗心跳 ——
-START_TIME = time.time()   # 进程启动时刻（/api/health 用）
-LAST_CYCLE_TS = 0.0        # 主循环最近一次完成的时间戳（卡死检测用）
-_LAST_HEAL_TS = 0.0         # 上次自动对账时间戳（确保数据实时同步）
-_HEAL_INTERVAL = 30         # 自动对账间隔（秒）
+START_TIME = time.time()  # 进程启动时刻（/api/health 用）
+LAST_CYCLE_TS = 0.0  # 主循环最近一次完成的时间戳（卡死检测用）
+_LAST_HEAL_TS = 0.0  # 上次自动对账时间戳（确保数据实时同步）
+_HEAL_INTERVAL = 30  # 自动对账间隔（秒）
+
 
 def _poll_feed(feed):
     """轮询行情并刷新健康时间戳/可用标志（行情健康指示用）。"""
@@ -510,7 +550,8 @@ def _poll_feed(feed):
     except Exception:
         FEED_AVAILABLE = False
 
-POLL_SEC = 60          # minishare 轮询间隔（与 minishare.json interval 对齐）
+
+POLL_SEC = 60  # minishare 轮询间隔（与 minishare.json interval 对齐）
 
 # ── #3 盘口级订单流连接器 ──
 # 把真实 tick 流（本地 jsonl 流文件 或 WebSocket）转成订单流分数，灌入
@@ -518,11 +559,12 @@ POLL_SEC = 60          # minishare 轮询间隔（与 minishare.json interval �
 # 优雅降级：无 tick 源时静默空转，C_flow 完全退回 minishare 驱动（不破坏现有路径）。
 TICK_FEED_ENABLED = os.environ.get("TICK_FEED_ENABLED", "0") == "1"
 TICK_STREAM_FILE = os.environ.get("TICK_STREAM_FILE", os.path.join(HERE, "tick_stream.jsonl"))
-TICK_WS_URL = os.environ.get("TICK_WS_URL", "")   # 例: ws://10.211.55.3:8765 （da龘 CTP tick 网关）
+TICK_WS_URL = os.environ.get("TICK_WS_URL", "")  # 例: ws://10.211.55.3:8765 （da龘 CTP tick 网关）
+
 
 class TickFeedConnector:
     def __init__(self):
-        self.acc = {}          # sym -> tof.TickOrderflow
+        self.acc = {}  # sym -> tof.TickOrderflow
         self.last_read = 0
         self.running = False
 
@@ -535,8 +577,14 @@ class TickFeedConnector:
         """接收一笔 tick，更新订单流累积器并把分数 push 进 feed.flow。"""
         global FEED
         a = self._acc_for(sym)
-        a.push(tick.get("price", 0), tick.get("vol", 0), tick.get("side"),
-               tick.get("bid_vol"), tick.get("ask_vol"), tick.get("ts"))
+        a.push(
+            tick.get("price", 0),
+            tick.get("vol", 0),
+            tick.get("side"),
+            tick.get("bid_vol"),
+            tick.get("ask_vol"),
+            tick.get("ts"),
+        )
         score = a.score()
         if FEED is not None and hasattr(FEED, "flow") and sym in FEED.flow and FEED.flow[sym] is not None:
             FEED.flow[sym].push_tick(score)
@@ -544,12 +592,13 @@ class TickFeedConnector:
     def _run_stream_file(self):
         """tail 本地 tick 流文件（jsonl，增量读取）。"""
         import os as _os
+
         if not _os.path.exists(TICK_STREAM_FILE):
             return
         with open(TICK_STREAM_FILE) as f:
             size = _os.path.getsize(TICK_STREAM_FILE)
             if size < self.last_read:
-                self.last_read = 0   # tick 源重启会 truncate 文件 → 从头重读，避免 C_flow 永久空转
+                self.last_read = 0  # tick 源重启会 truncate 文件 → 从头重读，避免 C_flow 永久空转
             f.seek(self.last_read)
             for line in f:
                 line = line.strip()
@@ -569,7 +618,7 @@ class TickFeedConnector:
         while self.running:
             try:
                 if TICK_WS_URL:
-                    self._run_ws()     # 阻塞式 WS（内部断线重连）
+                    self._run_ws()  # 阻塞式 WS（内部断线重连）
                 else:
                     self._run_stream_file()
                     time.sleep(2)
@@ -580,7 +629,8 @@ class TickFeedConnector:
         try:
             import websocket  # 需 pip install websocket-client
         except ImportError:
-            time.sleep(30); return
+            time.sleep(30)
+            return
         while self.running:
             try:
                 ws = websocket.create_connection(TICK_WS_URL, timeout=10)
@@ -596,6 +646,7 @@ class TickFeedConnector:
             except Exception:
                 time.sleep(5)
 
+
 # 全局连接器实例（main 启动时起线程）
 TICK_CONNECTOR = TickFeedConnector()
 
@@ -603,70 +654,70 @@ TICK_CONNECTOR = TickFeedConnector()
 #   ① 持续性去抖：dir_T 须同号连续 2 轮才认信号（单轮临界抖动不触发）
 #   ② 签名去重：sym|方向|价格桶 完全一致=同一信号，窗口内抑制；
 #      不同签名(反向/新价位)=真实新信号，立即推送（窗口不固定为60min）
-PRICE_BUCKET_PCT = 0.005   # 0.5% 价格桶：价格变动>0.5% 视为新信号
-DEDUPE_SAME_SIG_MIN = 60   # 相同签名信号的最小抑制窗口（分钟）：同一品种同方向 60min 内只推一次
+PRICE_BUCKET_PCT = 0.005  # 0.5% 价格桶：价格变动>0.5% 视为新信号
+DEDUPE_SAME_SIG_MIN = 60  # 相同签名信号的最小抑制窗口（分钟）：同一品种同方向 60min 内只推一次
 
 # —— 组合层风险约束（P0-1）：相关性同向 + 总风险预算 ——
 # 解决单品种检查盲区：JM(焦煤)/J(焦炭)相关常>0.9、FG/SA 亦高相关，
 # 同轮同时触发同向 → 系统发两个独立信号、各算各手数 = 同板块双倍暴露。
-PORTFOLIO_CORR_THRESHOLD = 0.70   # 两两日收益相关≥此值视为「同风险敞口」
-PORTFOLIO_RISK_PCT = 4.5          # 全组合风险预算上限 = 权益 × 4.5%（Σ|入场-止损|×乘数×手数；P0-3整改：原2.0%≈单笔1.5%导致只能持1个满仓单+新仓偏小，现约容纳3个1.5%单笔；corr/sector/net-dir分项上限仍兜底集中度）
-PORTFOLIO_CORR_BUCKET_PCT = 1.0   # 同相关桶（同向）风险上限 = 权益 × 1%（防双倍暴露）
+PORTFOLIO_CORR_THRESHOLD = 0.70  # 两两日收益相关≥此值视为「同风险敞口」
+PORTFOLIO_RISK_PCT = 4.5  # 全组合风险预算上限 = 权益 × 4.5%（Σ|入场-止损|×乘数×手数；P0-3整改：原2.0%≈单笔1.5%导致只能持1个满仓单+新仓偏小，现约容纳3个1.5%单笔；corr/sector/net-dir分项上限仍兜底集中度）
+PORTFOLIO_CORR_BUCKET_PCT = 1.0  # 同相关桶（同向）风险上限 = 权益 × 1%（防双倍暴露）
 # ── #6 板块集中度 + 单边净敞口上限 ──
 # 相关性桶只管「两两高相关」，管不住「五个化工品两两相关都 0.6，加起来却是一把大赌注」；
 # 净敞口则管不住「全组合清一色做多」的方向性风险。两道闸补上这两个洞。
-PORTFOLIO_SECTOR_PCT = 1.2        # 单板块（化工/黑系/农产品…）风险上限 = 权益 × 1.2%
-PORTFOLIO_NET_DIR_PCT = 1.5       # 单边净敞口上限 = 权益 × 1.5%（Σ多风险 或 Σ空风险）
+PORTFOLIO_SECTOR_PCT = 1.2  # 单板块（化工/黑系/农产品…）风险上限 = 权益 × 1.2%
+PORTFOLIO_NET_DIR_PCT = 1.5  # 单边净敞口上限 = 权益 × 1.5%（Σ多风险 或 Σ空风险）
 PORTFOLIO_SECTOR_MAX_N = 3
 
 # ─────────────────────────────────────────────────────────────────
 # v5 风控增强常量（基于7大量化策略研究）
 # ─────────────────────────────────────────────────────────────────
-MAX_SINGLE_TRADE_RISK_PCT = 1.0   # 单笔风险上限 = 权益 × 1%（趋势跟踪1%铁律）
-MIN_RR_RATIO = 2.0                 # 最低盈亏比 = 2:1（趋势跟踪盈亏比要求）
-DRAWDOWN_FULL_STOP_PCT = 10.0      # 10%回撤→强制全平+休息（趋势跟踪熔断）
-DRAWDOWN_FORCE_REST_SEC = 86400    # 10%回撤后强制休息24小时
-TIME_STOP_MAX_DAYS = 5             # 持仓超过5天未达T1→时间止损检查
-SIGMA_STOP_MULT = 3.0              # 3σ标准差硬止损（统计套利风控）
-CONSEC_LOSS_HARD_LIMIT = 5         # 连亏5次→强制冻结（AI策略风控）
+MAX_SINGLE_TRADE_RISK_PCT = 1.0  # 单笔风险上限 = 权益 × 1%（趋势跟踪1%铁律）
+MIN_RR_RATIO = 2.0  # 最低盈亏比 = 2:1（趋势跟踪盈亏比要求）
+DRAWDOWN_FULL_STOP_PCT = 10.0  # 10%回撤→强制全平+休息（趋势跟踪熔断）
+DRAWDOWN_FORCE_REST_SEC = 86400  # 10%回撤后强制休息24小时
+TIME_STOP_MAX_DAYS = 5  # 持仓超过5天未达T1→时间止损检查
+SIGMA_STOP_MULT = 3.0  # 3σ标准差硬止损（统计套利风控）
+CONSEC_LOSS_HARD_LIMIT = 5  # 连亏5次→强制冻结（AI策略风控）
 
 # ── v5.1 分级止损常量 ──
-BREAKEVEN_TRIGGER_R = 1.0          # 浮盈达到1R时触发保本止损
-TRAILING_STOP_ATR_MULT = 2.0       # 移动止损的ATR倍数
-STOP_LOSS_LEVEL_INITIAL = "initial"    # 初始止损
+BREAKEVEN_TRIGGER_R = 1.0  # 浮盈达到1R时触发保本止损
+TRAILING_STOP_ATR_MULT = 2.0  # 移动止损的ATR倍数
+STOP_LOSS_LEVEL_INITIAL = "initial"  # 初始止损
 STOP_LOSS_LEVEL_BREAKEVEN = "breakeven"  # 保本止损
-STOP_LOSS_LEVEL_TRAILING = "trailing"    # 移动止损
-STOP_LOSS_LEVEL_HARD = "hard"            # 硬止损（3σ）
+STOP_LOSS_LEVEL_TRAILING = "trailing"  # 移动止损
+STOP_LOSS_LEVEL_HARD = "hard"  # 硬止损（3σ）
 
 # ── v5.1 信号质量过滤常量 ──
-SIGNAL_QUALITY_MIN_SCORE = 60       # 信号质量最低通过分数（百分制）
-BREAKOUT_BODY_MIN_PCT = 0.5         # 突破K线实体最小幅度（%）
-BREAKOUT_VOLUME_MULT = 1.5          # 突破成交量需达到均量的倍数
-BREAKOUT_PULLBACK_CONFIRM = True    # 是否需要回踩确认
-VOLUME_MA_PERIOD = 20               # 成交量均线周期
+SIGNAL_QUALITY_MIN_SCORE = 60  # 信号质量最低通过分数（百分制）
+BREAKOUT_BODY_MIN_PCT = 0.5  # 突破K线实体最小幅度（%）
+BREAKOUT_VOLUME_MULT = 1.5  # 突破成交量需达到均量的倍数
+BREAKOUT_PULLBACK_CONFIRM = True  # 是否需要回踩确认
+VOLUME_MA_PERIOD = 20  # 成交量均线周期
 
 # ── v5.1 多周期确认常量 ──
-MULTI_TIMEFRAME_ENABLED = True          # 是否启用多周期确认
-HIGHER_TF_TREND_PERIOD = "1d"           # 大周期（日线）
-ENTRY_TF_PERIOD = "1h"                  # 入场周期（1小时）
-HIGHER_TF_MA_FAST = 20                  # 大周期快线周期
-HIGHER_TF_MA_SLOW = 55                  # 大周期慢线周期
-COUNTER_TREND_POS_SCALE = 0.5           # 逆大周期时的仓位缩放比例
-COUNTER_TREND_RR_BOOST = 1.3            # 逆大周期时盈亏比要求倍率
+MULTI_TIMEFRAME_ENABLED = True  # 是否启用多周期确认
+HIGHER_TF_TREND_PERIOD = "1d"  # 大周期（日线）
+ENTRY_TF_PERIOD = "1h"  # 入场周期（1小时）
+HIGHER_TF_MA_FAST = 20  # 大周期快线周期
+HIGHER_TF_MA_SLOW = 55  # 大周期慢线周期
+COUNTER_TREND_POS_SCALE = 0.5  # 逆大周期时的仓位缩放比例
+COUNTER_TREND_RR_BOOST = 1.3  # 逆大周期时盈亏比要求倍率
 
 # ═══════════════════════════════════════════
 # v6.0 新增常量 — 市场状态引擎（阶段一）
 # ═══════════════════════════════════════════
 
 # ── 市场状态定义 ──
-MARKET_STATE_TREND_EARLY = "trend_early"     # 趋势初期
-MARKET_STATE_TREND_MID = "trend_mid"         # 趋势中期
-MARKET_STATE_TREND_LATE = "trend_late"       # 趋势末期
-MARKET_STATE_SIDEWAYS = "sideways"           # 震荡市
+MARKET_STATE_TREND_EARLY = "trend_early"  # 趋势初期
+MARKET_STATE_TREND_MID = "trend_mid"  # 趋势中期
+MARKET_STATE_TREND_LATE = "trend_late"  # 趋势末期
+MARKET_STATE_SIDEWAYS = "sideways"  # 震荡市
 
 # ── 状态切换确认机制 ──
-STATE_CONFIRM_BARS = 3                       # 连续N根K线确认才切换状态
-STATE_HYSTERESIS_PCT = 10                    # 状态切换迟滞（评分差>10%才切换）
+STATE_CONFIRM_BARS = 3  # 连续N根K线确认才切换状态
+STATE_HYSTERESIS_PCT = 10  # 状态切换迟滞（评分差>10%才切换）
 
 # ── 技术面识别指标权重（总和=100%） ──
 TECH_WEIGHT_MA_ALIGNMENT = 25
@@ -738,7 +789,7 @@ STATE_PARAM_MAPPING = {
         "time_stop_days_mult": 0.8,
         "max_positions_mult": 0.7,
         "take_profit_mult": 0.6,
-    }
+    },
 }
 
 # ── 引擎开关（阶段一只显示状态，不启用动态参数） ──
@@ -756,14 +807,14 @@ TAKE_PROFIT_LEVEL_T1 = "tp_t1"
 TAKE_PROFIT_LEVEL_T2 = "tp_t2"
 TAKE_PROFIT_LEVEL_T3 = "tp_t3"
 TAKE_PROFIT_LEVEL_DONE = "tp_done"
-TP_T1_ATR_MULT = 3.0          # T1: ATR×3 减仓1/3 + 止损上移至保本
-TP_T2_ATR_MULT = 5.0          # T2: ATR×5 再减1/3 + 止损上移至T1
-TP_T3_TRAILING_ATR_MULT = 2.0 # T3: ATR×2 移动止盈跟踪
-TP_SIDEWAYS_SKIP_T3 = True    # 震荡市跳过T3，T2全平
-TP_T1_REDUCE_RATIO = 0.33     # T1减仓比例（1/3）
-TP_T2_REDUCE_RATIO = 0.50     # T2减仓比例（剩余的1/2 = 总1/3）
+TP_T1_ATR_MULT = 3.0  # T1: ATR×3 减仓1/3 + 止损上移至保本
+TP_T2_ATR_MULT = 5.0  # T2: ATR×5 再减1/3 + 止损上移至T1
+TP_T3_TRAILING_ATR_MULT = 2.0  # T3: ATR×2 移动止盈跟踪
+TP_SIDEWAYS_SKIP_T3 = True  # 震荡市跳过T3，T2全平
+TP_T1_REDUCE_RATIO = 0.33  # T1减仓比例（1/3）
+TP_T2_REDUCE_RATIO = 0.50  # T2减仓比例（剩余的1/2 = 总1/3）
 TP_T1_STOP_MOVE_TO_BREAKEVEN = True  # T1触发后止损上移至保本
-TP_T2_STOP_MOVE_TO_T1 = True         # T2触发后止损上移至T1价位
+TP_T2_STOP_MOVE_TO_T1 = True  # T2触发后止损上移至T1价位
 
 # ═══════════════════════════════════════════
 # v6.0 Phase 3: 策略参数自优化
@@ -776,33 +827,68 @@ AUTO_OPTIMIZE_ENABLED = False
 AUTO_OPTIMIZE_PARAMS = {
     "quality_threshold": {
         "label": "信号质量门槛",
-        "base": 60, "min": 50, "max": 75, "step": 5,
-        "unit": "分", "direction": "inverse", "locked": False,
-        "current_value": 60, "last_adjust_time": 0, "adjust_count": 0,
+        "base": 60,
+        "min": 50,
+        "max": 75,
+        "step": 5,
+        "unit": "分",
+        "direction": "inverse",
+        "locked": False,
+        "current_value": 60,
+        "last_adjust_time": 0,
+        "adjust_count": 0,
     },
     "single_trade_risk_pct": {
         "label": "单笔风险比例",
-        "base": 1.0, "min": 0.5, "max": 1.5, "step": 0.1,
-        "unit": "%", "direction": "direct", "locked": False,
-        "current_value": 1.0, "last_adjust_time": 0, "adjust_count": 0,
+        "base": 1.0,
+        "min": 0.5,
+        "max": 1.5,
+        "step": 0.1,
+        "unit": "%",
+        "direction": "direct",
+        "locked": False,
+        "current_value": 1.0,
+        "last_adjust_time": 0,
+        "adjust_count": 0,
     },
     "atr_stop_mult": {
         "label": "ATR止损倍数",
-        "base": 2.0, "min": 1.5, "max": 3.0, "step": 0.2,
-        "unit": "x", "direction": "adaptive", "locked": False,
-        "current_value": 2.0, "last_adjust_time": 0, "adjust_count": 0,
+        "base": 2.0,
+        "min": 1.5,
+        "max": 3.0,
+        "step": 0.2,
+        "unit": "x",
+        "direction": "adaptive",
+        "locked": False,
+        "current_value": 2.0,
+        "last_adjust_time": 0,
+        "adjust_count": 0,
     },
     "min_rr_ratio": {
         "label": "盈亏比要求",
-        "base": 2.0, "min": 1.5, "max": 3.0, "step": 0.2,
-        "unit": ":1", "direction": "inverse", "locked": False,
-        "current_value": 2.0, "last_adjust_time": 0, "adjust_count": 0,
+        "base": 2.0,
+        "min": 1.5,
+        "max": 3.0,
+        "step": 0.2,
+        "unit": ":1",
+        "direction": "inverse",
+        "locked": False,
+        "current_value": 2.0,
+        "last_adjust_time": 0,
+        "adjust_count": 0,
     },
     "time_stop_days": {
         "label": "时间止损天数",
-        "base": 5, "min": 3, "max": 7, "step": 1,
-        "unit": "天", "direction": "adaptive", "locked": False,
-        "current_value": 5, "last_adjust_time": 0, "adjust_count": 0,
+        "base": 5,
+        "min": 3,
+        "max": 7,
+        "step": 1,
+        "unit": "天",
+        "direction": "adaptive",
+        "locked": False,
+        "current_value": 5,
+        "last_adjust_time": 0,
+        "adjust_count": 0,
     },
 }
 
@@ -836,58 +922,60 @@ PHASE4_ENABLED = True  # 知识增强总开关
 
 # ── 模块A: 认知偏差防御 ──
 COGNITIVE_BIAS_ENABLED = True
-OVERCONFIDENCE_WIN_STREAK = 4       # 连赢次数触发过度自信检测
-OVERCONFIDENCE_SHRINK_PCT = 30      # 过度自信时缩仓30%
-OVERCONFIDENCE_RAISE_THRESHOLD = 10 # 过度自信时提高信号门槛10分
-REVENGE_TRADING_LOSS_STREAK = 3     # 连亏次数触发报复性交易检测
-REVENGE_TRADING_COOLDOWN_MIN = 60   # 报复性交易冷却期(分钟)
+OVERCONFIDENCE_WIN_STREAK = 4  # 连赢次数触发过度自信检测
+OVERCONFIDENCE_SHRINK_PCT = 30  # 过度自信时缩仓30%
+OVERCONFIDENCE_RAISE_THRESHOLD = 10  # 过度自信时提高信号门槛10分
+REVENGE_TRADING_LOSS_STREAK = 3  # 连亏次数触发报复性交易检测
+REVENGE_TRADING_COOLDOWN_MIN = 60  # 报复性交易冷却期(分钟)
 
 # ── 模块B: 期望值决策引擎 ──
 EXPECTED_VALUE_ENGINE_ENABLED = True
-EV_MIN_THRESHOLD = 0.3              # 期望值最低通过阈值(R)
+EV_MIN_THRESHOLD = 0.3  # 期望值最低通过阈值(R)
 EV_DIMENSIONS = {
-    "trend_strength": 0.25,         # 趋势强度权重
-    "volume_confirmation": 0.20,    # 成交量确认权重
-    "market_state": 0.20,           # 市场状态权重
-    "risk_reward": 0.20,            # 盈亏比质量权重
-    "timing": 0.15,                 # 时机把握权重
+    "trend_strength": 0.25,  # 趋势强度权重
+    "volume_confirmation": 0.20,  # 成交量确认权重
+    "market_state": 0.20,  # 市场状态权重
+    "risk_reward": 0.20,  # 盈亏比质量权重
+    "timing": 0.15,  # 时机把握权重
 }
-EV_CONFIDENCE_BOOST = 0.15          # 多维度一致时置信度加成
+EV_CONFIDENCE_BOOST = 0.15  # 多维度一致时置信度加成
 
 # ── 模块C: 反脆弱风控 ──
 ANTIFRAGILE_ENABLED = True
 ANTIFRAGILE_DRAWDOWN_TRIGGER = 3.0  # 回撤达3%触发反脆弱加仓
-ANTIFRAGILE_MAX_ADD_PCT = 50         # 最多加仓至原仓位50%
-ANTIFRAGILE_MIN_QUALITY = 70         # 反脆弱加仓最低信号质量
-ANTIFRAGILE_COOLDOWN_TRADES = 3      # 反脆弱加仓后冷却交易数
+ANTIFRAGILE_MAX_ADD_PCT = 50  # 最多加仓至原仓位50%
+ANTIFRAGILE_MIN_QUALITY = 70  # 反脆弱加仓最低信号质量
+ANTIFRAGILE_COOLDOWN_TRADES = 3  # 反脆弱加仓后冷却交易数
 
 # ── 模块D: 交易者状态监控 ──
 TRADER_STATE_ENABLED = True
-TRADER_FATIGUE_HOURS = 4            # 连续运行4小时触发疲劳检测
-TRADER_DAILY_MAX_TRADES = 20        # 每日最多交易次数
-TRADER_EMOTION_STREAK = 3           # 连续亏损次数触发情绪检测
-TRADER_SCARCITY_THRESHOLD = 0.2     # 权益回撤20%触发稀缺心态检测
+TRADER_FATIGUE_HOURS = 4  # 连续运行4小时触发疲劳检测
+TRADER_DAILY_MAX_TRADES = 20  # 每日最多交易次数
+TRADER_EMOTION_STREAK = 3  # 连续亏损次数触发情绪检测
+TRADER_SCARCITY_THRESHOLD = 0.2  # 权益回撤20%触发稀缺心态检测
 
 # ── 模块E: 策略进化复盘 ──
 STRATEGY_REVIEW_ENABLED = True
-REVIEW_MIN_TRADES = 10              # 最少交易数才触发复盘
+REVIEW_MIN_TRADES = 10  # 最少交易数才触发复盘
 REVIEW_QUALITY_WEIGHTS = {
-    "decision_quality": 0.4,         # 决策质量权重
-    "execution_quality": 0.3,        # 执行质量权重
-    "result_quality": 0.3,           # 结果质量权重
+    "decision_quality": 0.4,  # 决策质量权重
+    "execution_quality": 0.3,  # 执行质量权重
+    "result_quality": 0.3,  # 结果质量权重
 }
 DECISION_DIARY_FILE = "decision_diary.json"
 
 # ── 模块F: 第二层思维过滤 ──
 SECOND_LEVEL_THINKING_ENABLED = True
-CONSENSUS_EXTREME_HIGH = 80         # 共识极端乐观阈值(%)
-CONSENSUS_EXTREME_LOW = 20          # 共识极端悲观阈值(%)
-CONSENSUS_MIN_SAMPLES = 50          # 计算共识最小样本数
-SECOND_LEVEL_BARRIER_BOOST = 15     # 第二层思维时提高门槛15分
+CONSENSUS_EXTREME_HIGH = 80  # 共识极端乐观阈值(%)
+CONSENSUS_EXTREME_LOW = 20  # 共识极端悲观阈值(%)
+CONSENSUS_MIN_SAMPLES = 50  # 计算共识最小样本数
+SECOND_LEVEL_BARRIER_BOOST = 15  # 第二层思维时提高门槛15分
 
-        # 单板块最多同时持有/发信 3 个品种
-PORTFOLIO_VAR_PCT_CAP = 3.3       # P1-4：组合 1日95% VaR 上限 = 权益 × 3.3%（≈2%×1.65，与线性预算对齐；超则本轮回禁新增信号）
-PAIR_CORR_TTL = 1800              # 两两相关性缓存有效期（秒，30min）
+# 单板块最多同时持有/发信 3 个品种
+PORTFOLIO_VAR_PCT_CAP = (
+    3.3  # P1-4：组合 1日95% VaR 上限 = 权益 × 3.3%（≈2%×1.65，与线性预算对齐；超则本轮回禁新增信号）
+)
+PAIR_CORR_TTL = 1800  # 两两相关性缓存有效期（秒，30min）
 
 # —— P2（2026-08-14）：涨跌停锁死头寸尾部应力加计（可配置项） ——
 # 背景：P0-1 已让日亏线含浮亏 MTM，但没对「封板不可平」头寸做尾部应力缓冲。
@@ -896,15 +984,35 @@ PAIR_CORR_TTL = 1800              # 两两相关性缓存有效期（秒，30min
 # 默认 OFF：精确模式需 feed 提供昨结算(pre_close)才可靠判定封板；数据源就绪后开启。
 # 2026-08-14 用户确认开启：feed(minishare_live) 已存 pre_close 支撑精确模式，
 # 缺 pre_close 时自动降级启发式（浮亏≥1个停板幅度才计提），半自动系统仅影响告警/熔断线、不误下单。
-STRESS_LIMIT_LOCKED = True       # 总开关（精确模式优先，缺 pre_close 降级启发式）
-STRESS_TRIGGER_MULT = 1.0        # 启发式门槛：浮亏/名义 ≥ 该倍数×limit_pct 才计提应力
-STRESS_BUFFER_MULT = 1.0         # 计提幅度系数：应力 = limit_pct × 名义 × 此系数（即假设再穿一个停板）
+STRESS_LIMIT_LOCKED = True  # 总开关（精确模式优先，缺 pre_close 降级启发式）
+STRESS_TRIGGER_MULT = 1.0  # 启发式门槛：浮亏/名义 ≥ 该倍数×limit_pct 才计提应力
+STRESS_BUFFER_MULT = 1.0  # 计提幅度系数：应力 = limit_pct × 名义 × 此系数（即假设再穿一个停板）
 
 # —— 交易时段 / 无夜盘品种 ——
 # 日盘 09:00-15:00（全品种）；夜盘 21:00-23:00（仅“有夜盘”品种）。
 # 无夜盘品种（仅日盘交易）：收盘后（尤其 21:00 起）不再推送信号。
-NO_NIGHT = {"jd", "lh", "AP", "CJ", "PK", "RS", "PM", "WH", "JR", "LR", "CS", "rr",
-                            "lc", "si", "UR", "RM", "OI", "c"}  # 与 four_dim_strategy.NO_NIGHT_DEFAULT 保持同步
+NO_NIGHT = {
+    "jd",
+    "lh",
+    "AP",
+    "CJ",
+    "PK",
+    "RS",
+    "PM",
+    "WH",
+    "JR",
+    "LR",
+    "CS",
+    "rr",
+    "lc",
+    "si",
+    "UR",
+    "RM",
+    "OI",
+    "c",
+}  # 与 four_dim_strategy.NO_NIGHT_DEFAULT 保持同步
+
+
 def _in_session(sym, now=None):
     """该品种当前是否处于交易时段（决定是否允许推送信号）。
     G4：夜盘资格由 SYMBOLS[sym]["night"] 统一真值源决定（替代旧的 NO_NIGHT 集合）。
@@ -920,7 +1028,7 @@ def _in_session(sym, now=None):
     night_eligible = SYMBOLS.get(sym, {}).get("night", True)
     if not night_eligible:
         return day
-    night = (1260 <= t <= 1380)   # 21:00-23:00 夜盘
+    night = 1260 <= t <= 1380  # 21:00-23:00 夜盘
     return day or night
 
 
@@ -950,6 +1058,8 @@ def _should_suppress(sig, now=None):
 
 # —— 去重状态持久化（根治“进程重启/多进程 → 内存去重丢失 → 连环重发”）——
 DEDUP_STATE_FILE = os.path.join(HERE, "signal_dedup_state.json")
+
+
 def load_dedup_state(last_fire):
     """从磁盘载入去重状态（last_fire + _SIG_PREV_DIR），每次 evaluate 开头调用，
     使重启/多进程共享同一份去重记忆，避免重复推送。"""
@@ -957,8 +1067,10 @@ def load_dedup_state(last_fire):
     try:
         with open(DEDUP_STATE_FILE, "r") as f:
             d = json.load(f)
-        last_fire.clear(); last_fire.update(d.get("last", {}))
-        _SIG_PREV_DIR.clear(); _SIG_PREV_DIR.update(d.get("prev", {}))
+        last_fire.clear()
+        last_fire.update(d.get("last", {}))
+        _SIG_PREV_DIR.clear()
+        _SIG_PREV_DIR.update(d.get("prev", {}))
     except Exception:
         pass
     # 兜底：若磁盘状态完全为空（无 last 也无 prev，如刚重置/损坏），
@@ -968,6 +1080,8 @@ def load_dedup_state(last_fire):
     # 破坏「同号连续 2 轮才认信号」的去抖（曾导致首轮后迟迟不触发）。
     if not last_fire and not _SIG_PREV_DIR:
         _rebuild_dedup_from_chat(last_fire)
+
+
 def save_dedup_state(last_fire):
     """原子写回去重状态到磁盘。"""
     try:
@@ -977,8 +1091,12 @@ def save_dedup_state(last_fire):
         os.replace(tmp, DEDUP_STATE_FILE)
     except Exception:
         pass
+
+
 # —— 持仓触价告警去重状态持久化（根治"进程重启 → 内存去重丢失 → 连环重发"）——
 POS_ALERT_DEDUP_FILE = os.path.join(HERE, "position_alert_dedup_state.json")
+
+
 def load_pos_alert_dedup():
     """从磁盘载入持仓触价告警去重状态，每次 evaluate/_update_aux 开头调用。"""
     global _POS_ALERT_GUARD
@@ -999,6 +1117,7 @@ def load_pos_alert_dedup():
     except Exception:
         pass
 
+
 def save_pos_alert_dedup():
     """原子写回持仓触价告警去重状态到磁盘。"""
     try:
@@ -1007,15 +1126,13 @@ def save_pos_alert_dedup():
         for sym, levels in _POS_ALERT_GUARD.items():
             serializable[sym] = {}
             for kind, state in levels.items():
-                serializable[sym][kind] = {
-                    "fired": state.get("fired", False),
-                    "ts": state.get("ts", 0.0)
-                }
+                serializable[sym][kind] = {"fired": state.get("fired", False), "ts": state.get("ts", 0.0)}
         with open(tmp, "w") as f:
             json.dump({"guards": serializable}, f, ensure_ascii=False, default=_json_default)
         os.replace(tmp, POS_ALERT_DEDUP_FILE)
     except Exception:
         pass
+
 
 PORT = 8741
 STATE_FILE = os.path.join(HERE, "four_dim_live_state.json")
@@ -1027,19 +1144,22 @@ FUNDAMENTALS = os.path.join(HERE, "fundamentals.json")
 # G4：夜盘资格统一由 SYMBOLS[sym]["night"] 决定（four_dim_strategy.py 注入），
 # 旧的 _NIGHTLESS 字面量已废弃（见 _in_session / NIGHT_SYMS 改为读 night 字段）。
 # 止损基准 ATR：夜盘用 30 分钟 ATR（中间档，介于 5m 太细 / 日线太粗之间）
-ATR_WINDOW = 14          # 30min ATR 周期上限（自适应取 min(上限, 可用K-1)）
-ATR_MIN_K = 3            # 30min K 最少样本；不足则回退 日线ATR×经验比例
+ATR_WINDOW = 14  # 30min ATR 周期上限（自适应取 min(上限, 可用K-1)）
+ATR_MIN_K = 3  # 30min K 最少样本；不足则回退 日线ATR×经验比例
 ATR_30M_FALLBACK = 0.40  # 样本不足时的 30min ATR 估计（≈ 日线×0.4）
-ATR_FLOOR = 0.25         # 止损基准 ATR 地板（≥ 日线ATR×此值），防个别品种异常窄
+ATR_FLOOR = 0.25  # 止损基准 ATR 地板（≥ 日线ATR×此值），防个别品种异常窄
 # G4：有夜盘品种列表（由 SYMBOLS 的 night 字段派生，单一真值源）
 NIGHT_SYMS = [s for s in SYMBOLS if SYMBOLS.get(s, {}).get("night", True)]
 
 # 品种→交易合约映射（来自 trade_config.json 的 contract_specs.contract），供信号卡/持仓卡展示合约代码
 try:
     _TCFG = json.load(open(os.path.join(HERE, "trade_config.json"), encoding="utf-8"))
-    CONTRACT_MAP = {k: ml.normalize_contract_code(v.get("contract", k)) for k, v in _TCFG.get("contract_specs", {}).items()}
+    CONTRACT_MAP = {
+        k: ml.normalize_contract_code(v.get("contract", k)) for k, v in _TCFG.get("contract_specs", {}).items()
+    }
 except Exception:
     CONTRACT_MAP = {}
+
 
 # 2026-08-14：合约映射随动态主力解析刷新（根治写死月份导致盯市/展示价过时）。
 # minishare_live._authoritative_contracts() 已按持仓量动态返回当前主力/次主力合约。
@@ -1068,11 +1188,14 @@ def refresh_contract_map():
                     _fc = _feed0.contract_of(_s) if _feed0 else None
                     _ac = _auth.get(_s)
                     if _fc and _ac and _fc != _ac:
-                        _mismatches.append(f'{_s}: FEED={_fc} vs AUTH={_ac}')
+                        _mismatches.append(f"{_s}: FEED={_fc} vs AUTH={_ac}")
                 except Exception:
                     pass
             if _mismatches:
-                print(f'[CONTRACT_MAP WARNING] 持仓品种与主力合约不一致({len(_mismatches)}个): ' + ', '.join(_mismatches[:5]))
+                print(
+                    f"[CONTRACT_MAP WARNING] 持仓品种与主力合约不一致({len(_mismatches)}个): "
+                    + ", ".join(_mismatches[:5])
+                )
         except Exception:
             pass
     except Exception:
@@ -1102,16 +1225,19 @@ def _load_notify_cfg():
     except Exception:
         n = {}
     return {
-        "enabled": bool(n.get("enabled", False)),   # 默认关
+        "enabled": bool(n.get("enabled", False)),  # 默认关
         "native": bool(n.get("native", True)),
         "voice": bool(n.get("voice", True)),
         "sound": bool(n.get("sound", False)),
     }
+
+
 NOTIFY_CFG = _load_notify_cfg()
 
 # #122 信号时效 TTL：信号生成后 valid_minutes 分钟内有效，超时视为过期（灰显 / 禁用于跟单）
 # 默认 120 分钟（2 小时滚动窗口），可在 trade_config.json 顶层 "signal_ttl_minutes" 覆盖。
 DEFAULT_SIGNAL_TTL_MIN = 120
+
 
 def signal_ttl_minutes():
     try:
@@ -1123,9 +1249,12 @@ def signal_ttl_minutes():
         pass
     return DEFAULT_SIGNAL_TTL_MIN
 
+
 # P2-C（2026-08-14 整改）：风控阈值参数化——把 STOP_COOLDOWN_SEC / PORTFOLIO_VAR_PCT_CAP 等
 # 从硬编码常量改为可由 trade_config.json 顶层键覆盖（带 60s 缓存，缺省回退代码常量）。
 _TC_CACHE = {"t": 0.0, "v": None}
+
+
 def _load_tc():
     """读取 trade_config.json 顶层（60s 缓存），供阈值参数化。"""
     global _TC_CACHE
@@ -1139,6 +1268,7 @@ def _load_tc():
     _TC_CACHE = {"t": _now, "v": v}
     return v
 
+
 def _tc_num(key, default):
     """从 trade_config.json 顶层读数值型风控阈值，非数值/缺失则回退 default。"""
     try:
@@ -1148,6 +1278,7 @@ def _tc_num(key, default):
     except Exception:
         pass
     return default
+
 
 def annotate_signal_ttl(sig):
     """给信号补算时效状态：created_at / valid_minutes / expired / expires_at / remaining_min / age_min。
@@ -1198,7 +1329,8 @@ def _json_default(o):
 # 聊天式消息推送（面板内“消息”流）：把每条信号/持仓报警作为一条消息写入
 # state["chat"] 并落盘，前端以“对话”气泡呈现——非阻塞、可事后回看分析。
 # ---------------------------------------------------------------------------
-STATE_REF = None   # main() 启动时指向活动 state 字典，供 append_chat 直接写入
+STATE_REF = None  # main() 启动时指向活动 state 字典，供 append_chat 直接写入
+
 
 def chat_feed_path(date_str=None):
     """按天落盘：signal_chat_feed_YYYY-MM-DD.jsonl。默认今天。"""
@@ -1206,19 +1338,21 @@ def chat_feed_path(date_str=None):
         date_str = datetime.now().strftime("%Y-%m-%d")
     return os.path.join(HERE, f"signal_chat_feed_{date_str}.jsonl")
 
+
 def list_chat_days():
     """返回所有有消息的日期（降序），供复盘日历/下拉选择。"""
     days = []
     try:
         for fn in os.listdir(HERE):
             if fn.startswith("signal_chat_feed_") and fn.endswith(".jsonl"):
-                d = fn[len("signal_chat_feed_"):-len(".jsonl")]
+                d = fn[len("signal_chat_feed_") : -len(".jsonl")]
                 if len(d) == 10:
                     days.append(d)
     except Exception:
         pass
     days.sort(reverse=True)
     return days
+
 
 def load_chat_feed(date_str=None, limit=None):
     """读取指定日期的消息（默认今天）。limit=None 则全部返回（用于完整复盘）。"""
@@ -1239,12 +1373,33 @@ def load_chat_feed(date_str=None, limit=None):
         out = out[-limit:]
     return out
 
+
 def append_chat(entry):
     """把一条通知写入聊天流（内存 state + 按天落盘），前端以对话气泡呈现，
     按消息所属日期归类到对应日文件，便于逐日复盘。"""
-    keep = ("time", "kind", "symbol", "name", "direction", "lots", "price", "stop", "target",
-            "t1", "t2", "reason", "alert_type", "alert_label", "signal_type", "atr_src", "contract",
-            "push_suppressed", "hold_context", "action_advice", "advice_type")
+    keep = (
+        "time",
+        "kind",
+        "symbol",
+        "name",
+        "direction",
+        "lots",
+        "price",
+        "stop",
+        "target",
+        "t1",
+        "t2",
+        "reason",
+        "alert_type",
+        "alert_label",
+        "signal_type",
+        "atr_src",
+        "contract",
+        "push_suppressed",
+        "hold_context",
+        "action_advice",
+        "advice_type",
+    )
     e = {k: entry.get(k) for k in keep}
     # 2026-08-21: auto-resolve main contract code (with logging + fallback)
     # —— 主力合约代码是交易决策关键字段，缺失必须告警，不能静默吞掉
@@ -1277,6 +1432,7 @@ def append_chat(entry):
             STATE_REF.setdefault("chat", []).insert(0, e)
             STATE_REF["chat"] = STATE_REF["chat"][:2000]
 
+
 def _resample_30m(df_5m):
     """把 5 分钟 K 线聚合成 30 分钟 K 线（OHLCV），供 30 分钟 ATR 计算。"""
     if df_5m is None or len(df_5m) == 0:
@@ -1284,10 +1440,19 @@ def _resample_30m(df_5m):
     if not isinstance(df_5m.index, pd.DatetimeIndex):
         return None
     try:
-        ohlc = df_5m.resample("30min").agg({
-            "open": "first", "high": "max", "low": "min",
-            "close": "last", "volume": "sum",
-        }).dropna()
+        ohlc = (
+            df_5m.resample("30min")
+            .agg(
+                {
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum",
+                }
+            )
+            .dropna()
+        )
         return ohlc if len(ohlc) else None
     except Exception:
         return None
@@ -1340,7 +1505,7 @@ def _auto_levels(sym, direction, price):
         return None, None, None, None, price, False
     if FEED is None:
         return None, None, None, None, price, False
-    _user_price_valid = (price is not None and price != 0)
+    _user_price_valid = price is not None and price != 0
     used_price = price
     if _user_price_valid:
         print(f"[_auto_levels] {sym}: 使用用户价格 {price}")
@@ -1379,12 +1544,12 @@ def _auto_levels(sym, direction, price):
         try:
             # P-F (2026-08-14): 与主信号路径一致，用分品种 regime 阈值，避免两条 live 路径
             # regime 判错导致 tail_enabled 标记不一致（高/低波动品种尤甚）。
-            rreg = fd.classify_regime(
-                df_daily, fd.regime_params_for(sym, _STRAT_CFG, fmg.get_manager()))[0]
+            rreg = fd.classify_regime(df_daily, fd.regime_params_for(sym, _STRAT_CFG, fmg.get_manager()))[0]
         except Exception:
             rreg = "波动"
-        ep = exit_plan(sym, used_price, dir_T, stop_atr, rreg, _STRAT_CFG, fmg.get_manager(),
-                       sr_result=sra.get_cached(sym))
+        ep = exit_plan(
+            sym, used_price, dir_T, stop_atr, rreg, _STRAT_CFG, fmg.get_manager(), sr_result=sra.get_cached(sym)
+        )
         # 防御性校验：自动算出的止损/止盈方向绝不可错误，否则宁可失败也不落盘
         _bad = []
         if dir_T > 0:
@@ -1483,8 +1648,9 @@ def session_label(now=None):
 # ============ 账户级日亏硬限额（P2）：期货交易日基准权益 ============
 # 主数据源改为「账户动态权益回撤」(含浮亏、不依赖成交记录器手动录入)，
 # 交易时段划分按期货交易日(昨夜21:00~今15:00 为一交易日)。
-DAY_OPEN_EQUITY = None      # 当前期货交易日开盘基准权益
-DAY_OPEN_LABEL = ""         # 当前期货交易日标签(YYYY-MM-DD，15:00 后归属次日)
+DAY_OPEN_EQUITY = None  # 当前期货交易日开盘基准权益
+DAY_OPEN_LABEL = ""  # 当前期货交易日标签(YYYY-MM-DD，15:00 后归属次日)
+
 
 def _trading_day_label(now=None):
     """期货交易日标签：15:00 之后归属下一个自然日交易日。
@@ -1502,7 +1668,7 @@ def ensure_F(today):
         stale = True
         if os.path.exists(FUNDAMENTALS):
             age = datetime.now().timestamp() - os.path.getmtime(FUNDAMENTALS)
-            if age < 3600 * 20:   # 20h 内认为当日已刷
+            if age < 3600 * 20:  # 20h 内认为当日已刷
                 stale = False
         if stale:
             print(f"[F] 刷新基本面(akshare) {today} …")
@@ -1527,18 +1693,24 @@ def notify(sig, voice=True, banner=True):
         return
     if at == "配置异常":
         # 配置异常：用专门标题，避免"触及...位"这种触价文案误导
-        line = (f"{sig['name']} {sig['direction']} 配置异常：持仓 {sig['lots']}手，"
-                f"止损/止盈位方向需检查（实盘价 {sig.get('price') or '—'}）")
+        line = (
+            f"{sig['name']} {sig['direction']} 配置异常：持仓 {sig['lots']}手，"
+            f"止损/止盈位方向需检查（实盘价 {sig.get('price') or '—'}）"
+        )
     elif at:
         # 持仓触价报警（止损/止盈）
         label = sig.get("alert_label", "止损")
         level = sig.get("alert_level")
-        line = (f"{sig['name']} {sig['direction']} {at}！持仓 {sig['lots']}手，"
-                f"实盘价 {sig.get('price') or '—'} 触及你的{label}位 {level}")
+        line = (
+            f"{sig['name']} {sig['direction']} {at}！持仓 {sig['lots']}手，"
+            f"实盘价 {sig.get('price') or '—'} 触及你的{label}位 {level}"
+        )
     else:
-        line = (f"{sig['name']} {sig['direction']} 触发，建议 {sig['lots']} 手，"
-                f"开仓 {sig.get('price') or '—'} / 止损 {sig['stop']} / "
-                f"t1 {sig.get('t1') or '—'}(平半) / t2 {sig.get('target') or '—'}(全平)")
+        line = (
+            f"{sig['name']} {sig['direction']} 触发，建议 {sig['lots']} 手，"
+            f"开仓 {sig.get('price') or '—'} / 止损 {sig['stop']} / "
+            f"t1 {sig.get('t1') or '—'}(平半) / t2 {sig.get('target') or '—'}(全平)"
+        )
     print(f"\n🔔 [四维信号 {datetime.now():%H:%M:%S}] {line}")
     print(f"   {sig['reason']}")
     # 可选通知：默认关闭（NOTIFY_CFG.enabled=False → 仅控制台，不弹窗/不语音）
@@ -1551,10 +1723,11 @@ def notify(sig, voice=True, banner=True):
     # 语音会被压没；多条信号连发时横幅一个接一个把语音全压掉。改为「横幅先到→
     # 压音窗口结束→再播报」，保证每条语音完整可闻。
     if b:
-        sc = f'display notification "{sh_escape(line)}" with title "四维策略信号" ' \
-             f'subtitle "{sh_escape(sig["name"])} {sh_escape(sig["direction"])}"'
-        subprocess.run(["osascript", "-e", sc],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sc = (
+            f'display notification "{sh_escape(line)}" with title "四维策略信号" '
+            f'subtitle "{sh_escape(sig["name"])} {sh_escape(sig["direction"])}"'
+        )
+        subprocess.run(["osascript", "-e", sc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if v:
         time.sleep(1.0)  # 等通知的短暂压音窗口结束，再开语音
         txt = sh_escape(line)
@@ -1566,12 +1739,13 @@ def notify(sig, voice=True, banner=True):
                 cmd += ["-v", voice]
             cmd.append(txt)
             try:
-                r = subprocess.run(cmd, stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.PIPE, timeout=20)
+                r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=20)
                 if r.returncode == 0:
                     if voice is None:
-                        print("   ℹ️ Tingting 未装，已用系统默认语音播报(中文可能不准)；"
-                              "建议：系统设置→辅助功能→语音→嗓音→中文(中国)→Tingting→下载")
+                        print(
+                            "   ℹ️ Tingting 未装，已用系统默认语音播报(中文可能不准)；"
+                            "建议：系统设置→辅助功能→语音→嗓音→中文(中国)→Tingting→下载"
+                        )
                     break
                 err = (r.stderr or b"").decode("utf-8", "replace")[:160]
                 print(f"   ⚠️ say 语音[{voice or '默认'}]失败(rc={r.returncode}): {err}")
@@ -1584,30 +1758,40 @@ def notify(sig, voice=True, banner=True):
     if _suppressed:
         _hc = sig.get("hold_context") or {}
         _reason_key = "未知"
-        if _hc.get("dedup"): _reason_key = "信号去重"
-        elif _hc.get("whipsaw"): _reason_key = "Whipsaw噪声"
-        elif _hc.get("rate_limited"): _reason_key = "频率限制"
-        elif _hc.get("cooldown"): _reason_key = "平仓冷却期"
-        elif _hc.get("conflict"): _reason_key = "反向冲突"
-        elif _hc.get("held") and _hc.get("lots", 0) >= POSITION_SATURATION_LOTS: _reason_key = "仓位饱和"
-        elif _hc.get("min_lots"): _reason_key = "手数过小"
-        print(f"   📱 手机推送已抑制 [{_reason_key}]（持仓感知：{sig.get('signal_type','?')}）")
+        if _hc.get("dedup"):
+            _reason_key = "信号去重"
+        elif _hc.get("whipsaw"):
+            _reason_key = "Whipsaw噪声"
+        elif _hc.get("rate_limited"):
+            _reason_key = "频率限制"
+        elif _hc.get("cooldown"):
+            _reason_key = "平仓冷却期"
+        elif _hc.get("conflict"):
+            _reason_key = "反向冲突"
+        elif _hc.get("held") and _hc.get("lots", 0) >= POSITION_SATURATION_LOTS:
+            _reason_key = "仓位饱和"
+        elif _hc.get("min_lots"):
+            _reason_key = "手数过小"
+        print(f"   📱 手机推送已抑制 [{_reason_key}]（持仓感知：{sig.get('signal_type', '?')}）")
     try:
-        has_channel = pn.channels_status().get("telegram") or pn.channels_status().get("bark") \
-                or pn.channels_status().get("wecom")
+        has_channel = (
+            pn.channels_status().get("telegram")
+            or pn.channels_status().get("bark")
+            or pn.channels_status().get("wecom")
+        )
         if not _suppressed and has_channel:
             pn.push_alert(sig)
         elif _suppressed and has_channel:
             hc = sig.get("hold_context") or {}
             title = "持仓提示"
             if hc.get("cooldown"):
-                msg = f"⚠️ {sig.get('symbol','')} {sig.get('direction','')}信号已抑制：平仓冷却期"
+                msg = f"⚠️ {sig.get('symbol', '')} {sig.get('direction', '')}信号已抑制：平仓冷却期"
             elif hc.get("held") and hc.get("conflict"):
-                msg = f"⚠️ {sig.get('symbol','')} {sig.get('direction','')}信号已抑制：反向持仓冲突"
+                msg = f"⚠️ {sig.get('symbol', '')} {sig.get('direction', '')}信号已抑制：反向持仓冲突"
             elif hc.get("held"):
-                msg = f"⚠️ {sig.get('symbol','')} {sig.get('direction','')}信号已抑制：仓位饱和"
+                msg = f"⚠️ {sig.get('symbol', '')} {sig.get('direction', '')}信号已抑制：仓位饱和"
             else:
-                msg = f"⚠️ {sig.get('symbol','')} 信号已抑制"
+                msg = f"⚠️ {sig.get('symbol', '')} 信号已抑制"
             pn.push(msg, title=title)
     except Exception as e:
         print(f"   ⚠️ 手机推送异常: {e}")
@@ -1616,10 +1800,17 @@ def notify(sig, voice=True, banner=True):
 def notify_recover(sym, info):
     """自适应恢复通知：借用 notify 通道（横幅+语音，受 NOTIFY_CFG 开关约束）。"""
     name = SYMBOLS.get(sym, {}).get("name", sym)
-    sig = {"name": name, "direction": "↻自适应恢复",
-           "reason": f"近期walk-forward转正(expR={info.get('expR')}/胜{info.get('win_rate')}/n={info.get('trades')})，"
-                     f"自动解除屏蔽·恢复交易",
-           "lots": 0, "price": None, "stop": None, "t1": None, "target": None}
+    sig = {
+        "name": name,
+        "direction": "↻自适应恢复",
+        "reason": f"近期walk-forward转正(expR={info.get('expR')}/胜{info.get('win_rate')}/n={info.get('trades')})，"
+        f"自动解除屏蔽·恢复交易",
+        "lots": 0,
+        "price": None,
+        "stop": None,
+        "t1": None,
+        "target": None,
+    }
     notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
 
 
@@ -1643,12 +1834,18 @@ def build_batch_orders(mode="flatten", symbol=None):
         px = p.get("price") or prices.get(sym)
         d = p.get("direction")
         close_side = "卖平" if d == "多" else "买平"
-        item = {"symbol": sym, "name": p.get("name") or sym,
-                "contract": ml.normalize_contract_code(p.get("contract") or sym),
-                "step": "平仓", "side": close_side, "direction": d,
-                "lots": lots, "ref_price": px,
-                "float_pnl": p.get("float_pnl"),
-                "exec": None}
+        item = {
+            "symbol": sym,
+            "name": p.get("name") or sym,
+            "contract": ml.normalize_contract_code(p.get("contract") or sym),
+            "step": "平仓",
+            "side": close_side,
+            "direction": d,
+            "lots": lots,
+            "ref_price": px,
+            "float_pnl": p.get("float_pnl"),
+            "exec": None,
+        }
         try:
             item["exec"] = exp.plan_exit(sym, lots, px, d, panic=(mode == "flatten"))
         except Exception:
@@ -1667,17 +1864,25 @@ def build_batch_orders(mode="flatten", symbol=None):
                     ev_gate = ec.gate(lookahead_hours=4)
                     ev_scale = ec.scale_factor(ev_gate)
                     scale = rsm.RISK_FSM.scale()
-                    dd_scale = ddg.scale_factor()   # #119 回撤水位线渐变降险
-                    _combined = round(min(scale, dd_scale, ev_scale), 3)  # 整改：取较严者而非连乘（含#13事件闸门软减速）
+                    dd_scale = ddg.scale_factor()  # #119 回撤水位线渐变降险
+                    _combined = round(
+                        min(scale, dd_scale, ev_scale), 3
+                    )  # 整改：取较严者而非连乘（含#13事件闸门软减速）
                     if _combined < 1.0:
                         new_lots = max(1, int(round(new_lots * _combined)))
             except Exception:
                 pass
-            ritem = {"symbol": sym, "name": p.get("name") or sym,
-                     "contract": ml.normalize_contract_code(p.get("contract") or sym),
-                     "step": "反手开仓", "side": "买开" if new_dir == "多" else "卖开",
-                     "direction": new_dir, "lots": new_lots, "ref_price": px,
-                     "exec": None}
+            ritem = {
+                "symbol": sym,
+                "name": p.get("name") or sym,
+                "contract": ml.normalize_contract_code(p.get("contract") or sym),
+                "step": "反手开仓",
+                "side": "买开" if new_dir == "多" else "卖开",
+                "direction": new_dir,
+                "lots": new_lots,
+                "ref_price": px,
+                "exec": None,
+            }
             try:
                 ritem["exec"] = exp.plan_execution(sym, new_lots, px, new_dir, urgency="fast")
             except Exception:
@@ -1685,16 +1890,25 @@ def build_batch_orders(mode="flatten", symbol=None):
             rows.append(ritem)
     blocked = ""
     if mode == "reverse" and rsm.is_locked():
-        blocked = ("风控锁定/熔断中：反手的「开仓腿」被禁止，"
-                   "清单里的平仓腿照做、开仓腿先别打")
-    txt = "\n".join(
-        f"{i+1}. {r['name']}({r['contract']}) {r['step']} {r['side']} {r['lots']}手"
-        f" @参考{r['ref_price'] if r['ref_price'] is not None else '市价'}"
-        for i, r in enumerate(rows)) or "（当前无持仓）"
-    return {"ok": True, "mode": mode, "count": len(rows), "orders": rows,
-            "text": txt, "blocked": blocked,
-            "equity": snap.get("equity"),
-            "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        blocked = "风控锁定/熔断中：反手的「开仓腿」被禁止，清单里的平仓腿照做、开仓腿先别打"
+    txt = (
+        "\n".join(
+            f"{i + 1}. {r['name']}({r['contract']}) {r['step']} {r['side']} {r['lots']}手"
+            f" @参考{r['ref_price'] if r['ref_price'] is not None else '市价'}"
+            for i, r in enumerate(rows)
+        )
+        or "（当前无持仓）"
+    )
+    return {
+        "ok": True,
+        "mode": mode,
+        "count": len(rows),
+        "orders": rows,
+        "text": txt,
+        "blocked": blocked,
+        "equity": snap.get("equity"),
+        "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
 
 def apply_batch_orders(mode="flatten", symbol=None):
@@ -1703,7 +1917,8 @@ def apply_batch_orders(mode="flatten", symbol=None):
     plan = build_batch_orders(mode, symbol)
     done, errs = [], []
     for r in plan["orders"]:
-        sym = r["symbol"]; px = r.get("ref_price")
+        sym = r["symbol"]
+        px = r.get("ref_price")
         if px is None:
             errs.append(f"{sym} 无参考价，跳过")
             continue
@@ -1719,12 +1934,12 @@ def apply_batch_orders(mode="flatten", symbol=None):
         except Exception as e:
             errs.append(f"{sym} {r['step']} 异常: {repr(e)[:50]}")
     try:
-        dr.log_event("batch_order", state=mode,
-                     reason=f"{len(done)}腿已记账" + (f"；{len(errs)}腿异常" if errs else ""))
+        dr.log_event(
+            "batch_order", state=mode, reason=f"{len(done)}腿已记账" + (f"；{len(errs)}腿异常" if errs else "")
+        )
     except Exception:
         pass
-    return {"ok": not errs, "mode": mode, "done": done, "errors": errs,
-            "count": len(done)}
+    return {"ok": not errs, "mode": mode, "done": done, "errors": errs, "count": len(done)}
 
 
 def notify_killswitch(ks):
@@ -1743,18 +1958,19 @@ def notify_killswitch(ks):
     print("   ⚠️ 已禁止全部新开仓，且不会自动恢复；平完在面板点「解除熔断」")
     print("=" * 64)
     try:
-        sc = (f'display notification "{sh_escape(line)}" with title "🛑 账户硬熔断" '
-              f'subtitle "立即全平并停止交易"')
-        subprocess.run(["osascript", "-e", sc],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sc = f'display notification "{sh_escape(line)}" with title "🛑 账户硬熔断" subtitle "立即全平并停止交易"'
+        subprocess.run(["osascript", "-e", sc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
     try:
         # 熔断是保命播报：无论 NOTIFY_CFG 如何都出声（连播两遍确保听到）
         for _ in range(2):
-            subprocess.run(["say", "-v", "Tingting", sh_escape(line)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           timeout=30)
+            subprocess.run(
+                ["say", "-v", "Tingting", sh_escape(line)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
     except Exception:
         pass
     # —— #15 熔断强制推手机（最高优先级，无需在意 NOTIFY 开关）——
@@ -1777,9 +1993,11 @@ def recovery_tick():
         if info.get("recover"):
             RUNTIME_DISABLED.discard(sym)
             recovered.append(sym)
-            print(f"\n🔓 [自适应恢复] {SYMBOLS.get(sym, {}).get('name', sym)} {sym} "
-                  f"近期walk-forward转正(expR={info.get('expR')}/胜{info.get('win_rate')}/n={info.get('trades')})"
-                  f"→ 自动解除屏蔽，恢复交易")
+            print(
+                f"\n🔓 [自适应恢复] {SYMBOLS.get(sym, {}).get('name', sym)} {sym} "
+                f"近期walk-forward转正(expR={info.get('expR')}/胜{info.get('win_rate')}/n={info.get('trades')})"
+                f"→ 自动解除屏蔽，恢复交易"
+            )
             notify_recover(sym, info)
         else:
             print(f"[恢复检查] {sym} 维持屏蔽：{info.get('note')}")
@@ -1800,13 +2018,14 @@ def log_signal(sig):
 # ---------------------------------------------------------------------------
 # 持仓触价报警（止损 / t1 平半 / t2 全平）：每轮 _update_aux 调用，复用 notify() 弹窗+语音
 # ---------------------------------------------------------------------------
-_POS_ALERT_GUARD = {}   # sym -> {"stop":{"fired":bool,"ts":float}, "t1":{...}, "t2":{...}, "gap_stop":{...}}
-                                        # 时间窗口+持久化去重：30min 内同 level 不重推，跨进程/重启保留记忆
-                                        # 缺口击穿告警（gap_stop）：5分钟冷却期，价格返回安全区后允许再次告警
-                                        # 用户修改止盈止损时自动重置守卫
-_POS_LEVEL_GUARD = {}   # sym -> True，止损/止盈「方向配置异常」提醒每品种每轮持仓只发一次
+_POS_ALERT_GUARD = {}  # sym -> {"stop":{"fired":bool,"ts":float}, "t1":{...}, "t2":{...}, "gap_stop":{...}}
+# 时间窗口+持久化去重：30min 内同 level 不重推，跨进程/重启保留记忆
+# 缺口击穿告警（gap_stop）：5分钟冷却期，价格返回安全区后允许再次告警
+# 用户修改止盈止损时自动重置守卫
+_POS_LEVEL_GUARD = {}  # sym -> True，止损/止盈「方向配置异常」提醒每品种每轮持仓只发一次
 _POS_INSURE_GUARD = {}  # sym -> True，浮盈保险拦截落盘去抖（持续期间只落一次，回安全区复位）
-_SIG_PREV_DIR = {}       # sym -> 上一轮 dir_T（持续性去抖用，单轮临界抖动不触发）
+_SIG_PREV_DIR = {}  # sym -> 上一轮 dir_T（持续性去抖用，单轮临界抖动不触发）
+
 
 def _fmt_price(v):
     if v is None:
@@ -1816,11 +2035,13 @@ def _fmt_price(v):
     except (TypeError, ValueError):
         return str(v)
 
+
 _ALERT_LABELS = {
     "stop": "止损",
     "t1": "t1（1R 平半）",
     "t2": "t2（2R 全平）",
 }
+
 
 def _fire_position_alert(p, px, kind, level):
     label = _ALERT_LABELS.get(kind, kind)
@@ -1834,7 +2055,7 @@ def _fire_position_alert(p, px, kind, level):
             action_tip = "建议平掉1手（持仓一半），剩余挂移动止损"
         else:
             half = _lots // 2
-            action_tip = f"建议平掉{half}手（持仓一半），剩余{_lots-half}手挂移动止损"
+            action_tip = f"建议平掉{half}手（持仓一半），剩余{_lots - half}手挂移动止损"
     elif kind == "t2":
         if _lots <= 1:
             action_tip = "建议全部止盈离场"
@@ -1845,13 +2066,21 @@ def _fire_position_alert(p, px, kind, level):
     sig = {
         "name": p.get("name", p.get("symbol", "?")),
         "symbol": p.get("symbol"),
-        "direction": p["direction"], "lots": p["lots"],
-        "price": px, "stop": p.get("stop"), "target": p.get("target"),
-        "t1": p.get("t1"), "t2": p.get("t2"),
-        "alert_type": f"持仓{label}", "alert_label": label, "alert_level": _fmt_price(level),
-        "reason": (f"你的{p.get('name', p.get('symbol','?'))} {p['direction']} {p['lots']}手持仓，"
-                   f"实盘价 {_fmt_price(px)} 已触及你设的{label}位 {_fmt_price(level)}"
-                   f"（开仓均价 {_fmt_price(p.get('avg'))}），{action_tip}。"),
+        "direction": p["direction"],
+        "lots": p["lots"],
+        "price": px,
+        "stop": p.get("stop"),
+        "target": p.get("target"),
+        "t1": p.get("t1"),
+        "t2": p.get("t2"),
+        "alert_type": f"持仓{label}",
+        "alert_label": label,
+        "alert_level": _fmt_price(level),
+        "reason": (
+            f"你的{p.get('name', p.get('symbol', '?'))} {p['direction']} {p['lots']}手持仓，"
+            f"实盘价 {_fmt_price(px)} 已触及你设的{label}位 {_fmt_price(level)}"
+            f"（开仓均价 {_fmt_price(p.get('avg'))}），{action_tip}。"
+        ),
     }
     # 2026-08-20: add main contract code
     if not sig.get("contract") and sig.get("symbol"):
@@ -1869,15 +2098,15 @@ def _fire_position_alert(p, px, kind, level):
     sig["kind"] = "alert"
     append_chat(sig)
     # C4 报警历史：触价三档统一落盘，供「预警」页回看
-    log_alert("触价", p.get("symbol"), sig["name"], sig["reason"],
-              {"level_kind": kind, "level": level, "price": px})
+    log_alert("触价", p.get("symbol"), sig["name"], sig["reason"], {"level_kind": kind, "level": level, "price": px})
+
 
 # ── P1-3 止损冷静期 / P0-2 缺口击穿硬规则 相关 ──
-STOP_COOLDOWN_SEC = 1800   # 止损后同品种禁止开仓冷静期（秒=30min；震荡市防反复止损，可调）
-CLOSE_COOLDOWN_SEC = 900   # 平仓/减仓后同品种禁止开新仓冷静期（秒=15min；防刚平就追单）
-ALERT_REFIRE_SEC = 1800    # 持仓触价告警重推窗口（秒=30min）：同 sym+同 level 在窗口内只推一次，防震荡刷屏
-_LAST_STOP_EXIT = {}       # sym -> 最近止损离场时间戳（冷静期判定用）
-_LAST_POS_CLOSE = {}       # sym -> 最近平仓/减仓时间戳（防刚平就开新仓）
+STOP_COOLDOWN_SEC = 1800  # 止损后同品种禁止开仓冷静期（秒=30min；震荡市防反复止损，可调）
+CLOSE_COOLDOWN_SEC = 900  # 平仓/减仓后同品种禁止开新仓冷静期（秒=15min；防刚平就追单）
+ALERT_REFIRE_SEC = 1800  # 持仓触价告警重推窗口（秒=30min）：同 sym+同 level 在窗口内只推一次，防震荡刷屏
+_LAST_STOP_EXIT = {}  # sym -> 最近止损离场时间戳（冷静期判定用）
+_LAST_POS_CLOSE = {}  # sym -> 最近平仓/减仓时间戳（防刚平就开新仓）
 
 # ── v6.0 市场状态缓存 ──
 market_state_cache = {}  # symbol -> {state, tech_score, perf_score, ...}
@@ -1887,10 +2116,10 @@ market_state_cache = {}  # symbol -> {state, tech_score, perf_score, ...}
 auto_opt_params = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
 if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
     try:
-        with open(AUTO_OPT_LOG_FILE, 'r', encoding='utf-8') as _f:
+        with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as _f:
             _data = json.load(_f)
-            if 'params' in _data:
-                for _k, _v in _data['params'].items():
+            if "params" in _data:
+                for _k, _v in _data["params"].items():
                     if _k in auto_opt_params:
                         for _sk, _sv in _v.items():
                             auto_opt_params[_k][_sk] = _sv
@@ -1899,7 +2128,7 @@ if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
 auto_opt_adjustment_logs = []
 try:
     if os.path.exists(AUTO_OPT_LOG_FILE):
-        with open(AUTO_OPT_LOG_FILE, 'r', encoding='utf-8') as _f:
+        with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as _f:
             _data = json.load(_f)
             if "logs" in _data:
                 auto_opt_adjustment_logs = _data["logs"]
@@ -1909,8 +2138,10 @@ except Exception as _e:
 # ── v6.0 Phase 4: 知识增强全局状态 ──
 # 模块A: 认知偏差状态
 cognitive_bias_state = {
-    "win_streak": 0, "loss_streak": 0,
-    "last_trade_time": 0, "overconfidence_active": False,
+    "win_streak": 0,
+    "loss_streak": 0,
+    "last_trade_time": 0,
+    "overconfidence_active": False,
     "revenge_cooldown_until": 0,
 }
 # 模块D: 交易者状态
@@ -1926,40 +2157,44 @@ trader_state = {
 decision_diary = []
 try:
     if os.path.exists(DECISION_DIARY_FILE):
-        with open(DECISION_DIARY_FILE, 'r', encoding='utf-8') as _f:
+        with open(DECISION_DIARY_FILE, "r", encoding="utf-8") as _f:
             _dd = json.load(_f)
             decision_diary = _dd.get("entries", [])
 except Exception:
     pass
 # 模块F: 共识状态
 consensus_state = {
-    "extreme_high": False, "extreme_low": False,
-    "consensus_score": 50, "last_update": 0,
+    "extreme_high": False,
+    "extreme_low": False,
+    "consensus_score": 50,
+    "last_update": 0,
 }
 
 _POS_DIRECTION_HISTORY = {}  # sym -> [(direction, timestamp), ...] 记录最近方向变化（防来回打脸）
-_SIGNAL_PUSH_LOG = {}       # sym -> {"timestamps": [], "daily_count": date->int} 信号推送频率控制
-_LAST_POSITION_SNAPSHOT = {} # sym -> last known position state (防过期持仓警报)
+_SIGNAL_PUSH_LOG = {}  # sym -> {"timestamps": [], "daily_count": date->int} 信号推送频率控制
+_LAST_POSITION_SNAPSHOT = {}  # sym -> last known position state (防过期持仓警报)
 
 # 持仓饱和阈值：已有持仓占账户权益比例超此值时，新同向信号降级为"持仓管理"而非"交易信号"
 POSITION_SATURATION_VAPCT = 0.3  # 单个品种风险占权益上限
-POSITION_SATURATION_LOTS = 5     # 单个品种持仓手数上限（超此值新同向信号抑制）
+POSITION_SATURATION_LOTS = 5  # 单个品种持仓手数上限（超此值新同向信号抑制）
 
 # 🔒 新增：信号推送保护阈值
-WHIPSAW_WINDOW_SEC = 600      # 同一品种方向反转检测窗口（10分钟内反向=噪声）
-MAX_SIGNALS_PER_HOUR = 3      # 单品种每小时最大信号数（防轰炸）
-MAX_SIGNALS_PER_DAY = 12      # 单品种每日最大信号数（防疲劳推送）
-SIGNAL_DEDUP_WINDOW_SEC = 180 # 同向信号去重窗口（3分钟内同向重复=去重）
+WHIPSAW_WINDOW_SEC = 600  # 同一品种方向反转检测窗口（10分钟内反向=噪声）
+MAX_SIGNALS_PER_HOUR = 3  # 单品种每小时最大信号数（防轰炸）
+MAX_SIGNALS_PER_DAY = 12  # 单品种每日最大信号数（防疲劳推送）
+SIGNAL_DEDUP_WINDOW_SEC = 180  # 同向信号去重窗口（3分钟内同向重复=去重）
 SIGNAL_CROSS_DIR_LOCK_SEC = 1800  # 跨方向信号锁定窗口（30分钟内同品种不推反向信号）
-MIN_SUGGESTED_LOTS = 1        # 最小建议手数（低于此值不推信号）
+MIN_SUGGESTED_LOTS = 1  # 最小建议手数（低于此值不推信号）
 
 # 跨方向信号锁定记录：sym -> {direction, timestamp}
 _SIGNAL_DIR_LOCK = {}  # 记录每个品种最近一次推送的信号方向和时间
+
 
 def _check_gap_stop_triggered(ds, px, stop, entry_price):
     """[DEPRECATED] 请使用 gap_stop_utils.check_gap_stop_triggered
     保留此包装函数以兼容旧代码，实际逻辑已迁移到 gap_stop_utils 模块。"""
     from gap_stop_utils import check_gap_stop_triggered
+
     return check_gap_stop_triggered(ds, px, stop, entry_price)
 
 
@@ -1967,17 +2202,31 @@ def _fire_gap_stop_alert(p, px, stop, pen, oneR):
     """P0-2：缺口/滑点击穿止损的硬规则告警。半自动系统不代下单，改发最高优先级
     "必须立即市价平仓"告警，并明确提示：若开盘封同向停板平不掉，须承认敞口仍在并
     挂停板价排队，不可假装已离场（risk-manager 校验结论）。"""
-    sym = p.get("symbol"); name = p.get("name", sym)
-    text = (f"⚠️ 缺口/滑点击穿止损：{name} {p['direction']} {p['lots']}手，"
-            f"实盘价 {_fmt_price(px)} 已穿破止损位 {_fmt_price(stop)} 达 {pen:.1f}点"
-            f"（>{0.5*oneR:.1f}点≈0.5R），疑似跳空/滑点击穿而非干净触价。"
-            f"半自动系统无法代下单——请立即市价平仓；若开盘封同向停板平不掉，"
-            f"须承认敞口仍在并挂停板价排队，不可假装已离场。")
-    sig = {"name": name, "direction": p["direction"], "lots": p["lots"], "price": px,
-           "symbol": sym,
-           "stop": stop, "target": None, "t1": None, "t2": None,
-           "alert_type": "缺口击穿止损", "alert_label": "必须平仓", "alert_level": "紧急",
-           "reason": text, "force_close": True}
+    sym = p.get("symbol")
+    name = p.get("name", sym)
+    text = (
+        f"⚠️ 缺口/滑点击穿止损：{name} {p['direction']} {p['lots']}手，"
+        f"实盘价 {_fmt_price(px)} 已穿破止损位 {_fmt_price(stop)} 达 {pen:.1f}点"
+        f"（>{0.5 * oneR:.1f}点≈0.5R），疑似跳空/滑点击穿而非干净触价。"
+        f"半自动系统无法代下单——请立即市价平仓；若开盘封同向停板平不掉，"
+        f"须承认敞口仍在并挂停板价排队，不可假装已离场。"
+    )
+    sig = {
+        "name": name,
+        "direction": p["direction"],
+        "lots": p["lots"],
+        "price": px,
+        "symbol": sym,
+        "stop": stop,
+        "target": None,
+        "t1": None,
+        "t2": None,
+        "alert_type": "缺口击穿止损",
+        "alert_label": "必须平仓",
+        "alert_level": "紧急",
+        "reason": text,
+        "force_close": True,
+    }
     # 2026-08-20: add main contract code
     if not sig.get("contract") and sig.get("symbol"):
         try:
@@ -1995,6 +2244,7 @@ def _fire_gap_stop_alert(p, px, stop, pen, oneR):
     except Exception:
         pass
 
+
 def _levels_sane(p):
     """校验持仓 stop/t1/t2 是否落在方向正确的一侧（防配置错位造成误报）。
     返回 {"stop": True/False/None, "t1": ..., "t2": ...}：
@@ -2005,7 +2255,7 @@ def _levels_sane(p):
     try:
         avg = float(avg)
     except (TypeError, ValueError):
-        avg = None   # 非数值 avg（如字符串脏数据）→ 无法校验，不拦截
+        avg = None  # 非数值 avg（如字符串脏数据）→ 无法校验，不拦截
     ds = 1 if p.get("direction") == "多" else (-1 if p.get("direction") == "空" else 0)
     if not avg or ds == 0:
         return res
@@ -2017,9 +2267,9 @@ def _levels_sane(p):
             v = float(v)
         except (TypeError, ValueError):
             continue
-        if ds > 0:   # 多：止损在均价下方，止盈在上方
+        if ds > 0:  # 多：止损在均价下方，止盈在上方
             res[k] = (v < avg) if k == "stop" else (v > avg)
-        else:        # 空：止损在均价上方，止盈在下方
+        else:  # 空：止损在均价上方，止盈在下方
             res[k] = (v > avg) if k == "stop" else (v < avg)
     return res
 
@@ -2058,9 +2308,10 @@ def check_position_alerts(positions):
                         # 回写持久化
                         try:
                             import account_tracker as _at_mod
+
                             _st_tmp = _at_mod.load_state()
-                            _st_tmp["positions"][_tp_init.get("symbol","")] = {
-                                **_st_tmp["positions"].get(_tp_init.get("symbol",""), {}),
+                            _st_tmp["positions"][_tp_init.get("symbol", "")] = {
+                                **_st_tmp["positions"].get(_tp_init.get("symbol", ""), {}),
                                 "stop": _stop_v,
                             }
                             _at_mod.save_state(_st_tmp)
@@ -2070,8 +2321,10 @@ def check_position_alerts(positions):
                     _entry = float(_tp_init.get("avg") or _tp_init.get("price", 0))
                     if _entry > 0:
                         _tp_init["tp_targets"] = calc_take_profit_targets(
-                            _entry, float(_atr_val), _dir,
-                            market_state_cache.get(_tp_init.get("symbol", ""), {}).get("state")
+                            _entry,
+                            float(_atr_val),
+                            _dir,
+                            market_state_cache.get(_tp_init.get("symbol", ""), {}).get("state"),
                         )
                         _tp_init["init_qty"] = int(_tp_init.get("lots", 0))
             except Exception:
@@ -2089,9 +2342,13 @@ def check_position_alerts(positions):
                 if _days_held >= get_effective_param("time_stop_days", TIME_STOP_MAX_DAYS):
                     _t1_hit = _tp.get("t1_hit", False) or _tp.get("t1_state", "") == "hit"
                     if not _t1_hit:
-                        log_alert("时间止损检查", _tp.get("sym"), "持仓",
-                                  f"{_tp.get('sym')} 已持仓{_days_held:.1f}天未达T1，建议减仓或止损",
-                                  {"days_held": round(_days_held, 1), "lots": _tp.get("lots", 0)})
+                        log_alert(
+                            "时间止损检查",
+                            _tp.get("sym"),
+                            "持仓",
+                            f"{_tp.get('sym')} 已持仓{_days_held:.1f}天未达T1，建议减仓或止损",
+                            {"days_held": round(_days_held, 1), "lots": _tp.get("lots", 0)},
+                        )
             except Exception:
                 pass
 
@@ -2130,23 +2387,39 @@ def check_position_alerts(positions):
             if _tp_result["action"] in ("reduce_t1", "reduce_t2"):
                 _tp["t1_hit"] = True
                 _tp["t1_state"] = "hit" if _tp_result["action"] == "reduce_t1" else "t2_hit"
-            _action_labels = {"reduce_t1": "T1减仓", "reduce_t2": "T2减仓", "close_t1_full": "T1全平", "close_t2_full": "T2全平", "close_t3": "T3止盈平仓"}
-            log_alert("分级止盈", _sym, _dir_str,
-                      f"{_sym} {_action_labels.get(_tp_result['action'], _tp_result['action'])} "
-                      f"@{_px}, 减仓{_tp_result['reduce_qty']}手, "
-                      f"止损{'上移' if _tp_result['new_stop_price'] else '不变'}",
-                      {"tp_level": _tp_result["new_level"], "action": _tp_result["action"],
-                       "reduce_qty": _tp_result["reduce_qty"]})
+            _action_labels = {
+                "reduce_t1": "T1减仓",
+                "reduce_t2": "T2减仓",
+                "close_t1_full": "T1全平",
+                "close_t2_full": "T2全平",
+                "close_t3": "T3止盈平仓",
+            }
+            log_alert(
+                "分级止盈",
+                _sym,
+                _dir_str,
+                f"{_sym} {_action_labels.get(_tp_result['action'], _tp_result['action'])} "
+                f"@{_px}, 减仓{_tp_result['reduce_qty']}手, "
+                f"止损{'上移' if _tp_result['new_stop_price'] else '不变'}",
+                {
+                    "tp_level": _tp_result["new_level"],
+                    "action": _tp_result["action"],
+                    "reduce_qty": _tp_result["reduce_qty"],
+                },
+            )
             # ★ 2026-08-28: TP state machine fires alerts AND sets guard
             #   This connects the TP state machine with the alert guard:
             #   when a TP level transition is detected, fire the alert ONCE
             #   and mark the guard as fired to prevent duplicate raw-price alerts below.
-            _tp_g = _POS_ALERT_GUARD.setdefault(_sym, {
-                "stop": {"fired": False, "ts": 0.0},
-                "t1": {"fired": False, "ts": 0.0},
-                "t2": {"fired": False, "ts": 0.0},
-                "gap_stop": {"fired": False, "ts": 0.0},
-            })
+            _tp_g = _POS_ALERT_GUARD.setdefault(
+                _sym,
+                {
+                    "stop": {"fired": False, "ts": 0.0},
+                    "t1": {"fired": False, "ts": 0.0},
+                    "t2": {"fired": False, "ts": 0.0},
+                    "gap_stop": {"fired": False, "ts": 0.0},
+                },
+            )
             _tp_now = time.time()
             _tp_px = float(_tp.get("price") or _px)
             _tp_t1v = _tp.get("t1")
@@ -2177,8 +2450,10 @@ def check_position_alerts(positions):
             _POS_LEVEL_GUARD.pop(sym, None)
             _POS_INSURE_GUARD.pop(sym, None)
             continue
-        stop = p.get("stop"); target = p.get("target")
-        t1 = p.get("t1"); t2 = p.get("t2")
+        stop = p.get("stop")
+        target = p.get("target")
+        t1 = p.get("t1")
+        t2 = p.get("t2")
         if stop is None and t1 is None and t2 is None:
             continue
         px = p.get("price")
@@ -2194,12 +2469,15 @@ def check_position_alerts(positions):
             avg_f = float(avg)
         except (TypeError, ValueError):
             avg_f = None
-        g = _POS_ALERT_GUARD.setdefault(sym, {
-        "stop": {"fired": False, "ts": 0.0},
-        "t1": {"fired": False, "ts": 0.0},
-        "t2": {"fired": False, "ts": 0.0},
-        "gap_stop": {"fired": False, "ts": 0.0},  # ★ 缺口击穿去重守卫
-    })
+        g = _POS_ALERT_GUARD.setdefault(
+            sym,
+            {
+                "stop": {"fired": False, "ts": 0.0},
+                "t1": {"fired": False, "ts": 0.0},
+                "t2": {"fired": False, "ts": 0.0},
+                "gap_stop": {"fired": False, "ts": 0.0},  # ★ 缺口击穿去重守卫
+            },
+        )
         # ★ 2026-08-27: 确保已有守卫（从磁盘加载的旧版本）也包含 gap_stop 字段
         #   否则 get("gap_stop", default) 每次都返回默认值，去重机制完全失效
         if "gap_stop" not in g:
@@ -2212,7 +2490,7 @@ def check_position_alerts(positions):
             fix_note = ""
             try:
                 res = _auto_levels(sym, p["direction"], p.get("avg"))
-                vals = list(res) + [None] * (6 - len(res))   # 兼容失败 5 元组 / 成功 6 元组
+                vals = list(res) + [None] * (6 - len(res))  # 兼容失败 5 元组 / 成功 6 元组
                 nstop, nt1, nt2 = vals[0], vals[1], vals[2]
                 if nstop is not None and nt1 is not None and nt2 is not None:
                     for k in list(bad):
@@ -2220,7 +2498,9 @@ def check_position_alerts(positions):
                         p[k] = nv
                         bad.remove(k)
                         fix_note += f"；{_ALERT_LABELS[k]}已自动修正为 {_fmt_price(nv)}"
-                    stop = p.get("stop"); t1 = p.get("t1"); t2 = p.get("t2")
+                    stop = p.get("stop")
+                    t1 = p.get("t1")
+                    t2 = p.get("t2")
                     # 持久化到 account_state，避免下次轮询再次命中同一错误
                     try:
                         at.set_levels(sym, stop=stop, t1=t1, t2=t2)
@@ -2236,17 +2516,27 @@ def check_position_alerts(positions):
                 if sym not in _POS_LEVEL_GUARD:
                     _POS_LEVEL_GUARD[sym] = True
                     name = p.get("name", sym)
-                    dir_tip = ("空单止损应在开仓价上方、止盈在下方" if ds < 0
-                               else "多单止损应在开仓价下方、止盈在上方")
-                    text = (f"⚠️ 配置异常：{name} {p['direction']} {p['lots']}手持仓的"
-                            f"{'/'.join(bad) if bad else '止损/止盈'}位方向有误（{dir_tip}；"
-                            f"开仓均价 {_fmt_price(p.get('avg'))}），已拦截误报{fix_note}。"
-                            "仍有档位方向异常未能自动修正，请人工检查持仓配置。")
-                    sig = {"name": name, "direction": p["direction"], "lots": p["lots"],
-                           "price": px, "stop": p.get("stop"), "target": p.get("target"),
-                           "t1": p.get("t1"), "t2": p.get("t2"),
-                           "alert_type": "配置异常", "alert_label": "方向校验",
-                           "alert_level": "—", "reason": text}
+                    dir_tip = "空单止损应在开仓价上方、止盈在下方" if ds < 0 else "多单止损应在开仓价下方、止盈在上方"
+                    text = (
+                        f"⚠️ 配置异常：{name} {p['direction']} {p['lots']}手持仓的"
+                        f"{'/'.join(bad) if bad else '止损/止盈'}位方向有误（{dir_tip}；"
+                        f"开仓均价 {_fmt_price(p.get('avg'))}），已拦截误报{fix_note}。"
+                        "仍有档位方向异常未能自动修正，请人工检查持仓配置。"
+                    )
+                    sig = {
+                        "name": name,
+                        "direction": p["direction"],
+                        "lots": p["lots"],
+                        "price": px,
+                        "stop": p.get("stop"),
+                        "target": p.get("target"),
+                        "t1": p.get("t1"),
+                        "t2": p.get("t2"),
+                        "alert_type": "配置异常",
+                        "alert_label": "方向校验",
+                        "alert_level": "—",
+                        "reason": text,
+                    }
                     # 2026-08-20: add main contract code
                     if not sig.get("contract") and sig.get("symbol"):
                         try:
@@ -2260,27 +2550,28 @@ def check_position_alerts(positions):
                     sig["kind"] = "alert"
                     append_chat(sig)
                     try:
-                        log_alert("方向校验", sym, name, text,
-                                  {"avg": p.get("avg"), "fixed": fix_note or "无"})
+                        log_alert("方向校验", sym, name, text, {"avg": p.get("avg"), "fixed": fix_note or "无"})
                     except Exception:
                         pass
             else:
                 # 已自动修正：仅落盘日志，不弹窗打扰用户
                 try:
-                    log_alert("方向校验自动修正", sym, p.get("name", sym),
-                              f"检测到持仓止损/止盈方向错误{fix_note}，已静默修正并落盘",
-                              {"avg": p.get("avg"), "fixed": fix_note})
+                    log_alert(
+                        "方向校验自动修正",
+                        sym,
+                        p.get("name", sym),
+                        f"检测到持仓止损/止盈方向错误{fix_note}，已静默修正并落盘",
+                        {"avg": p.get("avg"), "fixed": fix_note},
+                    )
                 except Exception:
                     pass
-        stop_hit = (ds > 0 and px <= stop) or (ds < 0 and px >= stop) \
-            if stop is not None and "stop" not in bad else False
-        t1_hit = (ds > 0 and px >= t1) or (ds < 0 and px <= t1) \
-            if t1 is not None and "t1" not in bad else False
-        t2_hit = (ds > 0 and px >= t2) or (ds < 0 and px <= t2) \
-            if t2 is not None and "t2" not in bad else False
+        stop_hit = (
+            (ds > 0 and px <= stop) or (ds < 0 and px >= stop) if stop is not None and "stop" not in bad else False
+        )
+        t1_hit = (ds > 0 and px >= t1) or (ds < 0 and px <= t1) if t1 is not None and "t1" not in bad else False
+        t2_hit = (ds > 0 and px >= t2) or (ds < 0 and px <= t2) if t2 is not None and "t2" not in bad else False
         # ── 保险：浮盈状态下绝不报止损（空单 px<avg / 多单 px>avg 时 stop_hit 视为异常）──
-        insured = bool(stop_hit and avg_f
-                       and ((ds < 0 and px < avg_f) or (ds > 0 and px > avg_f)))
+        insured = bool(stop_hit and avg_f and ((ds < 0 and px < avg_f) or (ds > 0 and px > avg_f)))
         if insured:
             stop_hit = False
             # D2：去抖——条件持续期间只落盘一次，回安全区复位后允许再次落盘，
@@ -2288,11 +2579,15 @@ def check_position_alerts(positions):
             if not _POS_INSURE_GUARD.get(sym):
                 _POS_INSURE_GUARD[sym] = True
                 try:
-                    log_alert("方向校验拦截", sym, p.get("name", sym),
-                              f"浮盈状态下触发止损信号，判定为配置/数据异常已静默拦截"
-                              f"（方向={p['direction']} avg={_fmt_price(avg)} "
-                              f"px={_fmt_price(px)} stop={_fmt_price(stop)}）",
-                              {"direction": p["direction"], "avg": avg, "px": px, "stop": stop})
+                    log_alert(
+                        "方向校验拦截",
+                        sym,
+                        p.get("name", sym),
+                        f"浮盈状态下触发止损信号，判定为配置/数据异常已静默拦截"
+                        f"（方向={p['direction']} avg={_fmt_price(avg)} "
+                        f"px={_fmt_price(px)} stop={_fmt_price(stop)}）",
+                        {"direction": p["direction"], "avg": avg, "px": px, "stop": stop},
+                    )
                 except Exception:
                     pass
         else:
@@ -2366,7 +2661,9 @@ def check_position_alerts(positions):
         # t2（全平）：★ 一次性告警机制 —— 同 t1
         # ★ 2026-08-28: Skip raw alert for positions with tp_targets where
         #   the TP state machine already fired the alert.
-        _tp_t2_handled = bool(p.get("t2_hit", False)) or (p.get("tp_level", "") in (TAKE_PROFIT_LEVEL_T2, TAKE_PROFIT_LEVEL_T3, TAKE_PROFIT_LEVEL_DONE))
+        _tp_t2_handled = bool(p.get("t2_hit", False)) or (
+            p.get("tp_level", "") in (TAKE_PROFIT_LEVEL_T2, TAKE_PROFIT_LEVEL_T3, TAKE_PROFIT_LEVEL_DONE)
+        )
         if t2_hit:
             can_fire = not t2_alerted.get("fired", False)
             if _has_tp_targets and _tp_t2_handled:
@@ -2422,6 +2719,7 @@ STRESS_SCENARIOS = [
 _BLACK = {"FG", "SA", "JM", "J", "rb", "i", "hc", "SF", "SM", "v", "pp", "l", "pg", "eg", "bu", "FU", "ZC"}
 _AG = {"OI", "CF", "AP", "lh", "jd", "SR", "c", "a", "m", "RM", "Y", "P", "PK", "CJ", "rs", "wh"}
 
+
 def correlation_matrix():
     """组合相关性矩阵：基于持仓品种的日收益率相关系数（inner join 对齐交易日）。"""
     st = at.load_state()
@@ -2440,20 +2738,35 @@ def correlation_matrix():
         except Exception:
             continue
     if len(rets) < 2:
-        return {"ok": False, "reason": "有效日线不足 2 个品种", "labels": list(rets.keys()),
-                "names": {s: SYMBOLS.get(s, {}).get("name", s) for s in rets}, "matrix": []}
+        return {
+            "ok": False,
+            "reason": "有效日线不足 2 个品种",
+            "labels": list(rets.keys()),
+            "names": {s: SYMBOLS.get(s, {}).get("name", s) for s in rets},
+            "matrix": [],
+        }
     aligned = pd.concat(rets, axis=1).dropna()
     if isinstance(aligned.columns, pd.MultiIndex):
         aligned.columns = aligned.columns.get_level_values(0)
     if len(aligned) < 20:
-        return {"ok": False, "reason": "对齐后样本不足", "labels": list(aligned.columns),
-                "names": {s: SYMBOLS.get(s, {}).get("name", s) for s in aligned.columns}, "matrix": []}
+        return {
+            "ok": False,
+            "reason": "对齐后样本不足",
+            "labels": list(aligned.columns),
+            "names": {s: SYMBOLS.get(s, {}).get("name", s) for s in aligned.columns},
+            "matrix": [],
+        }
     corr = aligned.corr()
     labels = list(corr.columns)
     names = {s: SYMBOLS.get(s, {}).get("name", s) for s in labels}
     matrix = [[round(float(corr.iloc[i, j]), 2) for j in range(len(labels))] for i in range(len(labels))]
-    return {"ok": True, "labels": labels, "names": names, "matrix": matrix,
-            "note": f"基于 {len(aligned)} 个对齐交易日的日收益率相关系数"}
+    return {
+        "ok": True,
+        "labels": labels,
+        "names": names,
+        "matrix": matrix,
+        "note": f"基于 {len(aligned)} 个对齐交易日的日收益率相关系数",
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -2468,6 +2781,7 @@ _VAR_CACHE = {"t": 0.0, "v": None}
 _VAR_RETS_CACHE = {}
 _VAR_DATA_CACHE = {"t": 0.0, "key": None, "aligned": None, "cov": None, "valid": []}
 
+
 def _var_cfg():
     """①② VaR 配置：trade_config.json 顶层键覆盖，缺省回退代码常量。"""
     try:
@@ -2475,13 +2789,14 @@ def _var_cfg():
     except Exception:
         _m = "hist"
     return {
-        "method": _m,                                                # hist | param（回退开关）
-        "window": int(_tc_num("var_hist_window", 250)),              # 历史模拟窗口（交易日）
-        "min_samples": int(_tc_num("var_hist_min_samples", 120)),    # 对齐样本不足则回退参数法
-        "evt": bool(_tc_num("var_evt_enabled", 1)),                  # EVT 尾部压力测试开关
-        "evt_q": float(_tc_num("var_evt_threshold_q", 0.90)),        # GPD 阈值分位
-        "cache_sec": float(_tc_num("var_data_cache_sec", 300)),      # ② 数据缓存 TTL（秒）
+        "method": _m,  # hist | param（回退开关）
+        "window": int(_tc_num("var_hist_window", 250)),  # 历史模拟窗口（交易日）
+        "min_samples": int(_tc_num("var_hist_min_samples", 120)),  # 对齐样本不足则回退参数法
+        "evt": bool(_tc_num("var_evt_enabled", 1)),  # EVT 尾部压力测试开关
+        "evt_q": float(_tc_num("var_evt_threshold_q", 0.90)),  # GPD 阈值分位
+        "cache_sec": float(_tc_num("var_data_cache_sec", 300)),  # ② 数据缓存 TTL（秒）
     }
+
 
 def _var_symbol_returns(sym, ttl):
     """② 逐品种日收益率（TTL 缓存；底层 load_daily_refreshed 自带 30min 日线缓存）。"""
@@ -2500,6 +2815,7 @@ def _var_symbol_returns(sym, ttl):
         return None
     _VAR_RETS_CACHE[sym] = {"t": _now, "r": r}
     return r
+
 
 def _var_aligned_cov(symbols, window, ttl):
     """② 对齐收益率矩阵（尾部 window 日）+ 协方差；同品种集合+窗口在 TTL 内直接复用。
@@ -2522,9 +2838,9 @@ def _var_aligned_cov(symbols, window, ttl):
     if isinstance(aligned.columns, pd.MultiIndex):
         aligned.columns = aligned.columns.get_level_values(0)
     aligned = aligned.tail(int(window))
-    _VAR_DATA_CACHE = {"t": _now, "key": key, "aligned": aligned,
-                       "cov": aligned.cov(), "valid": list(valid)}
+    _VAR_DATA_CACHE = {"t": _now, "key": key, "aligned": aligned, "cov": aligned.cov(), "valid": list(valid)}
     return aligned, _VAR_DATA_CACHE["cov"], valid
+
 
 def _hist_quantile(sorted_vals, q):
     """① 经验分位（线性插值，与 numpy.quantile 默认 method='linear' 同口径）。sorted_vals 升序。"""
@@ -2538,6 +2854,7 @@ def _hist_quantile(sorted_vals, q):
     hi = min(n - 1, lo + 1)
     frac = pos - lo
     return float(sorted_vals[lo]) + (float(sorted_vals[hi]) - float(sorted_vals[lo])) * frac
+
 
 def _evt_gpd_fit(losses_sorted, q_u=0.90):
     """① EVT/GPD 尾部拟合（矩估计 MoM，免 scipy）。
@@ -2561,16 +2878,26 @@ def _evt_gpd_fit(losses_sorted, q_u=0.90):
     sig = 0.5 * m * ((m * m) / v + 1.0)
     if sig <= 0 or xi >= 1.0:
         return None, None, None
+
     def _var(cl):
         if abs(xi) < 1e-12:
             return u + sig * math.log(Nu / (N * (1.0 - cl)))
         return u + (sig / xi) * ((((1.0 - cl) * N) / Nu) ** (-xi) - 1.0)
+
     def _es(cl):
         return (_var(cl) + sig - xi * u) / (1.0 - xi)
-    info = {"xi": round(xi, 4), "beta": round(sig, 2), "u": round(u, 2),
-            "n": N, "n_exceed": Nu, "threshold_q": q_u,
-            "heavy_tail": bool(xi >= 0.5)}
+
+    info = {
+        "xi": round(xi, 4),
+        "beta": round(sig, 2),
+        "u": round(u, 2),
+        "n": N,
+        "n_exceed": Nu,
+        "threshold_q": q_u,
+        "heavy_tail": bool(xi >= 0.5),
+    }
     return info, _var, _es
+
 
 def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
     """组合 VaR / CVaR（① 2026-08-16 升级为 250 日历史模拟法 + EVT 尾部压力测试；
@@ -2602,8 +2929,13 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
         mult = _spec_mult(sym)
         sign = 1 if p.get("direction") == "多" else -1
         X[sym] = sign * p["lots"] * float(px) * mult
-        info[sym] = {"name": SYMBOLS.get(sym, {}).get("name", sym), "direction": p.get("direction"),
-                     "lots": p.get("lots"), "price": float(px), "exposure": round(X[sym], 2)}
+        info[sym] = {
+            "name": SYMBOLS.get(sym, {}).get("name", sym),
+            "direction": p.get("direction"),
+            "lots": p.get("lots"),
+            "price": float(px),
+            "exposure": round(X[sym], 2),
+        }
     if not X:
         r = {"ok": False, "reason": "持仓无可用价格"}
         if not _injected:
@@ -2623,29 +2955,38 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
             _VAR_CACHE = {"t": _now, "v": r}
         return r
     xr = pd.Series({s: X[s] for s in valid})
-    var_pnl = float(xr @ cov_df @ xr)          # 组合 P&L 方差（元²）
+    var_pnl = float(xr @ cov_df @ xr)  # 组合 P&L 方差（元²）
     if var_pnl <= 0:
         r = {"ok": False, "reason": "协方差非正，无法计算"}
         if not _injected:
             _VAR_CACHE = {"t": _now, "v": r}
         return r
-    sigma = math.sqrt(var_pnl)                 # 组合日 P&L 标准差（元）
+    sigma = math.sqrt(var_pnl)  # 组合日 P&L 标准差（元）
     prices_eq = {s: p.get("price") for s, p in positions.items() if p.get("price")}
     eq = at.snapshot(prices_eq).get("equity", 0) or _account_equity()
     # 标准正态分位数 + 正态 pdf（避免依赖 scipy；参数法回退路径 + 成分VaR 用）
     Z = {0.95: 1.6448536269514722, 0.99: 2.3263478740408408}
+
     def _es_norm(alpha):
         za = Z[alpha]
         phi = math.exp(-0.5 * za * za) / math.sqrt(2 * math.pi)
         return phi / (1 - alpha)
-    out = {"ok": True, "equity": round(eq, 2), "horizon_days": 1, "n_positions": len(valid),
-           "symbols": valid, "info": info, "exposures": {s: round(X[s], 2) for s in valid},
-           "sample_days": int(len(aligned))}
+
+    out = {
+        "ok": True,
+        "equity": round(eq, 2),
+        "horizon_days": 1,
+        "n_positions": len(valid),
+        "symbols": valid,
+        "info": info,
+        "exposures": {s: round(X[s], 2) for s in valid},
+        "sample_days": int(len(aligned)),
+    }
     use_hist = vcfg["method"] in ("hist", "historical") and len(aligned) >= vcfg["min_samples"]
     if use_hist:
         # ① 历史模拟法：组合逐日 P&L 经验分布取分位；EVT/GPD 尾部压力取严叠加（只加不减）
         _x = xr.values.astype(float)
-        _pnl = aligned[valid].values.astype(float) @ _x      # 组合逐日 P&L（元）
+        _pnl = aligned[valid].values.astype(float) @ _x  # 组合逐日 P&L（元）
         losses = sorted((-float(v)) for v in _pnl)
         evt_info, evt_var, evt_es = (None, None, None)
         if vcfg["evt"]:
@@ -2664,7 +3005,7 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
             if evt_info is not None and a > vcfg["evt_q"]:
                 _ev, _ee = evt_var(a), evt_es(a)
                 if _ev > 0:
-                    var_amt = max(var_h, _ev)      # EVT 压力测试取严：历史为底、GPD 尾部只加不减
+                    var_amt = max(var_h, _ev)  # EVT 压力测试取严：历史为底、GPD 尾部只加不减
                 if _ee > 0:
                     cvar_amt = max(cvar_h, _ee)
             out[f"var_{ka}"] = round(var_amt, 2)
@@ -2689,16 +3030,20 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
     contrib = {s: round(Z[0.95] * xr[s] * sx[s] * sigma_inv, 2) for s in valid}
     out["contrib_var95"] = contrib
     if use_hist:
-        out["note"] = (f"历史模拟法 1 日 VaR：{len(aligned)} 个对齐交易日组合逐日P&L经验分布分位；"
-                       f"EVT/GPD 尾部压力（阈值分位 {vcfg['evt_q']}，矩估计）取严叠加，"
-                       f"纯经验值见 *_hist 键；CVaR=超过 VaR 的条件期望损失。"
-                       f"与「计划风险R(基于止损)」互补：此处是市值暴露逐日盯市 VaR。"
-                       f"var_method=param 可回退参数法。")
+        out["note"] = (
+            f"历史模拟法 1 日 VaR：{len(aligned)} 个对齐交易日组合逐日P&L经验分布分位；"
+            f"EVT/GPD 尾部压力（阈值分位 {vcfg['evt_q']}，矩估计）取严叠加，"
+            f"纯经验值见 *_hist 键；CVaR=超过 VaR 的条件期望损失。"
+            f"与「计划风险R(基于止损)」互补：此处是市值暴露逐日盯市 VaR。"
+            f"var_method=param 可回退参数法。"
+        )
     else:
-        out["note"] = (f"参数法（正态、均值=0）1 日 VaR，基于 {len(aligned)} 个对齐交易日日收益率协方差；"
-                       f"CVaR=期望短缺(ES)=超过 VaR 的条件期望损失。与「计划风险R(基于止损)」互补："
-                       f"此处是市值暴露逐日盯市 VaR。"
-                       f"（var_method=param 或对齐样本不足 var_hist_min_samples={vcfg['min_samples']} → 参数法回退）")
+        out["note"] = (
+            f"参数法（正态、均值=0）1 日 VaR，基于 {len(aligned)} 个对齐交易日日收益率协方差；"
+            f"CVaR=期望短缺(ES)=超过 VaR 的条件期望损失。与「计划风险R(基于止损)」互补："
+            f"此处是市值暴露逐日盯市 VaR。"
+            f"（var_method=param 或对齐样本不足 var_hist_min_samples={vcfg['min_samples']} → 参数法回退）"
+        )
     if not _injected:
         _VAR_CACHE = {"t": _now, "v": out}
     return out
@@ -2730,30 +3075,40 @@ def spread_monitor():
     out = []
     for a, b, name in SPREAD_PAIRS:
         try:
-            da = load_daily_refreshed(a); db = load_daily_refreshed(b)
+            da = load_daily_refreshed(a)
+            db = load_daily_refreshed(b)
             if da is None or db is None or len(da) < 30 or len(db) < 30:
                 out.append({"pair": name, "name": name, "error": "日线不足"})
                 continue
-            sa = da["close"].rename(a); sb = db["close"].rename(b)
+            sa = da["close"].rename(a)
+            sb = db["close"].rename(b)
             join = pd.concat([sa, sb], axis=1).dropna()
             if len(join) < 30:
                 out.append({"pair": name, "name": name, "error": "对齐不足"})
                 continue
-            spread = (join[a] - join[b])
+            spread = join[a] - join[b]
             cur = float(spread.iloc[-1])
             win = spread.iloc[-60:]
-            mean = float(win.mean()); std = float(win.std())
+            mean = float(win.mean())
+            std = float(win.std())
             z = (cur - mean) / std if std and std > 0 else 0.0
             recent5 = float(spread.iloc[-5:].mean())
             prev5 = float(spread.iloc[-10:-5].mean()) if len(spread) >= 10 else float(spread.iloc[:-5].mean())
             trend = "扩大" if recent5 > prev5 else ("收窄" if recent5 < prev5 else "持平")
-            out.append({
-                "pair": f"{SYMBOLS.get(a, {}).get('name', a)}-{SYMBOLS.get(b, {}).get('name', b)}",
-                "name": name, "legA": a, "legB": b,
-                "current": round(cur, 1), "mean": round(mean, 1), "std": round(std, 1),
-                "z": round(z, 2), "trend": trend,
-                "recent": round(float(spread.iloc[-1] - spread.iloc[-2]), 1) if len(spread) >= 2 else 0.0,
-            })
+            out.append(
+                {
+                    "pair": f"{SYMBOLS.get(a, {}).get('name', a)}-{SYMBOLS.get(b, {}).get('name', b)}",
+                    "name": name,
+                    "legA": a,
+                    "legB": b,
+                    "current": round(cur, 1),
+                    "mean": round(mean, 1),
+                    "std": round(std, 1),
+                    "z": round(z, 2),
+                    "trend": trend,
+                    "recent": round(float(spread.iloc[-1] - spread.iloc[-2]), 1) if len(spread) >= 2 else 0.0,
+                }
+            )
         except Exception as e:
             out.append({"pair": name, "name": name, "error": str(e)[:60]})
     return {"pairs": out}
@@ -2761,6 +3116,7 @@ def spread_monitor():
 
 # ── 增量缺口 #129：板块强弱轮动排序 ────────────────────────────────────────
 _SECTOR_CACHE = {"t": 0.0, "v": None}
+
 
 def _symbol_momentum(sym):
     """取品种日线，算多周期动量 (5d/20d/60d) + 20d 波动率。失败返回 None。"""
@@ -2780,6 +3136,7 @@ def _symbol_momentum(sym):
     except Exception:
         return None
 
+
 def sector_rotation(force=False, cache_sec=180):
     """板块强弱轮动排序：全市场品种（主连，剔除交割合约）按 SYMBOLS[sym]['group'] 分板块，
     逐品种算多周期动量 → 板块聚合风险调整相对强度(RS) → 排名 + 轮动象限
@@ -2797,14 +3154,21 @@ def sector_rotation(force=False, cache_sec=180):
         if m is None:
             continue
         ret5, ret20, ret60, vol20 = m
-        rs = (ret20 / vol20) if vol20 and vol20 > 0 else 0.0   # 风险调整相对强度
-        data[sym] = {"sym": sym, "name": meta.get("name", sym),
-                     "group": meta.get("group", "其他"),
-                     "ret5": ret5, "ret20": ret20, "ret60": ret60,
-                     "vol20": vol20, "rs": rs}
+        rs = (ret20 / vol20) if vol20 and vol20 > 0 else 0.0  # 风险调整相对强度
+        data[sym] = {
+            "sym": sym,
+            "name": meta.get("name", sym),
+            "group": meta.get("group", "其他"),
+            "ret5": ret5,
+            "ret20": ret20,
+            "ret60": ret60,
+            "vol20": vol20,
+            "rs": rs,
+        }
     if not data:
         r = {"ok": False, "reason": "有效日线不足（需 ≥65 个交易日）"}
-        _SECTOR_CACHE = {"t": _now, "v": r}; return r
+        _SECTOR_CACHE = {"t": _now, "v": r}
+        return r
     # 分板块聚合
     groups = {}
     for sym, d in data.items():
@@ -2826,7 +3190,7 @@ def sector_rotation(force=False, cache_sec=180):
         gr20 = sum(m["ret20"] for m in members) / n
         gr60 = sum(m["ret60"] for m in members) / n
         up = sum(1 for m in members if m["ret20"] > 0)
-        accel = gr20 - gr60   # 中期动能 − 长期动能：正=上行加速，负=动能衰减
+        accel = gr20 - gr60  # 中期动能 − 长期动能：正=上行加速，负=动能衰减
         if gr20 > 0 and accel > 0:
             quad = "领涨加速"
         elif gr20 > 0 and accel <= 0:
@@ -2836,15 +3200,25 @@ def sector_rotation(force=False, cache_sec=180):
         else:
             quad = "领跌走弱"
         members_sorted = sorted(members, key=lambda m: abs(m["rs"]), reverse=True)
-        sectors.append({
-            "group": g, "n": n, "up": up, "down": n - up,
-            "mean_rs": round(mean_rs, 3),
-            "mean_ret5": round(gr5, 4), "mean_ret20": round(gr20, 4),
-            "mean_ret60": round(gr60, 4), "accel": round(accel, 4),
-            "quadrant": quad, "focus": g in focus_groups,
-            "members": [{"sym": m["sym"], "name": m["name"], "ret20": round(m["ret20"], 4),
-                         "rs": round(m["rs"], 3)} for m in members_sorted[:6]],
-        })
+        sectors.append(
+            {
+                "group": g,
+                "n": n,
+                "up": up,
+                "down": n - up,
+                "mean_rs": round(mean_rs, 3),
+                "mean_ret5": round(gr5, 4),
+                "mean_ret20": round(gr20, 4),
+                "mean_ret60": round(gr60, 4),
+                "accel": round(accel, 4),
+                "quadrant": quad,
+                "focus": g in focus_groups,
+                "members": [
+                    {"sym": m["sym"], "name": m["name"], "ret20": round(m["ret20"], 4), "rs": round(m["rs"], 3)}
+                    for m in members_sorted[:6]
+                ],
+            }
+        )
     sectors.sort(key=lambda s: s["mean_rs"], reverse=True)
     for i, s in enumerate(sectors):
         s["rank"] = i + 1
@@ -2854,23 +3228,40 @@ def sector_rotation(force=False, cache_sec=180):
     focus_sectors = [s for s in sectors if s["focus"]]
     leading = [s["group"] for s in sectors if s["quadrant"] == "领涨加速"]
     lagging = [s["group"] for s in sectors if s["quadrant"] == "领跌走弱"]
-    out = {"ok": True, "n_symbols": total, "n_groups": len(sectors),
-           "breadth_up": total_up, "breadth_pct": round(100.0 * total_up / total, 1) if total else 0,
-           "leading": leading, "lagging": lagging,
-           "strongest": sectors[0]["group"] if sectors else None,
-           "weakest": sectors[-1]["group"] if sectors else None,
-           "focus_sectors": [{"group": s["group"], "rank": s["rank"], "mean_rs": s["mean_rs"],
-                              "quadrant": s["quadrant"], "mean_ret20": s["mean_ret20"],
-                              "accel": s["accel"]} for s in focus_sectors],
-           "sectors": sectors,
-           "note": ("板块强弱轮动：逐品种多周期动量(5/20/60日)→风险调整相对强度 RS=20日收益/20日波动→"
-                    "板块 RS 均值排名；轮动象限按「中期动能(20d)正负 × 加速(20d−60d)正负」分 4 类。"
-                    "聚焦板块（含持仓关注的 黑系/农产品）加★标记。只读 minishare/akshare 日线，不接券商 API。")}
+    out = {
+        "ok": True,
+        "n_symbols": total,
+        "n_groups": len(sectors),
+        "breadth_up": total_up,
+        "breadth_pct": round(100.0 * total_up / total, 1) if total else 0,
+        "leading": leading,
+        "lagging": lagging,
+        "strongest": sectors[0]["group"] if sectors else None,
+        "weakest": sectors[-1]["group"] if sectors else None,
+        "focus_sectors": [
+            {
+                "group": s["group"],
+                "rank": s["rank"],
+                "mean_rs": s["mean_rs"],
+                "quadrant": s["quadrant"],
+                "mean_ret20": s["mean_ret20"],
+                "accel": s["accel"],
+            }
+            for s in focus_sectors
+        ],
+        "sectors": sectors,
+        "note": (
+            "板块强弱轮动：逐品种多周期动量(5/20/60日)→风险调整相对强度 RS=20日收益/20日波动→"
+            "板块 RS 均值排名；轮动象限按「中期动能(20d)正负 × 加速(20d−60d)正负」分 4 类。"
+            "聚焦板块（含持仓关注的 黑系/农产品）加★标记。只读 minishare/akshare 日线，不接券商 API。"
+        ),
+    }
     _SECTOR_CACHE = {"t": _now, "v": out}
     return out
 
 
 _VOLTGT_CACHE = {"t": 0.0, "v": None}
+
 
 def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
     """波动率目标化头寸（#130）：给定单品种目标「日度盈亏波动率占权益比例」，
@@ -2896,44 +3287,53 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
     equity = snap.get("equity") or 0
     if equity <= 0:
         r = {"ok": False, "reason": "权益无效(≤0)，无法计算目标头寸"}
-        _VOLTGT_CACHE = {"t": _now, "v": r}; return r
+        _VOLTGT_CACHE = {"t": _now, "v": r}
+        return r
     positions = [p for p in snap.get("positions", []) if p.get("lots")]
     focus = list(FOCUS_SYMS) if "FOCUS_SYMS" in globals() else []
     syms, seen = [], set()
     for p in positions:
         s = p["symbol"]
         if s not in seen:
-            syms.append(s); seen.add(s)
+            syms.append(s)
+            seen.add(s)
     # 持仓 + 聚焦品种一并给出目标手数建议（聚焦未持仓品种显示「建仓建议」）
     for s in focus:
         if s not in seen:
-            syms.append(s); seen.add(s)
+            syms.append(s)
+            seen.add(s)
     if not syms:
         r = {"ok": False, "reason": "无持仓也无聚焦品种，无法计算"}
-        _VOLTGT_CACHE = {"t": _now, "v": r}; return r
-    target_pnl_vol = equity * vol_target_pct / 100.0     # 单品种目标日度 P&L 波动(元)
+        _VOLTGT_CACHE = {"t": _now, "v": r}
+        return r
+    target_pnl_vol = equity * vol_target_pct / 100.0  # 单品种目标日度 P&L 波动(元)
     rows = []
-    per_sym_vol = {}        # sym -> 当前日度 P&L 波动(元, 带符号暴露)
-    per_sym_target_vol = {} # sym -> 目标日度 P&L 波动(元)
-    signed_X = {}           # sym -> 带符号暴露(元) 用于相关口径
+    per_sym_vol = {}  # sym -> 当前日度 P&L 波动(元, 带符号暴露)
+    per_sym_target_vol = {}  # sym -> 目标日度 P&L 波动(元)
+    signed_X = {}  # sym -> 带符号暴露(元) 用于相关口径
     for sym in syms:
         px, cur_lots, direction = None, 0, None
         for p in snap.get("positions", []):
             if p.get("symbol") == sym and p.get("lots"):
                 px = p.get("price") or p.get("avg")
-                cur_lots = p.get("lots"); direction = p.get("direction"); break
+                cur_lots = p.get("lots")
+                direction = p.get("direction")
+                break
         if px is None:
             if FEED:
                 try:
                     pp = FEED.price(sym)
-                    if pp and pp > 0: px = pp
-                except Exception: pass
+                    if pp and pp > 0:
+                        px = pp
+                except Exception:
+                    pass
             if px is None:
                 try:
                     d = load_daily_refreshed(sym)
                     if d is not None and len(d):
                         px = float(d["close"].iloc[-1])
-                except Exception: pass
+                except Exception:
+                    pass
         if not px or px <= 0:
             rows.append({"symbol": sym, "ok": False, "reason": "无价格"})
             continue
@@ -2948,10 +3348,11 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
         except Exception:
             sigma = None
         if sigma is None or sigma <= 0:
-            rows.append({"symbol": sym, "ok": False, "reason": "日线波动不足",
-                         "current_lots": cur_lots, "price": round(px, 2)})
+            rows.append(
+                {"symbol": sym, "ok": False, "reason": "日线波动不足", "current_lots": cur_lots, "price": round(px, 2)}
+            )
             continue
-        vol_per_lot = px * sigma * mult               # 每手日度 P&L 波动(元)
+        vol_per_lot = px * sigma * mult  # 每手日度 P&L 波动(元)
         target_lots = int(round(target_pnl_vol / vol_per_lot)) if vol_per_lot > 0 else 0
         target_lots = max(target_lots, 0)
         cur_vol = vol_per_lot * cur_lots
@@ -2964,18 +3365,25 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
             adj = "减仓"
         else:
             adj = "持平"
-        rows.append({
-            "symbol": sym, "name": SYMBOLS.get(sym, {}).get("name", sym), "ok": True,
-            "direction": direction, "price": round(px, 2),
-            "daily_sigma_pct": round(sigma * 100, 3), "mult": mult,
-            "current_lots": cur_lots,
-            "current_daily_vol": round(cur_vol, 2),
-            "current_vol_pct": round(100 * cur_vol / equity, 3) if equity else None,
-            "target_lots": target_lots,
-            "target_daily_vol": round(vol_per_lot * target_lots, 2),
-            "target_vol_pct": round(100 * vol_per_lot * target_lots / equity, 3) if equity else None,
-            "delta_lots": delta, "adj": adj,
-        })
+        rows.append(
+            {
+                "symbol": sym,
+                "name": SYMBOLS.get(sym, {}).get("name", sym),
+                "ok": True,
+                "direction": direction,
+                "price": round(px, 2),
+                "daily_sigma_pct": round(sigma * 100, 3),
+                "mult": mult,
+                "current_lots": cur_lots,
+                "current_daily_vol": round(cur_vol, 2),
+                "current_vol_pct": round(100 * cur_vol / equity, 3) if equity else None,
+                "target_lots": target_lots,
+                "target_daily_vol": round(vol_per_lot * target_lots, 2),
+                "target_vol_pct": round(100 * vol_per_lot * target_lots / equity, 3) if equity else None,
+                "delta_lots": delta,
+                "adj": adj,
+            }
+        )
         if cur_lots > 0:
             ds = 1 if direction == "多" else (-1 if direction == "空" else 0)
             per_sym_vol[sym] = abs(cur_vol)
@@ -2993,9 +3401,10 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
                 d = load_daily_refreshed(s)
                 if d is not None and len(d) >= 30:
                     rr = d["close"].pct_change().dropna()
-                    rr = rr.iloc[-20:]                  # 与逐品种σ口径一致（最后20日）
+                    rr = rr.iloc[-20:]  # 与逐品种σ口径一致（最后20日）
                     if len(rr) >= 10:
-                        rets[s] = rr; valid.append(s)
+                        rets[s] = rr
+                        valid.append(s)
             if valid:
                 aligned = pd.concat({s: rets[s] for s in valid}, axis=1).dropna()
                 if isinstance(aligned.columns, pd.MultiIndex):
@@ -3007,8 +3416,11 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
         except Exception:
             cur_corr = None
     out = {
-        "ok": True, "equity": round(equity, 2), "vol_target_pct": vol_target_pct,
-        "target_pnl_vol": round(target_pnl_vol, 2), "n_symbols": len(syms),
+        "ok": True,
+        "equity": round(equity, 2),
+        "vol_target_pct": vol_target_pct,
+        "target_pnl_vol": round(target_pnl_vol, 2),
+        "n_symbols": len(syms),
         "current_lots_total": sum(r.get("current_lots", 0) for r in rows if r.get("ok")),
         "rows": rows,
         "cur_portfolio_vol_indep": round(cur_indep, 2),
@@ -3017,11 +3429,13 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
         "cur_portfolio_vol_indep_pct": round(100 * cur_indep / equity, 3) if equity else None,
         "target_portfolio_vol_indep": round(target_indep, 2),
         "target_portfolio_vol_indep_pct": round(100 * target_indep / equity, 3) if equity else None,
-        "note": (f"波动率目标化：每品种目标日度盈亏波动={vol_target_pct}%权益(≈{round(target_pnl_vol,0)}元)，"
-                 f"按 现价×日收益率σ×乘数 反推目标手数。当前组合日波动：相关口径"
-                 f"{('≈%.2f元/%.2f%%'%(cur_corr,100*cur_corr/equity)) if cur_corr else 'N/A'}"
-                 f"（含对冲更低）、独立口径≈{cur_indep:.2f}元/{100*cur_indep/equity:.2f}%。"
-                 f"目标独立口径组合波动≈Σ=N×{vol_target_pct}%。仅建议、不代下单。"),
+        "note": (
+            f"波动率目标化：每品种目标日度盈亏波动={vol_target_pct}%权益(≈{round(target_pnl_vol, 0)}元)，"
+            f"按 现价×日收益率σ×乘数 反推目标手数。当前组合日波动：相关口径"
+            f"{('≈%.2f元/%.2f%%' % (cur_corr, 100 * cur_corr / equity)) if cur_corr else 'N/A'}"
+            f"（含对冲更低）、独立口径≈{cur_indep:.2f}元/{100 * cur_indep / equity:.2f}%。"
+            f"目标独立口径组合波动≈Σ=N×{vol_target_pct}%。仅建议、不代下单。"
+        ),
     }
     _VOLTGT_CACHE["t"] = _now
     _VOLTGT_CACHE["v"] = out
@@ -3032,9 +3446,9 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
 # 行情冲击（平方根冲击模型）：清仓成本 ≈ 名义金额 × IMPACT_BETA × √(参与率) × 日波动，
 # 参与率 = 平仓手数 / 20 日均量(ADV)。参与率越高、日波动越大、流动性越差 → 冲击成本越高。
 # 另给出「按 ≤MAX_PCT×ADV/日 减仓」需要的清仓天数，识别无法当日出清的品种。
-_IMPACT_BETA = 0.15          # 冲击常数（占日波动比例），经验值 0.1~0.3
-_LAR_MAX_PCT = 0.20          # 单日最多交易 ADV 的该比例（超过即视为冲击不可忽略）
-_LAR_CAP_FRAC = 0.50         # 单笔冲击成本上限（名义金额占比）
+_IMPACT_BETA = 0.15  # 冲击常数（占日波动比例），经验值 0.1~0.3
+_LAR_MAX_PCT = 0.20  # 单日最多交易 ADV 的该比例（超过即视为冲击不可忽略）
+_LAR_CAP_FRAC = 0.50  # 单笔冲击成本上限（名义金额占比）
 _LAR_CACHE = {"t": 0.0, "v": None}
 
 
@@ -3059,13 +3473,22 @@ def liquidity_at_risk(force=False, cache_sec=180):
         px = float(p.get("price") or p.get("avg") or 0)
         mult = float((cfc.get(sym, {}) or {}).get("multiplier", 10) or 10)
         notional = lots * px * mult
-        rec = {"symbol": sym, "direction": p.get("direction", ""),
-               "lots": int(lots), "price": round(px, 2), "multiplier": int(mult),
-               "notional": round(notional, 2), "ok": False, "reason": ""}
+        rec = {
+            "symbol": sym,
+            "direction": p.get("direction", ""),
+            "lots": int(lots),
+            "price": round(px, 2),
+            "multiplier": int(mult),
+            "notional": round(notional, 2),
+            "ok": False,
+            "reason": "",
+        }
         try:
             d = load_daily_refreshed(sym)
             if d is None or len(d) < 5:
-                rec["reason"] = "日线不足"; rows.append(rec); continue
+                rec["reason"] = "日线不足"
+                rows.append(rec)
+                continue
             vol = d["volume"].dropna()
             if len(vol) >= 5:
                 adv = float(vol.iloc[-20:].mean()) if len(vol) >= 20 else float(vol.mean())
@@ -3080,8 +3503,11 @@ def liquidity_at_risk(force=False, cache_sec=180):
             else:
                 sigma = 0.0
             if adv <= 0:
-                rec["adv"] = 0; rec["reason"] = "无成交量数据"; rows.append(rec); continue
-            participation = lots / adv                      # 单日清仓占 ADV 比例
+                rec["adv"] = 0
+                rec["reason"] = "无成交量数据"
+                rows.append(rec)
+                continue
+            participation = lots / adv  # 单日清仓占 ADV 比例
             # 平方根冲击成本（名义占比）
             cost_frac = _IMPACT_BETA * math.sqrt(max(participation, 0.0)) * sigma
             cost_frac = min(cost_frac, _LAR_CAP_FRAC)
@@ -3096,18 +3522,25 @@ def liquidity_at_risk(force=False, cache_sec=180):
                 tier = "中等"
             else:
                 tier = "高流动性"
-            rec.update({
-                "ok": True, "adv": round(adv, 0), "oi": round(oi, 0),
-                "sigma_daily_pct": round(100 * sigma, 3),
-                "participation_pct": round(100 * participation, 2),
-                "cost_fraction_pct": round(100 * cost_frac, 3),
-                "laR": round(laR, 2), "laR_pct_equity": round(100 * laR / equity, 3) if equity else None,
-                "days_to_exit": days,
-                "impact_warn": participation > _LAR_MAX_PCT,
-                "tier": tier,
-            })
+            rec.update(
+                {
+                    "ok": True,
+                    "adv": round(adv, 0),
+                    "oi": round(oi, 0),
+                    "sigma_daily_pct": round(100 * sigma, 3),
+                    "participation_pct": round(100 * participation, 2),
+                    "cost_fraction_pct": round(100 * cost_frac, 3),
+                    "laR": round(laR, 2),
+                    "laR_pct_equity": round(100 * laR / equity, 3) if equity else None,
+                    "days_to_exit": days,
+                    "impact_warn": participation > _LAR_MAX_PCT,
+                    "tier": tier,
+                }
+            )
         except Exception as e:
-            rec["reason"] = "计算异常:%s" % str(e)[:40]; rows.append(rec); continue
+            rec["reason"] = "计算异常:%s" % str(e)[:40]
+            rows.append(rec)
+            continue
         rows.append(rec)
 
     ok_rows = [r for r in rows if r.get("ok")]
@@ -3118,20 +3551,26 @@ def liquidity_at_risk(force=False, cache_sec=180):
     n_warn = sum(1 for r in ok_rows if r.get("impact_warn"))
 
     out = {
-        "ok": True, "equity": round(equity, 2), "n_symbols": len(rows),
-        "impact_beta": _IMPACT_BETA, "max_pct_per_day": _LAR_MAX_PCT,
+        "ok": True,
+        "equity": round(equity, 2),
+        "n_symbols": len(rows),
+        "impact_beta": _IMPACT_BETA,
+        "max_pct_per_day": _LAR_MAX_PCT,
         "total_laR": round(total_laR, 2),
         "total_laR_pct_equity": round(100 * total_laR / equity, 3) if equity else None,
-        "n_illiquid": n_illiquid, "n_impact_warn": n_warn,
+        "n_illiquid": n_illiquid,
+        "n_impact_warn": n_warn,
         "worst_symbol": worst["symbol"] if worst else None,
         "worst_participation_pct": worst["participation_pct"] if worst else None,
         "max_leg_symbol": max_leg["symbol"] if max_leg else None,
         "max_leg_pct_equity": max_leg["laR_pct_equity"] if max_leg else None,
         "rows": rows,
-        "note": (f"流动性风险(LaR)：基于平方根冲击模型，清仓冲击成本≈名义×{_IMPACT_BETA}×√(平仓量/ADV)×日波动。"
-                 f"组合 LaR≈{round(total_laR,0)}元(占权益{round(100*total_laR/equity,2) if equity else 0}%)；"
-                 f"低流动性品种{n_illiquid}个、单日冲击超阈值{n_warn}个。"
-                 f"仅度量退出成本，不代下单。"),
+        "note": (
+            f"流动性风险(LaR)：基于平方根冲击模型，清仓冲击成本≈名义×{_IMPACT_BETA}×√(平仓量/ADV)×日波动。"
+            f"组合 LaR≈{round(total_laR, 0)}元(占权益{round(100 * total_laR / equity, 2) if equity else 0}%)；"
+            f"低流动性品种{n_illiquid}个、单日冲击超阈值{n_warn}个。"
+            f"仅度量退出成本，不代下单。"
+        ),
     }
     _LAR_CACHE["t"] = _now
     _LAR_CACHE["v"] = out
@@ -3152,44 +3591,65 @@ def stress_test():
     specs = cfg.get("contract_specs", {})
     held = [p for p in snap["positions"] if p.get("lots")]
     # 当前每持仓浮动盈亏 + 1R
-    cur_pnl = {}; r1 = {}
+    cur_pnl = {}
+    r1 = {}
     for p in held:
-        sym = p["symbol"]; mult = specs.get(sym, {}).get("multiplier", 10)
-        px = p.get("price"); avg = p["avg"]; ds = 1 if p["direction"] == "多" else -1
+        sym = p["symbol"]
+        mult = specs.get(sym, {}).get("multiplier", 10)
+        px = p.get("price")
+        avg = p["avg"]
+        ds = 1 if p["direction"] == "多" else -1
         cur_pnl[sym] = (px - avg) * mult * p["lots"] * ds if px is not None else 0
-        t1 = p.get("t1"); stop = p.get("stop")
+        t1 = p.get("t1")
+        stop = p.get("stop")
         r1[sym] = abs(avg - t1) if t1 else (abs(avg - stop) if stop else None)
     results = []
     for sname, shock, scope in STRESS_SCENARIOS:
         if scope == "single":
-            worst_loss = 0.0; worst_sym = None; worst_new = 0.0
+            worst_loss = 0.0
+            worst_sym = None
+            worst_new = 0.0
             for p in held:
-                sym = p["symbol"]; mult = specs.get(sym, {}).get("multiplier", 10)
-                px = p.get("price") or p["avg"]; avg = p["avg"]; ds = 1 if p["direction"] == "多" else -1
-                newpx = px * (1 - shock * ds)   # 不利方向
+                sym = p["symbol"]
+                mult = specs.get(sym, {}).get("multiplier", 10)
+                px = p.get("price") or p["avg"]
+                avg = p["avg"]
+                ds = 1 if p["direction"] == "多" else -1
+                newpx = px * (1 - shock * ds)  # 不利方向
                 new = (newpx - avg) * mult * p["lots"] * ds
                 loss = cur_pnl.get(sym, 0) - new
                 if loss > worst_loss:
-                    worst_loss = loss; worst_sym = sym; worst_new = new
+                    worst_loss = loss
+                    worst_sym = sym
+                    worst_new = new
             new_float_total = base_float - worst_loss
             eq_after = round(base_equity + (new_float_total - base_float), 2)
-            results.append({
-                "name": sname, "scope": scope, "equity_after": eq_after,
-                "loss": round(worst_loss, 2), "breached": [worst_sym] if worst_sym else [],
-                "detail": f"最脆弱单品: {worst_sym or '—'}（冲击后该笔盈亏 {round(worst_new, 0)}）",
-            })
+            results.append(
+                {
+                    "name": sname,
+                    "scope": scope,
+                    "equity_after": eq_after,
+                    "loss": round(worst_loss, 2),
+                    "breached": [worst_sym] if worst_sym else [],
+                    "detail": f"最脆弱单品: {worst_sym or '—'}（冲击后该笔盈亏 {round(worst_new, 0)}）",
+                }
+            )
             continue
-        new_float_total = 0.0; breached = []
+        new_float_total = 0.0
+        breached = []
         for p in held:
-            sym = p["symbol"]; mult = specs.get(sym, {}).get("multiplier", 10)
-            px = p.get("price") or p["avg"]; avg = p["avg"]; ds = 1 if p["direction"] == "多" else -1
+            sym = p["symbol"]
+            mult = specs.get(sym, {}).get("multiplier", 10)
+            px = p.get("price") or p["avg"]
+            avg = p["avg"]
+            ds = 1 if p["direction"] == "多" else -1
             if scope == "black" and sym not in _BLACK:
                 shk = 0.0
             elif scope == "ag" and sym not in _AG:
                 shk = 0.0
             else:
                 shk = shock
-            newpx = px * (1 - shk * ds)   # 不利方向
+            newpx = px * (1 - shk * ds)  # 不利方向
             new = (newpx - avg) * mult * p["lots"] * ds
             new_float_total += new
             stop = p.get("stop")
@@ -3197,13 +3657,22 @@ def stress_test():
                 breached.append(sym)
         eq_after = round(base_equity + (new_float_total - base_float), 2)
         total_loss = round(base_float - new_float_total, 2)
-        results.append({
-            "name": sname, "scope": scope, "equity_after": eq_after,
-            "loss": total_loss, "breached": breached,
-            "detail": f"击穿止损: {', '.join(breached) if breached else '无'}",
-        })
-    return {"base_equity": round(base_equity, 2), "base_float": round(base_float, 2),
-            "positions": len(held), "scenarios": results}
+        results.append(
+            {
+                "name": sname,
+                "scope": scope,
+                "equity_after": eq_after,
+                "loss": total_loss,
+                "breached": breached,
+                "detail": f"击穿止损: {', '.join(breached) if breached else '无'}",
+            }
+        )
+    return {
+        "base_equity": round(base_equity, 2),
+        "base_float": round(base_float, 2),
+        "positions": len(held),
+        "scenarios": results,
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -3214,6 +3683,8 @@ def stress_test():
 # 不接券商 API、纯只读；默认 ρ=0.7(尾部 0.9)、趋同 z=3.0σ。
 # ----------------------------------------------------------------------------
 _CORRBRK_CACHE = {"t": 0.0, "v": None}
+
+
 def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_crisis=3.0, cache_sec=60):
     """相关性崩溃 / 危机趋同 stress：危机相关 ρ 下重算 VaR + 对冲失效趋同情景。"""
     global _CORRBRK_CACHE
@@ -3227,7 +3698,8 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
     positions = {s: p for s, p in st.get("positions", {}).items() if p.get("lots")}
     if len(positions) < 2:
         r = {"ok": False, "reason": "持仓不足 2 个，无法评估相关性崩溃"}
-        _CORRBRK_CACHE = {"t": _now, "v": r}; return r
+        _CORRBRK_CACHE = {"t": _now, "v": r}
+        return r
     # 暴露向量 X（带符号，元）
     X, info = {}, {}
     for sym, p in positions.items():
@@ -3237,11 +3709,17 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
         mult = _spec_mult(sym)
         sign = 1 if p.get("direction") == "多" else -1
         X[sym] = sign * p["lots"] * float(px) * mult
-        info[sym] = {"name": SYMBOLS.get(sym, {}).get("name", sym), "direction": p.get("direction"),
-                     "lots": p["lots"], "price": float(px), "exposure": round(X[sym], 2)}
+        info[sym] = {
+            "name": SYMBOLS.get(sym, {}).get("name", sym),
+            "direction": p.get("direction"),
+            "lots": p["lots"],
+            "price": float(px),
+            "exposure": round(X[sym], 2),
+        }
     if len(X) < 2:
         r = {"ok": False, "reason": "持仓无可用价格"}
-        _CORRBRK_CACHE = {"t": _now, "v": r}; return r
+        _CORRBRK_CACHE = {"t": _now, "v": r}
+        return r
     # 日收益率对齐
     rets = {}
     for sym in X:
@@ -3257,19 +3735,22 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
     valid = [s for s in X if s in rets]
     if len(valid) < 2:
         r = {"ok": False, "reason": "有效日线不足（需 ≥20 个交易日）"}
-        _CORRBRK_CACHE = {"t": _now, "v": r}; return r
+        _CORRBRK_CACHE = {"t": _now, "v": r}
+        return r
     aligned = pd.concat({s: rets[s] for s in valid}, axis=1).dropna()
     if isinstance(aligned.columns, pd.MultiIndex):
         aligned.columns = aligned.columns.get_level_values(0)
     if len(aligned) < 20:
         r = {"ok": False, "reason": "对齐样本不足 20 日"}
-        _CORRBRK_CACHE = {"t": _now, "v": r}; return r
+        _CORRBRK_CACHE = {"t": _now, "v": r}
+        return r
     cov = aligned.cov().loc[valid, valid]
     xr = pd.Series({s: X[s] for s in valid})
     var_n = float(xr @ cov @ xr)
     if var_n <= 0:
         r = {"ok": False, "reason": "协方差非正，无法计算"}
-        _CORRBRK_CACHE = {"t": _now, "v": r}; return r
+        _CORRBRK_CACHE = {"t": _now, "v": r}
+        return r
     sigma_n = math.sqrt(var_n)
     s_i = {s: math.sqrt(max(cov.loc[s, s], 0.0)) for s in valid}
     # 现状平均两两相关系数
@@ -3280,11 +3761,13 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
             if si > 0 and sj > 0:
                 off.append(cov.loc[valid[i], valid[j]] / (si * sj))
     avg_corr_obs = float(sum(off) / len(off)) if off else 0.0
+
     # 危机协方差（非对角相关→ρ·sign(X_i·X_j)：与每对持仓买卖方向一致的最不利相关——
     # 同侧持仓取 +ρ(同涨同跌放大损失)，对侧持仓(对冲)取 -ρ(多空同时向不利方向发散)，
     # 二者都使组合方差增大，保证危机 VaR≥正常 VaR，代表「所有腿同时向不利方向趋同」。）
     def _crisis_sigma(rho):
-        n = len(valid); tot = 0.0
+        n = len(valid)
+        tot = 0.0
         for i in range(n):
             for j in range(n):
                 a_, b_ = valid[i], valid[j]
@@ -3295,20 +3778,33 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
                     cij = rho * sg * s_i[a_] * s_i[b_]
                 tot += xr[a_] * xr[b_] * cij
         return math.sqrt(max(tot, 0.0))
+
     sigma_c = _crisis_sigma(rho_crisis)
     sigma_t = _crisis_sigma(rho_tail)
     prices_eq = {s: p.get("price") for s, p in positions.items() if p.get("price")}
     eq = at.snapshot(prices_eq).get("equity", 0) or _account_equity()
     Z = {0.95: 1.6448536269514722, 0.99: 2.3263478740408408}
     sum_standalone = sum(Z[0.95] * s_i[s] * abs(xr[s]) for s in valid)  # 名义独立 VaR(未计相关)
-    out = {"ok": True, "equity": round(eq, 2), "n_positions": len(valid), "symbols": valid,
-           "info": info, "exposures": {s: round(X[s], 2) for s in valid},
-           "sample_days": int(len(aligned)), "rho_crisis": rho_crisis, "rho_tail": rho_tail,
-           "avg_corr_obs": round(avg_corr_obs, 3), "z_crisis": z_crisis}
+    out = {
+        "ok": True,
+        "equity": round(eq, 2),
+        "n_positions": len(valid),
+        "symbols": valid,
+        "info": info,
+        "exposures": {s: round(X[s], 2) for s in valid},
+        "sample_days": int(len(aligned)),
+        "rho_crisis": rho_crisis,
+        "rho_tail": rho_tail,
+        "avg_corr_obs": round(avg_corr_obs, 3),
+        "z_crisis": z_crisis,
+    }
     # Lens A：相关性崩溃 VaR
     for a in (0.95, 0.99):
-        za = Z[a]; ka = int(a * 100)
-        vn = za * sigma_n; vc = za * sigma_c; vt = za * sigma_t
+        za = Z[a]
+        ka = int(a * 100)
+        vn = za * sigma_n
+        vc = za * sigma_c
+        vt = za * sigma_t
         out[f"var_{ka}"] = round(vn, 2)
         out[f"var_{ka}_pct"] = round(100 * vn / eq, 2) if eq else None
         out[f"var_{ka}_crisis"] = round(vc, 2)
@@ -3316,10 +3812,12 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
         out[f"var_{ka}_tail"] = round(vt, 2)
         out[f"amplify_{ka}"] = round(sigma_c / sigma_n, 2) if sigma_n else None
         out[f"amplify_tail_{ka}"] = round(sigma_t / sigma_n, 2) if sigma_n else None
+
     # 分散化保护（正常 vs 危机）
     def _div_benefit(sigma):
         port_var = Z[0.95] * sigma
         return (sum_standalone - port_var) / sum_standalone if sum_standalone else 0.0
+
     div_n = _div_benefit(sigma_n)
     div_c = _div_benefit(sigma_c)
     out["div_benefit_normal"] = round(div_n, 3)
@@ -3349,12 +3847,14 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
                 crisis_cov.loc[a_, b_] = rho_crisis * sg * s_i[a_] * s_i[b_]
     xc = crisis_cov @ xr
     out["contrib_crisis_var95"] = {s: round(Z[0.95] * xr[s] * xc[s] * inv_c, 2) for s in valid}
-    out["note"] = (f"相关性崩溃 stress：把全部非对角相关抬至危机相关 ρ={rho_crisis}(尾部 {rho_tail})，"
-                   f"且按每对持仓买卖方向取最不利符号(同侧+ρ/对冲-ρ)，即「所有腿同时向不利方向趋同」后重算 VaR。"
-                   f"现状平均两两相关 {avg_corr_obs:.2f}；危机放大倍数 {out['amplify_95']}×。"
-                   f"分散化保护由正常 {div_n*100:.0f}% 降至危机 {div_c*100:.0f}%（蒸发 {out['div_erosion']*100:.0f} 个百分点）。"
-                   f"危机趋同情景(每腿 z={z_crisis}σ 不利、对冲失效)组合损失约 {round(loss_convergence,0)}，"
-                   f"较正常相关对冲版(约 {round(loss_hedged_normal,0)}) 多亏 {round(hedge_unwind,0)}（对冲消失）。非投资建议。")
+    out["note"] = (
+        f"相关性崩溃 stress：把全部非对角相关抬至危机相关 ρ={rho_crisis}(尾部 {rho_tail})，"
+        f"且按每对持仓买卖方向取最不利符号(同侧+ρ/对冲-ρ)，即「所有腿同时向不利方向趋同」后重算 VaR。"
+        f"现状平均两两相关 {avg_corr_obs:.2f}；危机放大倍数 {out['amplify_95']}×。"
+        f"分散化保护由正常 {div_n * 100:.0f}% 降至危机 {div_c * 100:.0f}%（蒸发 {out['div_erosion'] * 100:.0f} 个百分点）。"
+        f"危机趋同情景(每腿 z={z_crisis}σ 不利、对冲失效)组合损失约 {round(loss_convergence, 0)}，"
+        f"较正常相关对冲版(约 {round(loss_hedged_normal, 0)}) 多亏 {round(hedge_unwind, 0)}（对冲消失）。非投资建议。"
+    )
     _CORRBRK_CACHE = {"t": _now, "v": out}
     return out
 
@@ -3372,16 +3872,26 @@ def _fire_trail_alert(sym, pos, px, state, new_stop):
         "保本": "t1(1R)已触及，止损已自动上移至开仓价(保本)，后续不再亏本金",
         "跟踪": "盈利扩大，移动止损已上移锁定利润",
         "达t2": "已达 t2(2R)全平目标，建议全部止盈离场",
-        "尾仓": (f"已达 t{min_profit_R:.0f}R，建议平掉 {close_pct}%、留 {keep_pct}% 尾仓用 "
-                 f"{tail_trail_R:.0f}×R 宽移动止损跟出，让利润奔跑（回撤触新止损即离场）"),
+        "尾仓": (
+            f"已达 t{min_profit_R:.0f}R，建议平掉 {close_pct}%、留 {keep_pct}% 尾仓用 "
+            f"{tail_trail_R:.0f}×R 宽移动止损跟出，让利润奔跑（回撤触新止损即离场）"
+        ),
     }.get(state, "")
     sig = {
-        "name": pos.get("name", sym), "direction": pos["direction"], "lots": pos["lots"],
+        "name": pos.get("name", sym),
+        "direction": pos["direction"],
+        "lots": pos["lots"],
         "symbol": sym,
-        "price": px, "stop": new_stop, "t1": pos.get("t1"), "t2": pos.get("t2"),
-        "alert_type": f"移动止损·{state}", "alert_label": state,
-        "reason": (f"{pos.get('name', sym)} {pos['direction']} {pos['lots']}手：{tip}"
-                   f"（新止损 {_fmt_price(new_stop)}，现价 {_fmt_price(px)}）"),
+        "price": px,
+        "stop": new_stop,
+        "t1": pos.get("t1"),
+        "t2": pos.get("t2"),
+        "alert_type": f"移动止损·{state}",
+        "alert_label": state,
+        "reason": (
+            f"{pos.get('name', sym)} {pos['direction']} {pos['lots']}手：{tip}"
+            f"（新止损 {_fmt_price(new_stop)}，现价 {_fmt_price(px)}）"
+        ),
     }
     # 2026-08-20: add main contract code
     if not sig.get("contract") and sig.get("symbol"):
@@ -3396,28 +3906,25 @@ def _fire_trail_alert(sym, pos, px, state, new_stop):
     sig["kind"] = "alert"
     append_chat(sig)
     # C4 报警历史：移动止损状态切换统一落盘
-    log_alert("移动止损", sym, sig["name"], sig["reason"],
-              {"state": state, "new_stop": new_stop, "price": px})
-
-
+    log_alert("移动止损", sym, sig["name"], sig["reason"], {"state": state, "new_stop": new_stop, "price": px})
 
 
 def calc_tiered_stop_loss(position, entry_price, atr, sigma_stop_price):
     """
     分级止损计算（v5.1 新增）
-    
+
     根据持仓浮盈状态，自动判断当前应使用哪一级止损：
     - 初始止损：入场时设定的止损价（风险1%）
     - 保本止损：浮盈≥1R时，止损上移至成本价
     - 移动止损：浮盈≥2R时，使用ATR移动止损追踪
     - 硬止损：3σ标准差兜底（极端行情）
-    
+
     Args:
         position: 持仓对象（含 direction, entry_price, current_price 等）
         entry_price: 入场均价
         atr: 当前ATR值
         sigma_stop_price: 3σ硬止损价格
-    
+
     Returns:
         dict: {
             "stop_level": 当前止损级别,
@@ -3427,23 +3934,23 @@ def calc_tiered_stop_loss(position, entry_price, atr, sigma_stop_price):
     """
     direction = position.get("direction", "long")
     current_price = position.get("current_price", entry_price)
-    
+
     # 计算1R的价格距离（基于ATR*2作为初始止损距离）
     initial_stop_dist = atr * 2.0 if atr and atr > 0 else (entry_price * 0.02)
-    
+
     # 计算初始止损价
     if direction in ("多", "long"):
         initial_stop = entry_price - initial_stop_dist
     else:
         initial_stop = entry_price + initial_stop_dist
-    
+
     # 计算当前浮盈（以R为单位）
     if direction in ("多", "long"):
         profit_pips = current_price - entry_price
     else:
         profit_pips = entry_price - current_price
     profit_r = profit_pips / initial_stop_dist if initial_stop_dist > 0 else 0
-    
+
     # 分级判断
     if profit_r >= 2.0:
         # 第三级：移动止损（ATR追踪）
@@ -3465,7 +3972,7 @@ def calc_tiered_stop_loss(position, entry_price, atr, sigma_stop_price):
         # 第一级：初始止损
         stop_price = initial_stop
         stop_level = STOP_LOSS_LEVEL_INITIAL
-    
+
     # 第四级：硬止损兜底（3σ更严格时使用）
     if sigma_stop_price and sigma_stop_price > 0:
         if direction in ("多", "long"):
@@ -3476,17 +3983,16 @@ def calc_tiered_stop_loss(position, entry_price, atr, sigma_stop_price):
             if sigma_stop_price < stop_price:
                 stop_price = sigma_stop_price
                 stop_level = STOP_LOSS_LEVEL_HARD
-    
+
     # 计算止损距离百分比
     stop_distance_pct = abs(current_price - stop_price) / current_price * 100 if current_price > 0 else 0
-    
+
     return {
         "stop_level": stop_level,
         "stop_price": round(stop_price, 4),
         "stop_distance_pct": round(stop_distance_pct, 2),
-        "profit_r": round(profit_r, 2)
+        "profit_r": round(profit_r, 2),
     }
-
 
 
 def calc_signal_quality_score(signal, klines, volume_ma):
@@ -3496,17 +4002,17 @@ def calc_signal_quality_score(signal, klines, volume_ma):
     """
     score = 0
     details = {}
-    
+
     direction = signal.get("direction", "long")
     signal_type = signal.get("signal_type", "breakout")
-    
+
     # 只对突破类信号做质量过滤
     if signal_type not in ["breakout", "trend_break", "resistance_break"]:
         return {"score": 100, "passed": True, "details": {"note": "非突破类信号，默认通过"}}
-    
+
     if not klines or len(klines) < 3:
         return {"score": SIGNAL_QUALITY_MIN_SCORE, "passed": True, "details": {"note": "K线数据不足，默认通过"}}
-    
+
     # 获取突破K线
     breakout_candle = klines[-2]
     open_p = breakout_candle.get("open", 0)
@@ -3514,10 +4020,10 @@ def calc_signal_quality_score(signal, klines, volume_ma):
     high_p = breakout_candle.get("high", 0)
     low_p = breakout_candle.get("low", 0)
     volume = breakout_candle.get("volume", 0)
-    
+
     if open_p == 0 or volume_ma == 0:
         return {"score": SIGNAL_QUALITY_MIN_SCORE, "passed": True, "details": {"note": "数据异常，默认通过"}}
-    
+
     # 维度1：收盘价确认（30分）
     body_pct = abs(close_p - open_p) / open_p * 100
     body_score = min(30, body_pct / BREAKOUT_BODY_MIN_PCT * 30)
@@ -3525,10 +4031,10 @@ def calc_signal_quality_score(signal, klines, volume_ma):
         "score": round(body_score, 1),
         "max": 30,
         "body_pct": round(body_pct, 2),
-        "threshold": BREAKOUT_BODY_MIN_PCT
+        "threshold": BREAKOUT_BODY_MIN_PCT,
     }
     score += body_score
-    
+
     # 维度2：成交量确认（30分）
     if volume_ma > 0:
         volume_ratio = volume / volume_ma
@@ -3540,10 +4046,10 @@ def calc_signal_quality_score(signal, klines, volume_ma):
         "score": round(volume_score, 1),
         "max": 30,
         "volume_ratio": round(volume_ratio, 2),
-        "threshold": BREAKOUT_VOLUME_MULT
+        "threshold": BREAKOUT_VOLUME_MULT,
     }
     score += volume_score
-    
+
     # 维度3：回踩确认（20分）
     pullback_score = 0
     if len(klines) >= 3:
@@ -3561,23 +4067,20 @@ def calc_signal_quality_score(signal, klines, volume_ma):
                 pullback_score = 20
             else:
                 pullback_score = 10
-    
+
     if BREAKOUT_PULLBACK_CONFIRM and len(klines) < 4:
         pullback_score = max(pullback_score, 10)
-    
-    details["pullback_confirm"] = {
-        "score": round(pullback_score, 1),
-        "max": 20
-    }
+
+    details["pullback_confirm"] = {"score": round(pullback_score, 1), "max": 20}
     score += pullback_score
-    
+
     # 维度4：位置合理性（20分）
     entry_price = signal.get("entry_price", close_p)
     if direction == "long":
         breakout_dist = (entry_price - high_p) / high_p * 100 if high_p > 0 else 0
     else:
         breakout_dist = (low_p - entry_price) / low_p * 100 if low_p > 0 else 0
-    
+
     if 0.3 <= breakout_dist <= 2.0:
         position_score = 20
     elif breakout_dist < 0.3:
@@ -3586,22 +4089,18 @@ def calc_signal_quality_score(signal, klines, volume_ma):
         position_score = 15
     else:
         position_score = 5
-    
+
     details["position_quality"] = {
         "score": round(position_score, 1),
         "max": 20,
-        "breakout_dist_pct": round(breakout_dist, 2)
+        "breakout_dist_pct": round(breakout_dist, 2),
     }
     score += position_score
-    
+
     score = round(score, 1)
     passed = score >= SIGNAL_QUALITY_MIN_SCORE
-    
-    return {
-        "score": score,
-        "passed": passed,
-        "details": details
-    }
+
+    return {"score": score, "passed": passed, "details": details}
 
 
 def get_higher_tf_trend(higher_tf_klines):
@@ -3611,34 +4110,34 @@ def get_higher_tf_trend(higher_tf_klines):
     """
     if not higher_tf_klines or len(higher_tf_klines) < HIGHER_TF_MA_SLOW + 5:
         return {"trend": "sideways", "strength": 0, "ma_fast": 0, "ma_slow": 0}
-    
+
     closes = [k.get("close", 0) for k in higher_tf_klines if k.get("close", 0) > 0]
-    
+
     if len(closes) < HIGHER_TF_MA_SLOW:
         return {"trend": "sideways", "strength": 0, "ma_fast": 0, "ma_slow": 0}
-    
+
     ma_fast = sum(closes[-HIGHER_TF_MA_FAST:]) / HIGHER_TF_MA_FAST
     ma_slow = sum(closes[-HIGHER_TF_MA_SLOW:]) / HIGHER_TF_MA_SLOW
-    
+
     if ma_slow == 0:
         return {"trend": "sideways", "strength": 0, "ma_fast": ma_fast, "ma_slow": ma_slow}
-    
+
     divergence_pct = (ma_fast - ma_slow) / ma_slow * 100
     strength = min(100, abs(divergence_pct) * 20)
-    
+
     if divergence_pct > 0.5:
         trend = "bullish"
     elif divergence_pct < -0.5:
         trend = "bearish"
     else:
         trend = "sideways"
-    
+
     return {
         "trend": trend,
         "strength": round(strength, 1),
         "ma_fast": round(ma_fast, 4),
         "ma_slow": round(ma_slow, 4),
-        "divergence_pct": round(divergence_pct, 2)
+        "divergence_pct": round(divergence_pct, 2),
     }
 
 
@@ -3649,29 +4148,29 @@ def apply_multi_tf_filter(signal, higher_tf_trend):
     """
     if not MULTI_TIMEFRAME_ENABLED:
         return {"passed": True, "pos_scale": 1.0, "rr_required": MIN_RR_RATIO, "reason": "多周期确认未启用"}
-    
+
     trend = higher_tf_trend.get("trend", "sideways")
     strength = higher_tf_trend.get("strength", 0)
     direction = signal.get("direction", "long")
-    
+
     is_bullish = trend == "bullish" and direction == "long"
     is_bearish = trend == "bearish" and direction == "short"
     is_with_trend = is_bullish or is_bearish
-    
+
     if trend == "sideways":
         return {
             "passed": True,
             "pos_scale": 0.8,
             "rr_required": get_effective_param("min_rr_ratio", MIN_RR_RATIO),
-            "reason": f"大周期震荡，仓位×0.8（趋势强度: {strength}）"
+            "reason": f"大周期震荡，仓位×0.8（趋势强度: {strength}）",
         }
-    
+
     if is_with_trend:
         return {
             "passed": True,
             "pos_scale": 1.0,
             "rr_required": get_effective_param("min_rr_ratio", MIN_RR_RATIO),
-            "reason": f"顺大周期趋势（{trend}），趋势强度: {strength}"
+            "reason": f"顺大周期趋势（{trend}），趋势强度: {strength}",
         }
     else:
         new_rr = MIN_RR_RATIO * COUNTER_TREND_RR_BOOST
@@ -3679,7 +4178,7 @@ def apply_multi_tf_filter(signal, higher_tf_trend):
             "passed": True,
             "pos_scale": COUNTER_TREND_POS_SCALE,
             "rr_required": round(new_rr, 2),
-            "reason": f"逆大周期趋势（{trend}），仓位×{COUNTER_TREND_POS_SCALE}，盈亏比要求≥{new_rr:.1f}:1"
+            "reason": f"逆大周期趋势（{trend}），仓位×{COUNTER_TREND_POS_SCALE}，盈亏比要求≥{new_rr:.1f}:1",
         }
 
 
@@ -3689,14 +4188,14 @@ def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
     """
     ds = 1 if direction == "多" else -1
     oneR = abs(entry - t1) if t1 else abs(entry - stop)
-    
+
     levels = {}
     # 初始止损
     levels[STOP_LOSS_LEVEL_INITIAL] = stop
-    
+
     # 保本止损（1R触发）
     levels[STOP_LOSS_LEVEL_BREAKEVEN] = entry
-    
+
     # 移动止损（当前价 -/+ ATR倍数）
     if atr and atr > 0:
         if ds > 0:
@@ -3705,7 +4204,7 @@ def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
             levels[STOP_LOSS_LEVEL_TRAILING] = entry + TRAILING_STOP_ATR_MULT * atr
     else:
         levels[STOP_LOSS_LEVEL_TRAILING] = stop
-    
+
     # 硬止损（3σ）
     if atr and atr > 0:
         if ds > 0:
@@ -3714,7 +4213,7 @@ def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
             levels[STOP_LOSS_LEVEL_HARD] = entry + SIGMA_STOP_MULT * atr
     else:
         levels[STOP_LOSS_LEVEL_HARD] = stop
-    
+
     return levels
 
 
@@ -3723,15 +4222,15 @@ def _get_stop_level_state(profit_R, cur_state, direction, px, entry, oneR, atr):
     返回: (new_stop, new_state)
     """
     ds = 1 if direction == "多" else -1
-    
+
     if profit_R < BREAKEVEN_TRIGGER_R:
         # 未达1R：保持初始止损
         return None, STOP_LOSS_LEVEL_INITIAL
-    
+
     elif profit_R < 2.0:
         # 1R-2R：保本止损
         return entry, STOP_LOSS_LEVEL_BREAKEVEN
-    
+
     else:
         # ≥2R：进入移动止损
         if atr and atr > 0:
@@ -3748,7 +4247,6 @@ def _get_stop_level_state(profit_R, cur_state, direction, px, entry, oneR, atr):
 
 
 def manage_trailing_stops():
-
     """移动止损自动管理（仅实时行情可用时跑，避免非交易时段误调）：
       - 价格触及 t1(1R) → 止损上移至开仓价(保本)
       - 盈利继续扩大 → 按 1R 跟踪上移锁定利润（多头止损=max(开仓价, 现价-1R)）
@@ -3764,23 +4262,26 @@ def manage_trailing_stops():
         if px is None:
             continue
         ds = 1 if pos["direction"] == "多" else -1
-        entry = pos.get("avg"); t1 = pos.get("t1"); t2 = pos.get("t2"); stop = pos.get("stop")
+        entry = pos.get("avg")
+        t1 = pos.get("t1")
+        t2 = pos.get("t2")
+        stop = pos.get("stop")
         if entry is None or t1 is None:
-            continue   # 无 t1 无法定义 1R，跳过
+            continue  # 无 t1 无法定义 1R，跳过
         oneR = abs(entry - t1)
         if oneR <= 0:
             continue
-        profit = ds * (px - entry)   # 以 1R 为单位的盈利
+        profit = ds * (px - entry)  # 以 1R 为单位的盈利
         cur_state = pos.get("trail_state")
-        profit_R = profit / oneR   # 以 1R 为单位的盈利
+        profit_R = profit / oneR  # 以 1R 为单位的盈利
         if profit_R < 1:
-            continue   # 未达 t1：保持初始止损不动
+            continue  # 未达 t1：保持初始止损不动
         # ── P-G 尾仓（trailing_tail）：参数统一从 _STRAT_CFG 读取；min_profit_R 驱动入尾仓阈值 ──
         tt = _STRAT_CFG.get("trailing_tail", {})
         # 开关优先级：特性开关 > 旧配置 > 默认关闭
         _tail_sw = None
         try:
-            _tail_sw = fmg.get_manager().is_enabled('trailing_stop')
+            _tail_sw = fmg.get_manager().is_enabled("trailing_stop")
         except Exception:
             pass
         if _tail_sw is None:
@@ -3792,7 +4293,7 @@ def manage_trailing_stops():
             # 已达 t2，用更宽(tail_trail_R×1R)移动止损跟出，回撤触新止损即离场
             tail_stop_dist = tail_trail_R * oneR
             if ds > 0:
-                cand = max(entry, px - tail_stop_dist)   # 不低于开仓价(保本底)
+                cand = max(entry, px - tail_stop_dist)  # 不低于开仓价(保本底)
                 new_stop = cand if cand > stop else stop
             else:
                 cand = min(entry, px + tail_stop_dist)
@@ -3807,7 +4308,7 @@ def manage_trailing_stops():
             tail_stop_dist = tail_trail_R * oneR
             if ds > 0:
                 base = t2 - tail_stop_dist
-                new_stop = base if base > stop else stop   # 尾仓基线比 t2 宽松（允许回撤）
+                new_stop = base if base > stop else stop  # 尾仓基线比 t2 宽松（允许回撤）
             else:
                 base = t2 + tail_stop_dist
                 new_stop = base if base < stop else stop
@@ -3870,8 +4371,11 @@ def compute_heat(prices=None):
             continue
         sym = p["symbol"]
         mult = (specs.get(sym) or {}).get("multiplier", 10)
-        stop = p.get("stop"); avg = p.get("avg"); lots = p["lots"]
-        planned = None; unreal_r = None
+        stop = p.get("stop")
+        avg = p.get("avg")
+        lots = p["lots"]
+        planned = None
+        unreal_r = None
         if stop is not None and avg is not None:
             sd = abs(stop - avg) * mult * lots
             if sd > 0:
@@ -3886,22 +4390,32 @@ def compute_heat(prices=None):
         mp = p.get("margin_pct", 0) or 0
         if mp > margin_cap_pct:
             single_over = True
-        rows.append({
-            "symbol": sym, "name": p.get("name", sym), "lots": lots,
-            "direction": p.get("direction"),
-            "planned_r": round(planned, 2) if planned else None,
-            "unreal_r": round(unreal_r, 3) if unreal_r is not None else None,
-            "margin_pct": mp,
-        })
+        rows.append(
+            {
+                "symbol": sym,
+                "name": p.get("name", sym),
+                "lots": lots,
+                "direction": p.get("direction"),
+                "planned_r": round(planned, 2) if planned else None,
+                "unreal_r": round(unreal_r, 3) if unreal_r is not None else None,
+                "margin_pct": mp,
+            }
+        )
     heat_pct = round(total_planned / budget * 100, 1) if budget > 0 else 0.0
     over = (heat_pct > 100) or single_over
     status = "超标" if over else ("警戒" if heat_pct > 80 else "正常")
     return {
-        "budget": round(budget, 2), "equity": round(equity, 2),
-        "risk_pct": risk_pct, "portfolio_risk_pct": risk_pct,  # risk_pct 此处=组合总风险预算%
-        "total_planned_r": round(total_planned, 2), "total_unreal_r": round(total_unreal_r, 2),
-        "heat_pct": heat_pct, "status": status, "over": bool(over),
-        "margin_cap_pct": margin_cap_pct, "rows": rows,
+        "budget": round(budget, 2),
+        "equity": round(equity, 2),
+        "risk_pct": risk_pct,
+        "portfolio_risk_pct": risk_pct,  # risk_pct 此处=组合总风险预算%
+        "total_planned_r": round(total_planned, 2),
+        "total_unreal_r": round(total_unreal_r, 2),
+        "heat_pct": heat_pct,
+        "status": status,
+        "over": bool(over),
+        "margin_cap_pct": margin_cap_pct,
+        "rows": rows,
     }
 
 
@@ -3922,18 +4436,29 @@ def check_heat_alert(prices=None):
     _HEAT_ALERT_STATE["status"] = status
     if status != "超标" or prev is None:
         return 0
-    text = (f"组合风险超标：计划风险合计 {h.get('total_planned_r')} 元 / 预算 "
-            f"{h.get('budget')} 元 = 热度 {h.get('heat_pct')}%，已超风险预算上限——"
-            f"勿再加仓，优先减仓或收紧止损。")
-    sig = {"name": "组合风险", "direction": "风控", "lots": 0, "price": None,
-           "stop": None, "target": None, "t1": None, "t2": None,
-           "alert_type": "风险超标", "alert_label": "风险预算",
-           "alert_level": f"{h.get('heat_pct')}%", "reason": text}
+    text = (
+        f"组合风险超标：计划风险合计 {h.get('total_planned_r')} 元 / 预算 "
+        f"{h.get('budget')} 元 = 热度 {h.get('heat_pct')}%，已超风险预算上限——"
+        f"勿再加仓，优先减仓或收紧止损。"
+    )
+    sig = {
+        "name": "组合风险",
+        "direction": "风控",
+        "lots": 0,
+        "price": None,
+        "stop": None,
+        "target": None,
+        "t1": None,
+        "t2": None,
+        "alert_type": "风险超标",
+        "alert_label": "风险预算",
+        "alert_level": f"{h.get('heat_pct')}%",
+        "reason": text,
+    }
     notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
     sig["kind"] = "alert"
     append_chat(sig)
-    log_alert("风险超标", None, "组合风险", text,
-              {"heat_pct": h.get("heat_pct"), "budget": h.get("budget")})
+    log_alert("风险超标", None, "组合风险", text, {"heat_pct": h.get("heat_pct"), "budget": h.get("budget")})
     return 1
 
 
@@ -3952,80 +4477,215 @@ def check_heat_alert(prices=None):
 # ---------------------------------------------------------------------------
 RULE_SEVERITY_RANK = {"info": 0, "notice": 1, "warning": 2, "danger": 3}
 RULE_SEVERITY_LABEL = {"info": "提示", "notice": "关注", "warning": "警告", "danger": "危险"}
-RULE_SEVERITY_COLOR = {"info": "#3498db", "notice": "#f1c40f",
-                       "warning": "#e6a23c", "danger": "#e74c3c"}
+RULE_SEVERITY_COLOR = {"info": "#3498db", "notice": "#f1c40f", "warning": "#e6a23c", "danger": "#e74c3c"}
 
 DEFAULT_RISK_RULES = [
-    {"id": "heat_over", "name": "组合风险预算超标", "category": "仓位",
-     "metric": "heat_pct", "op": ">", "threshold": 100, "unit": "pct",
-     "severity": "danger", "notify": False,
-     "action": "立即停止加仓；优先减仓或把止损收紧至 1.2R 内，使计划风险回到预算内。"},
-    {"id": "heat_watch", "name": "组合风险预算接近上限", "category": "仓位",
-     "metric": "heat_pct", "op": ">", "threshold": 80, "unit": "pct",
-     "severity": "warning", "notify": True,
-     "action": "风险已到警戒线（>80%），新开仓手数减半，预留安全垫。"},
-    {"id": "kill_halted", "name": "组合级硬熔断触发", "category": "熔断",
-     "metric": "halted", "op": "==", "threshold": True, "unit": "bool",
-     "severity": "danger", "notify": False,
-     "action": "硬熔断已触发：立即按系统生成的一键全平清单平仓，停机等待人工解除。"},
-    {"id": "fsm_locked", "name": "仓位状态机锁定", "category": "熔断",
-     "metric": "fsm_state", "op": "in", "threshold": ["LOCKED", "HALTED"], "unit": "str",
-     "severity": "danger", "notify": False,
-     "action": "状态机已锁死，禁止一切新开仓；若 HALTED 须人工按清单全平并解除熔断。"},
-    {"id": "fsm_warning", "name": "仓位状态机预警", "category": "熔断",
-     "metric": "fsm_state", "op": "==", "threshold": "WARNING", "unit": "str",
-     "severity": "warning", "notify": True,
-     "action": "状态机预警（WARNING），新开仓手数按 0.5× 缩放，控制节奏。"},
-    {"id": "daily_loss", "name": "当日亏损逼近停机线", "category": "纪律",
-     "metric": "daily_loss_pct", "op": ">", "threshold": 0.05, "unit": "frac",
-     "severity": "danger", "notify": False,
-     "action": "当日亏损已破 5% 软停机线，状态机锁定；减仓或停手，勿摊平。"},
-    {"id": "daily_loss_warn", "name": "当日亏损预警线", "category": "纪律",
-     "metric": "daily_loss_pct", "op": ">", "threshold": 0.03, "unit": "frac",
-     "severity": "warning", "notify": True,
-     "action": "当日亏损超 3%，收紧止损、降低新开仓手数。"},
-    {"id": "consec_losses", "name": "连续止损笔数过多", "category": "纪律",
-     "metric": "consec_losses", "op": ">=", "threshold": 2, "unit": "int",
-     "severity": "warning", "notify": True,
-     "action": "连续止损≥2 笔，软警告；≥3 笔当日冻结（禁新开，跨日自动解除）。"},
-    {"id": "drawdown", "name": "账户回撤触及水位线", "category": "回撤",
-     "metric": "dd_pct", "op": ">=", "threshold": 5.0, "unit": "pct",
-     "severity": "warning", "notify": True,
-     "action": "账户自峰值回撤≥5%，新开仓手数按水位线系数缩放（5%→0.7 / 10%→0.5 / 15%→0）。"},
-    {"id": "single_concentration", "name": "单品保证金占比超限", "category": "暴露",
-     "metric": "max_margin_pct", "op": ">", "threshold": 30, "unit": "pct",
-     "severity": "warning", "notify": True,
-     "action": "单一品种保证金占比超 30%，过度集中；分散或减仓。"},
-    {"id": "usage_high", "name": "资金使用率偏高", "category": "仓位",
-     "metric": "usage_rate", "op": ">", "threshold": 60, "unit": "pct",
-     "severity": "warning", "notify": True,
-     "action": "组合资金使用率>60%，接近组合上限；控制新开仓规模。"},
-    {"id": "position_count", "name": "持仓品种过多", "category": "暴露",
-     "metric": "n_positions", "op": ">", "threshold": 8, "unit": "int",
-     "severity": "notice", "notify": True,
-     "action": "持仓≥8 个品种，注意力分散、相关性难控；聚焦核心 3–5 个。"},
+    {
+        "id": "heat_over",
+        "name": "组合风险预算超标",
+        "category": "仓位",
+        "metric": "heat_pct",
+        "op": ">",
+        "threshold": 100,
+        "unit": "pct",
+        "severity": "danger",
+        "notify": False,
+        "action": "立即停止加仓；优先减仓或把止损收紧至 1.2R 内，使计划风险回到预算内。",
+    },
+    {
+        "id": "heat_watch",
+        "name": "组合风险预算接近上限",
+        "category": "仓位",
+        "metric": "heat_pct",
+        "op": ">",
+        "threshold": 80,
+        "unit": "pct",
+        "severity": "warning",
+        "notify": True,
+        "action": "风险已到警戒线（>80%），新开仓手数减半，预留安全垫。",
+    },
+    {
+        "id": "kill_halted",
+        "name": "组合级硬熔断触发",
+        "category": "熔断",
+        "metric": "halted",
+        "op": "==",
+        "threshold": True,
+        "unit": "bool",
+        "severity": "danger",
+        "notify": False,
+        "action": "硬熔断已触发：立即按系统生成的一键全平清单平仓，停机等待人工解除。",
+    },
+    {
+        "id": "fsm_locked",
+        "name": "仓位状态机锁定",
+        "category": "熔断",
+        "metric": "fsm_state",
+        "op": "in",
+        "threshold": ["LOCKED", "HALTED"],
+        "unit": "str",
+        "severity": "danger",
+        "notify": False,
+        "action": "状态机已锁死，禁止一切新开仓；若 HALTED 须人工按清单全平并解除熔断。",
+    },
+    {
+        "id": "fsm_warning",
+        "name": "仓位状态机预警",
+        "category": "熔断",
+        "metric": "fsm_state",
+        "op": "==",
+        "threshold": "WARNING",
+        "unit": "str",
+        "severity": "warning",
+        "notify": True,
+        "action": "状态机预警（WARNING），新开仓手数按 0.5× 缩放，控制节奏。",
+    },
+    {
+        "id": "daily_loss",
+        "name": "当日亏损逼近停机线",
+        "category": "纪律",
+        "metric": "daily_loss_pct",
+        "op": ">",
+        "threshold": 0.05,
+        "unit": "frac",
+        "severity": "danger",
+        "notify": False,
+        "action": "当日亏损已破 5% 软停机线，状态机锁定；减仓或停手，勿摊平。",
+    },
+    {
+        "id": "daily_loss_warn",
+        "name": "当日亏损预警线",
+        "category": "纪律",
+        "metric": "daily_loss_pct",
+        "op": ">",
+        "threshold": 0.03,
+        "unit": "frac",
+        "severity": "warning",
+        "notify": True,
+        "action": "当日亏损超 3%，收紧止损、降低新开仓手数。",
+    },
+    {
+        "id": "consec_losses",
+        "name": "连续止损笔数过多",
+        "category": "纪律",
+        "metric": "consec_losses",
+        "op": ">=",
+        "threshold": 2,
+        "unit": "int",
+        "severity": "warning",
+        "notify": True,
+        "action": "连续止损≥2 笔，软警告；≥3 笔当日冻结（禁新开，跨日自动解除）。",
+    },
+    {
+        "id": "drawdown",
+        "name": "账户回撤触及水位线",
+        "category": "回撤",
+        "metric": "dd_pct",
+        "op": ">=",
+        "threshold": 5.0,
+        "unit": "pct",
+        "severity": "warning",
+        "notify": True,
+        "action": "账户自峰值回撤≥5%，新开仓手数按水位线系数缩放（5%→0.7 / 10%→0.5 / 15%→0）。",
+    },
+    {
+        "id": "single_concentration",
+        "name": "单品保证金占比超限",
+        "category": "暴露",
+        "metric": "max_margin_pct",
+        "op": ">",
+        "threshold": 30,
+        "unit": "pct",
+        "severity": "warning",
+        "notify": True,
+        "action": "单一品种保证金占比超 30%，过度集中；分散或减仓。",
+    },
+    {
+        "id": "usage_high",
+        "name": "资金使用率偏高",
+        "category": "仓位",
+        "metric": "usage_rate",
+        "op": ">",
+        "threshold": 60,
+        "unit": "pct",
+        "severity": "warning",
+        "notify": True,
+        "action": "组合资金使用率>60%，接近组合上限；控制新开仓规模。",
+    },
+    {
+        "id": "position_count",
+        "name": "持仓品种过多",
+        "category": "暴露",
+        "metric": "n_positions",
+        "op": ">",
+        "threshold": 8,
+        "unit": "int",
+        "severity": "notice",
+        "notify": True,
+        "action": "持仓≥8 个品种，注意力分散、相关性难控；聚焦核心 3–5 个。",
+    },
     # ── v5 新增：7大量化策略研究结论 ──
-    {"id": "dd_circuit_breaker", "name": "10%回撤硬熔断", "category": "熔断",
-     "metric": "dd_pct", "op": ">=", "threshold": 10.0, "unit": "pct",
-     "severity": "danger", "notify": False,
-     "action": "10%回撤触发硬熔断：全平所有仓位 + 强制休息24小时 + 重启风险评估。"},
-    {"id": "consec_loss_hard", "name": "连亏5次硬冻结", "category": "纪律",
-     "metric": "consec_losses", "op": ">=", "threshold": 5, "unit": "int",
-     "severity": "danger", "notify": False,
-     "action": "连亏5次触发硬冻结：当日禁止所有新开仓，次日自动解除。"},
-    {"id": "per_trade_risk", "name": "单笔风险超1%上限", "category": "仓位",
-     "metric": "risk_pct", "op": ">", "threshold": 1.0, "unit": "pct",
-     "severity": "warning", "notify": True,
-     "action": "单笔风险超1%上限，应缩手数或调整止损，控制单笔风险在1%以内。"},
-    {"id": "time_stop_check", "name": "持仓超时检查", "category": "纪律",
-     "metric": "position_count", "op": ">", "threshold": 0, "unit": "int",
-     "severity": "notice", "notify": True,
-     "action": "有持仓超过5天未达T1，应检查是否继续持有或减仓。"},
+    {
+        "id": "dd_circuit_breaker",
+        "name": "10%回撤硬熔断",
+        "category": "熔断",
+        "metric": "dd_pct",
+        "op": ">=",
+        "threshold": 10.0,
+        "unit": "pct",
+        "severity": "danger",
+        "notify": False,
+        "action": "10%回撤触发硬熔断：全平所有仓位 + 强制休息24小时 + 重启风险评估。",
+    },
+    {
+        "id": "consec_loss_hard",
+        "name": "连亏5次硬冻结",
+        "category": "纪律",
+        "metric": "consec_losses",
+        "op": ">=",
+        "threshold": 5,
+        "unit": "int",
+        "severity": "danger",
+        "notify": False,
+        "action": "连亏5次触发硬冻结：当日禁止所有新开仓，次日自动解除。",
+    },
+    {
+        "id": "per_trade_risk",
+        "name": "单笔风险超1%上限",
+        "category": "仓位",
+        "metric": "risk_pct",
+        "op": ">",
+        "threshold": 1.0,
+        "unit": "pct",
+        "severity": "warning",
+        "notify": True,
+        "action": "单笔风险超1%上限，应缩手数或调整止损，控制单笔风险在1%以内。",
+    },
+    {
+        "id": "time_stop_check",
+        "name": "持仓超时检查",
+        "category": "纪律",
+        "metric": "position_count",
+        "op": ">",
+        "threshold": 0,
+        "unit": "int",
+        "severity": "notice",
+        "notify": True,
+        "action": "有持仓超过5天未达T1，应检查是否继续持有或减仓。",
+    },
     # ── v5.1 新增：分级止损规则 ──
-    {"id": "tiered_stop_loss", "name": "分级止损联动", "category": "止损",
-     "metric": "stop_level", "op": "auto", "threshold": None, "unit": "level",
-     "severity": "info", "notify": True,
-     "action": "根据浮盈自动调整止损级别：初始→保本→移动→硬止损，实现止损级联保护。"},
+    {
+        "id": "tiered_stop_loss",
+        "name": "分级止损联动",
+        "category": "止损",
+        "metric": "stop_level",
+        "op": "auto",
+        "threshold": None,
+        "unit": "level",
+        "severity": "info",
+        "notify": True,
+        "action": "根据浮盈自动调整止损级别：初始→保本→移动→硬止损，实现止损级联保护。",
+    },
 ]
 
 
@@ -4048,7 +4708,7 @@ def _load_risk_rules():
                     rd[k] = ov[k]
         if rd.get("on", True):
             rules.append(rd)
-    for c in (cfg.get("extra") or []):
+    for c in cfg.get("extra") or []:
         if isinstance(c, dict) and c.get("id") and c.get("metric") and c.get("op"):
             c.setdefault("name", c["id"])
             c.setdefault("category", "自定义")
@@ -4141,9 +4801,9 @@ def _eval_rule(rule, ctx):
         elif op in ("<=", "le"):
             hit = float(v) <= float(thr)
         elif op in ("==", "eq"):
-            hit = (v == thr)
+            hit = v == thr
         elif op in ("!=", "ne"):
-            hit = (v != thr)
+            hit = v != thr
         elif op == "in":
             hit = v in (thr or [])
         elif op == "not_in":
@@ -4153,10 +4813,15 @@ def _eval_rule(rule, ctx):
     except Exception:
         hit = False
     return {
-        "id": rule["id"], "name": rule["name"], "category": rule.get("category"),
-        "metric": m, "op": op,
-        "threshold": thr, "threshold_disp": _fmt_rule_value(thr, rule.get("unit", "num")),
-        "value": v, "value_disp": _fmt_rule_value(v, rule.get("unit", "num")),
+        "id": rule["id"],
+        "name": rule["name"],
+        "category": rule.get("category"),
+        "metric": m,
+        "op": op,
+        "threshold": thr,
+        "threshold_disp": _fmt_rule_value(thr, rule.get("unit", "num")),
+        "value": v,
+        "value_disp": _fmt_rule_value(v, rule.get("unit", "num")),
         "severity": rule.get("severity", "warning"),
         "severity_label": RULE_SEVERITY_LABEL.get(rule.get("severity", "warning")),
         "action": rule.get("action", ""),
@@ -4177,11 +4842,14 @@ def _risk_rules_notify(triggered):
         was = _RULE_NOTIFY_STATE.get(rid, False)
         if e.get("notify", True) and not was:
             try:
-                log_alert("规则引擎", None, e["name"],
-                          f"[{e['severity_label']}] {e['name']}：当前 {e['value_disp']} "
-                          f"触发阈值 {e['threshold_disp']}。建议：{e['action']}",
-                          {"rule_id": rid, "severity": e["severity"],
-                           "value": e["value"], "threshold": e["threshold"]})
+                log_alert(
+                    "规则引擎",
+                    None,
+                    e["name"],
+                    f"[{e['severity_label']}] {e['name']}：当前 {e['value_disp']} "
+                    f"触发阈值 {e['threshold_disp']}。建议：{e['action']}",
+                    {"rule_id": rid, "severity": e["severity"], "value": e["value"], "threshold": e["threshold"]},
+                )
             except Exception:
                 pass
     for rid in list(_RULE_NOTIFY_STATE.keys()):
@@ -4218,19 +4886,21 @@ def _pb_load_trades():
     try:
         data = json.load(open(tj.JOURNAL_FILE, encoding="utf-8")) or {}
         for t in data.get("trades", []):
-            out.append({
-                "id": t.get("id"),
-                "symbol": t.get("symbol"),
-                "direction": t.get("direction"),
-                "lots": t.get("lots"),
-                "entry_price": t.get("entry_price"),
-                "exit_price": t.get("exit_price"),
-                "exit_reason": t.get("exit_reason"),
-                "pnl": t.get("pnl"),
-                "signal_id": t.get("signal_id", ""),
-                "entry_dt": _pb_parse_dt(t.get("time")),
-                "exit_dt": _pb_parse_dt(t.get("exit_time") or ""),
-            })
+            out.append(
+                {
+                    "id": t.get("id"),
+                    "symbol": t.get("symbol"),
+                    "direction": t.get("direction"),
+                    "lots": t.get("lots"),
+                    "entry_price": t.get("entry_price"),
+                    "exit_price": t.get("exit_price"),
+                    "exit_reason": t.get("exit_reason"),
+                    "pnl": t.get("pnl"),
+                    "signal_id": t.get("signal_id", ""),
+                    "entry_dt": _pb_parse_dt(t.get("time")),
+                    "exit_dt": _pb_parse_dt(t.get("exit_time") or ""),
+                }
+            )
     except Exception:
         pass
     return out
@@ -4240,33 +4910,60 @@ def _pb_load_events():
     evs = []
     for t in _pb_load_trades():
         if t["entry_dt"]:
-            evs.append({"dt": t["entry_dt"], "date": t["entry_dt"].strftime("%Y-%m-%d"),
-                        "type": "entry", "symbol": t["symbol"], "dir": t["direction"],
-                        "detail": "开仓 %s%s手 @%s（信号:%s）" % (
-                            t["direction"], t["lots"], t["entry_price"], (t["signal_id"] or "")[:22])})
+            evs.append(
+                {
+                    "dt": t["entry_dt"],
+                    "date": t["entry_dt"].strftime("%Y-%m-%d"),
+                    "type": "entry",
+                    "symbol": t["symbol"],
+                    "dir": t["direction"],
+                    "detail": "开仓 %s%s手 @%s（信号:%s）"
+                    % (t["direction"], t["lots"], t["entry_price"], (t["signal_id"] or "")[:22]),
+                }
+            )
         if t["exit_dt"]:
-            evs.append({"dt": t["exit_dt"], "date": t["exit_dt"].strftime("%Y-%m-%d"),
-                        "type": "exit", "symbol": t["symbol"], "dir": t["direction"],
-                        "detail": "平仓 %s%s手 @%s 盈亏=%s（%s）" % (
-                            t["direction"], t["lots"], t["exit_price"], t["pnl"], t["exit_reason"] or "")})
+            evs.append(
+                {
+                    "dt": t["exit_dt"],
+                    "date": t["exit_dt"].strftime("%Y-%m-%d"),
+                    "type": "exit",
+                    "symbol": t["symbol"],
+                    "dir": t["direction"],
+                    "detail": "平仓 %s%s手 @%s 盈亏=%s（%s）"
+                    % (t["direction"], t["lots"], t["exit_price"], t["pnl"], t["exit_reason"] or ""),
+                }
+            )
     try:
-        for s in (json.load(open(SIGNAL_LOG, encoding="utf-8")) or []):
+        for s in json.load(open(SIGNAL_LOG, encoding="utf-8")) or []:
             st = _pb_parse_dt(s.get("time"))
             if st:
-                evs.append({"dt": st, "date": st.strftime("%Y-%m-%d"),
-                            "type": "signal", "symbol": s.get("symbol"), "dir": s.get("direction"),
-                            "detail": "信号 %s/%s %s 参考价%s 止损%s" % (
-                                s.get("name", ""), s.get("symbol"), s.get("direction"),
-                                s.get("entry_ref"), s.get("stop"))})
+                evs.append(
+                    {
+                        "dt": st,
+                        "date": st.strftime("%Y-%m-%d"),
+                        "type": "signal",
+                        "symbol": s.get("symbol"),
+                        "dir": s.get("direction"),
+                        "detail": "信号 %s/%s %s 参考价%s 止损%s"
+                        % (s.get("name", ""), s.get("symbol"), s.get("direction"), s.get("entry_ref"), s.get("stop")),
+                    }
+                )
     except Exception:
         pass
     try:
-        for a in (json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) or []):
+        for a in json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) or []:
             at_ = _pb_parse_dt(a.get("time"))
             if at_:
-                evs.append({"dt": at_, "date": at_.strftime("%Y-%m-%d"),
-                            "type": "alert", "symbol": a.get("symbol"), "dir": None,
-                            "detail": "[%s] %s" % (a.get("kind", ""), (a.get("text") or "")[:70])})
+                evs.append(
+                    {
+                        "dt": at_,
+                        "date": at_.strftime("%Y-%m-%d"),
+                        "type": "alert",
+                        "symbol": a.get("symbol"),
+                        "dir": None,
+                        "detail": "[%s] %s" % (a.get("kind", ""), (a.get("text") or "")[:70]),
+                    }
+                )
     except Exception:
         pass
     evs.sort(key=lambda e: e["dt"])
@@ -4282,8 +4979,15 @@ def build_playback_timeline(force=False, cache_sec=60):
     base = float(cfg.get("playback_base_equity", _PLAYBACK_BASE_EQUITY))
     events = _pb_load_events()
     if not events:
-        out = {"ok": True, "base_equity": base, "symbols": [], "date_range": [None, None],
-               "n_dates": 0, "frames": [], "note": "暂无交易/信号/报警历史"}
+        out = {
+            "ok": True,
+            "base_equity": base,
+            "symbols": [],
+            "date_range": [None, None],
+            "n_dates": 0,
+            "frames": [],
+            "note": "暂无交易/信号/报警历史",
+        }
         _PLAYBACK_CACHE["t"] = now
         _PLAYBACK_CACHE["v"] = out
         return out
@@ -4333,27 +5037,46 @@ def build_playback_timeline(force=False, cache_sec=60):
                     run = None
                     if close_at is not None and t["entry_price"] is not None:
                         run = round((close_at - float(t["entry_price"])) * mult * int(t["lots"]) * ds, 2)
-                    open_pos.append({"symbol": t["symbol"], "dir": t["direction"],
-                                     "lots": t["lots"], "entry": t["entry_price"],
-                                     "close_at_date": close_at, "running_pnl": run})
-        running_mtm = round(sum(p["running_pnl"] for p in open_pos if p["running_pnl"] is not None), 2) if open_pos else 0.0
+                    open_pos.append(
+                        {
+                            "symbol": t["symbol"],
+                            "dir": t["direction"],
+                            "lots": t["lots"],
+                            "entry": t["entry_price"],
+                            "close_at_date": close_at,
+                            "running_pnl": run,
+                        }
+                    )
+        running_mtm = (
+            round(sum(p["running_pnl"] for p in open_pos if p["running_pnl"] is not None), 2) if open_pos else 0.0
+        )
         evs = by_date.get(date, [])
-        frames.append({
-            "date": date,
-            "realized_pnl_to_date": round(realized, 2),
-            "running_mtm_pnl": running_mtm,
-            "equity_to_date": round(base + realized + running_mtm, 2),
-            "n_open": len(open_pos),
-            "open_positions": open_pos,
-            "events": [{"type": e["type"], "symbol": e["symbol"], "dir": e["dir"], "detail": e["detail"]} for e in evs],
-            "n_signals": sum(1 for e in evs if e["type"] == "signal"),
-            "n_entries": sum(1 for e in evs if e["type"] == "entry"),
-            "n_exits": sum(1 for e in evs if e["type"] == "exit"),
-            "n_alerts": sum(1 for e in evs if e["type"] == "alert"),
-        })
+        frames.append(
+            {
+                "date": date,
+                "realized_pnl_to_date": round(realized, 2),
+                "running_mtm_pnl": running_mtm,
+                "equity_to_date": round(base + realized + running_mtm, 2),
+                "n_open": len(open_pos),
+                "open_positions": open_pos,
+                "events": [
+                    {"type": e["type"], "symbol": e["symbol"], "dir": e["dir"], "detail": e["detail"]} for e in evs
+                ],
+                "n_signals": sum(1 for e in evs if e["type"] == "signal"),
+                "n_entries": sum(1 for e in evs if e["type"] == "entry"),
+                "n_exits": sum(1 for e in evs if e["type"] == "exit"),
+                "n_alerts": sum(1 for e in evs if e["type"] == "alert"),
+            }
+        )
     symbols = sorted(set(e["symbol"] for e in events if e.get("symbol")))
-    out = {"ok": True, "base_equity": base, "symbols": symbols,
-           "date_range": [d0, d1], "n_dates": len(dates), "frames": frames}
+    out = {
+        "ok": True,
+        "base_equity": base,
+        "symbols": symbols,
+        "date_range": [d0, d1],
+        "n_dates": len(dates),
+        "frames": frames,
+    }
     _PLAYBACK_CACHE["t"] = now
     _PLAYBACK_CACHE["v"] = out
     return out
@@ -4370,21 +5093,46 @@ def playback_kline(symbol, asof=None):
             d = str(idx)[:10]
             if asof and d > asof:
                 continue
-            bars.append({"date": d, "o": float(row.get("open")), "h": float(row.get("high")),
-                         "l": float(row.get("low")), "c": float(row.get("close")),
-                         "v": float(row.get("volume") or 0)})
+            bars.append(
+                {
+                    "date": d,
+                    "o": float(row.get("open")),
+                    "h": float(row.get("high")),
+                    "l": float(row.get("low")),
+                    "c": float(row.get("close")),
+                    "v": float(row.get("volume") or 0),
+                }
+            )
         marks = []
         for t in _pb_load_trades():
             if t["symbol"] != symbol:
                 continue
             if t["entry_dt"]:
-                marks.append({"type": "entry", "date": t["entry_dt"].strftime("%Y-%m-%d"),
-                              "price": t["entry_price"], "dir": t["direction"]})
+                marks.append(
+                    {
+                        "type": "entry",
+                        "date": t["entry_dt"].strftime("%Y-%m-%d"),
+                        "price": t["entry_price"],
+                        "dir": t["direction"],
+                    }
+                )
             if t["exit_dt"]:
-                marks.append({"type": "exit", "date": t["exit_dt"].strftime("%Y-%m-%d"),
-                              "price": t["exit_price"], "dir": t["direction"]})
-        return {"ok": True, "symbol": symbol, "asof": asof, "bars": bars, "marks": marks,
-                "events": _pb_load_events(symbol, asof)}
+                marks.append(
+                    {
+                        "type": "exit",
+                        "date": t["exit_dt"].strftime("%Y-%m-%d"),
+                        "price": t["exit_price"],
+                        "dir": t["direction"],
+                    }
+                )
+        return {
+            "ok": True,
+            "symbol": symbol,
+            "asof": asof,
+            "bars": bars,
+            "marks": marks,
+            "events": _pb_load_events(symbol, asof),
+        }
     except Exception as e:
         return {"ok": False, "reason": repr(e)[:80]}
 
@@ -4418,31 +5166,46 @@ def _pb_load_events(symbol, asof, state=None):
                     continue
                 kind = it.get("kind") or "news"
                 label = it.get("name") or it.get("alert_label") or it.get("alert_type") or kind
-                events.append({"date": t, "symbol": sym or symbol, "type": kind,
-                               "label": str(label), "detail": it.get("reason") or ""})
+                events.append(
+                    {
+                        "date": t,
+                        "symbol": sym or symbol,
+                        "type": kind,
+                        "label": str(label),
+                        "detail": it.get("reason") or "",
+                    }
+                )
     except Exception:
         pass
     if state is not None:
         try:
             _an = state.get("anomaly", {}) or {}
-            for a in (_an.get("anomalies") or []):
+            for a in _an.get("anomalies") or []:
                 if symbol and (a.get("symbol") or "") != symbol:
                     continue
                 t = (a.get("time") or a.get("date") or "")[:10]
                 if not t or (asof and t > asof):
                     continue
-                events.append({"date": t, "symbol": a.get("symbol") or symbol,
-                               "type": "anomaly", "label": a.get("type") or "异动",
-                               "detail": a.get("detail") or ""})
+                events.append(
+                    {
+                        "date": t,
+                        "symbol": a.get("symbol") or symbol,
+                        "type": "anomaly",
+                        "label": a.get("type") or "异动",
+                        "detail": a.get("detail") or "",
+                    }
+                )
         except Exception:
             pass
     # 按日期去重（同日同标签只留一条）
-    seen = set(); uniq = []
+    seen = set()
+    uniq = []
     for e in events:
         k = (e["date"], e["type"], e["label"])
         if k in seen:
             continue
-        seen.add(k); uniq.append(e)
+        seen.add(k)
+        uniq.append(e)
     uniq.sort(key=lambda x: x["date"])
     return uniq
 
@@ -4462,7 +5225,14 @@ SENS_PARAMS = [
     {"key": "risk_gate.kelly_slope", "label": "Kelly斜率", "base": 2.0, "values": [1.0, 1.5, 2.0, 2.5, 3.0]},
 ]
 SENS_FOCUS_DEFAULT = ["FG", "SA", "JM", "jd"]
-FOCUS_SYMS = ["jd", "lh", "FG", "SA", "JM", "J"]   # 固定关注的 6 品种（2026-08-19 22:35 恢复：15:17 部署时误删定义，导致 evaluate 全部 NameError 跳过、夜盘零信号）
+FOCUS_SYMS = [
+    "jd",
+    "lh",
+    "FG",
+    "SA",
+    "JM",
+    "J",
+]  # 固定关注的 6 品种（2026-08-19 22:35 恢复：15:17 部署时误删定义，导致 evaluate 全部 NameError 跳过、夜盘零信号）
 
 
 def _sens_deepcopy(cfg):
@@ -4496,8 +5266,7 @@ def _sens_agg_backtest(symbols, cfg, tail):
             wins += int(round(r["win_rate"] * r["trades"]))
     expR = total_R / n_trades if n_trades else 0.0
     win_rate = wins / n_trades if n_trades else 0.0
-    return {"expR": round(expR, 4), "total_R": round(total_R, 2),
-            "n_trades": n_trades, "win_rate": round(win_rate, 3)}
+    return {"expR": round(expR, 4), "total_R": round(total_R, 2), "n_trades": n_trades, "win_rate": round(win_rate, 3)}
 
 
 def _sens_run_thread(symbols, tail):
@@ -4521,22 +5290,40 @@ def _sens_run_thread(symbols, tail):
                 cfg = _sens_deepcopy(cfg0)
                 _sens_set_path(cfg, p["key"], val)
                 m = _sens_agg_backtest(symbols, cfg, tail)
-                series.append({"value": val, "is_base": val == p["base"],
-                               "expR": m["expR"], "total_R": m["total_R"],
-                               "n_trades": m["n_trades"], "win_rate": m["win_rate"]})
+                series.append(
+                    {
+                        "value": val,
+                        "is_base": val == p["base"],
+                        "expR": m["expR"],
+                        "total_R": m["total_R"],
+                        "n_trades": m["n_trades"],
+                        "win_rate": m["win_rate"],
+                    }
+                )
             exprs = [s["expR"] for s in series]
             rng = max(exprs) - min(exprs)
             base_s = next((s for s in series if s["is_base"]), None)
             base_expR = base_s["expR"] if base_s else 0.0
             sens = rng / max(0.01, abs(base_expR)) if base_expR else 0.0
             robust = "稳健" if sens < 0.3 else ("中等" if sens < 0.8 else "敏感")
-            params_out.append({
-                "key": p["key"], "label": p["label"], "base": p["base"],
-                "sensitivity": round(sens, 3), "robust": robust, "series": series,
-            })
+            params_out.append(
+                {
+                    "key": p["key"],
+                    "label": p["label"],
+                    "base": p["base"],
+                    "sensitivity": round(sens, 3),
+                    "robust": robust,
+                    "series": series,
+                }
+            )
         params_out.sort(key=lambda x: -x["sensitivity"])
-        result = {"ok": True, "status": "done", "focus_symbols": symbols,
-                  "base_metrics": base_metrics, "params": params_out}
+        result = {
+            "ok": True,
+            "status": "done",
+            "focus_symbols": symbols,
+            "base_metrics": base_metrics,
+            "params": params_out,
+        }
         _SENS_CACHE["v"] = result
         _SENS_CACHE["t"] = time.time()
     except Exception as e:
@@ -4550,8 +5337,7 @@ def parameter_sensitivity(force=False, symbols=None, tail=200, cache_sec=1800):
     now = time.time()
     with _SENS_LOCK:
         if _SENS_CACHE["running"]:
-            return {"ok": True, "status": "running",
-                    "elapsed": round(now - _SENS_CACHE["since"], 1)}
+            return {"ok": True, "status": "running", "elapsed": round(now - _SENS_CACHE["since"], 1)}
         if not force and _SENS_CACHE["v"] is not None and now - _SENS_CACHE["t"] < cache_sec:
             return _SENS_CACHE["v"]
         syms = [s for s in (symbols or SENS_FOCUS_DEFAULT) if s in fd.SYMBOLS]
@@ -4567,8 +5353,7 @@ def parameter_sensitivity(force=False, symbols=None, tail=200, cache_sec=1800):
 def evaluate_risk_rules(force=False, prices=None, cache_sec=30):
     """组合预警规则引擎主入口（#132）。返回分级评估 dict，供 /api/risk_rules 与面板。"""
     now = time.time()
-    if not force and _RISK_RULES_CACHE["v"] is not None and \
-            now - _RISK_RULES_CACHE["t"] < cache_sec:
+    if not force and _RISK_RULES_CACHE["v"] is not None and now - _RISK_RULES_CACHE["t"] < cache_sec:
         return _RISK_RULES_CACHE["v"]
     ctx = _risk_rule_context(prices)
     rules = _load_risk_rules()
@@ -4598,8 +5383,10 @@ def evaluate_risk_rules(force=False, prices=None, cache_sec=30):
     out = {
         "ok": True,
         "updated": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "grade": grade, "grade_color": grade_color,
-        "n_rules": len(evals), "n_triggered": len(triggered),
+        "grade": grade,
+        "grade_color": grade_color,
+        "n_rules": len(evals),
+        "n_triggered": len(triggered),
         "context": {
             "equity": round(ctx.get("equity") or 0, 2),
             "usage_rate": ctx.get("usage_rate"),
@@ -4633,10 +5420,13 @@ ALERT_KINDS = ["触价", "移动止损", "自选到价", "跳空风险", "风险
 def log_alert(kind, symbol=None, name=None, text="", extra=None):
     """统一报警落盘（C4）：所有报警（触价三档 / 移动止损 / 自选到价 / 跳空 / 风险超标）
     都写入 alert_history.json（最多保留 300 条），供面板「预警」页回看。"""
-    rec = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-           "kind": kind, "symbol": symbol,
-           "name": name or (SYMBOLS.get(symbol, {}).get("name", symbol) if symbol else None),
-           "text": text}
+    rec = {
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "kind": kind,
+        "symbol": symbol,
+        "name": name or (SYMBOLS.get(symbol, {}).get("name", symbol) if symbol else None),
+        "text": text,
+    }
     if extra:
         rec.update(extra)
     try:
@@ -4669,8 +5459,13 @@ def load_alerts(kind=None, limit=120):
     total_all = len(arr)
     if kind and kind not in ("", "全部"):
         arr = [a for a in arr if a.get("kind") == kind]
-    return {"items": arr[:limit], "total": total_all, "shown": min(len(arr), limit),
-            "kinds": kinds, "all_kinds": ALERT_KINDS}
+    return {
+        "items": arr[:limit],
+        "total": total_all,
+        "shown": min(len(arr), limit),
+        "kinds": kinds,
+        "all_kinds": ALERT_KINDS,
+    }
 
 
 # —— B1 自选到价提醒（非持仓品种也能挂条件）——
@@ -4715,13 +5510,20 @@ def watch_add(symbol, op, price, note=""):
     if len(wl["items"]) >= 60:
         return False, "到价提醒最多 60 条，请先删除部分"
     nm = SYMBOLS.get(symbol, {}).get("name", symbol)
-    wl["items"].append({
-        "id": f"w{int(time.time() * 1000) % 1000000000}",
-        "symbol": symbol, "name": nm, "op": op, "price": price,
-        "note": (note or "")[:40], "enabled": True,
-        "fired": False, "fired_time": None,
-        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    })
+    wl["items"].append(
+        {
+            "id": f"w{int(time.time() * 1000) % 1000000000}",
+            "symbol": symbol,
+            "name": nm,
+            "op": op,
+            "price": price,
+            "note": (note or "")[:40],
+            "enabled": True,
+            "fired": False,
+            "fired_time": None,
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
     save_watchlist(wl)
     return True, f"已添加：{nm} {'上破' if op == 'above' else '下破'} {price}"
 
@@ -4787,12 +5589,24 @@ def check_watch_alerts():
         nm = it.get("name") or sym
         arrow = "上破" if it["op"] == "above" else "下破"
         note = f"（备注：{it['note']}）" if it.get("note") else ""
-        text = (f"自选到价提醒触发：{nm} 实盘价 {_fmt_price(px)} 已{arrow}你设的 "
-                f"{_fmt_price(lvl)}{note}。仅到价提醒，是否入场仍看四维信号与风控。")
-        sig = {"name": nm, "direction": "关注", "lots": 0, "price": px,
-               "stop": None, "target": None, "t1": None, "t2": None,
-               "alert_type": "自选到价", "alert_label": f"{arrow}价位",
-               "alert_level": _fmt_price(lvl), "reason": text}
+        text = (
+            f"自选到价提醒触发：{nm} 实盘价 {_fmt_price(px)} 已{arrow}你设的 "
+            f"{_fmt_price(lvl)}{note}。仅到价提醒，是否入场仍看四维信号与风控。"
+        )
+        sig = {
+            "name": nm,
+            "direction": "关注",
+            "lots": 0,
+            "price": px,
+            "stop": None,
+            "target": None,
+            "t1": None,
+            "t2": None,
+            "alert_type": "自选到价",
+            "alert_label": f"{arrow}价位",
+            "alert_level": _fmt_price(lvl),
+            "reason": text,
+        }
         # 2026-08-20: add main contract code
         if not sig.get("contract") and sig.get("symbol"):
             try:
@@ -4829,13 +5643,16 @@ def watch_view():
         r["in_session"] = _in_session(sym) if sym in SYMBOLS else False
         rows.append(r)
     rows.sort(key=lambda r: (r.get("fired") or False, r.get("symbol") or ""))
-    return {"items": rows, "count": len(rows),
-            "pending": sum(1 for r in rows if not r.get("fired") and r.get("enabled", True))}
+    return {
+        "items": rows,
+        "count": len(rows),
+        "pending": sum(1 for r in rows if not r.get("fired") and r.get("enabled", True)),
+    }
 
 
 # —— B2 换月预警 ——
-ROLL_WARN_DAYS = 15      # 距交割月首日 < 15 天：开始留意换月
-ROLL_URGENT_DAYS = 7     # < 7 天：须换月（流动性下降 + 交割风险）
+ROLL_WARN_DAYS = 15  # 距交割月首日 < 15 天：开始留意换月
+ROLL_URGENT_DAYS = 7  # < 7 天：须换月（流动性下降 + 交割风险）
 
 
 def _parse_contract_month(code):
@@ -4846,7 +5663,8 @@ def _parse_contract_month(code):
     if len(digits) < 4:
         return None
     try:
-        yy = int(digits[-4:-2]); mm = int(digits[-2:])
+        yy = int(digits[-4:-2])
+        mm = int(digits[-2:])
     except ValueError:
         return None
     if not 1 <= mm <= 12:
@@ -4874,8 +5692,7 @@ def rollover_info(sym, contract=None):
         level, msg = "warn", f"{code} 距交割月 {days} 天，建议开始留意换到下一主力"
     else:
         level, msg = "ok", f"{code} 距交割月 {days} 天，无需换月"
-    return {"contract": code, "delivery": f"{y}-{m:02d}", "days_left": days,
-            "level": level, "msg": msg}
+    return {"contract": code, "delivery": f"{y}-{m:02d}", "days_left": days, "level": level, "msg": msg}
 
 
 def rollover_overview():
@@ -4887,9 +5704,16 @@ def rollover_overview():
         if not p.get("lots"):
             continue
         info = rollover_info(sym) or {}
-        rows.append({"symbol": sym, "name": SYMBOLS.get(sym, {}).get("name", sym),
-                     "direction": p.get("direction"), "lots": p.get("lots"), **info})
-    rows.sort(key=lambda r: (r.get("days_left") if r.get("days_left") is not None else 999))
+        rows.append(
+            {
+                "symbol": sym,
+                "name": SYMBOLS.get(sym, {}).get("name", sym),
+                "direction": p.get("direction"),
+                "lots": p.get("lots"),
+                **info,
+            }
+        )
+    rows.sort(key=lambda r: r.get("days_left") if r.get("days_left") is not None else 999)
     urgent = [r for r in rows if r.get("level") == "urgent"]
     warn = [r for r in rows if r.get("level") == "warn"]
     mm = {}
@@ -4897,17 +5721,21 @@ def rollover_overview():
         mm = rollover_mismatch_check()
     except Exception:
         mm = {"mismatches": [], "count": 0}
-    return {"rows": rows, "urgent": len(urgent), "warn": len(warn),
-            "note": f"距交割月 <{ROLL_URGENT_DAYS} 天须换月 · <{ROLL_WARN_DAYS} 天开始留意",
-            "mismatches": mm.get("mismatches", []),
-            "mm_count": mm.get("count", 0),
-            "ak_checked_at": mm.get("checked_at"),
-            "ak_error": mm.get("error")}
+    return {
+        "rows": rows,
+        "urgent": len(urgent),
+        "warn": len(warn),
+        "note": f"距交割月 <{ROLL_URGENT_DAYS} 天须换月 · <{ROLL_WARN_DAYS} 天开始留意",
+        "mismatches": mm.get("mismatches", []),
+        "mm_count": mm.get("count", 0),
+        "ak_checked_at": mm.get("checked_at"),
+        "ak_error": mm.get("error"),
+    }
 
 
 # —— B3 跳空风险预警 ——
-_GAP_CACHE = {}            # sym -> (ts, stats)  历史跳空统计缓存 30min
-_GAP_ALERT_GUARD = set()   # "日期|窗口" 每个收盘前窗口只提醒一次
+_GAP_CACHE = {}  # sym -> (ts, stats)  历史跳空统计缓存 30min
+_GAP_ALERT_GUARD = set()  # "日期|窗口" 每个收盘前窗口只提醒一次
 
 
 def _gap_stats(sym, lookback=120):
@@ -4924,9 +5752,12 @@ def _gap_stats(sym, lookback=120):
             prev_close = d["close"].shift(1)
             gap = ((d["open"] - prev_close).abs() / prev_close * 100).dropna()
             if len(gap) >= 20:
-                out = {"avg": round(float(gap.mean()), 2),
-                       "p90": round(float(gap.quantile(0.9)), 2),
-                       "max": round(float(gap.max()), 2), "n": int(len(gap))}
+                out = {
+                    "avg": round(float(gap.mean()), 2),
+                    "p90": round(float(gap.quantile(0.9)), 2),
+                    "max": round(float(gap.max()), 2),
+                    "n": int(len(gap)),
+                }
     except Exception:
         out = None
     _GAP_CACHE[sym] = (now, out)
@@ -4973,8 +5804,7 @@ def gap_risk(prices=None):
         if g and stop_pct is not None:
             if g["p90"] >= stop_pct:
                 level = "高"
-                tip = (f"90 分位跳空 {g['p90']}% ≥ 止损距 {stop_pct}%，"
-                       f"{overnight}可能直接跳过止损，建议减仓或收紧止损")
+                tip = f"90 分位跳空 {g['p90']}% ≥ 止损距 {stop_pct}%，{overnight}可能直接跳过止损，建议减仓或收紧止损"
             elif g["avg"] >= stop_pct * 0.6:
                 level = "中"
                 tip = f"平均跳空 {g['avg']}% 已接近止损距 {stop_pct}%，注意{overnight}风险"
@@ -4982,13 +5812,23 @@ def gap_risk(prices=None):
                 level = "低"
                 tip = f"止损距 {stop_pct}% 明显大于常见跳空 {g['avg']}%，{overnight}风险可控"
             counts[level] = counts.get(level, 0) + 1
-        rows.append({
-            "symbol": sym, "name": p.get("name", sym), "direction": p.get("direction"),
-            "lots": p.get("lots"), "price": px, "stop": stop, "stop_pct": stop_pct,
-            "gap_avg": (g or {}).get("avg"), "gap_p90": (g or {}).get("p90"),
-            "gap_max": (g or {}).get("max"), "level": level, "tip": tip,
-            "night": sym not in NO_NIGHT,
-        })
+        rows.append(
+            {
+                "symbol": sym,
+                "name": p.get("name", sym),
+                "direction": p.get("direction"),
+                "lots": p.get("lots"),
+                "price": px,
+                "stop": stop,
+                "stop_pct": stop_pct,
+                "gap_avg": (g or {}).get("avg"),
+                "gap_p90": (g or {}).get("p90"),
+                "gap_max": (g or {}).get("max"),
+                "level": level,
+                "tip": tip,
+                "night": sym not in NO_NIGHT,
+            }
+        )
     order = {"高": 0, "中": 1, "低": 2, "—": 3}
     rows.sort(key=lambda r: order.get(r["level"], 9))
     if counts["高"]:
@@ -4999,9 +5839,14 @@ def gap_risk(prices=None):
         summary = f"当前持仓{overnight}跳空风险可控"
     else:
         summary = "当前无持仓，无跳空风险"
-    return {"phase": phase, "overnight": overnight, "rows": rows,
-            "counts": counts, "summary": summary,
-            "note": "跳空统计=近120交易日 |今开−昨收|/昨收；p90=90分位（较极端情形）"}
+    return {
+        "phase": phase,
+        "overnight": overnight,
+        "rows": rows,
+        "counts": counts,
+        "summary": summary,
+        "note": "跳空统计=近120交易日 |今开−昨收|/昨收；p90=90分位（较极端情形）",
+    }
 
 
 def check_gap_alerts():
@@ -5016,15 +5861,27 @@ def check_gap_alerts():
     if not highs:
         return 0
     _GAP_ALERT_GUARD.add(key)
-    rep = max(highs, key=lambda r: (r.get("gap_p90") or 0))
+    rep = max(highs, key=lambda r: r.get("gap_p90") or 0)
     names = "、".join(r["name"] for r in highs[:4])
-    text = (f"{g['phase']}提醒：{len(highs)} 个持仓{g['overnight']}跳空风险偏高（{names}）——"
-            f"历史跳空幅度可能直接越过止损，建议减仓或收紧止损。")
-    sig = {"name": "跳空风险", "direction": "风控", "symbol": rep.get("symbol"),
-           "lots": rep.get("lots"), "price": rep.get("price"),
-           "stop": rep.get("stop"), "target": None, "t1": None, "t2": None,
-           "alert_type": "跳空风险", "alert_label": g["overnight"],
-           "alert_level": rep.get("stop"), "reason": text}
+    text = (
+        f"{g['phase']}提醒：{len(highs)} 个持仓{g['overnight']}跳空风险偏高（{names}）——"
+        f"历史跳空幅度可能直接越过止损，建议减仓或收紧止损。"
+    )
+    sig = {
+        "name": "跳空风险",
+        "direction": "风控",
+        "symbol": rep.get("symbol"),
+        "lots": rep.get("lots"),
+        "price": rep.get("price"),
+        "stop": rep.get("stop"),
+        "target": None,
+        "t1": None,
+        "t2": None,
+        "alert_type": "跳空风险",
+        "alert_label": g["overnight"],
+        "alert_level": rep.get("stop"),
+        "reason": text,
+    }
     # 2026-08-20: add main contract code
     if not sig.get("contract") and sig.get("symbol"):
         try:
@@ -5037,8 +5894,13 @@ def check_gap_alerts():
     notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
     sig["kind"] = "alert"
     append_chat(sig)
-    log_alert("跳空风险", rep.get("symbol"), "跳空风险", text,
-              {"count": len(highs), "phase": g["phase"], "overnight": g["overnight"]})
+    log_alert(
+        "跳空风险",
+        rep.get("symbol"),
+        "跳空风险",
+        text,
+        {"count": len(highs), "phase": g["phase"], "overnight": g["overnight"]},
+    )
     return len(highs)
 
 
@@ -5084,9 +5946,13 @@ def vol_regime(sym, lookback=120):
                 cur = float(win.iloc[-1])
                 pct = float((win <= cur).mean() * 100)
                 label = "极高" if pct >= 85 else ("高" if pct >= 60 else ("中" if pct >= 25 else "低"))
-                out = {"atr_pct": round(cur, 2), "percentile": round(pct, 0),
-                       "regime": label, "median": round(float(win.median()), 2),
-                       "n": int(len(win))}
+                out = {
+                    "atr_pct": round(cur, 2),
+                    "percentile": round(pct, 0),
+                    "regime": label,
+                    "median": round(float(win.median()), 2),
+                    "n": int(len(win)),
+                }
     except Exception:
         out = None
     _VOL_CACHE[sym] = (now, out)
@@ -5105,27 +5971,38 @@ def variety_edge(with_vol=True):
         c = calib.get(sym) or {}
         mo = c.get("mean_oos")
         row = {
-            "symbol": sym, "name": meta.get("name", sym),
+            "symbol": sym,
+            "name": meta.get("name", sym),
             "mean_oos": (round(float(mo), 4) if mo is not None else None),
-            "full_expR": c.get("full_expR"), "cur_full_expR": c.get("cur_full_expR"),
-            "trades": c.get("total_trades"), "folds": c.get("folds"),
-            "T_thresh": c.get("T_thresh"), "robust": bool(c.get("robust")),
-            "note": c.get("note", ""), "disabled": sym in RUNTIME_DISABLED,
+            "full_expR": c.get("full_expR"),
+            "cur_full_expR": c.get("cur_full_expR"),
+            "trades": c.get("total_trades"),
+            "folds": c.get("folds"),
+            "T_thresh": c.get("T_thresh"),
+            "robust": bool(c.get("robust")),
+            "note": c.get("note", ""),
+            "disabled": sym in RUNTIME_DISABLED,
             "recoverable": sym in AUTO_RECOVER_SYMBOLS,
             "slip_pts": round(float(fd.get_slip_pts(sym, DEFAULT_CONFIG)), 2),
             "recalibrated": ("重校准" in (c.get("note", "") or "")),
-            "held": sym in held, "focus": sym in focus, "vol": None,
+            "held": sym in held,
+            "focus": sym in focus,
+            "vol": None,
         }
         if with_vol and sym in focus:
             row["vol"] = vol_regime(sym)
         rows.append(row)
-    rows.sort(key=lambda r: (not r["held"], not r["focus"],
-                             -(r["mean_oos"] if r["mean_oos"] is not None else -9)))
+    rows.sort(key=lambda r: (not r["held"], not r["focus"], -(r["mean_oos"] if r["mean_oos"] is not None else -9)))
     pos_edge = [r for r in rows if (r["mean_oos"] or 0) > 0 and not r["disabled"]]
-    return {"rows": rows, "focus": sorted(focus), "held": sorted(held),
-            "disabled": sorted(RUNTIME_DISABLED), "pos_edge_count": len(pos_edge),
-            "note": "mean_oos=滚动样本外平均期望R（>0 才有正统计优势）；"
-                    "robust=false 或已屏蔽品种不出信号；波动率仅算持仓+关注 6 品种"}
+    return {
+        "rows": rows,
+        "focus": sorted(focus),
+        "held": sorted(held),
+        "disabled": sorted(RUNTIME_DISABLED),
+        "pos_edge_count": len(pos_edge),
+        "note": "mean_oos=滚动样本外平均期望R（>0 才有正统计优势）；"
+        "robust=false 或已屏蔽品种不出信号；波动率仅算持仓+关注 6 品种",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -5133,6 +6010,8 @@ def variety_edge(with_vol=True):
 # ---------------------------------------------------------------------------
 _CPOS_CACHE = None
 _CPOS_MTIME = 0
+
+
 def get_cpos_cache():
     """加载龙虎榜缓存；文件被每日自动化覆盖(mtime 变化)时自动重载。"""
     global _CPOS_CACHE, _CPOS_MTIME
@@ -5174,6 +6053,8 @@ def cpos_for(sym):
 
 # 逐合约龙虎榜键（SA01→SA701）：让 01 取真实逐合约数据，不再用品种级 SA 失真
 _CONTRACT_CPOS_KEY = {"SA01": "SA701"}
+
+
 def contract_cpos_key(sym):
     return _CONTRACT_CPOS_KEY.get(sym, variety_of(sym))
 
@@ -5226,25 +6107,33 @@ def cpos_ranking(top_n=8, date=None):
                     break
         if c is None:
             continue
-        rows.append({
-            "sym": sym,
-            "name": SYMBOLS[sym]["name"],
-            "c_score": c,
-            "net": net,
-            "net_chg": net_chg,
-            "direction": "多" if net > 0 else ("空" if net < 0 else "中性"),
-            "exchange": rec.get("exchange", ""),
-        })
+        rows.append(
+            {
+                "sym": sym,
+                "name": SYMBOLS[sym]["name"],
+                "c_score": c,
+                "net": net,
+                "net_chg": net_chg,
+                "direction": "多" if net > 0 else ("空" if net < 0 else "中性"),
+                "exchange": rec.get("exchange", ""),
+            }
+        )
     rows.sort(key=lambda r: r["c_score"], reverse=True)
     bullish = [r for r in rows if r["c_score"] > 0][:top_n]
     bearish = [r for r in rows if r["c_score"] < 0]
-    bearish.sort(key=lambda r: r["c_score"])   # 最偏空（最负）在前
+    bearish.sort(key=lambda r: r["c_score"])  # 最偏空（最负）在前
     bearish = bearish[:top_n]
-    by_sym = {r["sym"]: {
-        "available": True, "c_score": r["c_score"], "net": r["net"],
-        "net_chg": r["net_chg"], "direction": r["direction"],
-        "trade_date": target,
-    } for r in rows}
+    by_sym = {
+        r["sym"]: {
+            "available": True,
+            "c_score": r["c_score"],
+            "net": r["net"],
+            "net_chg": r["net_chg"],
+            "direction": r["direction"],
+            "trade_date": target,
+        }
+        for r in rows
+    }
     # 2026-08-15：补充 is_today / stale_days，前端据此标注「数据日期·每日收盘更新」
     try:
         _td = datetime.strptime(str(target), "%Y%m%d").date() if target else None
@@ -5273,7 +6162,8 @@ def cpos_ranking(top_n=8, date=None):
 # ---------------------------------------------------------------------------
 # 组合层风险约束（P0-1）：相关性同向 + 总风险预算
 # ---------------------------------------------------------------------------
-PAIR_CORR_CACHE = {}   # frozenset({a,b}) -> (ts, corr|None)
+PAIR_CORR_CACHE = {}  # frozenset({a,b}) -> (ts, corr|None)
+
 
 def _spec_mult(sym):
     """品种合约乘数（手风险计算用）。"""
@@ -5281,6 +6171,7 @@ def _spec_mult(sym):
         return at.load_config()["contract_specs"].get(sym, {}).get("multiplier", 10)
     except Exception:
         return 10
+
 
 def _reconcile_journal_vs_account(held):
     """只读对账：journal 开仓记录(pnl=None)反推「应持仓」，与 account_state 持仓(held)比对。
@@ -5303,20 +6194,24 @@ def _reconcile_journal_vs_account(held):
             qty = abs(t.get("quantity") or t.get("lots") or 0) or 1
             if k not in javg_acc:
                 javg_acc[k] = {"sum": 0.0, "qty": 0.0}
-                jlevels[k] = {"stop": t.get("stop"), "stop_dist": t.get("stop_dist"),
-                              "t1": t.get("t1"), "t2": t.get("t2")}
+                jlevels[k] = {
+                    "stop": t.get("stop"),
+                    "stop_dist": t.get("stop_dist"),
+                    "t1": t.get("t1"),
+                    "t2": t.get("t2"),
+                }
             javg_acc[k]["sum"] += (t.get("entry_price") or 0) * qty
             javg_acc[k]["qty"] += qty
-        javg = {k: round(v["sum"] / v["qty"], 2) if v["qty"] else 0.0
-                for k, v in javg_acc.items()}
+        javg = {k: round(v["sum"] / v["qty"], 2) if v["qty"] else 0.0 for k, v in javg_acc.items()}
         aopen = {}
         for p in held:
             k = (p.get("symbol"), p.get("direction"))
             aopen[k] = aopen.get(k, 0) + (p.get("lots") or 0)
         issues = []
         avg_issues = []
-        for k in (set(jopen) | set(aopen)):
-            jl = jopen.get(k, 0); al = aopen.get(k, 0)
+        for k in set(jopen) | set(aopen):
+            jl = jopen.get(k, 0)
+            al = aopen.get(k, 0)
             if jl == 0 and al > 0:
                 issues.append(f"{k[0]} {k[1]}：账户有 {al} 手但 journal 无对应开仓记录")
             elif al == 0 and jl > 0:
@@ -5332,23 +6227,34 @@ def _reconcile_journal_vs_account(held):
                 avg_issues.append(msg)
                 issues.append(msg)
         # 已实现盈亏漂移（journal 已平仓盈亏合计 vs account realized_pnl）
-        jrealized = round(sum((t.get("pnl") or 0) for t in data.get("trades", [])
-                              if t.get("pnl") is not None), 2)
+        jrealized = round(sum((t.get("pnl") or 0) for t in data.get("trades", []) if t.get("pnl") is not None), 2)
         arealized = round(at.load_state().get("realized_pnl", 0.0), 2)
         realized_issues = []
         if abs(jrealized - arealized) > 0.01:
             msg = f"已实现盈亏不一致（journal {jrealized} vs 账户 {arealized}）"
             realized_issues.append(msg)
             issues.append(msg)
-        return {"match": len(issues) == 0, "issues": issues,
-                "journal_open": len(jopen), "account_open": len(aopen),
-                "realized_pnl_journal": jrealized, "realized_pnl_account": arealized,
-                "realized_issues": realized_issues, "avg_issues": avg_issues}
+        return {
+            "match": len(issues) == 0,
+            "issues": issues,
+            "journal_open": len(jopen),
+            "account_open": len(aopen),
+            "realized_pnl_journal": jrealized,
+            "realized_pnl_account": arealized,
+            "realized_issues": realized_issues,
+            "avg_issues": avg_issues,
+        }
     except Exception as e:
-        return {"match": None, "issues": [f"对账异常：{e}"],
-                "journal_open": None, "account_open": None,
-                "realized_pnl_journal": None, "realized_pnl_account": None,
-                "realized_issues": [], "avg_issues": []}
+        return {
+            "match": None,
+            "issues": [f"对账异常：{e}"],
+            "journal_open": None,
+            "account_open": None,
+            "realized_pnl_journal": None,
+            "realized_pnl_account": None,
+            "realized_issues": [],
+            "avg_issues": [],
+        }
 
 
 _ACCSYNC_CACHE = {"ts": 0.0, "data": None}
@@ -5369,7 +6275,9 @@ def positions_reconcile(positions):
             sym = it.get("symbol")
             if sym not in specs:
                 return {"ok": False, "message": f"未知品种 {sym}"}
-            d = it.get("direction"); lots = int(it.get("lots") or 0); avg = it.get("avg")
+            d = it.get("direction")
+            lots = int(it.get("lots") or 0)
+            avg = it.get("avg")
             if d not in ("多", "空") or lots <= 0 or avg is None:
                 return {"ok": False, "message": f"{sym} 手数/方向/均价非法"}
             want[sym] = {"direction": d, "lots": lots, "avg": float(avg)}
@@ -5405,16 +6313,23 @@ def positions_reconcile(positions):
             elif p["lots"] != w["lots"] or p["direction"] != w["direction"]:
                 # 同品种但手数/方向变了：先平后开，保留旧 stop/t1/t2
                 px = _feed_price(sym, p.get("avg"))
-                _old_stop = p.get("stop"); _old_t1 = p.get("t1"); _old_t2 = p.get("t2")
+                _old_stop = p.get("stop")
+                _old_t1 = p.get("t1")
+                _old_t2 = p.get("t2")
                 at.record_trade(sym, "close", p["direction"], p["lots"], px)
                 tj.record_exit(sym, p["direction"], p["lots"], px, reason="CTP 手动平仓对账")
-                at.record_trade(sym, "open", w["direction"], w["lots"], w["avg"],
-                                stop=_old_stop, t1=_old_t1, t2=_old_t2)
+                at.record_trade(
+                    sym, "open", w["direction"], w["lots"], w["avg"], stop=_old_stop, t1=_old_t1, t2=_old_t2
+                )
                 tj.record_entry(sym, w["direction"], w["lots"], w["avg"], signal_id="对账")
-                adjusted.append({"symbol": sym, "from": [p["direction"], p["lots"]],
-                                 "to": [w["direction"], w["lots"]]})
-        return {"ok": True, "removed": removed, "added": added, "adjusted": adjusted,
-                "message": f"对账完成：平仓 {len(removed)}、新开 {len(added)}、调整 {len(adjusted)}"}
+                adjusted.append({"symbol": sym, "from": [p["direction"], p["lots"]], "to": [w["direction"], w["lots"]]})
+        return {
+            "ok": True,
+            "removed": removed,
+            "added": added,
+            "adjusted": adjusted,
+            "message": f"对账完成：平仓 {len(removed)}、新开 {len(added)}、调整 {len(adjusted)}",
+        }
     except Exception as e:
         return {"ok": False, "message": f"对账异常：{e}"}
 
@@ -5427,7 +6342,12 @@ def account_marketsync(force=False, heal=False):
     返回只读快照 + 每持仓盯市状态 + 漂移告警 + 自愈记录 + journal 账户一致性。"""
     global _ACCSYNC_CACHE
     now = time.time()
-    if (not force) and (not heal) and _ACCSYNC_CACHE["data"] is not None and (now - _ACCSYNC_CACHE["ts"]) < _ACCSYNC_TTL:
+    if (
+        (not force)
+        and (not heal)
+        and _ACCSYNC_CACHE["data"] is not None
+        and (now - _ACCSYNC_CACHE["ts"]) < _ACCSYNC_TTL
+    ):
         return _ACCSYNC_CACHE["data"]
     # 显式自愈（journal 为真相源，仅偏差时写盘，安全幂等）
     healed = []
@@ -5446,8 +6366,7 @@ def account_marketsync(force=False, heal=False):
     snap = at.snapshot(prices)
     # 行情时效
     feed_status = "正常" if FEED_AVAILABLE else "离线"
-    feed_last = (datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S")
-                 if FEED_LAST_UPDATE else "")
+    feed_last = datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S") if FEED_LAST_UPDATE else ""
     age = (datetime.now().timestamp() - FEED_LAST_UPDATE) / 60.0 if FEED_LAST_UPDATE else None
     data_age_min = round(age, 1) if age is not None else None
     # 每持仓盯市状态
@@ -5487,8 +6406,12 @@ def account_marketsync(force=False, heal=False):
             except Exception:
                 continue
             if _days >= 7:
-                drift.append({"level": "info",
-                              "msg": f"持仓超期提醒：{_sym} 已持 {_days} 天，若已在 CTP 客户端手动平仓，请用 /api/positions_reconcile 对账"})
+                drift.append(
+                    {
+                        "level": "info",
+                        "msg": f"持仓超期提醒：{_sym} 已持 {_days} 天，若已在 CTP 客户端手动平仓，请用 /api/positions_reconcile 对账",
+                    }
+                )
     except Exception:
         pass
     # 一致性对账（含已实现盈亏/开仓均价盲区）
@@ -5533,10 +6456,20 @@ def account_marketsync(force=False, heal=False):
         "usage_pct": snap.get("usage_rate"),
         "held_count": len(held),
         "priced_count": priced_n,
-        "positions": [{"symbol": p["symbol"], "name": p.get("name"), "direction": p.get("direction"),
-                       "lots": p.get("lots"), "avg": p.get("avg"), "price": p.get("price"),
-                       "float_pnl": p.get("float_pnl"), "mtm_ok": p.get("mtm_ok"),
-                       "mtm_reason": p.get("mtm_reason")} for p in held],
+        "positions": [
+            {
+                "symbol": p["symbol"],
+                "name": p.get("name"),
+                "direction": p.get("direction"),
+                "lots": p.get("lots"),
+                "avg": p.get("avg"),
+                "price": p.get("price"),
+                "float_pnl": p.get("float_pnl"),
+                "mtm_ok": p.get("mtm_ok"),
+                "mtm_reason": p.get("mtm_reason"),
+            }
+            for p in held
+        ],
         "drift": drift,
         "consistency": consist,
         "healed": healed,
@@ -5555,7 +6488,7 @@ def _market_phase():
         return "休市"
     t = now.hour * 60 + now.minute
     day = (540 <= t <= 615) or (630 <= t <= 690) or (810 <= t <= 900)
-    night = (1260 <= t <= 1380)
+    night = 1260 <= t <= 1380
     if day:
         return "日盘交易中"
     if night:
@@ -5567,8 +6500,7 @@ def _chk(name, passed, ok="", warn="", lvl="warn"):
     """构造一条开盘前检查项。status: ok / warn / error / info。"""
     if passed:
         return {"name": name, "status": "ok", "msg": ok or "正常"}
-    return {"name": name, "status": (lvl if lvl in ("warn", "error", "info") else "warn"),
-            "msg": warn or ok}
+    return {"name": name, "status": (lvl if lvl in ("warn", "error", "info") else "warn"), "msg": warn or ok}
 
 
 def _recent_signals_for_premkt(limit=60):
@@ -5592,10 +6524,15 @@ def _premkt_focus(sig_list):
             if lots <= 0:
                 continue
             focus[sym] = {
-                "symbol": sym, "name": pos.get("name") or sym,
-                "direction": pos.get("direction"), "lots": lots,
-                "avg": pos.get("avg"), "stop": pos.get("stop"),
-                "t1": pos.get("t1"), "target": pos.get("target"), "src": "持仓",
+                "symbol": sym,
+                "name": pos.get("name") or sym,
+                "direction": pos.get("direction"),
+                "lots": lots,
+                "avg": pos.get("avg"),
+                "stop": pos.get("stop"),
+                "t1": pos.get("t1"),
+                "target": pos.get("target"),
+                "src": "持仓",
             }
     except Exception:
         pass
@@ -5604,10 +6541,15 @@ def _premkt_focus(sig_list):
         if not sym or sym in focus or s.get("expired"):
             continue
         focus[sym] = {
-            "symbol": sym, "name": s.get("name") or sym,
-            "direction": s.get("direction"), "lots": s.get("lots"),
-            "avg": s.get("price"), "stop": s.get("stop"),
-            "t1": s.get("t1"), "target": s.get("target"), "src": "近期信号",
+            "symbol": sym,
+            "name": s.get("name") or sym,
+            "direction": s.get("direction"),
+            "lots": s.get("lots"),
+            "avg": s.get("price"),
+            "stop": s.get("stop"),
+            "t1": s.get("t1"),
+            "target": s.get("target"),
+            "src": "近期信号",
         }
     return list(focus.values())
 
@@ -5624,10 +6566,11 @@ _PREMK_TTL = 30
 # ----------------------------------------------------------------------------
 _XSRC_CACHE = {"t": 0.0, "v": None}
 _XSRC_TTL = 60
-RT_DAILY_GAP_WARN = 6.0      # 实时价 vs 日线收盘阈值(%)
-RT_AVG_GAP_WARN = 8.0        # 实时价 vs 持仓均价阈值(%)（仅交易时段）
-AVG_DAILY_GAP_WARN = 8.0     # 持仓均价 vs 日线收盘阈值(%)（实时不可用/休市时的替代校验）
+RT_DAILY_GAP_WARN = 6.0  # 实时价 vs 日线收盘阈值(%)
+RT_AVG_GAP_WARN = 8.0  # 实时价 vs 持仓均价阈值(%)（仅交易时段）
+AVG_DAILY_GAP_WARN = 8.0  # 持仓均价 vs 日线收盘阈值(%)（实时不可用/休市时的替代校验）
 SIGNAL_DAILY_GAP_WARN = 8.0  # 信号开仓价 vs 日线收盘阈值(%)
+
 
 def _xs_recent_signal_price(sym):
     """该品种最近一条【未过期】信号的开仓价。
@@ -5660,6 +6603,7 @@ def _xs_recent_signal_price(sym):
             continue  # 已过期，跳过（历史快照不应再比对最新日线）
         return s.get("price"), s.get("time")
     return None, None
+
 
 def cross_source_check(force=False):
     """多源数据交叉校验（#126）。对持仓∪关注品种，逐合约比对四源数值并标记矛盾。"""
@@ -5703,7 +6647,9 @@ def cross_source_check(force=False):
             amp = (dhi - dlo) / dlo * 100.0 if (dhi and dlo and dlo > 0) else 0.0
             thr = max(RT_DAILY_GAP_WARN, 1.5 * amp, 3.0)
             if abs(gap) > thr:
-                flags.append(f"实时价({rt:.0f})与日线收盘({dl:.0f})偏离 {gap:+.1f}%（>动态阈值 {thr:.1f}%），疑似行情卡/合约错/复权错")
+                flags.append(
+                    f"实时价({rt:.0f})与日线收盘({dl:.0f})偏离 {gap:+.1f}%（>动态阈值 {thr:.1f}%），疑似行情卡/合约错/复权错"
+                )
         # 校验2：实时 vs 持仓均价（持仓 + 交易时段 + 实时可用）
         if rt is not None and avg is not None and (pos.get("lots") or 0) > 0 and trading:
             gap = (rt - avg) / avg * 100.0
@@ -5736,23 +6682,26 @@ def cross_source_check(force=False):
             error_n += 1
         for f in flags:
             all_flags.append(f"{sym}: {f}")
-        rows.append({
-            "symbol": sym, "name": name,
-            "rt": round(rt, 2) if rt is not None else None,
-            "daily_close": round(dl, 2) if dl is not None else None,
-            "daily_high": round(dhi, 2) if dhi is not None else None,
-            "daily_low": round(dlo, 2) if dlo is not None else None,
-            "avg": round(avg, 2) if avg is not None else None,
-            "signal_price": round(sp, 2) if sp is not None else None,
-            "signal_time": spt,
-            "rt_vs_daily_pct": rt_vs_daily,
-            "rt_vs_avg_pct": rt_vs_avg,
-            "avg_vs_daily_pct": avg_vs_daily,
-            "sig_vs_daily_pct": sig_vs_daily,
-            "held": sym in held,
-            "flags": flags,
-            "status": status,
-        })
+        rows.append(
+            {
+                "symbol": sym,
+                "name": name,
+                "rt": round(rt, 2) if rt is not None else None,
+                "daily_close": round(dl, 2) if dl is not None else None,
+                "daily_high": round(dhi, 2) if dhi is not None else None,
+                "daily_low": round(dlo, 2) if dlo is not None else None,
+                "avg": round(avg, 2) if avg is not None else None,
+                "signal_price": round(sp, 2) if sp is not None else None,
+                "signal_time": spt,
+                "rt_vs_daily_pct": rt_vs_daily,
+                "rt_vs_avg_pct": rt_vs_avg,
+                "avg_vs_daily_pct": avg_vs_daily,
+                "sig_vs_daily_pct": sig_vs_daily,
+                "held": sym in held,
+                "flags": flags,
+                "status": status,
+            }
+        )
     out = {
         "ok": True,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -5762,7 +6711,9 @@ def cross_source_check(force=False):
         "summary": {
             "checked": len(rows),
             "with_realtime": with_rt,
-            "ok": ok_n, "warn": warn_n, "error": error_n,
+            "ok": ok_n,
+            "warn": warn_n,
+            "error": error_n,
             "flags": all_flags,
         },
         "note": "跨源校验：minishare 实时价 / 日线收盘 / 持仓均价(journal) / 信号开仓价 四源互相印证。报警即疑似数据矛盾（移仓漏更/合约错/行情卡/复权错），与 #14 单源质量、#124 对账互补。",
@@ -5786,6 +6737,7 @@ def pnl_attribution(force=False):
     if not force and _ATTR_CACHE["data"] is not None and (now - _ATTR_CACHE["ts"]) < _ATTR_TTL:
         return _ATTR_CACHE["data"]
     import trade_journal as tj
+
     try:
         out = tj.pnl_attribution()
     except Exception as e:
@@ -5822,9 +6774,9 @@ def premarket_brief(force=False):
     drift = sync.get("drift", []) or []
     # —— 检查清单 ——
     checks = []
-    checks.append(_chk("账户权益已同步", eq > 0,
-                       ok=f"已同步 · 动态权益 ¥{eq:,.0f}",
-                       warn="未同步或权益为 0，开盘前请先同步账户"))
+    checks.append(
+        _chk("账户权益已同步", eq > 0, ok=f"已同步 · 动态权益 ¥{eq:,.0f}", warn="未同步或权益为 0，开盘前请先同步账户")
+    )
     if phase == "休市":
         checks.append(_chk("实时行情", True, ok="当前休市 · 行情待开盘后恢复", lvl="info"))
     elif feed_status == "正常" and (feed_age is None or feed_age <= 5):
@@ -5835,15 +6787,25 @@ def premarket_brief(force=False):
         checks.append(_chk("实时行情", False, warn="行情离线，无法盯市", lvl="warn"))
     dd_scale = dd.get("scale", 1.0)
     if dd_scale < 1.0:
-        checks.append(_chk("回撤水位线降险", False,
-                           warn=f"已触发 · 回撤 {dd.get('dd_pct')}% · 新开仓系数 {dd_scale}（自动降仓）",
-                           lvl="warn"))
+        checks.append(
+            _chk(
+                "回撤水位线降险",
+                False,
+                warn=f"已触发 · 回撤 {dd.get('dd_pct')}% · 新开仓系数 {dd_scale}（自动降仓）",
+                lvl="warn",
+            )
+        )
     else:
         checks.append(_chk("回撤水位线降险", True, ok=f"正常 · 回撤 {dd.get('dd_pct')}% · 系数 1.0"))
     if halted:
-        checks.append(_chk("硬熔断状态", False,
-                           warn="已激活 · " + str(fsm.get("killswitch", {}).get("reason", "") or "未知"),
-                           lvl="error"))
+        checks.append(
+            _chk(
+                "硬熔断状态",
+                False,
+                warn="已激活 · " + str(fsm.get("killswitch", {}).get("reason", "") or "未知"),
+                lvl="error",
+            )
+        )
     else:
         checks.append(_chk("硬熔断状态", True, ok="未激活"))
     hpct = heat.get("heat_pct", 0) or 0
@@ -5857,21 +6819,33 @@ def premarket_brief(force=False):
         checks.append(_chk("journal↔账户一致性", True, ok="一致 · 无漏记"))
     else:
         issues = consist.get("issues", []) or []
-        checks.append(_chk("journal↔账户一致性", False,
-                           warn="不一致 · " + ("；".join(issues[:3]) or "请回灌 journal"),
-                           lvl="error"))
+        checks.append(
+            _chk(
+                "journal↔账户一致性", False, warn="不一致 · " + ("；".join(issues[:3]) or "请回灌 journal"), lvl="error"
+            )
+        )
     if expired_n > 0:
-        checks.append(_chk("近期信号时效", False,
-                           warn=f"{expired_n} 条信号已过期（>{signal_ttl_minutes()}min），跟单前请重评",
-                           lvl="warn"))
+        checks.append(
+            _chk(
+                "近期信号时效",
+                False,
+                warn=f"{expired_n} 条信号已过期（>{signal_ttl_minutes()}min），跟单前请重评",
+                lvl="warn",
+            )
+        )
     else:
         checks.append(_chk("近期信号时效", True, ok="无过期信号"))
     if held == 0:
         checks.append(_chk("当前持仓盯市", True, ok="无持仓", lvl="info"))
     elif priced < held:
-        checks.append(_chk("当前持仓盯市", False,
-                           warn=f"{priced}/{held} 持仓有实时价，{held - priced} 个无实时价（非交易时段/行情缺口）",
-                           lvl="warn"))
+        checks.append(
+            _chk(
+                "当前持仓盯市",
+                False,
+                warn=f"{priced}/{held} 持仓有实时价，{held - priced} 个无实时价（非交易时段/行情缺口）",
+                lvl="warn",
+            )
+        )
     else:
         checks.append(_chk("当前持仓盯市", True, ok=f"{priced}/{held} 持仓全部实时盯市"))
     # —— 汇总 ——
@@ -5880,16 +6854,28 @@ def premarket_brief(force=False):
         "phase": phase,
         "read_only": True,
         "source": "minishare（行情）+ journal（持仓）+ 风控状态机",
-        "account": {"equity_dynamic": eq, "usage_pct": sync.get("usage_pct"),
-                    "float_total": sync.get("float_total"), "held": held, "priced": priced},
-        "heat": {"heat_pct": hpct, "status": heat.get("status"), "over": heat.get("over"),
-                 "budget": heat.get("budget")},
+        "account": {
+            "equity_dynamic": eq,
+            "usage_pct": sync.get("usage_pct"),
+            "float_total": sync.get("float_total"),
+            "held": held,
+            "priced": priced,
+        },
+        "heat": {
+            "heat_pct": hpct,
+            "status": heat.get("status"),
+            "over": heat.get("over"),
+            "budget": heat.get("budget"),
+        },
         "drawdown": {"dd_pct": dd.get("dd_pct"), "tier": dd.get("tier"), "scale": dd_scale},
-        "fsm": {"state": fsm.get("state"), "consec_losses": fsm.get("consec_losses"),
-                "halted": halted, "kill_reason": fsm.get("killswitch", {}).get("reason")},
+        "fsm": {
+            "state": fsm.get("state"),
+            "consec_losses": fsm.get("consec_losses"),
+            "halted": halted,
+            "kill_reason": fsm.get("killswitch", {}).get("reason"),
+        },
         "feed": {"status": feed_status, "age_min": feed_age, "last": sync.get("feed_last")},
-        "signals": {"total": len(sig_list), "expired": expired_n,
-                    "recent": sig_list[:8]},
+        "signals": {"total": len(sig_list), "expired": expired_n, "recent": sig_list[:8]},
         "focus": focus,
         "checks": checks,
         "drift_count": len(drift),
@@ -5906,8 +6892,10 @@ def _account_equity():
     except Exception:
         return 0.0
 
+
 _POS_CACHE = {"time": 0, "data": None}
 _POS_CACHE_TTL = 2  # 缓存2秒
+
 
 def _load_open_positions():
     """当前真实持仓 → 敞口列表 [{sym, direction, lots, risk}]。"""
@@ -5930,19 +6918,26 @@ def _load_open_positions():
                 risk = abs(float(avg) - float(stop)) * _spec_mult(sym) * lots
             except Exception:
                 continue
-            out.append({"sym": sym, "direction": pos.get("direction"),
-                        "lots": lots, "risk": risk, "avg": avg,
-                        "group": _sym_group(sym)})
+            out.append(
+                {
+                    "sym": sym,
+                    "direction": pos.get("direction"),
+                    "lots": lots,
+                    "risk": risk,
+                    "avg": avg,
+                    "group": _sym_group(sym),
+                }
+            )
         _POS_CACHE = {"time": time.time(), "data": out}
         return out
     except Exception:
         return []
 
 
-
 # ═══════════════════════════════════════════════════════════
 # v6.0 市场状态引擎 — 核心函数（阶段一）
 # ═══════════════════════════════════════════════════════════
+
 
 def _calc_ma_alignment_score(klines):
     """技术面指标1：均线排列评分（v6.0 新增）"""
@@ -5986,7 +6981,7 @@ def _calc_vol_level_score(klines):
     for i in range(1, len(klines)):
         high = klines[i].get("high", 0)
         low = klines[i].get("low", 0)
-        prev_close = klines[i-1].get("close", 0)
+        prev_close = klines[i - 1].get("close", 0)
         if high > 0 and low > 0 and prev_close > 0:
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             tr_values.append(tr)
@@ -6016,14 +7011,14 @@ def _calc_vol_change_score(klines):
     for i in range(1, len(klines)):
         high = klines[i].get("high", 0)
         low = klines[i].get("low", 0)
-        prev_close = klines[i-1].get("close", 0)
+        prev_close = klines[i - 1].get("close", 0)
         if high > 0 and low > 0 and prev_close > 0:
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             tr_values.append(tr)
     if len(tr_values) < TECH_ATR_PERIOD + TECH_LOOKBACK_BARS:
         return 50
     atr_recent = sum(tr_values[-TECH_ATR_PERIOD:]) / TECH_ATR_PERIOD
-    atr_prev = sum(tr_values[-TECH_ATR_PERIOD-TECH_LOOKBACK_BARS:-TECH_LOOKBACK_BARS]) / TECH_ATR_PERIOD
+    atr_prev = sum(tr_values[-TECH_ATR_PERIOD - TECH_LOOKBACK_BARS : -TECH_LOOKBACK_BARS]) / TECH_ATR_PERIOD
     if atr_prev == 0:
         return 50
     change_pct = (atr_recent - atr_prev) / atr_prev * 100
@@ -6048,38 +7043,51 @@ def _calc_volume_price_score(klines, volumes=None):
     if not volumes or len(volumes) < TECH_VOLUME_MA_PERIOD:
         if len(closes) < 10:
             return 50
-        price_changes = [abs(closes[i] - closes[i-1]) / closes[i-1] * 100 
-                        for i in range(1, len(closes)) if closes[i-1] > 0]
+        price_changes = [
+            abs(closes[i] - closes[i - 1]) / closes[i - 1] * 100 for i in range(1, len(closes)) if closes[i - 1] > 0
+        ]
         if len(price_changes) < 5:
             return 50
         avg_change = sum(price_changes[-10:]) / 10
-        if avg_change < 0.3: return 30
-        elif avg_change < 1.0: return 55
-        elif avg_change < 2.0: return 70
-        else: return 85
+        if avg_change < 0.3:
+            return 30
+        elif avg_change < 1.0:
+            return 55
+        elif avg_change < 2.0:
+            return 70
+        else:
+            return 85
     vol_ma = sum(volumes[-TECH_VOLUME_MA_PERIOD:]) / TECH_VOLUME_MA_PERIOD
     recent_scores = []
     for i in range(-3, 0):
         if len(klines) + i < 1 or len(volumes) + i < 1:
             continue
         close = klines[i].get("close", 0)
-        prev_close = klines[i-1].get("close", 0) if i > -len(klines) else close
+        prev_close = klines[i - 1].get("close", 0) if i > -len(klines) else close
         vol = volumes[i] if i < len(volumes) else vol_ma
         if prev_close == 0 or vol_ma == 0:
             continue
         price_change_pct = (close - prev_close) / prev_close * 100
         vol_ratio = vol / vol_ma
         if abs(price_change_pct) < 0.2:
-            if vol_ratio < 0.8: recent_scores.append(20)
-            else: recent_scores.append(40)
+            if vol_ratio < 0.8:
+                recent_scores.append(20)
+            else:
+                recent_scores.append(40)
         elif price_change_pct > 0:
-            if vol_ratio > 1.2: recent_scores.append(70)
-            elif vol_ratio > 0.8: recent_scores.append(55)
-            else: recent_scores.append(85)
+            if vol_ratio > 1.2:
+                recent_scores.append(70)
+            elif vol_ratio > 0.8:
+                recent_scores.append(55)
+            else:
+                recent_scores.append(85)
         else:
-            if vol_ratio > 1.2: recent_scores.append(75)
-            elif vol_ratio > 0.8: recent_scores.append(50)
-            else: recent_scores.append(80)
+            if vol_ratio > 1.2:
+                recent_scores.append(75)
+            elif vol_ratio > 0.8:
+                recent_scores.append(50)
+            else:
+                recent_scores.append(80)
     if not recent_scores:
         return 50
     return round(sum(recent_scores) / len(recent_scores), 1)
@@ -6111,16 +7119,25 @@ def _calc_trend_strength_score(klines):
 def calc_tech_market_state(klines, volumes=None):
     """技术面市场状态综合评分（v6.0 新增）"""
     if not klines or len(klines) < TECH_MA_SLOW + 10:
-        return {"total_score": 50, "state_candidate": MARKET_STATE_SIDEWAYS,
-                "indicators": {}, "ma_fast": 0, "ma_slow": 0}
+        return {
+            "total_score": 50,
+            "state_candidate": MARKET_STATE_SIDEWAYS,
+            "indicators": {},
+            "ma_fast": 0,
+            "ma_slow": 0,
+        }
     ma_score = _calc_ma_alignment_score(klines)
     vol_level_score = _calc_vol_level_score(klines)
     vol_change_score = _calc_vol_change_score(klines)
     vp_score = _calc_volume_price_score(klines, volumes)
     trend_strength_score = _calc_trend_strength_score(klines)
-    total_score = (ma_score * TECH_WEIGHT_MA_ALIGNMENT + vol_level_score * TECH_WEIGHT_VOL_LEVEL +
-                   vol_change_score * TECH_WEIGHT_VOL_CHANGE + vp_score * TECH_WEIGHT_VOLUME_PRICE +
-                   trend_strength_score * TECH_WEIGHT_TREND_STRENGTH) / 100
+    total_score = (
+        ma_score * TECH_WEIGHT_MA_ALIGNMENT
+        + vol_level_score * TECH_WEIGHT_VOL_LEVEL
+        + vol_change_score * TECH_WEIGHT_VOL_CHANGE
+        + vp_score * TECH_WEIGHT_VOLUME_PRICE
+        + trend_strength_score * TECH_WEIGHT_TREND_STRENGTH
+    ) / 100
     total_score = round(total_score, 1)
     closes = [k.get("close", 0) for k in klines if k.get("close", 0) > 0]
     ma_fast = sum(closes[-TECH_MA_FAST:]) / TECH_MA_FAST if len(closes) >= TECH_MA_FAST else 0
@@ -6136,12 +7153,20 @@ def calc_tech_market_state(klines, volumes=None):
         state_candidate = MARKET_STATE_TREND_LATE
     if total_score >= 70 and vol_change_score < 40:
         state_candidate = MARKET_STATE_TREND_LATE
-    return {"total_score": total_score, "state_candidate": state_candidate,
-            "trend_direction": trend_direction,
-            "indicators": {"ma_alignment": ma_score, "vol_level": vol_level_score,
-                          "vol_change": vol_change_score, "volume_price": vp_score,
-                          "trend_strength": trend_strength_score},
-            "ma_fast": round(ma_fast, 4), "ma_slow": round(ma_slow, 4)}
+    return {
+        "total_score": total_score,
+        "state_candidate": state_candidate,
+        "trend_direction": trend_direction,
+        "indicators": {
+            "ma_alignment": ma_score,
+            "vol_level": vol_level_score,
+            "vol_change": vol_change_score,
+            "volume_price": vp_score,
+            "trend_strength": trend_strength_score,
+        },
+        "ma_fast": round(ma_fast, 4),
+        "ma_slow": round(ma_slow, 4),
+    }
 
 
 def calc_performance_score(recent_trades):
@@ -6154,45 +7179,78 @@ def calc_performance_score(recent_trades):
         return {"total_score": 50, "level": "mid", "metrics": {"note": f"交易数不足({n}笔)"}}
     wins = sum(1 for t in trades if t.get("win", t.get("r_result", 0) > 0))
     win_rate = wins / n * 100
-    if win_rate > 60: winrate_score = 80 + min(20, (win_rate - 60) * 2)
-    elif win_rate > 45: winrate_score = 50 + (win_rate - 45) / 15 * 30
-    elif win_rate > 30: winrate_score = 20 + (win_rate - 30) / 15 * 30
-    else: winrate_score = max(0, 20 - (30 - win_rate) * 1.5)
+    if win_rate > 60:
+        winrate_score = 80 + min(20, (win_rate - 60) * 2)
+    elif win_rate > 45:
+        winrate_score = 50 + (win_rate - 45) / 15 * 30
+    elif win_rate > 30:
+        winrate_score = 20 + (win_rate - 30) / 15 * 30
+    else:
+        winrate_score = max(0, 20 - (30 - win_rate) * 1.5)
     winning_r = [t.get("r_result", 0) for t in trades if t.get("r_result", 0) > 0]
     losing_r = [abs(t.get("r_result", 0)) for t in trades if t.get("r_result", 0) < 0]
     profit_factor = sum(winning_r) / sum(losing_r) if losing_r and sum(losing_r) > 0 else (3.0 if winning_r else 1.0)
-    if profit_factor > 2.5: pf_score = 80 + min(20, (profit_factor - 2.5) * 10)
-    elif profit_factor > 1.5: pf_score = 50 + (profit_factor - 1.5) * 30
-    elif profit_factor > 0.8: pf_score = 20 + (profit_factor - 0.8) / 0.7 * 30
-    else: pf_score = max(0, 20 - (0.8 - profit_factor) * 30)
+    if profit_factor > 2.5:
+        pf_score = 80 + min(20, (profit_factor - 2.5) * 10)
+    elif profit_factor > 1.5:
+        pf_score = 50 + (profit_factor - 1.5) * 30
+    elif profit_factor > 0.8:
+        pf_score = 20 + (profit_factor - 0.8) / 0.7 * 30
+    else:
+        pf_score = max(0, 20 - (0.8 - profit_factor) * 30)
     current_streak = 0
     streak_type = "none"
     for t in reversed(trades):
         is_win = t.get("win", t.get("r_result", 0) > 0)
         if is_win:
-            if streak_type in ("win", "none"): current_streak += 1; streak_type = "win"
-            else: break
+            if streak_type in ("win", "none"):
+                current_streak += 1
+                streak_type = "win"
+            else:
+                break
         else:
-            if streak_type in ("lose", "none"): current_streak += 1; streak_type = "lose"
-            else: break
+            if streak_type in ("lose", "none"):
+                current_streak += 1
+                streak_type = "lose"
+            else:
+                break
     if streak_type == "win":
-        streak_score = 90 if current_streak >= 5 else (75 if current_streak >= 3 else (60 if current_streak >= 2 else 55))
+        streak_score = (
+            90 if current_streak >= 5 else (75 if current_streak >= 3 else (60 if current_streak >= 2 else 55))
+        )
     elif streak_type == "lose":
-        streak_score = 10 if current_streak >= 5 else (25 if current_streak >= 3 else (40 if current_streak >= 2 else 45))
-    else: streak_score = 50
+        streak_score = (
+            10 if current_streak >= 5 else (25 if current_streak >= 3 else (40 if current_streak >= 2 else 45))
+        )
+    else:
+        streak_score = 50
     recent_short = trades[-PERF_WINDOW_SHORT:] if len(trades) >= PERF_WINDOW_SHORT else trades
     total_r = sum(t.get("r_result", 0) for t in recent_short)
     r_score = max(0, min(100, 50 + (total_r / 3.0) * 50))
-    total_score = (winrate_score * PERF_WEIGHT_WINRATE + pf_score * PERF_WEIGHT_PROFIT_FACTOR +
-                   streak_score * PERF_WEIGHT_STREAK + r_score * PERF_WEIGHT_RECENT_R) / 100
+    total_score = (
+        winrate_score * PERF_WEIGHT_WINRATE
+        + pf_score * PERF_WEIGHT_PROFIT_FACTOR
+        + streak_score * PERF_WEIGHT_STREAK
+        + r_score * PERF_WEIGHT_RECENT_R
+    ) / 100
     total_score = round(total_score, 1)
     level = "good" if total_score >= PERF_SCORE_GOOD_MIN else ("mid" if total_score >= PERF_SCORE_MID_MIN else "poor")
-    return {"total_score": total_score, "level": level,
-            "metrics": {"win_rate": round(win_rate, 1), "winrate_score": round(winrate_score, 1),
-                        "profit_factor": round(profit_factor, 2), "pf_score": round(pf_score, 1),
-                        "current_streak": current_streak, "streak_type": streak_type,
-                        "streak_score": round(streak_score, 1), "recent_total_r": round(total_r, 2),
-                        "r_score": round(r_score, 1), "trade_count": n}}
+    return {
+        "total_score": total_score,
+        "level": level,
+        "metrics": {
+            "win_rate": round(win_rate, 1),
+            "winrate_score": round(winrate_score, 1),
+            "profit_factor": round(profit_factor, 2),
+            "pf_score": round(pf_score, 1),
+            "current_streak": current_streak,
+            "streak_type": streak_type,
+            "streak_score": round(streak_score, 1),
+            "recent_total_r": round(total_r, 2),
+            "r_score": round(r_score, 1),
+            "trade_count": n,
+        },
+    }
 
 
 def determine_market_state(tech_result, perf_result, prev_state=None, confirm_counter=0):
@@ -6200,10 +7258,26 @@ def determine_market_state(tech_result, perf_result, prev_state=None, confirm_co
     tech_state = tech_result.get("state_candidate", MARKET_STATE_SIDEWAYS)
     perf_level = perf_result.get("level", "mid")
     switch_matrix = {
-        MARKET_STATE_TREND_EARLY: {"good": (MARKET_STATE_TREND_EARLY, "high"), "mid": (MARKET_STATE_TREND_EARLY, "mid"), "poor": (MARKET_STATE_SIDEWAYS, "low")},
-        MARKET_STATE_TREND_MID: {"good": (MARKET_STATE_TREND_MID, "high"), "mid": (MARKET_STATE_TREND_MID, "mid"), "poor": (MARKET_STATE_TREND_LATE, "low")},
-        MARKET_STATE_TREND_LATE: {"good": (MARKET_STATE_TREND_LATE, "mid"), "mid": (MARKET_STATE_TREND_LATE, "mid"), "poor": (MARKET_STATE_TREND_LATE, "high")},
-        MARKET_STATE_SIDEWAYS: {"good": (MARKET_STATE_SIDEWAYS, "mid"), "mid": (MARKET_STATE_SIDEWAYS, "mid"), "poor": (MARKET_STATE_SIDEWAYS, "high")},
+        MARKET_STATE_TREND_EARLY: {
+            "good": (MARKET_STATE_TREND_EARLY, "high"),
+            "mid": (MARKET_STATE_TREND_EARLY, "mid"),
+            "poor": (MARKET_STATE_SIDEWAYS, "low"),
+        },
+        MARKET_STATE_TREND_MID: {
+            "good": (MARKET_STATE_TREND_MID, "high"),
+            "mid": (MARKET_STATE_TREND_MID, "mid"),
+            "poor": (MARKET_STATE_TREND_LATE, "low"),
+        },
+        MARKET_STATE_TREND_LATE: {
+            "good": (MARKET_STATE_TREND_LATE, "mid"),
+            "mid": (MARKET_STATE_TREND_LATE, "mid"),
+            "poor": (MARKET_STATE_TREND_LATE, "high"),
+        },
+        MARKET_STATE_SIDEWAYS: {
+            "good": (MARKET_STATE_SIDEWAYS, "mid"),
+            "mid": (MARKET_STATE_SIDEWAYS, "mid"),
+            "poor": (MARKET_STATE_SIDEWAYS, "high"),
+        },
     }
     if tech_state in switch_matrix and perf_level in switch_matrix[tech_state]:
         candidate_state, confidence = switch_matrix[tech_state][perf_level]
@@ -6222,36 +7296,61 @@ def determine_market_state(tech_result, perf_result, prev_state=None, confirm_co
             new_counter = 0
         else:
             new_state = prev_state
-    return {"state": new_state, "confidence": confidence, "tech_state": tech_state,
-            "perf_level": perf_level, "tech_score": tech_result.get("total_score", 50),
-            "perf_score": perf_result.get("total_score", 50), "confirm_counter": new_counter,
-            "switched": switched, "trend_direction": tech_result.get("trend_direction", "long")}
+    return {
+        "state": new_state,
+        "confidence": confidence,
+        "tech_state": tech_state,
+        "perf_level": perf_level,
+        "tech_score": tech_result.get("total_score", 50),
+        "perf_score": perf_result.get("total_score", 50),
+        "confirm_counter": new_counter,
+        "switched": switched,
+        "trend_direction": tech_result.get("trend_direction", "long"),
+    }
 
 
 def get_dynamic_params(market_state):
     """获取当前市场状态下的动态参数（v6.0 新增）"""
     if not DYNAMIC_PARAMS_ENABLED:
-        return {"single_trade_risk_mult": 1.0, "min_rr_ratio_mult": 1.0, "quality_score_mult": 1.0,
-                "atr_stop_mult": 1.0, "time_stop_days_mult": 1.0, "max_positions_mult": 1.0,
-                "take_profit_mult": 1.0, "note": "动态参数未启用（阶段一观察期）"}
+        return {
+            "single_trade_risk_mult": 1.0,
+            "min_rr_ratio_mult": 1.0,
+            "quality_score_mult": 1.0,
+            "atr_stop_mult": 1.0,
+            "time_stop_days_mult": 1.0,
+            "max_positions_mult": 1.0,
+            "take_profit_mult": 1.0,
+            "note": "动态参数未启用（阶段一观察期）",
+        }
     if market_state in STATE_PARAM_MAPPING:
         return STATE_PARAM_MAPPING[market_state].copy()
-    return {"single_trade_risk_mult": 1.0, "min_rr_ratio_mult": 1.0, "quality_score_mult": 1.0,
-            "atr_stop_mult": 1.0, "time_stop_days_mult": 1.0, "max_positions_mult": 1.0,
-            "take_profit_mult": 1.0, "note": "未知状态"}
+    return {
+        "single_trade_risk_mult": 1.0,
+        "min_rr_ratio_mult": 1.0,
+        "quality_score_mult": 1.0,
+        "atr_stop_mult": 1.0,
+        "time_stop_days_mult": 1.0,
+        "max_positions_mult": 1.0,
+        "take_profit_mult": 1.0,
+        "note": "未知状态",
+    }
 
 
 def get_state_label(state):
     """获取市场状态中文标签（v6.0 新增）"""
-    labels = {MARKET_STATE_TREND_EARLY: "趋势初期", MARKET_STATE_TREND_MID: "趋势中期",
-              MARKET_STATE_TREND_LATE: "趋势末期", MARKET_STATE_SIDEWAYS: "震荡市"}
+    labels = {
+        MARKET_STATE_TREND_EARLY: "趋势初期",
+        MARKET_STATE_TREND_MID: "趋势中期",
+        MARKET_STATE_TREND_LATE: "趋势末期",
+        MARKET_STATE_SIDEWAYS: "震荡市",
+    }
     return labels.get(state, state)
-
 
 
 # ═══════════════════════════════════════════════════════════
 # v6.0 分级止盈状态机 — 核心函数
 # ═══════════════════════════════════════════════════════════
+
 
 def calc_take_profit_targets(entry_price, atr, direction, market_state=None):
     """计算分级止盈目标位"""
@@ -6273,9 +7372,12 @@ def calc_take_profit_targets(entry_price, atr, direction, market_state=None):
         t1_price = entry_price - atr * t1_mult
         t2_price = entry_price - atr * t2_mult
     return {
-        "t1_price": round(t1_price, 4), "t2_price": round(t2_price, 4),
-        "t1_atr_mult": round(t1_mult, 2), "t2_atr_mult": round(t2_mult, 2),
-        "t3_trailing_atr_mult": round(t3_mult, 2), "skip_t3": skip_t3
+        "t1_price": round(t1_price, 4),
+        "t2_price": round(t2_price, 4),
+        "t1_atr_mult": round(t1_mult, 2),
+        "t2_atr_mult": round(t2_mult, 2),
+        "t3_trailing_atr_mult": round(t3_mult, 2),
+        "skip_t3": skip_t3,
     }
 
 
@@ -6287,23 +7389,28 @@ def update_take_profit_level(position_info, current_price, atr):
     tp_targets = position_info.get("tp_targets", {})
     current_qty = position_info.get("current_qty", 0)
     init_qty = position_info.get("init_qty", current_qty)
-    
-    result = {"new_level": current_level, "action": "none",
-              "reduce_qty": 0, "new_stop_price": None, "trailing_stop": None}
-    
+
+    result = {
+        "new_level": current_level,
+        "action": "none",
+        "reduce_qty": 0,
+        "new_stop_price": None,
+        "trailing_stop": None,
+    }
+
     if entry_price <= 0 or current_price <= 0 or not tp_targets:
         return result
-    
+
     t1_price = tp_targets.get("t1_price", 0)
     t2_price = tp_targets.get("t2_price", 0)
     skip_t3 = tp_targets.get("skip_t3", False)
-    
+
     def hit_target(target):
         if direction == "long":
             return current_price >= target
         else:
             return current_price <= target
-    
+
     # 状态1: T1未达
     if current_level == TAKE_PROFIT_LEVEL_NONE:
         if hit_target(t1_price):
@@ -6320,7 +7427,7 @@ def update_take_profit_level(position_info, current_price, atr):
             if TP_T1_STOP_MOVE_TO_BREAKEVEN:
                 result["new_stop_price"] = entry_price
         return result
-    
+
     # 状态2: T1已达
     elif current_level == TAKE_PROFIT_LEVEL_T1:
         if hit_target(t2_price):
@@ -6337,7 +7444,7 @@ def update_take_profit_level(position_info, current_price, atr):
             if TP_T2_STOP_MOVE_TO_T1:
                 result["new_stop_price"] = t1_price
         return result
-    
+
     # 状态3: T2已达 → 进入T3或全平
     elif current_level == TAKE_PROFIT_LEVEL_T2:
         if skip_t3:
@@ -6352,7 +7459,7 @@ def update_take_profit_level(position_info, current_price, atr):
             else:
                 result["trailing_stop"] = current_price + atr * TP_T3_TRAILING_ATR_MULT
         return result
-    
+
     # 状态4: T3追踪中
     elif current_level == TAKE_PROFIT_LEVEL_T3:
         prev_trailing = position_info.get("trailing_stop", 0)
@@ -6377,12 +7484,14 @@ def update_take_profit_level(position_info, current_price, atr):
                 result["action"] = "close_t3"
                 result["reduce_qty"] = current_qty
         return result
-    
+
     return result
+
 
 # ═══════════════════════════════════════════════════════════
 # v6.0 止盈状态机结束
 # ═══════════════════════════════════════════════════════════
+
 
 def _load_state_log():
     """加载状态切换日志"""
@@ -6390,7 +7499,7 @@ def _load_state_log():
         return []
     try:
         if os.path.exists(STATE_LOG_FILE):
-            with open(STATE_LOG_FILE, 'r', encoding='utf-8') as f:
+            with open(STATE_LOG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         print(f"[v6.0] 加载状态日志失败: {e}")
@@ -6403,7 +7512,7 @@ def _save_state_log(log_list):
         return
     try:
         trimmed = log_list[-STATE_LOG_MAX_RECORDS:]
-        with open(STATE_LOG_FILE, 'w', encoding='utf-8') as f:
+        with open(STATE_LOG_FILE, "w", encoding="utf-8") as f:
             json.dump(trimmed, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[v6.0] 保存状态日志失败: {e}")
@@ -6434,13 +7543,15 @@ def log_state_transition(symbol, prev_state, new_state, tech_result, perf_result
             "total_score": perf_result.get("total_score", 0),
             "level": perf_result.get("level", ""),
             "metrics": perf_result.get("metrics", {}),
-        }
+        },
     }
     log_list = _load_state_log()
     log_list.append(log_entry)
     _save_state_log(log_list)
-    print(f"[v6.0] 状态切换: {symbol} {get_state_label(prev_state)} → {get_state_label(new_state)} "
-          f"(技术{tech_result.get('total_score', 0)}分 / 表现{perf_result.get('total_score', 0)}分)")
+    print(
+        f"[v6.0] 状态切换: {symbol} {get_state_label(prev_state)} → {get_state_label(new_state)} "
+        f"(技术{tech_result.get('total_score', 0)}分 / 表现{perf_result.get('total_score', 0)}分)"
+    )
 
 
 def get_state_log(symbol=None, limit=20):
@@ -6456,13 +7567,14 @@ def get_state_log(symbol=None, limit=20):
 # v6.0 Phase 3: 参数自优化核心函数
 # ═══════════════════════════════════════════
 
+
 def _load_auto_opt_params():
     """加载自优化参数配置（从本地JSON文件持久化）"""
     if not AUTO_OPTIMIZE_ENABLED:
         return {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
     try:
         if os.path.exists(AUTO_OPT_LOG_FILE):
-            with open(AUTO_OPT_LOG_FILE, 'r', encoding='utf-8') as f:
+            with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if "params" in data:
                     result = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
@@ -6484,7 +7596,7 @@ def _save_auto_opt_params(params, adjustment_logs=None):
         data = {"params": params, "last_save_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
         if adjustment_logs is not None:
             data["logs"] = adjustment_logs[-AUTO_OPT_LOG_MAX_RECORDS:]
-        with open(AUTO_OPT_LOG_FILE, 'w', encoding='utf-8') as f:
+        with open(AUTO_OPT_LOG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[v6.0] 保存自优化参数失败: {e}")
@@ -6509,7 +7621,6 @@ def _add_adjustment_log(logs, param_key, action, old_val, new_val, reason, metri
     return logs
 
 
-
 def _get_trade_r(t):
     """获取交易的R值（兼容多种数据源字段）"""
     if "r_result" in t:
@@ -6525,11 +7636,19 @@ def _get_trade_r(t):
         return pnl / max(1, abs(entry)) if entry else pnl
     return 0.0
 
+
 def _calc_performance_metrics(recent_trades, stop_trades=None):
     """计算近期表现指标"""
     if not recent_trades or len(recent_trades) == 0:
-        return {"win_rate": 50, "profit_factor": 1.0, "streak_count": 0,
-                "streak_type": "none", "stop_rate": 50, "recent_total_r": 0, "trade_count": 0}
+        return {
+            "win_rate": 50,
+            "profit_factor": 1.0,
+            "streak_count": 0,
+            "streak_type": "none",
+            "stop_rate": 50,
+            "recent_total_r": 0,
+            "trade_count": 0,
+        }
     trades = recent_trades[-AUTO_OPT_WINDOW_MID:]
     n = len(trades)
     wins = sum(1 for t in trades if (_get_trade_r(t)) > 0)
@@ -6561,11 +7680,19 @@ def _calc_performance_metrics(recent_trades, stop_trades=None):
         stop_count = sum(1 for t in trades[-AUTO_OPT_WINDOW_STOP:] if _get_trade_r(t) < -0.1)
         total = min(AUTO_OPT_WINDOW_STOP, len(trades))
         stop_rate = stop_count / total * 100 if total > 0 else 50
-    short_trades = recent_trades[-AUTO_OPT_WINDOW_SHORT:] if len(recent_trades) >= AUTO_OPT_WINDOW_SHORT else recent_trades
+    short_trades = (
+        recent_trades[-AUTO_OPT_WINDOW_SHORT:] if len(recent_trades) >= AUTO_OPT_WINDOW_SHORT else recent_trades
+    )
     recent_total_r = sum(_get_trade_r(t) for t in short_trades)
-    return {"win_rate": round(win_rate, 1), "profit_factor": round(profit_factor, 2),
-            "streak_count": streak_count, "streak_type": streak_type,
-            "stop_rate": round(stop_rate, 1), "recent_total_r": round(recent_total_r, 2), "trade_count": n}
+    return {
+        "win_rate": round(win_rate, 1),
+        "profit_factor": round(profit_factor, 2),
+        "streak_count": streak_count,
+        "streak_type": streak_type,
+        "stop_rate": round(stop_rate, 1),
+        "recent_total_r": round(recent_total_r, 2),
+        "trade_count": n,
+    }
 
 
 def check_and_adjust_params(params, recent_trades, adjustment_logs):
@@ -6585,11 +7712,23 @@ def check_and_adjust_params(params, recent_trades, adjustment_logs):
         cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
         if cd:
             if metrics["streak_type"] == "win" and metrics["streak_count"] >= AUTO_OPT_STREAK_THRESHOLD:
-                pending.append({"param_key": "quality_threshold", "direction": "decrease", "priority": 10,
-                                "reason": f"连盈{metrics['streak_count']}次，降低信号质量门槛"})
+                pending.append(
+                    {
+                        "param_key": "quality_threshold",
+                        "direction": "decrease",
+                        "priority": 10,
+                        "reason": f"连盈{metrics['streak_count']}次，降低信号质量门槛",
+                    }
+                )
             elif metrics["streak_type"] == "lose" and metrics["streak_count"] >= AUTO_OPT_STREAK_THRESHOLD:
-                pending.append({"param_key": "quality_threshold", "direction": "increase", "priority": 10,
-                                "reason": f"连亏{metrics['streak_count']}次，提高信号质量门槛"})
+                pending.append(
+                    {
+                        "param_key": "quality_threshold",
+                        "direction": "increase",
+                        "priority": 10,
+                        "reason": f"连亏{metrics['streak_count']}次，提高信号质量门槛",
+                    }
+                )
 
     # 2. 单笔风险比例
     p = params.get("single_trade_risk_pct", {})
@@ -6597,11 +7736,23 @@ def check_and_adjust_params(params, recent_trades, adjustment_logs):
         cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
         if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_MID:
             if metrics["win_rate"] > AUTO_OPT_WINRATE_HIGH:
-                pending.append({"param_key": "single_trade_risk_pct", "direction": "increase", "priority": 8,
-                                "reason": f"胜率{metrics['win_rate']}% > {AUTO_OPT_WINRATE_HIGH}%，提高单笔风险"})
+                pending.append(
+                    {
+                        "param_key": "single_trade_risk_pct",
+                        "direction": "increase",
+                        "priority": 8,
+                        "reason": f"胜率{metrics['win_rate']}% > {AUTO_OPT_WINRATE_HIGH}%，提高单笔风险",
+                    }
+                )
             elif metrics["win_rate"] < AUTO_OPT_WINRATE_LOW:
-                pending.append({"param_key": "single_trade_risk_pct", "direction": "decrease", "priority": 8,
-                                "reason": f"胜率{metrics['win_rate']}% < {AUTO_OPT_WINRATE_LOW}%，降低单笔风险"})
+                pending.append(
+                    {
+                        "param_key": "single_trade_risk_pct",
+                        "direction": "decrease",
+                        "priority": 8,
+                        "reason": f"胜率{metrics['win_rate']}% < {AUTO_OPT_WINRATE_LOW}%，降低单笔风险",
+                    }
+                )
 
     # 3. 盈亏比要求
     p = params.get("min_rr_ratio", {})
@@ -6609,11 +7760,23 @@ def check_and_adjust_params(params, recent_trades, adjustment_logs):
         cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
         if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_MID:
             if metrics["profit_factor"] > AUTO_OPT_PF_HIGH:
-                pending.append({"param_key": "min_rr_ratio", "direction": "decrease", "priority": 6,
-                                "reason": f"盈亏比{metrics['profit_factor']} > {AUTO_OPT_PF_HIGH}，降低入场要求"})
+                pending.append(
+                    {
+                        "param_key": "min_rr_ratio",
+                        "direction": "decrease",
+                        "priority": 6,
+                        "reason": f"盈亏比{metrics['profit_factor']} > {AUTO_OPT_PF_HIGH}，降低入场要求",
+                    }
+                )
             elif metrics["profit_factor"] < AUTO_OPT_PF_LOW:
-                pending.append({"param_key": "min_rr_ratio", "direction": "increase", "priority": 6,
-                                "reason": f"盈亏比{metrics['profit_factor']} < {AUTO_OPT_PF_LOW}，提高入场要求"})
+                pending.append(
+                    {
+                        "param_key": "min_rr_ratio",
+                        "direction": "increase",
+                        "priority": 6,
+                        "reason": f"盈亏比{metrics['profit_factor']} < {AUTO_OPT_PF_LOW}，提高入场要求",
+                    }
+                )
 
     # 4. ATR止损倍数
     p = params.get("atr_stop_mult", {})
@@ -6621,11 +7784,23 @@ def check_and_adjust_params(params, recent_trades, adjustment_logs):
         cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
         if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_STOP:
             if metrics["stop_rate"] > AUTO_OPT_STOP_RATE_HIGH:
-                pending.append({"param_key": "atr_stop_mult", "direction": "increase", "priority": 7,
-                                "reason": f"止损触发率{metrics['stop_rate']}% > {AUTO_OPT_STOP_RATE_HIGH}%，放宽止损"})
+                pending.append(
+                    {
+                        "param_key": "atr_stop_mult",
+                        "direction": "increase",
+                        "priority": 7,
+                        "reason": f"止损触发率{metrics['stop_rate']}% > {AUTO_OPT_STOP_RATE_HIGH}%，放宽止损",
+                    }
+                )
             elif metrics["stop_rate"] < AUTO_OPT_STOP_RATE_LOW:
-                pending.append({"param_key": "atr_stop_mult", "direction": "decrease", "priority": 7,
-                                "reason": f"止损触发率{metrics['stop_rate']}% < {AUTO_OPT_STOP_RATE_LOW}%，收紧止损"})
+                pending.append(
+                    {
+                        "param_key": "atr_stop_mult",
+                        "direction": "decrease",
+                        "priority": 7,
+                        "reason": f"止损触发率{metrics['stop_rate']}% < {AUTO_OPT_STOP_RATE_LOW}%，收紧止损",
+                    }
+                )
 
     # 5. 时间止损天数
     p = params.get("time_stop_days", {})
@@ -6633,11 +7808,23 @@ def check_and_adjust_params(params, recent_trades, adjustment_logs):
         cd = (now - p.get("last_adjust_time", 0)) > (AUTO_OPT_COOLDOWN_HOURS * 3600)
         if cd and metrics["trade_count"] >= AUTO_OPT_WINDOW_MID:
             if metrics["win_rate"] > 55 and metrics["profit_factor"] > 2.0:
-                pending.append({"param_key": "time_stop_days", "direction": "increase", "priority": 4,
-                                "reason": f"胜率{metrics['win_rate']}%+盈亏比{metrics['profit_factor']}，延长持仓时间"})
+                pending.append(
+                    {
+                        "param_key": "time_stop_days",
+                        "direction": "increase",
+                        "priority": 4,
+                        "reason": f"胜率{metrics['win_rate']}%+盈亏比{metrics['profit_factor']}，延长持仓时间",
+                    }
+                )
             elif metrics["win_rate"] < 45 and metrics["profit_factor"] < 1.5:
-                pending.append({"param_key": "time_stop_days", "direction": "decrease", "priority": 4,
-                                "reason": f"胜率{metrics['win_rate']}%+盈亏比{metrics['profit_factor']}，缩短持仓时间"})
+                pending.append(
+                    {
+                        "param_key": "time_stop_days",
+                        "direction": "decrease",
+                        "priority": 4,
+                        "reason": f"胜率{metrics['win_rate']}%+盈亏比{metrics['profit_factor']}，缩短持仓时间",
+                    }
+                )
 
     if pending:
         pending.sort(key=lambda x: x["priority"], reverse=True)
@@ -6656,8 +7843,12 @@ def check_and_adjust_params(params, recent_trades, adjustment_logs):
             params[param_key]["current_value"] = new_val
             params[param_key]["last_adjust_time"] = now
             params[param_key]["adjust_count"] = params[param_key].get("adjust_count", 0) + 1
-            adjustment_logs = _add_adjustment_log(adjustment_logs, param_key, direction, old_val, new_val, adj["reason"], metrics)
-            adjustments.append(f"{param_info['label']}: {old_val}{param_info['unit']} → {new_val}{param_info['unit']} ({adj['reason']})")
+            adjustment_logs = _add_adjustment_log(
+                adjustment_logs, param_key, direction, old_val, new_val, adj["reason"], metrics
+            )
+            adjustments.append(
+                f"{param_info['label']}: {old_val}{param_info['unit']} → {new_val}{param_info['unit']} ({adj['reason']})"
+            )
             _save_auto_opt_params(params, adjustment_logs)
             print(f"[v6.0] 参数自优化: {param_info['label']} {old_val} → {new_val} ({adj['reason']})")
     return params, adjustment_logs, adjustments
@@ -6692,10 +7883,15 @@ def check_rollback_needed(params, recent_trades, adjustment_logs):
         rollback_val = max(param_info["min"], min(param_info["max"], rollback_val))
         if rollback_val != current_val:
             params[last_adjusted_param]["current_value"] = rollback_val
-            adjustment_logs = _add_adjustment_log(adjustment_logs, last_adjusted_param, "rollback",
-                current_val, rollback_val,
+            adjustment_logs = _add_adjustment_log(
+                adjustment_logs,
+                last_adjusted_param,
+                "rollback",
+                current_val,
+                rollback_val,
                 f"调整后{AUTO_OPT_ROLLBACK_TRADES}笔累积R={total_r:.2f} < {AUTO_OPT_ROLLBACK_THRESHOLD}，自动回退",
-                {"total_r_after": total_r, "trade_count": len(recent_after)})
+                {"total_r_after": total_r, "trade_count": len(recent_after)},
+            )
             _save_auto_opt_params(params, adjustment_logs)
             print(f"[v6.0] 参数回退: {param_info['label']} {current_val} → {rollback_val} (调整后累积R={total_r:.2f})")
             return params, adjustment_logs, True
@@ -6709,71 +7905,73 @@ def get_effective_param(param_key, default_val):
     return default_val
 
 
-
 # Phase 4 Modules A-F
+
 
 def update_cognitive_bias(result_r):
     if not COGNITIVE_BIAS_ENABLED:
         return
     if result_r > 0:
-        cognitive_bias_state['win_streak'] += 1
-        cognitive_bias_state['loss_streak'] = 0
+        cognitive_bias_state["win_streak"] += 1
+        cognitive_bias_state["loss_streak"] = 0
     else:
-        cognitive_bias_state['loss_streak'] += 1
-        cognitive_bias_state['win_streak'] = 0
-    cognitive_bias_state['last_trade_time'] = time.time()
-    if cognitive_bias_state['win_streak'] >= OVERCONFIDENCE_WIN_STREAK:
-        cognitive_bias_state['overconfidence_active'] = True
-        print(f'[v6.0 Phase4] overconfidence: {cognitive_bias_state["win_streak"]} wins')
-    if cognitive_bias_state['loss_streak'] >= REVENGE_TRADING_LOSS_STREAK:
-        if time.time() > cognitive_bias_state.get('revenge_cooldown_until', 0):
-            cognitive_bias_state['revenge_cooldown_until'] = time.time() + REVENGE_TRADING_COOLDOWN_MIN * 60
-            print(f'[v6.0 Phase4] revenge cooldown: {REVENGE_TRADING_COOLDOWN_MIN}min')
+        cognitive_bias_state["loss_streak"] += 1
+        cognitive_bias_state["win_streak"] = 0
+    cognitive_bias_state["last_trade_time"] = time.time()
+    if cognitive_bias_state["win_streak"] >= OVERCONFIDENCE_WIN_STREAK:
+        cognitive_bias_state["overconfidence_active"] = True
+        print(f"[v6.0 Phase4] overconfidence: {cognitive_bias_state['win_streak']} wins")
+    if cognitive_bias_state["loss_streak"] >= REVENGE_TRADING_LOSS_STREAK:
+        if time.time() > cognitive_bias_state.get("revenge_cooldown_until", 0):
+            cognitive_bias_state["revenge_cooldown_until"] = time.time() + REVENGE_TRADING_COOLDOWN_MIN * 60
+            print(f"[v6.0 Phase4] revenge cooldown: {REVENGE_TRADING_COOLDOWN_MIN}min")
+
 
 def get_cognitive_bias_overlay():
     if not COGNITIVE_BIAS_ENABLED:
         return {}
     overlay = {}
-    if cognitive_bias_state.get('overconfidence_active'):
-        overlay['quality_threshold_boost'] = OVERCONFIDENCE_RAISE_THRESHOLD
-        overlay['position_shrink_pct'] = OVERCONFIDENCE_SHRINK_PCT
-        overlay['reason'] = f'win_streak={cognitive_bias_state["win_streak"]}'
-    if time.time() < cognitive_bias_state.get('revenge_cooldown_until', 0):
-        overlay['block_new_signals'] = True
-        overlay['reason'] = 'revenge_trading_cooldown'
+    if cognitive_bias_state.get("overconfidence_active"):
+        overlay["quality_threshold_boost"] = OVERCONFIDENCE_RAISE_THRESHOLD
+        overlay["position_shrink_pct"] = OVERCONFIDENCE_SHRINK_PCT
+        overlay["reason"] = f"win_streak={cognitive_bias_state['win_streak']}"
+    if time.time() < cognitive_bias_state.get("revenge_cooldown_until", 0):
+        overlay["block_new_signals"] = True
+        overlay["reason"] = "revenge_trading_cooldown"
     return overlay
+
 
 def calc_expected_value_signal(signal, market_state=None, position_info=None):
     if not EXPECTED_VALUE_ENGINE_ENABLED:
-        return {'ev_score': 0, 'ev_passed': True, 'ev_details': {}}
+        return {"ev_score": 0, "ev_passed": True, "ev_details": {}}
     dims = {}
     trend_score = 50
-    if signal.get('trend_strength'):
-        trend_score = min(100, max(0, int(signal['trend_strength'])))
-    elif market_state and market_state.get('state') in ('trend_early', 'trend_mid'):
+    if signal.get("trend_strength"):
+        trend_score = min(100, max(0, int(signal["trend_strength"])))
+    elif market_state and market_state.get("state") in ("trend_early", "trend_mid"):
         trend_score = 70
-    elif market_state and market_state.get('state') == 'trend_late':
+    elif market_state and market_state.get("state") == "trend_late":
         trend_score = 55
-    elif market_state and market_state.get('state') == 'sideways':
+    elif market_state and market_state.get("state") == "sideways":
         trend_score = 30
-    dims['trend_strength'] = trend_score
-    vol_score = signal.get('volume_score', 50)
-    dims['volume_confirmation'] = min(100, max(0, int(vol_score)))
+    dims["trend_strength"] = trend_score
+    vol_score = signal.get("volume_score", 50)
+    dims["volume_confirmation"] = min(100, max(0, int(vol_score)))
     if market_state:
-        state_score_map = {'trend_early': 75, 'trend_mid': 65, 'trend_late': 45, 'sideways': 30}
-        state_score = state_score_map.get(market_state.get('state', 'sideways'), 40)
-        if market_state.get('confirm_count', 0) >= 3:
+        state_score_map = {"trend_early": 75, "trend_mid": 65, "trend_late": 45, "sideways": 30}
+        state_score = state_score_map.get(market_state.get("state", "sideways"), 40)
+        if market_state.get("confirm_count", 0) >= 3:
             state_score += 10
     else:
         state_score = 50
-    dims['market_state'] = min(100, state_score)
-    rr = signal.get('rr_ratio', 2.0)
+    dims["market_state"] = min(100, state_score)
+    rr = signal.get("rr_ratio", 2.0)
     rr_score = min(100, int(rr * 30)) if rr > 0 else 20
-    dims['risk_reward'] = rr_score
+    dims["risk_reward"] = rr_score
     timing_score = 50
-    if signal.get('momentum_score'):
-        timing_score = int(signal['momentum_score'])
-    dims['timing'] = min(100, max(0, timing_score))
+    if signal.get("momentum_score"):
+        timing_score = int(signal["momentum_score"])
+    dims["timing"] = min(100, max(0, timing_score))
     total_weight = sum(EV_DIMENSIONS.values())
     weighted_score = sum(dims[k] * v for k, v in EV_DIMENSIONS.items()) / total_weight
     values = list(dims.values())
@@ -6783,70 +7981,93 @@ def calc_expected_value_signal(signal, market_state=None, position_info=None):
     avg_rr = max(1.5, rr)
     expected_value = est_win_rate * avg_rr - (1 - est_win_rate)
     passed = expected_value >= EV_MIN_THRESHOLD
-    return {'ev_score': round(weighted_score, 1), 'ev_expected_value': round(expected_value, 2), 'ev_passed': passed, 'ev_details': dims, 'ev_min_threshold': EV_MIN_THRESHOLD}
+    return {
+        "ev_score": round(weighted_score, 1),
+        "ev_expected_value": round(expected_value, 2),
+        "ev_passed": passed,
+        "ev_details": dims,
+        "ev_min_threshold": EV_MIN_THRESHOLD,
+    }
+
 
 def calc_antifragile_adjustment(equity, peak_equity, signal_quality, position_info=None):
     if not ANTIFRAGILE_ENABLED:
-        return {'action': 'none', 'reason': ''}
+        return {"action": "none", "reason": ""}
     if equity <= 0 or peak_equity <= 0:
-        return {'action': 'none', 'reason': ''}
+        return {"action": "none", "reason": ""}
     drawdown = (peak_equity - equity) / peak_equity * 100
     if drawdown < ANTIFRAGILE_DRAWDOWN_TRIGGER:
-        return {'action': 'none', 'reason': f'drawdown={drawdown:.1f}% < {ANTIFRAGILE_DRAWDOWN_TRIGGER}%'}
+        return {"action": "none", "reason": f"drawdown={drawdown:.1f}% < {ANTIFRAGILE_DRAWDOWN_TRIGGER}%"}
     if signal_quality >= ANTIFRAGILE_MIN_QUALITY:
         add_pct = min(ANTIFRAGILE_MAX_ADD_PCT, int(drawdown * 10))
-        return {'action': 'antifragile_add', 'reason': f'dd={drawdown:.1f}%, q={signal_quality}, add_{add_pct}%', 'add_pct': add_pct}
+        return {
+            "action": "antifragile_add",
+            "reason": f"dd={drawdown:.1f}%, q={signal_quality}, add_{add_pct}%",
+            "add_pct": add_pct,
+        }
     else:
         shrink_pct = min(50, int(drawdown * 5))
-        return {'action': 'antifragile_shrink', 'reason': f'dd={drawdown:.1f}%, q={signal_quality}, shrink_{shrink_pct}%', 'shrink_pct': shrink_pct}
+        return {
+            "action": "antifragile_shrink",
+            "reason": f"dd={drawdown:.1f}%, q={signal_quality}, shrink_{shrink_pct}%",
+            "shrink_pct": shrink_pct,
+        }
+
 
 def update_trader_state(trade_result=None):
     if not TRADER_STATE_ENABLED:
         return
-    today = time.strftime('%Y-%m-%d')
-    if trader_state.get('daily_date') != today:
-        trader_state['daily_date'] = today
-        trader_state['daily_trade_count'] = 0
-        trader_state['emotion_streak'] = 0
-    trader_state['daily_trade_count'] += 1
+    today = time.strftime("%Y-%m-%d")
+    if trader_state.get("daily_date") != today:
+        trader_state["daily_date"] = today
+        trader_state["daily_trade_count"] = 0
+        trader_state["emotion_streak"] = 0
+    trader_state["daily_trade_count"] += 1
     if trade_result is not None:
         if trade_result > 0:
-            trader_state['emotion_streak'] = 0
+            trader_state["emotion_streak"] = 0
         else:
-            trader_state['emotion_streak'] += 1
-    session_hours = (time.time() - trader_state.get('session_start_time', time.time())) / 3600
-    trader_state['fatigue_level'] = min(100, int(session_hours / TRADER_FATIGUE_HOURS * 50))
-    if trader_state.get('daily_trade_count', 0) > TRADER_DAILY_MAX_TRADES:
-        trader_state['scarcity_detected'] = True
+            trader_state["emotion_streak"] += 1
+    session_hours = (time.time() - trader_state.get("session_start_time", time.time())) / 3600
+    trader_state["fatigue_level"] = min(100, int(session_hours / TRADER_FATIGUE_HOURS * 50))
+    if trader_state.get("daily_trade_count", 0) > TRADER_DAILY_MAX_TRADES:
+        trader_state["scarcity_detected"] = True
+
 
 def save_decision_diary_entry(entry):
     if not STRATEGY_REVIEW_ENABLED:
         return
-    entry['timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
-    entry['ts_unix'] = time.time()
+    entry["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    entry["ts_unix"] = time.time()
     decision_diary.append(entry)
     try:
-        data = {'entries': decision_diary[-500:]}
-        with open(DECISION_DIARY_FILE, 'w', encoding='utf-8') as f:
+        data = {"entries": decision_diary[-500:]}
+        with open(DECISION_DIARY_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f'[v6.0 Phase4] save diary failed: {e}')
+        print(f"[v6.0 Phase4] save diary failed: {e}")
+
 
 def calc_review_quality(trade_result, decision_quality, execution_quality=None):
     if not STRATEGY_REVIEW_ENABLED:
-        return {'total_score': 0, 'grade': 'N/A'}
+        return {"total_score": 0, "grade": "N/A"}
     exec_q = execution_quality or decision_quality
-    total = (decision_quality * REVIEW_QUALITY_WEIGHTS['decision_quality'] + exec_q * REVIEW_QUALITY_WEIGHTS['execution_quality'] + (min(100, max(0, 50 + trade_result * 20)) * REVIEW_QUALITY_WEIGHTS['result_quality']))
+    total = (
+        decision_quality * REVIEW_QUALITY_WEIGHTS["decision_quality"]
+        + exec_q * REVIEW_QUALITY_WEIGHTS["execution_quality"]
+        + (min(100, max(0, 50 + trade_result * 20)) * REVIEW_QUALITY_WEIGHTS["result_quality"])
+    )
     total = round(total, 1)
     if total >= 80:
-        grade = 'A'
+        grade = "A"
     elif total >= 70:
-        grade = 'B'
+        grade = "B"
     elif total >= 60:
-        grade = 'C'
+        grade = "C"
     else:
-        grade = 'D'
-    return {'total_score': total, 'grade': grade}
+        grade = "D"
+    return {"total_score": total, "grade": grade}
+
 
 def update_consensus_state(market_states):
     if not SECOND_LEVEL_THINKING_ENABLED:
@@ -6858,90 +8079,105 @@ def update_consensus_state(market_states):
         return consensus_state
     state_counts = {}
     for s in states:
-        st = s.get('state', 'unknown')
+        st = s.get("state", "unknown")
         state_counts[st] = state_counts.get(st, 0) + 1
     total = len(states)
-    trend_pct = sum(v for k, v in state_counts.items() if k in ('trend_early', 'trend_mid', 'trend_late')) / total * 100
+    trend_pct = sum(v for k, v in state_counts.items() if k in ("trend_early", "trend_mid", "trend_late")) / total * 100
     consensus_score = min(100, int(trend_pct))
-    consensus_state['consensus_score'] = consensus_score
-    consensus_state['last_update'] = time.time()
-    consensus_state['extreme_high'] = consensus_score >= CONSENSUS_EXTREME_HIGH
-    consensus_state['extreme_low'] = consensus_score <= CONSENSUS_EXTREME_LOW
+    consensus_state["consensus_score"] = consensus_score
+    consensus_state["last_update"] = time.time()
+    consensus_state["extreme_high"] = consensus_score >= CONSENSUS_EXTREME_HIGH
+    consensus_state["extreme_low"] = consensus_score <= CONSENSUS_EXTREME_LOW
     return consensus_state
+
 
 def check_second_level_thinking(signal, market_state=None):
     if not SECOND_LEVEL_THINKING_ENABLED:
-        return {'pass': True, 'reason': '', 'barrier_boost': 0}
+        return {"pass": True, "reason": "", "barrier_boost": 0}
     cs = consensus_state
-    if cs.get('extreme_high'):
-        return {'pass': True, 'reason': f'extreme_high({cs["consensus_score"]}%), barrier +{SECOND_LEVEL_BARRIER_BOOST}', 'barrier_boost': SECOND_LEVEL_BARRIER_BOOST, 'warning': 'extreme_bullish'}
-    if cs.get('extreme_low'):
-        signal_dir = signal.get('direction', '')
-        if signal_dir == 'long':
-            return {'pass': True, 'reason': f'extreme_low({cs["consensus_score"]}%), contrarian', 'barrier_boost': 0, 'opportunity': 'contrarian'}
-    return {'pass': True, 'reason': '', 'barrier_boost': 0}
+    if cs.get("extreme_high"):
+        return {
+            "pass": True,
+            "reason": f"extreme_high({cs['consensus_score']}%), barrier +{SECOND_LEVEL_BARRIER_BOOST}",
+            "barrier_boost": SECOND_LEVEL_BARRIER_BOOST,
+            "warning": "extreme_bullish",
+        }
+    if cs.get("extreme_low"):
+        signal_dir = signal.get("direction", "")
+        if signal_dir == "long":
+            return {
+                "pass": True,
+                "reason": f"extreme_low({cs['consensus_score']}%), contrarian",
+                "barrier_boost": 0,
+                "opportunity": "contrarian",
+            }
+    return {"pass": True, "reason": "", "barrier_boost": 0}
+
 
 def apply_phase4_filters(signal, market_state=None, position_info=None, equity=None, peak_equity=None):
-    result = {'passed': True, 'reason': '', 'adjustments': {}, 'warnings': [], 'boosts': []}
+    result = {"passed": True, "reason": "", "adjustments": {}, "warnings": [], "boosts": []}
     if not PHASE4_ENABLED:
         return result
     overlay = get_cognitive_bias_overlay()
-    if overlay.get('block_new_signals'):
-        result['passed'] = False
-        result['reason'] = overlay.get('reason', 'blocked')
-        result['warnings'].append(f'[A]{overlay.get("reason","")}')
+    if overlay.get("block_new_signals"):
+        result["passed"] = False
+        result["reason"] = overlay.get("reason", "blocked")
+        result["warnings"].append(f"[A]{overlay.get('reason', '')}")
         return result
-    if overlay.get('position_shrink_pct'):
-        result['adjustments']['position_shrink_pct'] = overlay['position_shrink_pct']
-        result['warnings'].append(f'[A]shrink_{overlay["position_shrink_pct"]}%')
-    if overlay.get('quality_threshold_boost'):
-        result['adjustments']['quality_threshold_boost'] = overlay['quality_threshold_boost']
+    if overlay.get("position_shrink_pct"):
+        result["adjustments"]["position_shrink_pct"] = overlay["position_shrink_pct"]
+        result["warnings"].append(f"[A]shrink_{overlay['position_shrink_pct']}%")
+    if overlay.get("quality_threshold_boost"):
+        result["adjustments"]["quality_threshold_boost"] = overlay["quality_threshold_boost"]
     ev = calc_expected_value_signal(signal, market_state, position_info)
-    if not ev.get('ev_passed'):
-        result['passed'] = False
-        result['reason'] = f'ev={ev["ev_expected_value"]:.2f} < {EV_MIN_THRESHOLD}'
-        result['warnings'].append(f'[B]{result["reason"]}')
+    if not ev.get("ev_passed"):
+        result["passed"] = False
+        result["reason"] = f"ev={ev['ev_expected_value']:.2f} < {EV_MIN_THRESHOLD}"
+        result["warnings"].append(f"[B]{result['reason']}")
         return result
-    if ev.get('ev_expected_value', 0) > 1.0:
-        result['boosts'].append(f'[B]ev={ev["ev_expected_value"]:.2f}')
+    if ev.get("ev_expected_value", 0) > 1.0:
+        result["boosts"].append(f"[B]ev={ev['ev_expected_value']:.2f}")
     if equity and peak_equity:
-        af = calc_antifragile_adjustment(equity, peak_equity, signal.get('quality_score', 50), position_info)
-        if af.get('action') == 'antifragile_add':
-            result['boosts'].append(f'[C]{af["reason"]}')
-            result['adjustments']['antifragile_add_pct'] = af['add_pct']
-        elif af.get('action') == 'antifragile_shrink':
-            result['adjustments']['antifragile_shrink_pct'] = af['shrink_pct']
-            result['warnings'].append(f'[C]{af["reason"]}')
+        af = calc_antifragile_adjustment(equity, peak_equity, signal.get("quality_score", 50), position_info)
+        if af.get("action") == "antifragile_add":
+            result["boosts"].append(f"[C]{af['reason']}")
+            result["adjustments"]["antifragile_add_pct"] = af["add_pct"]
+        elif af.get("action") == "antifragile_shrink":
+            result["adjustments"]["antifragile_shrink_pct"] = af["shrink_pct"]
+            result["warnings"].append(f"[C]{af['reason']}")
     t_overlay = get_trader_state_overlay()
-    if t_overlay.get('emotion_block'):
-        result['passed'] = False
-        result['reason'] = t_overlay.get('reason', 'emotion_blocked')
-        result['warnings'].append(f'[D]{result["reason"]}')
+    if t_overlay.get("emotion_block"):
+        result["passed"] = False
+        result["reason"] = t_overlay.get("reason", "emotion_blocked")
+        result["warnings"].append(f"[D]{result['reason']}")
         return result
-    if t_overlay.get('fatigue_shrink_pct'):
-        result['adjustments']['fatigue_shrink_pct'] = t_overlay['fatigue_shrink_pct']
+    if t_overlay.get("fatigue_shrink_pct"):
+        result["adjustments"]["fatigue_shrink_pct"] = t_overlay["fatigue_shrink_pct"]
     slt = check_second_level_thinking(signal, market_state)
-    if slt.get('barrier_boost'):
-        result['adjustments']['second_level_barrier'] = slt['barrier_boost']
-        result['warnings'].append(f'[F]{slt.get("reason","")}')
-    if slt.get('opportunity'):
-        result['boosts'].append(f'[F]contrarian:{slt["opportunity"]}')
+    if slt.get("barrier_boost"):
+        result["adjustments"]["second_level_barrier"] = slt["barrier_boost"]
+        result["warnings"].append(f"[F]{slt.get('reason', '')}")
+    if slt.get("opportunity"):
+        result["boosts"].append(f"[F]contrarian:{slt['opportunity']}")
     return result
+
 
 def get_trader_state_overlay():
     if not TRADER_STATE_ENABLED:
         return {}
     overlay = {}
-    if trader_state.get('fatigue_level', 0) >= 50:
-        overlay['fatigue_shrink_pct'] = min(50, trader_state['fatigue_level'])
-        overlay['reason'] = f'fatigue={trader_state["fatigue_level"]}%'
-    if trader_state.get('emotion_streak', 0) >= TRADER_EMOTION_STREAK:
-        overlay['emotion_block'] = True
-        overlay['reason'] = f'emotion_streak={trader_state["emotion_streak"]}'
-    if trader_state.get('scarcity_detected'):
-        overlay['max_risk_boost'] = -50
-        overlay['reason'] = 'scarcity_detected'
+    if trader_state.get("fatigue_level", 0) >= 50:
+        overlay["fatigue_shrink_pct"] = min(50, trader_state["fatigue_level"])
+        overlay["reason"] = f"fatigue={trader_state['fatigue_level']}%"
+    if trader_state.get("emotion_streak", 0) >= TRADER_EMOTION_STREAK:
+        overlay["emotion_block"] = True
+        overlay["reason"] = f"emotion_streak={trader_state['emotion_streak']}"
+    if trader_state.get("scarcity_detected"):
+        overlay["max_risk_boost"] = -50
+        overlay["reason"] = "scarcity_detected"
     return overlay
+
+
 def _update_market_states(feed, state):
     """v6.0: 遍历所有品种更新市场状态"""
     # Phase 4: 更新共识状态
@@ -6953,30 +8189,30 @@ def _update_market_states(feed, state):
             sym_klines = klines_data.get(sym, [])
             if not sym_klines or len(sym_klines) < TECH_MA_SLOW + 10:
                 continue
-            
+
             # 获取成交量数据
             volumes_list = []
             for k in sym_klines:
                 v = k.get("volume") or k.get("vol")
                 if v:
                     volumes_list.append(float(v))
-            
+
             # 1. 技术面识别
             tech_result = calc_tech_market_state(sym_klines, volumes_list or None)
-            
+
             # 2. 表现面反馈（从state的交易历史获取）
             trade_log = state.get("discipline", {}).get("trade_log", [])
             sym_trades = [t for t in trade_log if t.get("symbol") == sym]
             perf_result = calc_performance_score(sym_trades)
-            
+
             # 3. 获取之前的状态
             prev_info = market_state_cache.get(sym, {})
             prev_state = prev_info.get("state", MARKET_STATE_SIDEWAYS)
             prev_counter = prev_info.get("confirm_counter", 0)
-            
+
             # 4. 状态判定
             state_result = determine_market_state(tech_result, perf_result, prev_state, prev_counter)
-            
+
             # 5. 更新缓存
             market_state_cache[sym] = {
                 "state": state_result["state"],
@@ -6988,9 +8224,9 @@ def _update_market_states(feed, state):
                 "trend_direction": state_result["trend_direction"],
                 "tech_indicators": tech_result.get("indicators", {}),
                 "last_update": time.time(),
-                "switched": state_result["switched"]
+                "switched": state_result["switched"],
             }
-            
+
             # 6. 状态切换日志 + 记录
             if state_result["switched"]:
                 log_state_transition(
@@ -6999,16 +8235,16 @@ def _update_market_states(feed, state):
                     new_state=state_result["state"],
                     tech_result=tech_result,
                     perf_result=perf_result,
-                    confidence=state_result["confidence"]
+                    confidence=state_result["confidence"],
                 )
         except Exception as _e:
             pass
 
 
-
 # ═══════════════════════════════════════════════════════════
 # v6.0 函数结束
 # ═══════════════════════════════════════════════════════════
+
 
 def _position_aware_advice(sig, open_positions, price):
     """P-持仓感知 v4：信号发出前与用户真实持仓比对。
@@ -7026,7 +8262,7 @@ def _position_aware_advice(sig, open_positions, price):
 
     now = time.time()
     today = datetime.now().strftime("%Y-%m-%d")
-    
+
     # ── 状态清理：定期清理过期的追踪记录（防内存泄漏）──
     _EXPIRE_SEC = 86400  # 24小时过期
     # 清理过期的Whipsaw方向历史
@@ -7051,8 +8287,11 @@ def _position_aware_advice(sig, open_positions, price):
         _log = _SIGNAL_PUSH_LOG[_s]
         _log["timestamps"] = [t for t in _log.get("timestamps", []) if now - t < 3600]
         _daily = _log.get("daily_count", {})
-        _log["daily_count"] = {d: c for d, c in _daily.items()
-                             if (datetime.strptime(d, "%Y-%m-%d").timestamp() if isinstance(d, str) else 0) > now - 7*86400}
+        _log["daily_count"] = {
+            d: c
+            for d, c in _daily.items()
+            if (datetime.strptime(d, "%Y-%m-%d").timestamp() if isinstance(d, str) else 0) > now - 7 * 86400
+        }
         if not _log.get("timestamps") and not _log.get("daily_count"):
             if _log.get("last_sig_time", 0) < now - _EXPIRE_SEC:
                 del _SIGNAL_PUSH_LOG[_s]
@@ -7060,7 +8299,6 @@ def _position_aware_advice(sig, open_positions, price):
         _SIGNAL_PUSH_LOG[_s] = _log
     # ── 清理结束 ──
 
-    
     # 保护8：跨方向信号锁定（30分钟内同品种只推一个方向，避免矛盾信号）
     _dir_lock = _SIGNAL_DIR_LOCK.get(sym)
     if _dir_lock and (now - _dir_lock.get("time", 0)) < SIGNAL_CROSS_DIR_LOCK_SEC:
@@ -7070,11 +8308,13 @@ def _position_aware_advice(sig, open_positions, price):
             sig["hold_context"] = {"cross_dir_locked": True, "locked_dir": _locked_dir}
             sig["signal_type"] = "信号整合·方向锁定"
             sig["push_suppressed"] = True
-            sig["action_advice"] = f"{sym} 30分钟内已推{_locked_dir}方向信号，当前{sig_dir}方向锁定中({_lock_remain}分钟后解锁)，不推矛盾信号。"
+            sig["action_advice"] = (
+                f"{sym} 30分钟内已推{_locked_dir}方向信号，当前{sig_dir}方向锁定中({_lock_remain}分钟后解锁)，不推矛盾信号。"
+            )
             sig["advice_type"] = "cross_dir_locked"
             sig["reason"] += f"【整合·方向锁定】{sym} 近期已推{_locked_dir}方向信号，不推反向{sig_dir}信号。"
             return "blocked"
-    
+
     # 保护7：信号去重（3分钟内同向重复→抑制）
     _sig_log = _SIGNAL_PUSH_LOG.get(sym, {"timestamps": [], "daily_count": {}, "last_dir": None, "last_sig_time": 0})
     if _sig_log.get("last_dir") == sig_dir and (now - _sig_log.get("last_sig_time", 0)) < SIGNAL_DEDUP_WINDOW_SEC:
@@ -7085,7 +8325,7 @@ def _position_aware_advice(sig, open_positions, price):
         sig["action_advice"] = f"{sym} {sig_dir}信号{remaining}秒内已推送过，去重处理。"
         sig["reason"] += f"【去重】{SIGNAL_DEDUP_WINDOW_SEC}秒内同向重复信号已抑制。"
         return "blocked"
-    
+
     # 保护5：Whipsaw检测（短时间方向反转→噪声）
     _dir_history = _POS_DIRECTION_HISTORY.get(sym, [])
     recent_flip = False
@@ -7096,15 +8336,15 @@ def _position_aware_advice(sig, open_positions, price):
     _POS_DIRECTION_HISTORY.setdefault(sym, []).append((sig_dir, now))
     if len(_POS_DIRECTION_HISTORY[sym]) > 6:
         _POS_DIRECTION_HISTORY[sym] = _POS_DIRECTION_HISTORY[sym][-6:]
-    
+
     if recent_flip and len(_dir_history) >= 2:
         sig["hold_context"] = {"whipsaw": True}
         sig["signal_type"] = "信号噪声·来回打脸"
         sig["push_suppressed"] = True
-        sig["action_advice"] = f"{sym} 近期{WHIPSAW_WINDOW_SEC//60}分钟内方向反复切换(Whipsaw)，建议观望。"
-        sig["reason"] += f"【Whipsaw】{sym} 近期{WHIPSAW_WINDOW_SEC//60}分钟内出现方向反转，信号可信度下降。"
+        sig["action_advice"] = f"{sym} 近期{WHIPSAW_WINDOW_SEC // 60}分钟内方向反复切换(Whipsaw)，建议观望。"
+        sig["reason"] += f"【Whipsaw】{sym} 近期{WHIPSAW_WINDOW_SEC // 60}分钟内出现方向反转，信号可信度下降。"
         return "blocked"
-    
+
     # 保护6：信号频率控制
     _timestamps = [t for t in _sig_log.get("timestamps", []) if now - t < 3600]
     if len(_timestamps) >= MAX_SIGNALS_PER_HOUR:
@@ -7114,7 +8354,7 @@ def _position_aware_advice(sig, open_positions, price):
         sig["action_advice"] = f"{sym} 本小时已推送{len(_timestamps)}条信号，达到上限{MAX_SIGNALS_PER_HOUR}/小时。"
         sig["reason"] += f"【限频】单品种每小时最多{MAX_SIGNALS_PER_HOUR}条信号。"
         return "blocked"
-    
+
     _daily = _sig_log.get("daily_count", {})
     daily_count = _daily.get(today, 0)
     if daily_count >= MAX_SIGNALS_PER_DAY:
@@ -7124,7 +8364,7 @@ def _position_aware_advice(sig, open_positions, price):
         sig["action_advice"] = f"{sym} 今日已推送{daily_count}条信号，达到上限{MAX_SIGNALS_PER_DAY}/日。"
         sig["reason"] += f"【限频】单品种每日最多{MAX_SIGNALS_PER_DAY}条信号。"
         return "blocked"
-    
+
     _SIGNAL_PUSH_LOG[sym] = {
         "timestamps": _timestamps + [now],
         "daily_count": {**_daily, today: daily_count + 1},
@@ -7136,7 +8376,7 @@ def _position_aware_advice(sig, open_positions, price):
 
     total_positions = len(open_positions)
     total_lots = sum(int(p.get("lots") or 0) for p in open_positions)
-    
+
     # 保护3：平仓冷却期
     _lpc = _LAST_POS_CLOSE.get(sym)
     if _lpc is not None and (now - _lpc) < CLOSE_COOLDOWN_SEC:
@@ -7148,7 +8388,7 @@ def _position_aware_advice(sig, open_positions, price):
         sig["advice_type"] = "cooldown"
         sig["reason"] += f"【冷却期】{remain}分钟内不推新信号。"
         return "blocked"
-    
+
     for pos in open_positions:
         if pos.get("sym") != sym:
             continue
@@ -7157,53 +8397,64 @@ def _position_aware_advice(sig, open_positions, price):
         mult = _spec_mult(sym)
         avg = float(pos.get("avg") or 0)
         if price and mult and lots:
-            float_pnl = ((float(price) - avg) * mult * lots) if pos_dir == "多" else ((avg - float(price)) * mult * lots)
+            float_pnl = (
+                ((float(price) - avg) * mult * lots) if pos_dir == "多" else ((avg - float(price)) * mult * lots)
+            )
         else:
             float_pnl = None
-        
+
         _LAST_POSITION_SNAPSHOT[sym] = {"lots": lots, "direction": pos_dir, "avg": avg, "time": now}
-        
+
         sig["hold_context"] = {
-            "held": True, "conflict": pos_dir != sig_dir,
-            "direction": pos_dir, "lots": lots, "avg": avg,
-            "price": price, "float_pnl": round(float_pnl, 1) if float_pnl is not None else None,
+            "held": True,
+            "conflict": pos_dir != sig_dir,
+            "direction": pos_dir,
+            "lots": lots,
+            "avg": avg,
+            "price": price,
+            "float_pnl": round(float_pnl, 1) if float_pnl is not None else None,
             "sig_dir": sig_dir,
             "total_positions": total_positions,
             "total_lots": total_lots,
         }
-        
+
         # 保护1：反向信号严格抑制
         if pos_dir != sig_dir:
             sig["signal_type"] = "持仓提示·反向信号"
             sig["push_suppressed"] = True
             if float_pnl is not None and float_pnl < 0:
-                advice = ("⚠️ 你持有 %s %d手、均价%.1f、浮亏约%.0f元。"
-                          "模型现翻向%s。请勿盲目反手或锁仓！"
-                          "应先检查止损是否触发——未触发则持有观察，触发则按纪律离场。"
-                          % (pos_dir, lots, avg, abs(float_pnl), sig_dir))
+                advice = (
+                    "⚠️ 你持有 %s %d手、均价%.1f、浮亏约%.0f元。"
+                    "模型现翻向%s。请勿盲目反手或锁仓！"
+                    "应先检查止损是否触发——未触发则持有观察，触发则按纪律离场。"
+                    % (pos_dir, lots, avg, abs(float_pnl), sig_dir)
+                )
             else:
                 pnl_txt = ("浮盈约%.0f元" % float_pnl) if float_pnl is not None else "持仓中"
-                advice = ("⚠️ 你持有 %s %d手、均价%.1f、%s。"
-                          "模型现翻向%s。反向信号不建议操作！"
-                          "盈利单可继续持有，若离场优先平仓了结，勿反向开仓。"
-                          % (pos_dir, lots, avg, pnl_txt, sig_dir))
+                advice = (
+                    "⚠️ 你持有 %s %d手、均价%.1f、%s。"
+                    "模型现翻向%s。反向信号不建议操作！"
+                    "盈利单可继续持有，若离场优先平仓了结，勿反向开仓。" % (pos_dir, lots, avg, pnl_txt, sig_dir)
+                )
             sig["action_advice"] = advice
             sig["advice_type"] = "reverse_blocked"
             sig["reason"] = f"【反向抑制】{advice}"
             return "blocked"
-        
+
         # 保护2：同向大仓位饱和
         if lots >= POSITION_SATURATION_LOTS:
             sig["signal_type"] = "持仓提示·大仓位维持"
             sig["push_suppressed"] = True
-            advice = (f"你已持有 {pos_dir} {lots}手（均价{avg}），仓位已较大。"
-                      f"模型确认{sig_dir}方向，但不建议继续加仓。"
-                      f"建议：维持现有仓位，设好移动止损。")
+            advice = (
+                f"你已持有 {pos_dir} {lots}手（均价{avg}），仓位已较大。"
+                f"模型确认{sig_dir}方向，但不建议继续加仓。"
+                f"建议：维持现有仓位，设好移动止损。"
+            )
             sig["action_advice"] = advice
             sig["advice_type"] = "saturated"
             sig["reason"] += "【仓位饱和】" + advice
             return "blocked"
-        
+
         new_total = lots + sig_lots
         if new_total > POSITION_SATURATION_LOTS:
             allowed = POSITION_SATURATION_LOTS - lots
@@ -7211,30 +8462,38 @@ def _position_aware_advice(sig, open_positions, price):
                 return "blocked"
             sig_lots = allowed
             sig["lots"] = allowed
-        
+
         if lots >= sig_lots * 2:
             advice_type = "hold"
-            advice = (f"你已持有 {pos_dir} {lots}手（均价{avg}），模型再次确认{sig_dir}方向。"
-                      f"当前仓位已不小，建议：维持为主，移动止损保护利润。")
+            advice = (
+                f"你已持有 {pos_dir} {lots}手（均价{avg}），模型再次确认{sig_dir}方向。"
+                f"当前仓位已不小，建议：维持为主，移动止损保护利润。"
+            )
         elif float_pnl is not None and float_pnl > 0:
             advice_type = "add_profit"
-            advice = (f"你已持有 {pos_dir} {lots}手（均价{avg}，浮盈{float_pnl}元），"
-                      f"模型确认{sig_dir}方向延续。建议：可加{sig_lots}手→总{new_total}手。")
+            advice = (
+                f"你已持有 {pos_dir} {lots}手（均价{avg}，浮盈{float_pnl}元），"
+                f"模型确认{sig_dir}方向延续。建议：可加{sig_lots}手→总{new_total}手。"
+            )
         elif float_pnl is not None and float_pnl < 0:
             advice_type = "caution"
-            advice = (f"你已持有 {pos_dir} {lots}手（均价{avg}，浮亏{abs(float_pnl)}元），"
-                      f"模型确认{sig_dir}方向未变。谨慎加仓！")
+            advice = (
+                f"你已持有 {pos_dir} {lots}手（均价{avg}，浮亏{abs(float_pnl)}元），"
+                f"模型确认{sig_dir}方向未变。谨慎加仓！"
+            )
         else:
             advice_type = "add"
-            advice = (f"你已持有 {pos_dir} {lots}手（均价{avg}），"
-                      f"模型触发{sig_dir}信号。建议：可加{sig_lots}手→总{new_total}手。")
-        
+            advice = (
+                f"你已持有 {pos_dir} {lots}手（均价{avg}），"
+                f"模型触发{sig_dir}信号。建议：可加{sig_lots}手→总{new_total}手。"
+            )
+
         sig["signal_type"] = "持仓提示·同向加仓信号"
         sig["action_advice"] = advice
         sig["advice_type"] = advice_type
         sig["reason"] += f"【持仓·建议】{advice}"
         return True
-    
+
     # 无持仓：检查组合上下文
     if sig_lots < MIN_SUGGESTED_LOTS:
         sig["hold_context"] = {"min_lots": True}
@@ -7243,23 +8502,27 @@ def _position_aware_advice(sig, open_positions, price):
         sig["action_advice"] = f"{sym} 建议手数{sig_lots}低于最小下单单位{MIN_SUGGESTED_LOTS}，信号静默。"
         sig["reason"] += f"【手数过滤】建议手数{sig_lots} < 最小单位{MIN_SUGGESTED_LOTS}。"
         return "blocked"
-    
+
     for s in list(_LAST_POSITION_SNAPSHOT.keys()):
         snap = _LAST_POSITION_SNAPSHOT.get(s)
         if snap and (now - snap.get("time", 0)) > 86400:
             del _LAST_POSITION_SNAPSHOT[s]
-    
+
     if total_positions > 0:
         sig["hold_context"] = {
-            "held": False, "conflict": False,
-            "total_positions": total_positions, "total_lots": total_lots,
+            "held": False,
+            "conflict": False,
+            "total_positions": total_positions,
+            "total_lots": total_lots,
         }
         long_count = sum(1 for p in open_positions if p.get("direction") == sig_dir)
         short_count = total_positions - long_count
-        
+
         if (sig_dir == "多" and long_count > 0) or (sig_dir == "空" and short_count > 0):
-            advice = (f"当前已有{long_count if sig_dir=='多' else short_count}笔{sig_dir}头持仓，"
-                      f"本信号为新{sig_dir}方向——注意整体敞口。")
+            advice = (
+                f"当前已有{long_count if sig_dir == '多' else short_count}笔{sig_dir}头持仓，"
+                f"本信号为新{sig_dir}方向——注意整体敞口。"
+            )
             sig["signal_type"] = "持仓提示·同向开仓信号"
             sig["advice_type"] = "same_dir_add"
         elif long_count > 0 and short_count > 0:
@@ -7278,9 +8541,10 @@ def _position_aware_advice(sig, open_positions, price):
         sig["action_advice"] = f"当前空仓，本信号为{sig_dir}方向开仓。"
         sig["advice_type"] = "empty_new"
         sig["reason"] += f"【空仓·{sig_dir}】信号为新方向开仓。"
-    
+
     _LAST_POSITION_SNAPSHOT[sym] = {"lots": 0, "direction": None, "avg": None, "time": now}
     return False
+
 
 def _limit_locked_stress(open_positions, feed, pre_close_map=None):
     """P2（2026-08-14）：涨跌停锁死头寸尾部应力加计。
@@ -7310,10 +8574,12 @@ def _limit_locked_stress(open_positions, feed, pre_close_map=None):
         mult = spec.get("multiplier") or spec.get("mult") or 1
         limit_pct = spec.get("limit_pct") or 0.05
         try:
-            avg_f = float(avg); lots_f = float(lots); mult_f = float(mult)
+            avg_f = float(avg)
+            lots_f = float(lots)
+            mult_f = float(mult)
         except Exception:
             continue
-        notional = avg_f * mult_f * lots_f                     # 名义金额
+        notional = avg_f * mult_f * lots_f  # 名义金额
         # 实时价（优先 feed.price，其次 last_snap.close）
         px = None
         try:
@@ -7330,9 +8596,9 @@ def _limit_locked_stress(open_positions, feed, pre_close_map=None):
         except Exception:
             continue
         dir_sign = 1 if str(direction) in ("多", "long", "buy", "B", "1") else -1
-        unreal = (px_f - avg_f) * mult_f * lots_f * dir_sign    # 浮动盈亏（正=盈）
+        unreal = (px_f - avg_f) * mult_f * lots_f * dir_sign  # 浮动盈亏（正=盈）
         if unreal >= 0:
-            continue                                           # 盈利头寸封板风险小，跳过
+            continue  # 盈利头寸封板风险小，跳过
         loss_ratio = (-unreal / notional) if notional > 0 else 0.0
         # 封板判定
         pre = (pre_close_map or {}).get(sym)
@@ -7346,18 +8612,27 @@ def _limit_locked_stress(open_positions, feed, pre_close_map=None):
                 upper = pre_f * (1 + limit_pct)
                 lower = pre_f * (1 - limit_pct)
                 if dir_sign > 0 and px_f <= lower * 1.002:
-                    locked = True; mode = "exact"              # 多单封跌停
+                    locked = True
+                    mode = "exact"  # 多单封跌停
                 elif dir_sign < 0 and px_f >= upper * 0.998:
-                    locked = True; mode = "exact"              # 空单封涨停
+                    locked = True
+                    mode = "exact"  # 空单封涨停
             except Exception:
                 pass
         if not locked and loss_ratio < STRESS_TRIGGER_MULT * limit_pct:
-            continue                                           # 启发式也未达门槛
+            continue  # 启发式也未达门槛
         stress = notional * limit_pct * STRESS_BUFFER_MULT
         total += stress
-        details.append({"sym": sym, "direction": direction, "lots": lots_f,
-                        "unreal": round(unreal, 1), "lock_mode": mode,
-                        "stress": round(stress, 1)})
+        details.append(
+            {
+                "sym": sym,
+                "direction": direction,
+                "lots": lots_f,
+                "unreal": round(unreal, 1),
+                "lock_mode": mode,
+                "stress": round(stress, 1),
+            }
+        )
     return total, details
 
 
@@ -7368,6 +8643,7 @@ def _sym_group(sym):
     except Exception:
         return "其他"
 
+
 def get_pair_corr(a, b, ttl=PAIR_CORR_TTL):
     """任意两品种日收益率滚动相关（带缓存）。返回 float 或 None（数据不足/异常）。"""
     if a == b:
@@ -7377,22 +8653,26 @@ def get_pair_corr(a, b, ttl=PAIR_CORR_TTL):
     if c is not None and (time.time() - c[0]) < ttl:
         return c[1]
     try:
-        da = load_daily_refreshed(a); db = load_daily_refreshed(b)
+        da = load_daily_refreshed(a)
+        db = load_daily_refreshed(b)
         if da is None or db is None or len(da) < 30 or len(db) < 30:
-            PAIR_CORR_CACHE[key] = (time.time(), None); return None
+            PAIR_CORR_CACHE[key] = (time.time(), None)
+            return None
         ra = da["close"].pct_change().dropna().rename(a)
         rb = db["close"].pct_change().dropna().rename(b)
         join = pd.concat([ra, rb], axis=1).dropna()
         if len(join) < 20:
-            PAIR_CORR_CACHE[key] = (time.time(), None); return None
+            PAIR_CORR_CACHE[key] = (time.time(), None)
+            return None
         corr = float(join[a].corr(join[b]))
         PAIR_CORR_CACHE[key] = (time.time(), corr)
         return corr
     except Exception:
-        PAIR_CORR_CACHE[key] = (time.time(), None); return None
+        PAIR_CORR_CACHE[key] = (time.time(), None)
+        return None
 
-def portfolio_risk_check(sym, direction, lots, price, stop, equity,
-                         open_positions, round_exposures):
+
+def portfolio_risk_check(sym, direction, lots, price, stop, equity, open_positions, round_exposures):
     """组合层约束：①总风险预算 ②相关性同向桶上限。
     返回 {ok, lots(调整后), action, reason, corr_hits}。"""
     orig = lots
@@ -7406,9 +8686,14 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
     if cand_risk > per_trade_budget:
         per_trade_fit = max(0, int(per_trade_budget // per_hand)) if per_hand > 0 else 0
         if per_trade_fit < 1:
-            return {"ok": False, "lots": 0, "action": "blocked",
-                    "reason": f"单笔风险{cand_risk:.0f}超1%上限({per_trade_budget:.0f})，缩手数或调整止损",
-                    "corr_hits": [], "risk_level": "per_trade"}
+            return {
+                "ok": False,
+                "lots": 0,
+                "action": "blocked",
+                "reason": f"单笔风险{cand_risk:.0f}超1%上限({per_trade_budget:.0f})，缩手数或调整止损",
+                "corr_hits": [],
+                "risk_level": "per_trade",
+            }
         lots = min(lots, per_trade_fit)
         cand_risk = per_hand * lots
     # 现有敞口 = 持仓 + 本轮回已发信号
@@ -7418,8 +8703,13 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
     budget = equity * _tc_num("portfolio_risk_pct", PORTFOLIO_RISK_PCT) / 100.0
     remaining = budget - open_risk
     if remaining <= 0:
-        return {"ok": False, "lots": 0, "action": "blocked",
-                "reason": f"组合风险预算已用尽({open_risk:.0f}/{budget:.0f})", "corr_hits": []}
+        return {
+            "ok": False,
+            "lots": 0,
+            "action": "blocked",
+            "reason": f"组合风险预算已用尽({open_risk:.0f}/{budget:.0f})",
+            "corr_hits": [],
+        }
     if cand_risk > remaining:
         fit = max(1, int(remaining // per_hand))
         if fit < lots:
@@ -7433,7 +8723,7 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
         c = get_pair_corr(sym, e["sym"])
         if c is None or c < PORTFOLIO_CORR_THRESHOLD:
             continue
-        if e["direction"] == direction:   # 同向 + 高相关 = 双倍暴露风险
+        if e["direction"] == direction:  # 同向 + 高相关 = 双倍暴露风险
             corr_hits.append((e["sym"], round(c, 2)))
             cap = equity * PORTFOLIO_CORR_BUCKET_PCT / 100.0
             if e["risk"] + cand_risk > cap:
@@ -7443,42 +8733,56 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
                     lots = fit
                     cand_risk = per_hand * lots
                 if lots < 1:
-                    return {"ok": False, "lots": 0, "action": "blocked",
-                            "reason": f"与{e['sym']}(相关{c:.2f})同向·组合风险超限",
-                            "corr_hits": corr_hits}
+                    return {
+                        "ok": False,
+                        "lots": 0,
+                        "action": "blocked",
+                        "reason": f"与{e['sym']}(相关{c:.2f})同向·组合风险超限",
+                        "corr_hits": corr_hits,
+                    }
     # ③ 板块集中度（#6）：同板块风险总额上限 + 同板块最多 N 个品种
     grp = _sym_group(sym)
-    same_grp = [e for e in exposures
-                if e["sym"] != sym and (e.get("group") or _sym_group(e["sym"])) == grp]
+    same_grp = [e for e in exposures if e["sym"] != sym and (e.get("group") or _sym_group(e["sym"])) == grp]
     grp_risk = sum(e["risk"] for e in same_grp)
     if len(same_grp) >= PORTFOLIO_SECTOR_MAX_N:
-        return {"ok": False, "lots": 0, "action": "blocked",
-                "reason": f"{grp}板块已有{len(same_grp)}个敞口(上限{PORTFOLIO_SECTOR_MAX_N})",
-                "corr_hits": corr_hits}
+        return {
+            "ok": False,
+            "lots": 0,
+            "action": "blocked",
+            "reason": f"{grp}板块已有{len(same_grp)}个敞口(上限{PORTFOLIO_SECTOR_MAX_N})",
+            "corr_hits": corr_hits,
+        }
     grp_cap = equity * PORTFOLIO_SECTOR_PCT / 100.0
     if grp_risk + cand_risk > grp_cap:
         allow = max(0.0, grp_cap - grp_risk)
         fit = int(allow // per_hand) if per_hand > 0 else 0
         fit = max(0, min(fit, lots))
         if fit < 1:
-            return {"ok": False, "lots": 0, "action": "blocked",
-                    "reason": f"{grp}板块风险已满({grp_risk:.0f}/{grp_cap:.0f})",
-                    "corr_hits": corr_hits}
+            return {
+                "ok": False,
+                "lots": 0,
+                "action": "blocked",
+                "reason": f"{grp}板块风险已满({grp_risk:.0f}/{grp_cap:.0f})",
+                "corr_hits": corr_hits,
+            }
         if fit < lots:
             lots = fit
             cand_risk = per_hand * lots
     # ④ 单边净敞口上限（#6）：Σ同方向风险 ≤ 权益 × 1.5%，防「清一色做多」被一根系统性大阴线穿
-    same_dir_risk = sum(e["risk"] for e in exposures
-                        if e["sym"] != sym and e["direction"] == direction)
+    same_dir_risk = sum(e["risk"] for e in exposures if e["sym"] != sym and e["direction"] == direction)
     dir_cap = equity * PORTFOLIO_NET_DIR_PCT / 100.0
     if same_dir_risk + cand_risk > dir_cap:
         allow = max(0.0, dir_cap - same_dir_risk)
         fit = int(allow // per_hand) if per_hand > 0 else 0
         fit = max(0, min(fit, lots))
         if fit < 1:
-            return {"ok": False, "lots": 0, "action": "blocked",
-                    "reason": f"单边{direction}净敞口已满({same_dir_risk:.0f}/{dir_cap:.0f})",
-                    "corr_hits": corr_hits}
+            return {
+                "ok": False,
+                "lots": 0,
+                "action": "blocked",
+                "reason": f"单边{direction}净敞口已满({same_dir_risk:.0f}/{dir_cap:.0f})",
+                "corr_hits": corr_hits,
+            }
         if fit < lots:
             lots = fit
             cand_risk = per_hand * lots
@@ -7489,23 +8793,27 @@ def portfolio_risk_check(sym, direction, lots, price, stop, equity,
         reasons.append(f"{grp}板块集中度")
     if same_dir_risk > 0 and lots < orig:
         reasons.append(f"单边{direction}敞口")
-    return {"ok": lots >= 1, "lots": lots,
-            "action": ("blocked" if lots < 1 else ("reduced" if lots < orig else "allow")),
-            "reason": (("%s降仓至%s手·" % ("+".join(reasons), lots)) if (reasons and lots < orig) else ""),
-            "corr_hits": corr_hits,
-            "sector": grp, "sector_risk": round(grp_risk, 1),
-            "dir_risk": round(same_dir_risk, 1)}
+    return {
+        "ok": lots >= 1,
+        "lots": lots,
+        "action": ("blocked" if lots < 1 else ("reduced" if lots < orig else "allow")),
+        "reason": (("%s降仓至%s手·" % ("+".join(reasons), lots)) if (reasons and lots < orig) else ""),
+        "corr_hits": corr_hits,
+        "sector": grp,
+        "sector_risk": round(grp_risk, 1),
+        "dir_risk": round(same_dir_risk, 1),
+    }
 
 
 def _portfolio_recommend(signals, open_positions, state):
     """组合级智能推荐：收集所有信号后，只推最优的1-2个。
-    
+
     排名依据：
     1. 信号质量分（quality_score）— 越高越好
-    2. 盈亏比（rr_ratio）— 越高越好  
+    2. 盈亏比（rr_ratio）— 越高越好
     3. 持仓相关性 — 有持仓的品种优先（加仓/管理优于新开）
     4. 板块分散 — 避免同板块重复推荐
-    
+
     推送规则：
     - 0个信号：不推送
     - 1个信号：直接推送
@@ -7513,15 +8821,15 @@ def _portfolio_recommend(signals, open_positions, state):
     """
     if not signals:
         return
-    
+
     _MAX_PUSH = 1  # 每轮回最多推送1个信号（避免轰炸）
-    
+
     # 排序：综合评分 = 质量分*0.4 + 盈亏比*0.3 + 持仓相关*0.3
     def _rank_score(sig):
         qs = sig.get("quality_score", 50) or 50
         rr = float(sig.get("rr_ratio", 2.0) or 2.0)
         rr_norm = min(rr / 3.0, 1.0)  # 归一化到0-1
-        
+
         # 持仓相关加分：有持仓的品种信号优先
         hc = sig.get("hold_context") or {}
         pos_bonus = 0
@@ -7529,23 +8837,23 @@ def _portfolio_recommend(signals, open_positions, state):
             pos_bonus = 1.0  # 有持仓的品种加满分
         elif hc.get("total_positions", 0) > 0:
             pos_bonus = 0.5  # 组合有持仓但非本品种
-        
+
         score = qs * 0.4 + rr_norm * 100 * 0.3 + pos_bonus * 100 * 0.3
         return score
-    
+
     # 按综合评分排序
     ranked = sorted(signals, key=_rank_score, reverse=True)
-    
+
     # 选出要推送的信号
     to_push = ranked[:_MAX_PUSH]
     to_suppress = ranked[_MAX_PUSH:]
-    
+
     # 推送选中的信号
     for sig in to_push:
         sym = sig.get("symbol", "?")
         qs = sig.get("quality_score", "?")
         rr = sig.get("rr_ratio", "?")
-        
+
         # 构建组合推荐上下文
         total_pos = len(open_positions)
         pos_info = ""
@@ -7558,27 +8866,24 @@ def _portfolio_recommend(signals, open_positions, state):
                 pos_info = f"（当前组合有{total_pos}笔持仓，本品种为新开仓）"
         else:
             pos_info = "（当前空仓，建议新开仓）"
-        
+
         sig["portfolio_context"] = {
             "total_positions": total_pos,
             "pos_info": pos_info,
             "rank_score": round(_rank_score(sig), 1),
             "is_top_pick": True,
         }
-        
+
         # 在action_advice中补充组合建议
         _orig_advice = sig.get("action_advice", "") or ""
         sig["action_advice"] = (
-            f"📊 组合智能推荐 · {sym} {sig.get('direction','')} | "
-            f"质量{qs}分 · 盈亏比{rr} | {pos_info}\n"
-            f"{_orig_advice}"
+            f"📊 组合智能推荐 · {sym} {sig.get('direction', '')} | 质量{qs}分 · 盈亏比{rr} | {pos_info}\n{_orig_advice}"
         )
-        
+
         notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
         append_chat(sig)
-        print(f"\n🎯 [组合推荐] 最优信号: {sym} {sig.get('direction','')} "
-              f"质量{qs} 盈亏比{rr} → 已推送")
-    
+        print(f"\n🎯 [组合推荐] 最优信号: {sym} {sig.get('direction', '')} 质量{qs} 盈亏比{rr} → 已推送")
+
     # 暂缓的信号
     for sig in to_suppress:
         sym = sig.get("symbol", "?")
@@ -7588,69 +8893,86 @@ def _portfolio_recommend(signals, open_positions, state):
         sig["hold_context"]["deprioritized"] = True
         sig["action_advice"] = (
             f"本轮回优先推荐其他品种，{sym}信号暂缓推送。"
-            f"（质量{sig.get('quality_score','?')} 盈亏比{sig.get('rr_ratio','?')}）"
+            f"（质量{sig.get('quality_score', '?')} 盈亏比{sig.get('rr_ratio', '?')}）"
         )
         # 仍记录到前端，但标记为已抑制
         append_chat(sig)
-        print(f"   📋 [组合推荐·暂缓] {sym} {sig.get('direction','')} → 优先级不足")
+        print(f"   📋 [组合推荐·暂缓] {sym} {sig.get('direction', '')} → 优先级不足")
 
 
 def evaluate(feed, today, last_fire, state, corr_histories):
     fired = []
     _round_signal_buffer = []  # 组合级智能推荐：收集本轮回所有可推送信号，延迟notify
-    open_positions = _load_open_positions()   # 组合层：当前真实持仓敞口（整轮不变）
+    open_positions = _load_open_positions()  # 组合层：当前真实持仓敞口（整轮不变）
     # P1-4：组合 VaR 预交易闸（risk-manager 校验：1日95% VaR≤3.3%）——当前组合 VaR 已超上限则本轮回禁止新增信号
     _var_hot = False
     _var_cap = _tc_num("portfolio_var_pct_cap", PORTFOLIO_VAR_PCT_CAP)
     try:
         _pv = portfolio_var()
-        if (_pv.get("ok") and isinstance(_pv.get("var_95_pct"), (int, float))
-                and _pv["var_95_pct"] > _var_cap):
+        if _pv.get("ok") and isinstance(_pv.get("var_95_pct"), (int, float)) and _pv["var_95_pct"] > _var_cap:
             _var_hot = True
             print(f"[P1-4 VaR闸] 组合1日95%VaR={_pv['var_95_pct']}% 超上限{_var_cap}%，本轮回禁止新增信号")
     except Exception as _e:
         print(f"[P1-4 VaR闸] 计算异常(忽略): {repr(_e)[:60]}")
-    round_exposures = []                      # 组合层：本轮回已发信号（供后续品种比对叠加）
-    load_dedup_state(last_fire)   # 载入磁盘去重记忆（重启/多进程共享，杜绝连环重发）
-    load_pos_alert_dedup()       # 载入持仓触价告警去重记忆（跨重启保留 30min 窗口）
+    round_exposures = []  # 组合层：本轮回已发信号（供后续品种比对叠加）
+    load_dedup_state(last_fire)  # 载入磁盘去重记忆（重启/多进程共享，杜绝连环重发）
+    load_pos_alert_dedup()  # 载入持仓触价告警去重记忆（跨重启保留 30min 窗口）
     state["cpos_trade_date"] = get_cpos_cache().get("_meta", {}).get("trade_date", "")
     # #8 市场情绪系统：用上一轮全品种快照计算综合情绪 → 本轮 pipeline 调制
     _sent_band = None
     try:
-        _snaps = senteng.build_snapshots_from_runner(
-            state.get("symbols", {}), feed, SYMBOLS)
+        _snaps = senteng.build_snapshots_from_runner(state.get("symbols", {}), feed, SYMBOLS)
         _sent_res = senteng.compute(_snaps)
         _sent_band = _sent_res.get("band")
         state["sentiment"] = {
-            "score": _sent_res["score"], "label": _sent_res["label"],
-            "band": _sent_band, "bias": _sent_res["bias"],
-            "scale": _sent_res["scale"], "factors": _sent_res["factors"],
+            "score": _sent_res["score"],
+            "label": _sent_res["label"],
+            "band": _sent_band,
+            "bias": _sent_res["bias"],
+            "scale": _sent_res["scale"],
+            "factors": _sent_res["factors"],
         }
         if _sent_band not in ("neutral",):
             print(f"[#8 情绪] score={_sent_res['score']} label={_sent_res['label']} scale={_sent_res['scale']}")
     except Exception as _e:
         print(f"[#8 情绪] 计算异常(忽略): {repr(_e)[:80]}")
     for sym in SYMBOLS:
-        if sym in RUNTIME_DISABLED:   # 自适应恢复：硬禁或待恢复品种，禁止出信号（保留卡片占位）
+        if sym in RUNTIME_DISABLED:  # 自适应恢复：硬禁或待恢复品种，禁止出信号（保留卡片占位）
             recoverable = sym in AUTO_RECOVER_SYMBOLS
-            state["symbols"][sym] = {"name": SYMBOLS[sym]["name"], "price": feed.price(sym),
-                                     "pipe": {"disabled": True, "recoverable": recoverable,
-                                              "reason": ("自适应恢复候选·近期walk-forward转正后自动解禁"
-                                                         if recoverable else "校准OOS负期望·硬禁")},
-                                     "last_signal": None, "cpos": cpos_for(contract_cpos_key(sym))}
+            state["symbols"][sym] = {
+                "name": SYMBOLS[sym]["name"],
+                "price": feed.price(sym),
+                "pipe": {
+                    "disabled": True,
+                    "recoverable": recoverable,
+                    "reason": (
+                        "自适应恢复候选·近期walk-forward转正后自动解禁" if recoverable else "校准OOS负期望·硬禁"
+                    ),
+                },
+                "last_signal": None,
+                "cpos": cpos_for(contract_cpos_key(sym)),
+            }
             continue
         gate = GATE_CACHE["gates"].get(sym)
-        if gate and gate.get("gated"):   # 动态表现门控：近期真实回测转负，自动暂停发信号（卡片保留）
-            state["symbols"][sym] = {"name": SYMBOLS[sym]["name"], "price": feed.price(sym),
-                                     "pipe": {"gated": True,
-                                              "reason": f"动态门控·近期真实回测负({gate.get('reason','')})"},
-                                     "last_signal": None, "cpos": cpos_for(contract_cpos_key(sym))}
+        if gate and gate.get("gated"):  # 动态表现门控：近期真实回测转负，自动暂停发信号（卡片保留）
+            state["symbols"][sym] = {
+                "name": SYMBOLS[sym]["name"],
+                "price": feed.price(sym),
+                "pipe": {"gated": True, "reason": f"动态门控·近期真实回测负({gate.get('reason', '')})"},
+                "last_signal": None,
+                "cpos": cpos_for(contract_cpos_key(sym)),
+            }
             continue
         try:
-            df_daily = load_daily_refreshed(sym)   # 日线层刷新到当前（akshare 兜底，minishare 无日线权限）
+            df_daily = load_daily_refreshed(sym)  # 日线层刷新到当前（akshare 兜底，minishare 无日线权限）
             if df_daily is None or len(df_daily) < 60:
-                state["symbols"][sym] = {"name": SYMBOLS[sym]["name"], "price": feed.price(sym),
-                                         "pipe": {}, "last_signal": None, "cpos": cpos_for(contract_cpos_key(sym))}
+                state["symbols"][sym] = {
+                    "name": SYMBOLS[sym]["name"],
+                    "price": feed.price(sym),
+                    "pipe": {},
+                    "last_signal": None,
+                    "cpos": cpos_for(contract_cpos_key(sym)),
+                }
                 continue
             df_5m = feed.get_5m(sym, n_bars=120)
             F = score_F(variety_of(sym), today)
@@ -7688,10 +9010,23 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 _sr_res = None
             # #10 GA 权重加载（每品种设置优化权重，无缓存则用默认）
             fd.set_ga_weights_for_symbol(sym)
-            pipe = pipeline(sym, df_daily, df_5m, _STRAT_CFG, corr_hist=ch if len(ch) >= 10 else None,
-                            c_override=C, date=today, F_override=F2, hmm_label=hmm_lbl, macro_label=mb,
-                            garch_label=garch_lbl, gbm_garch=gbm_res, feat_mgr=fmg.get_manager(),
-                            sentiment_label=_sent_band, sr_result=_sr_res)
+            pipe = pipeline(
+                sym,
+                df_daily,
+                df_5m,
+                _STRAT_CFG,
+                corr_hist=ch if len(ch) >= 10 else None,
+                c_override=C,
+                date=today,
+                F_override=F2,
+                hmm_label=hmm_lbl,
+                macro_label=mb,
+                garch_label=garch_lbl,
+                gbm_garch=gbm_res,
+                feat_mgr=fmg.get_manager(),
+                sentiment_label=_sent_band,
+                sr_result=_sr_res,
+            )
             # #1 信息维度：把资讯/新闻/情绪/另类数据对 F 的调整写入 pipe，供面板/信号解释消费
             try:
                 pipe["F_raw"] = round(float(F), 3)
@@ -7715,10 +9050,15 @@ def evaluate(feed, today, last_fire, state, corr_histories):
             # 合约类品种的实时价：minishare 尚未映射/非交易时段无快照时，回退 akshare 该合约日线最新收盘
             if price is None and df_daily is not None and len(df_daily):
                 price = float(df_daily["close"].iloc[-1])
-            state["symbols"][sym] = {"name": SYMBOLS[sym]["name"], "price": price,
-                                     "pipe": pipe, "last_signal": state["symbols"].get(sym, {}).get("last_signal"),
-                                     "cpos": cpos_for(contract_cpos_key(sym)),
-                                     "gbm_garch": gbm_res, "garch_label": garch_lbl}
+            state["symbols"][sym] = {
+                "name": SYMBOLS[sym]["name"],
+                "price": price,
+                "pipe": pipe,
+                "last_signal": state["symbols"].get(sym, {}).get("last_signal"),
+                "cpos": cpos_for(contract_cpos_key(sym)),
+                "gbm_garch": gbm_res,
+                "garch_label": garch_lbl,
+            }
         except Exception as e:
             # 单品种计算异常不应拖垮整块面板：记日志并跳过本轮该品种
             print(f"[evaluate] 跳过 {sym}: {type(e).__name__}: {e}")
@@ -7732,10 +9072,13 @@ def evaluate(feed, today, last_fire, state, corr_histories):
         _lse = _LAST_STOP_EXIT.get(sym)
         if _lse is not None and (time.time() - _lse) < _tc_num("stop_cooldown_sec", STOP_COOLDOWN_SEC):
             _remain = int((STOP_COOLDOWN_SEC - (time.time() - _lse)) // 60)
-            state["symbols"][sym] = {"name": SYMBOLS[sym]["name"], "price": price,
-                                     "pipe": {"cooldown": True,
-                                              "reason": f"止损冷静期(剩{_remain}min禁开)"},
-                                     "last_signal": None, "cpos": cpos_for(contract_cpos_key(sym))}
+            state["symbols"][sym] = {
+                "name": SYMBOLS[sym]["name"],
+                "price": price,
+                "pipe": {"cooldown": True, "reason": f"止损冷静期(剩{_remain}min禁开)"},
+                "last_signal": None,
+                "cpos": cpos_for(contract_cpos_key(sym)),
+            }
             continue
         if pipe["triggered"] and pipe["dir_T"] != 0 and price:
             # P1-4：组合 VaR 已超上限→本轮回不再新增信号（卡片仍更新展示）
@@ -7769,8 +9112,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 # 不同签名(反向/新价位)或超出抑制窗口 → 放行（即时推送真实新信号）
                 # ★ 立即登记去重记忆（早于 notify/append/log），即使后续调用异常也不会丢失，
                 #   避免“写了聊天流却没记去重”导致下一轮又重发（用户最反感重复）。
-                last_fire[sym] = {"dir": dir_T, "t": datetime.now().timestamp(),
-                                 "day": today_key, "sig": sig_hash}
+                last_fire[sym] = {"dir": dir_T, "t": datetime.now().timestamp(), "day": today_key, "sig": sig_hash}
                 # 算风控 + 出场 + 信号
                 atr_daily = strat_atr(df_daily).iloc[-1]
                 if atr_daily is None or pd.isna(atr_daily) or atr_daily <= 0:
@@ -7780,16 +9122,29 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 # P2b：该品种已有持仓手数（open_positions 为 evaluate 开头已加载的真实持仓）
                 _held = next((int(p.get("lots") or 0) for p in open_positions if p.get("sym") == sym), 0)
                 # P1/P2b（2026-08-19）：T 强度缩放仓位 + 净持仓扣减；手数按日线ATR（稳定）
-                rg = risk_gate(sym, price, atr_daily, _STRAT_CFG,
-                               t_strength=abs(pipe.get("T_5m") or 0.0),
-                               t_thresh=pipe.get("T_thresh_used"),
-                               held_lots=_held)
+                rg = risk_gate(
+                    sym,
+                    price,
+                    atr_daily,
+                    _STRAT_CFG,
+                    t_strength=abs(pipe.get("T_5m") or 0.0),
+                    t_thresh=pipe.get("T_thresh_used"),
+                    held_lots=_held,
+                )
                 if not rg["passed"]:
                     # 仍记录触发但风控未过（温和提示）
                     pipe["risk_blocked"] = True
                     continue
-                ep = exit_plan(sym, price, pipe["dir_T"], stop_atr, pipe["regime"], _STRAT_CFG, fmg.get_manager(),
-                               sr_result=sra.get_cached(sym))
+                ep = exit_plan(
+                    sym,
+                    price,
+                    pipe["dir_T"],
+                    stop_atr,
+                    pipe["regime"],
+                    _STRAT_CFG,
+                    fmg.get_manager(),
+                    sr_result=sra.get_cached(sym),
+                )
                 sig = build_signal(sym, pipe, rg, ep, _STRAT_CFG, entry_ref=price)
                 sig["regime_hmm"] = pipe.get("regime_hmm")
                 # ★ P-持仓感知 v3：与真实持仓比对，根据持仓逻辑智能处理
@@ -7817,14 +9172,23 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 sig["dd_scale"] = dd_scale
                 sig["event_scale"] = ev_scale
                 _gbm_scale = pipe.get("risk_scale") or 1.0
-                _combined = round(min(scale, dd_scale, ev_scale, _gbm_scale), 3)  # 整改：取较严者而非连乘（含#13事件闸门+GBM高波动降仓）
+                _combined = round(
+                    min(scale, dd_scale, ev_scale, _gbm_scale), 3
+                )  # 整改：取较严者而非连乘（含#13事件闸门+GBM高波动降仓）
                 if _combined < 1.0:
                     sig["lots"] = max(1, int(round(sig["lots"] * _combined)))
                     sig["risk_scale"] = _combined
                 # 组合层约束：相关性同向降仓/否决 + 总风险预算（日亏含浮亏由 P0-1 主源=动态权益回撤负责，非此处）
-                pchk = portfolio_risk_check(sym, sig["direction"], sig["lots"], price,
-                                            sig.get("stop"), _account_equity(),
-                                            open_positions, round_exposures)
+                pchk = portfolio_risk_check(
+                    sym,
+                    sig["direction"],
+                    sig["lots"],
+                    price,
+                    sig.get("stop"),
+                    _account_equity(),
+                    open_positions,
+                    round_exposures,
+                )
                 if not pchk["ok"] and not _sig_conflict:
                     pipe["portfolio_blocked"] = True
                     pipe["portfolio_reason"] = pchk["reason"]
@@ -7855,7 +9219,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             sig["action_advice"] = (
                                 f"盈亏比 {rr_ratio:.1f}:1，符合≥{MIN_RR_RATIO:.0f}:1 要求，风险回报合理。"
                             )
-                
+
                 # ── v5.1 新增：信号质量评分过滤 ──
                 if not sig.get("push_suppressed"):
                     _vols = sig.get("_volumes", [])
@@ -7877,10 +9241,10 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         )
                         # v6.0 Phase 4: 知识增强过滤
                         _p4_signal = dict(sig)
-                        _p4_signal.setdefault("quality_score", _qq['score'])
+                        _p4_signal.setdefault("quality_score", _qq["score"])
                         _p4_result = apply_phase4_filters(_p4_signal, market_state=market_state_cache.get(sym))
                         if not _p4_result.get("passed", True):
-                            sig["reason"] += f"【Phase4过滤】{_p4_result.get('reason','')}。"
+                            sig["reason"] += f"【Phase4过滤】{_p4_result.get('reason', '')}。"
                             sig["blocked"] = True
                         for _w in _p4_result.get("warnings", []):
                             sig["reason"] += f"【{_w}】"
@@ -7889,7 +9253,9 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         # 应用调整参数
                         if _p4_result.get("adjustments", {}).get("position_shrink_pct"):
                             sig["position_shrink_pct"] = _p4_result["adjustments"]["position_shrink_pct"]
-                        sig["reason"] += f"【信号质量不足】{_qq['score']}分 < {get_effective_param('quality_threshold', SIGNAL_QUALITY_MIN_SCORE)}分。"
+                        sig["reason"] += (
+                            f"【信号质量不足】{_qq['score']}分 < {get_effective_param('quality_threshold', SIGNAL_QUALITY_MIN_SCORE)}分。"
+                        )
 
                 # ── v5.1 新增：多周期趋势确认 ──
                 if not sig.get("push_suppressed"):
@@ -7928,11 +9294,15 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 # 记录本轮回已发信号，供后续品种比对相关性/预算叠加
                 if not _sig_conflict:
                     _mult = _spec_mult(sym)
-                    round_exposures.append({
-                    "sym": sym, "direction": sig["direction"], "lots": sig["lots"],
-                    "risk": abs(price - (sig.get("stop") or 0)) * _mult * sig["lots"],
-                    "group": _sym_group(sym),
-                })
+                    round_exposures.append(
+                        {
+                            "sym": sym,
+                            "direction": sig["direction"],
+                            "lots": sig["lots"],
+                            "risk": abs(price - (sig.get("stop") or 0)) * _mult * sig["lots"],
+                            "group": _sym_group(sym),
+                        }
+                    )
                 sig["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 sig["price"] = price
                 if not _sig_conflict:
@@ -7944,8 +9314,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 # #7 执行计划：手数定了还得说清「怎么打进去」（薄盘口大单自伤最贵）
                 try:
                     sig["exec_plan"] = exp.plan_execution(
-                        sym, sig["lots"], price, sig["direction"],
-                        urgency="fast" if is_flip else "normal")
+                        sym, sig["lots"], price, sig["direction"], urgency="fast" if is_flip else "normal"
+                    )
                 except Exception as _e:
                     print(f"[执行计划] {sym} 异常(忽略): {repr(_e)[:60]}")
                 sig["reason"] += f"（止损基准:{atr_src}ATR）"
@@ -7967,8 +9337,11 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             _exp["llm"] = _llm_txt
                     sig["explanation"] = _exp
                 except Exception as _e:
-                    sig["explanation"] = {"summary": sig.get("reason", ""),
-                                          "bullets": [sig.get("reason", "")], "llm_prompt": ""}
+                    sig["explanation"] = {
+                        "summary": sig.get("reason", ""),
+                        "bullets": [sig.get("reason", "")],
+                        "llm_prompt": "",
+                    }
                 sig["kind"] = "signal"
                 _hc = sig.get("hold_context") or {}
                 if not _hc.get("cross_dir_locked"):
@@ -7976,25 +9349,62 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 else:
                     print(f"   📌 {sym} 方向锁定中({_hc.get('locked_dir')}向)，信号静默不展示")
                 log_signal(sig)
-                state["signals"].insert(0, {k: sig.get(k) for k in
-                    ("time", "created_at", "name", "direction", "signal_type", "lots", "price",
-                     "stop", "target", "t1", "t2", "reason", "atr_src", "valid_minutes",
-                     "explanation", "regime_hmm", "macro_ctx", "garch_label", "gbm_garch", "risk_scale", "contract",
-                     "push_suppressed", "hold_context", "action_advice", "advice_type")})
+                state["signals"].insert(
+                    0,
+                    {
+                        k: sig.get(k)
+                        for k in (
+                            "time",
+                            "created_at",
+                            "name",
+                            "direction",
+                            "signal_type",
+                            "lots",
+                            "price",
+                            "stop",
+                            "target",
+                            "t1",
+                            "t2",
+                            "reason",
+                            "atr_src",
+                            "valid_minutes",
+                            "explanation",
+                            "regime_hmm",
+                            "macro_ctx",
+                            "garch_label",
+                            "gbm_garch",
+                            "risk_scale",
+                            "contract",
+                            "push_suppressed",
+                            "hold_context",
+                            "action_advice",
+                            "advice_type",
+                        )
+                    },
+                )
                 state["signals"] = state["signals"][:30]
                 state["symbols"][sym]["last_signal"] = {
-                    "direction": sig["direction"], "lots": sig["lots"],
-                    "price": sig.get("price"), "stop": sig["stop"], "target": sig["target"],
-                    "t1": sig.get("t1"), "t2": sig.get("t2"),
-                    "created_at": sig.get("created_at"), "valid_minutes": sig.get("valid_minutes"),
-                    "time": sig.get("time"), "explanation": sig.get("explanation"), "macro_ctx": sig.get("macro_ctx"),
-                    "garch_label": sig.get("garch_label"), "gbm_garch": sig.get("gbm_garch"),
+                    "direction": sig["direction"],
+                    "lots": sig["lots"],
+                    "price": sig.get("price"),
+                    "stop": sig["stop"],
+                    "target": sig["target"],
+                    "t1": sig.get("t1"),
+                    "t2": sig.get("t2"),
+                    "created_at": sig.get("created_at"),
+                    "valid_minutes": sig.get("valid_minutes"),
+                    "time": sig.get("time"),
+                    "explanation": sig.get("explanation"),
+                    "macro_ctx": sig.get("macro_ctx"),
+                    "garch_label": sig.get("garch_label"),
+                    "gbm_garch": sig.get("gbm_garch"),
                     "risk_scale": sig.get("risk_scale"),
                     "push_suppressed": sig.get("push_suppressed"),
                     "hold_context": sig.get("hold_context"),
                     "action_advice": sig.get("action_advice"),
                     "advice_type": sig.get("advice_type"),
-                    "contract": sig.get("contract") or _get_main_contract(sym)}
+                    "contract": sig.get("contract") or _get_main_contract(sym),
+                }
             except Exception as e:
                 print(f"[evaluate] 信号生成异常 {sym}: {type(e).__name__}: {e}")
                 traceback.print_exc()
@@ -8002,8 +9412,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
             fired.append(sym)
     # ── 组合级智能推荐：收集所有信号后，只推最优的1-2个 ──
     _portfolio_recommend(_round_signal_buffer, open_positions, state)
-    save_dedup_state(last_fire)   # 写回磁盘去重记忆（重启/多进程共享）
-    save_pos_alert_dedup()        # 写回持仓触价告警去重记忆
+    save_dedup_state(last_fire)  # 写回磁盘去重记忆（重启/多进程共享）
+    save_pos_alert_dedup()  # 写回持仓触价告警去重记忆
     return fired
 
 
@@ -8024,6 +9434,7 @@ def start_dashboard(state):
                 rows = body_json.get("rows")
                 if rows is None and "csv" in body_json:
                     import csv as _csv
+
                     _buf = io.StringIO(body_json["csv"])
                     rd = _csv.reader(_buf)
                     header = next(rd, [])
@@ -8055,16 +9466,28 @@ def start_dashboard(state):
                     body_json = json.loads(raw) if raw.strip() else {}
                     act = body_json.get("action")
                     if act == "open":
-                        ok, msg, st = paper_open(body_json.get("symbol"), body_json.get("direction"),
-                                                 body_json.get("lots"), body_json.get("price"),
-                                                 body_json.get("signal_id", ""), body_json.get("strategy", "模拟"))
+                        ok, msg, st = paper_open(
+                            body_json.get("symbol"),
+                            body_json.get("direction"),
+                            body_json.get("lots"),
+                            body_json.get("price"),
+                            body_json.get("signal_id", ""),
+                            body_json.get("strategy", "模拟"),
+                        )
                     elif act == "close":
-                        ok, msg, st = paper_close(body_json.get("symbol"), body_json.get("price"),
-                                                  body_json.get("lots"), body_json.get("reason", "手动"))
+                        ok, msg, st = paper_close(
+                            body_json.get("symbol"),
+                            body_json.get("price"),
+                            body_json.get("lots"),
+                            body_json.get("reason", "手动"),
+                        )
                     else:
                         ok, msg, st = False, "未知 action", None
-                    body = json.dumps({"ok": ok, "msg": msg, "state": st} if st is not None
-                                      else {"ok": ok, "msg": msg}, ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        {"ok": ok, "msg": msg, "state": st} if st is not None else {"ok": ok, "msg": msg},
+                        ensure_ascii=False,
+                        default=str,
+                    )
                 else:
                     body = json.dumps(paper_state(), ensure_ascii=False, default=str)
             except Exception as e:
@@ -8084,10 +9507,12 @@ def start_dashboard(state):
                 try:
                     _fp = os.path.join(HERE, _asset)
                     if os.path.isfile(_fp):
-                        _ct = {"manifest.webmanifest": "application/manifest+json",
-                               "sw.js": "application/javascript",
-                               "icon-192.png": "image/png",
-                               "icon-512.png": "image/png"}[_asset]
+                        _ct = {
+                            "manifest.webmanifest": "application/manifest+json",
+                            "sw.js": "application/javascript",
+                            "icon-192.png": "image/png",
+                            "icon-512.png": "image/png",
+                        }[_asset]
                         with open(_fp, "rb") as _f:
                             _data = _f.read()
                         self.send_response(200)
@@ -8134,7 +9559,7 @@ def start_dashboard(state):
                 self.wfile.write(json.dumps(_log_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # #8 市场情绪系统 API
-            elif self.path.split('?')[0] == "/api/sentiment":
+            elif self.path.split("?")[0] == "/api/sentiment":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8143,7 +9568,7 @@ def start_dashboard(state):
                 self.wfile.write(json.dumps(_sent_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # #9 支撑压力位 API
-            elif self.path.split('?')[0] == "/api/sr":
+            elif self.path.split("?")[0] == "/api/sr":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8161,15 +9586,21 @@ def start_dashboard(state):
                         "zone": _r.get("zone", "far"),
                         "zone_label": _r.get("zone_label", "无数据"),
                         "nearest_dist_pct": _r.get("nearest_dist_pct", 99.0),
-                        "levels": [{"price": l["price"], "role": l["role"],
-                                    "strength": l["strength"], "touches": l["touches"],
-                                    "distance_pct": l["distance_pct"]}
-                                   for l in _levels[:5]],
+                        "levels": [
+                            {
+                                "price": l["price"],
+                                "role": l["role"],
+                                "strength": l["strength"],
+                                "touches": l["touches"],
+                                "distance_pct": l["distance_pct"],
+                            }
+                            for l in _levels[:5]
+                        ],
                     }
                 self.wfile.write(json.dumps(_sr_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # #10 GA 因子挖掘/权重优化 API
-            elif self.path.split('?')[0] == "/api/ga_weights":
+            elif self.path.split("?")[0] == "/api/ga_weights":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8192,7 +9623,7 @@ def start_dashboard(state):
                 self.wfile.write(json.dumps(_ga_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # #11 全市场扫描 API
-            elif self.path.split('?')[0] == "/api/scan":
+            elif self.path.split("?")[0] == "/api/scan":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8206,7 +9637,7 @@ def start_dashboard(state):
                 self.wfile.write(json.dumps(_scan_out, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # #11 品种筛选 API
-            elif self.path.split('?')[0] == "/api/screener":
+            elif self.path.split("?")[0] == "/api/screener":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8224,13 +9655,17 @@ def start_dashboard(state):
                     self.wfile.write(_payload)
                 except Exception as _e:
                     import traceback
+
                     _tb = traceback.format_exc()
                     print(f"[screener error] {_tb}", flush=True)
-                    _err = json.dumps({"error": str(_e), "tb": _tb, "passed": [], "summary": {"n_passed": 0, "n_total": 0}}, ensure_ascii=False).encode("utf-8")
+                    _err = json.dumps(
+                        {"error": str(_e), "tb": _tb, "passed": [], "summary": {"n_passed": 0, "n_total": 0}},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
                     self.wfile.write(_err)
                 return
             # #11 回测可视化 API
-            elif self.path.split('?')[0] == "/api/backtest_viz":
+            elif self.path.split("?")[0] == "/api/backtest_viz":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8239,7 +9674,7 @@ def start_dashboard(state):
                 self.wfile.write(json.dumps(_viz, ensure_ascii=False, default=str).encode("utf-8"))
                 return
             # v6.0 Phase 3: 参数自优化 API
-            elif self.path.split('?')[0] == "/api/auto-optimize":
+            elif self.path.split("?")[0] == "/api/auto-optimize":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8248,11 +9683,11 @@ def start_dashboard(state):
                     "enabled": AUTO_OPTIMIZE_ENABLED,
                     "params": auto_opt_params,
                     "adjustment_count": len(auto_opt_adjustment_logs),
-                    "recent_logs": auto_opt_adjustment_logs[-20:] if auto_opt_adjustment_logs else []
+                    "recent_logs": auto_opt_adjustment_logs[-20:] if auto_opt_adjustment_logs else [],
                 }
                 self.wfile.write(json.dumps(_ao_payload, ensure_ascii=False, default=str).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/auto-optimize/toggle":
+            elif self.path.split("?")[0] == "/api/auto-optimize/toggle":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8279,11 +9714,13 @@ def start_dashboard(state):
                 if _param_key in auto_opt_params:
                     auto_opt_params[_param_key]["locked"] = _locked
                     _save_auto_opt_params(auto_opt_params, auto_opt_adjustment_logs)
-                    self.wfile.write(json.dumps({"success": True, "param": _param_key, "locked": _locked}).encode("utf-8"))
+                    self.wfile.write(
+                        json.dumps({"success": True, "param": _param_key, "locked": _locked}).encode("utf-8")
+                    )
                 else:
                     self.wfile.write(json.dumps({"success": False, "error": "param not found"}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/auto-optimize/reset":
+            elif self.path.split("?")[0] == "/api/auto-optimize/reset":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8293,17 +9730,20 @@ def start_dashboard(state):
                 _save_auto_opt_params(auto_opt_params, auto_opt_adjustment_logs)
                 self.wfile.write(json.dumps({"success": True, "message": "所有参数已重置为基准值"}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/health":
+            elif self.path.split("?")[0] == "/api/health":
                 # #16 进程看门狗健康检查：崩溃/卡死自检用
                 try:
                     _last_age = (time.time() - LAST_CYCLE_TS) if LAST_CYCLE_TS else None
-                    body = json.dumps({
-                        "ok": True,
-                        "pid": os.getpid(),
-                        "uptime_sec": round(time.time() - START_TIME, 1),
-                        "last_cycle_ago_sec": round(_last_age, 1) if _last_age is not None else None,
-                        "feed_available": FEED_AVAILABLE,
-                    }, ensure_ascii=False)
+                    body = json.dumps(
+                        {
+                            "ok": True,
+                            "pid": os.getpid(),
+                            "uptime_sec": round(time.time() - START_TIME, 1),
+                            "last_cycle_ago_sec": round(_last_age, 1) if _last_age is not None else None,
+                            "feed_available": FEED_AVAILABLE,
+                        },
+                        ensure_ascii=False,
+                    )
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8353,7 +9793,7 @@ def start_dashboard(state):
                 except Exception:
                     pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
-            elif self.path.split('?')[0] == "/api/account":
+            elif self.path.split("?")[0] == "/api/account":
                 try:
                     # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
                     # 防止 auto_main 动态换月导致盯市价错挂非持仓合约。
@@ -8389,8 +9829,9 @@ def start_dashboard(state):
                         snap["ctp_balance"] = None
                     # 行情健康指示
                     snap["feed_status"] = "正常" if FEED_AVAILABLE else "离线"
-                    snap["feed_last"] = (datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S")
-                                         if FEED_LAST_UPDATE else "")
+                    snap["feed_last"] = (
+                        datetime.fromtimestamp(FEED_LAST_UPDATE).strftime("%H:%M:%S") if FEED_LAST_UPDATE else ""
+                    )
                     _age = (datetime.now().timestamp() - FEED_LAST_UPDATE) / 60.0 if FEED_LAST_UPDATE else None
                     snap["data_age_min"] = round(_age, 1) if _age is not None else None
                     # 组合风险热度（A1/B4）
@@ -8414,6 +9855,7 @@ def start_dashboard(state):
                     self.wfile.write(json.dumps(snap, ensure_ascii=False, default=str).encode("utf-8"))
                 except Exception as _e:
                     import traceback
+
                     print(f"[/api/account] ERROR: {type(_e).__name__}: {_e}")
                     traceback.print_exc()
                     # 出错时返回空账户数据，而不是让框架吞掉响应
@@ -8440,8 +9882,9 @@ def start_dashboard(state):
                 # 以 journal 为真相源自愈 account_state（已实现盈亏/开仓均价），返回修正明细
                 try:
                     ok, changes, _ = at.heal_from_journal()
-                    body = json.dumps({"ok": ok, "changes": changes,
-                                       "account": at.load_state()}, ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        {"ok": ok, "changes": changes, "account": at.load_state()}, ensure_ascii=False, default=str
+                    )
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8485,7 +9928,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path.split('?')[0] == "/api/journal":
+            elif self.path.split("?")[0] == "/api/journal":
                 # 成交记录器：返回 summary + compare_to_papertrack + 绩效(净值曲线/回撤/Sharpe) + R 倍数
                 try:
                     s = tj.summary()
@@ -8498,16 +9941,34 @@ def start_dashboard(state):
                     perf = tj.performance_metrics(prices)
                     curve = tj.equity_curve(prices)
                     intraday = tj.intraday_equity()
-                    body = json.dumps({"summary": s, "compare": c, "performance": perf,
-                                       "equity_curve": curve, "intraday": intraday,
-                                       "trades": all_trades}, ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        {
+                            "summary": s,
+                            "compare": c,
+                            "performance": perf,
+                            "equity_curve": curve,
+                            "intraday": intraday,
+                            "trades": all_trades,
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    )
                 except Exception as _e:
                     import traceback
+
                     traceback.print_exc()
-                    body = json.dumps({"summary": tj.summary(), "compare": {"error": str(_e)},
-                                       "performance": {}, "equity_curve": [], "trades": [],
-                                       "error": f"journal partial failure: {_e}"},
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        {
+                            "summary": tj.summary(),
+                            "compare": {"error": str(_e)},
+                            "performance": {},
+                            "equity_curve": [],
+                            "trades": [],
+                            "error": f"journal partial failure: {_e}",
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    )
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8517,6 +9978,7 @@ def start_dashboard(state):
                 # F1 多策略 / 多账户视图：按 strategy 或 account 聚合盈亏
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _gb = _q.get("group_by", ["strategy"])[0]
                     body = json.dumps(tj.by_strategy(group_by=_gb), ensure_ascii=False, default=str)
@@ -8527,7 +9989,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path.split('?')[0] == "/api/anomaly":
+            elif self.path.split("?")[0] == "/api/anomaly":
                 # 异动扫描结果
                 try:
                     body = json.dumps(state.get("anomaly", {}), ensure_ascii=False, default=str)
@@ -8538,7 +10000,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path.split('?')[0] == "/api/risk":
+            elif self.path.split("?")[0] == "/api/risk":
                 # 仓位状态机快照
                 try:
                     body = json.dumps(rsm.RISK_FSM.summary(), ensure_ascii=False, default=str)
@@ -8557,14 +10019,14 @@ def start_dashboard(state):
                     _p = dict(x.split("=", 1) for x in _q.split("&") if "=" in x)
                     _act = _p.get("action", "")
                     if _act == "ack":
-                        body = json.dumps(rsm.KILL.acknowledge(),
-                                          ensure_ascii=False, default=str)
+                        body = json.dumps(rsm.KILL.acknowledge(), ensure_ascii=False, default=str)
                     elif _act == "reset":
                         _peak = _p.get("peak")
                         body = json.dumps(
-                            rsm.KILL.reset("面板人工解除",
-                                           reset_peak_to=float(_peak) if _peak else None),
-                            ensure_ascii=False, default=str)
+                            rsm.KILL.reset("面板人工解除", reset_peak_to=float(_peak) if _peak else None),
+                            ensure_ascii=False,
+                            default=str,
+                        )
                         # #119 同步重置回撤水位线峰值（解除即视为新起点，避免旧峰值秒杀）
                         try:
                             ddg.reset_peak(float(_peak)) if _peak else ddg.reset_peak()
@@ -8572,11 +10034,9 @@ def start_dashboard(state):
                             pass
                         print(f"[熔断] 已人工解除（面板操作）")
                     else:
-                        body = json.dumps(rsm.KILL.summary(),
-                                          ensure_ascii=False, default=str)
+                        body = json.dumps(rsm.KILL.summary(), ensure_ascii=False, default=str)
                 except Exception as e:
-                    body = json.dumps({"halted": False, "error": str(e)},
-                                      ensure_ascii=False)
+                    body = json.dumps({"halted": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8603,8 +10063,7 @@ def start_dashboard(state):
                     _force = _p.get("force") == "1"
                     _wh = _p.get("window_h")
                     _wh = int(_wh) if _wh and _wh.isdigit() else 4
-                    body = json.dumps(cal.evaluate(window_h=_wh, force=_force),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(cal.evaluate(window_h=_wh, force=_force), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8618,18 +10077,29 @@ def start_dashboard(state):
                     _q = self.path.split("?", 1)[1] if "?" in self.path else ""
                     _p = dict(x.split("=", 1) for x in _q.split("&") if "=" in x)
                     if _p.get("action") == "refresh":
-                        _cw = cw.check_consistency(focus_symbols=FOCUS_SYMS,
-                                                   disabled_set=RUNTIME_DISABLED)
+                        _cw = cw.check_consistency(focus_symbols=FOCUS_SYMS, disabled_set=RUNTIME_DISABLED)
                         _STATE_CONSISTENCY["report"] = _cw
                         _STATE_CONSISTENCY["last_run"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        body = json.dumps({"ok": True, "refreshed": True,
-                                           "last_run": _STATE_CONSISTENCY["last_run"],
-                                           "report": _STATE_CONSISTENCY["report"]},
-                                          ensure_ascii=False, default=str)
+                        body = json.dumps(
+                            {
+                                "ok": True,
+                                "refreshed": True,
+                                "last_run": _STATE_CONSISTENCY["last_run"],
+                                "report": _STATE_CONSISTENCY["report"],
+                            },
+                            ensure_ascii=False,
+                            default=str,
+                        )
                     else:
-                        body = json.dumps({"ok": True, "last_run": _STATE_CONSISTENCY["last_run"],
-                                           "report": _STATE_CONSISTENCY["report"]},
-                                          ensure_ascii=False, default=str)
+                        body = json.dumps(
+                            {
+                                "ok": True,
+                                "last_run": _STATE_CONSISTENCY["last_run"],
+                                "report": _STATE_CONSISTENCY["report"],
+                            },
+                            ensure_ascii=False,
+                            default=str,
+                        )
                 except Exception as e:
                     body = json.dumps({"error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8641,10 +10111,12 @@ def start_dashboard(state):
                 # 系统自检：全链路数据一致性校验
                 try:
                     import self_check as sc
+
                     _report = sc.run_all_checks()
                     body = json.dumps(_report, ensure_ascii=False, default=str)
                 except Exception as _e:
                     import traceback
+
                     traceback.print_exc()
                     body = json.dumps({"ok": False, "error": str(_e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8660,27 +10132,37 @@ def start_dashboard(state):
                     _action = _p.get("action", "view")
                     if _action == "stage":
                         if _RECAL_STAGE["running"]:
-                            body = json.dumps({"ok": False, "msg": "staging 进行中，请稍候",
-                                               "running": True}, ensure_ascii=False)
+                            body = json.dumps(
+                                {"ok": False, "msg": "staging 进行中，请稍候", "running": True}, ensure_ascii=False
+                            )
                         else:
                             import threading
-                            threading.Thread(target=_recalibrate_stage_async,
-                                             daemon=True).start()
-                            body = json.dumps({"ok": True, "msg": "已后台启动漂移检测+候选staging（约1-3分钟，稍后GET查看）",
-                                               "running": True}, ensure_ascii=False)
+
+                            threading.Thread(target=_recalibrate_stage_async, daemon=True).start()
+                            body = json.dumps(
+                                {
+                                    "ok": True,
+                                    "msg": "已后台启动漂移检测+候选staging（约1-3分钟，稍后GET查看）",
+                                    "running": True,
+                                },
+                                ensure_ascii=False,
+                            )
                     else:  # view
                         try:
-                            _d = json.load(open(os.path.join(HERE, "calibration_drift.json"),
-                                                encoding="utf-8"))
+                            _d = json.load(open(os.path.join(HERE, "calibration_drift.json"), encoding="utf-8"))
                         except Exception:
                             _d = None
-                        body = json.dumps({
-                            "ok": True,
-                            "drift_report": _d,
-                            "staging": _RECAL_STAGE,
-                            "note": "view=当前漂移报告；?action=stage 后台产出候选T；"
-                                    "POST /api/recalibrate?action=apply&symbol=J 或 __all__ 一键落盘",
-                        }, ensure_ascii=False, default=str)
+                        body = json.dumps(
+                            {
+                                "ok": True,
+                                "drift_report": _d,
+                                "staging": _RECAL_STAGE,
+                                "note": "view=当前漂移报告；?action=stage 后台产出候选T；"
+                                "POST /api/recalibrate?action=apply&symbol=J 或 __all__ 一键落盘",
+                            },
+                            ensure_ascii=False,
+                            default=str,
+                        )
                 except Exception as e:
                     body = json.dumps({"error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8697,16 +10179,17 @@ def start_dashboard(state):
                     _act = _p.get("action", "status")
                     if _act == "run":
                         if _tool not in _TOOL_DEFS:
-                            body = json.dumps({"ok": False, "msg": f"未知工具: {_tool}"},
-                                              ensure_ascii=False)
+                            body = json.dumps({"ok": False, "msg": f"未知工具: {_tool}"}, ensure_ascii=False)
                         else:
                             ok, msg = run_tool(_tool)
                             body = json.dumps({"ok": ok, "msg": msg}, ensure_ascii=False)
                     else:
                         with _TOOL_LOCK:
-                            body = json.dumps({"running": _TOOL_STATE["running"],
-                                               "last": _TOOL_STATE["last"]},
-                                              ensure_ascii=False, default=str)
+                            body = json.dumps(
+                                {"running": _TOOL_STATE["running"], "last": _TOOL_STATE["last"]},
+                                ensure_ascii=False,
+                                default=str,
+                            )
                 except Exception as e:
                     body = json.dumps({"error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -8723,6 +10206,7 @@ def start_dashboard(state):
                     _f = _p.get("file")
                     if _f:
                         from urllib.parse import unquote
+
                         res = bi.import_file(unquote(_f), apply=_apply)
                     else:
                         res = bi.scan(apply=_apply)
@@ -8755,7 +10239,7 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
-            elif self.path.split('?')[0] == "/api/notify":
+            elif self.path.split("?")[0] == "/api/notify":
                 # 通知配置（GET 只读）
                 try:
                     body = json.dumps(NOTIFY_CFG, ensure_ascii=False, default=str)
@@ -8805,6 +10289,7 @@ def start_dashboard(state):
                 # 指定日期的全部消息（默认今天），用于逐日复盘
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _d = _q.get("date", [None])[0]
                     _feed = load_chat_feed(_d, limit=None)
@@ -8815,12 +10300,13 @@ def start_dashboard(state):
                             _ct = _auth_contracts.get(_m["symbol"]) or CONTRACT_MAP.get(_m["symbol"])
                             if _ct:
                                 _m["contract"] = ml.normalize_contract_code(_ct)
-                    body = json.dumps({"date": _d or datetime.now().strftime("%Y-%m-%d"),
-                                        "count": len(_feed), "messages": _feed},
-                                       ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        {"date": _d or datetime.now().strftime("%Y-%m-%d"), "count": len(_feed), "messages": _feed},
+                        ensure_ascii=False,
+                        default=str,
+                    )
                 except Exception as e:
-                    body = json.dumps({"date": "", "count": 0, "messages": [],
-                                       "error": str(e)}, ensure_ascii=False)
+                    body = json.dumps({"date": "", "count": 0, "messages": [], "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8830,14 +10316,19 @@ def start_dashboard(state):
                 # 管住手复盘卡（日/周/月纪律评分）+ 收盘快照回看
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     if "list" in _q:
                         # 返回 日/周/月 三套记录列表，供复盘页下拉填充
-                        body = json.dumps({
-                            "daily": dr.list_records(),
-                            "weekly": dr.list_weekly_records(),
-                            "monthly": dr.list_monthly_records(),
-                        }, ensure_ascii=False, default=str)
+                        body = json.dumps(
+                            {
+                                "daily": dr.list_records(),
+                                "weekly": dr.list_weekly_records(),
+                                "monthly": dr.list_monthly_records(),
+                            },
+                            ensure_ascii=False,
+                            default=str,
+                        )
                     elif "date" in _q:
                         _rec = dr.get_record(_q["date"][0])
                         if _rec is None:
@@ -8859,8 +10350,7 @@ def start_dashboard(state):
                     else:
                         body = json.dumps(state.get("discipline", {}), ensure_ascii=False, default=str)
                 except Exception as e:
-                    body = json.dumps({"daily": {}, "weekly": {}, "monthly": {}, "error": str(e)},
-                                      ensure_ascii=False)
+                    body = json.dumps({"daily": {}, "weekly": {}, "monthly": {}, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8891,12 +10381,12 @@ def start_dashboard(state):
                 # 支持 ?date=YYYYMMDD 回看历史交易日
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _d = _q.get("date", [None])[0]
                     body = json.dumps(cpos_ranking(date=_d), ensure_ascii=False, default=str)
                 except Exception as e:
-                    body = json.dumps({"total": 0, "bullish": [], "bearish": [], "error": str(e)},
-                                      ensure_ascii=False)
+                    body = json.dumps({"total": 0, "bullish": [], "bearish": [], "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -8906,6 +10396,7 @@ def start_dashboard(state):
                 # CSV 导出：type=journal|performance|discipline&kind=daily|weekly|monthly
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _type = _q.get("type", ["journal"])[0]
                     _kind = _q.get("kind", ["daily"])[0]
@@ -8913,18 +10404,49 @@ def start_dashboard(state):
                     w = csv.writer(buf)
                     if _type == "journal":
                         trades = tj._load()["trades"]
-                        w.writerow(["id", "time", "symbol", "direction", "lots", "entry_price",
-                                    "exit_price", "exit_time", "exit_reason", "pnl", "signal_id",
-                                    "stop_dist", "strategy", "account", "note"])
+                        w.writerow(
+                            [
+                                "id",
+                                "time",
+                                "symbol",
+                                "direction",
+                                "lots",
+                                "entry_price",
+                                "exit_price",
+                                "exit_time",
+                                "exit_reason",
+                                "pnl",
+                                "signal_id",
+                                "stop_dist",
+                                "strategy",
+                                "account",
+                                "note",
+                            ]
+                        )
                         for t in trades:
-                            w.writerow([t.get("id"), t.get("time"), t.get("symbol"), t.get("direction"),
-                                        t.get("lots"), t.get("entry_price"), t.get("exit_price"),
-                                        t.get("exit_time"), t.get("exit_reason"), t.get("pnl"),
-                                        t.get("signal_id"), t.get("stop_dist"),
-                                        t.get("strategy", ""), t.get("account", "主账户"), t.get("note", "")])
+                            w.writerow(
+                                [
+                                    t.get("id"),
+                                    t.get("time"),
+                                    t.get("symbol"),
+                                    t.get("direction"),
+                                    t.get("lots"),
+                                    t.get("entry_price"),
+                                    t.get("exit_price"),
+                                    t.get("exit_time"),
+                                    t.get("exit_reason"),
+                                    t.get("pnl"),
+                                    t.get("signal_id"),
+                                    t.get("stop_dist"),
+                                    t.get("strategy", ""),
+                                    t.get("account", "主账户"),
+                                    t.get("note", ""),
+                                ]
+                            )
                         fname = "trade_journal.csv"
                     elif _type == "performance":
-                        s = tj.summary(); p = tj.performance_metrics()
+                        s = tj.summary()
+                        p = tj.performance_metrics()
                         w.writerow(["指标", "数值"])
                         for k, v in p.items():
                             if isinstance(v, dict):
@@ -8944,13 +10466,34 @@ def start_dashboard(state):
                             recs = dr.list_monthly_records()
                         else:
                             recs = dr.list_records()
-                        w.writerow(["date", "score", "grade", "trades_opened", "signal_trades",
-                                    "impulse_trades", "manual_records", "lock_violations", "period_pnl", "ops_count"])
+                        w.writerow(
+                            [
+                                "date",
+                                "score",
+                                "grade",
+                                "trades_opened",
+                                "signal_trades",
+                                "impulse_trades",
+                                "manual_records",
+                                "lock_violations",
+                                "period_pnl",
+                                "ops_count",
+                            ]
+                        )
                         for r in recs:
-                            w.writerow([r.get("date") or r.get("friday") or r.get("month"),
-                                        r.get("score"), r.get("grade"), r.get("trades_opened"),
-                                        r.get("signal_trades"), r.get("impulse_trades", r.get("manual_trades", 0)),
-                                        r.get("lock_violations"), r.get("period_pnl"), r.get("ops_count")])
+                            w.writerow(
+                                [
+                                    r.get("date") or r.get("friday") or r.get("month"),
+                                    r.get("score"),
+                                    r.get("grade"),
+                                    r.get("trades_opened"),
+                                    r.get("signal_trades"),
+                                    r.get("impulse_trades", r.get("manual_trades", 0)),
+                                    r.get("lock_violations"),
+                                    r.get("period_pnl"),
+                                    r.get("ops_count"),
+                                ]
+                            )
                         fname = f"discipline_{_kind}.csv"
                     csv_text = buf.getvalue()
                     self.send_response(200)
@@ -8997,6 +10540,7 @@ def start_dashboard(state):
                 # 持仓K线 + SR位 + 止损止盈标注
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     q = parse_qs(urlparse(self.path).query)
                     sym = q.get("sym", [None])[0]
                     if not sym or sym not in SYMBOLS:
@@ -9048,6 +10592,7 @@ def start_dashboard(state):
                 # #128 相关性崩溃 / 危机趋同 stress 专项
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(correlation_breakdown_stress(force=_force), ensure_ascii=False, default=str)
@@ -9062,6 +10607,7 @@ def start_dashboard(state):
                 # #129 板块强弱轮动排序
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(sector_rotation(force=_force), ensure_ascii=False, default=str)
@@ -9077,11 +10623,11 @@ def start_dashboard(state):
                 # 信号瀑布流：最近 N 条信号时间线
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     limit = int((_q.get("limit", ["30"]))[0])
                     since = _q.get("since", [None])[0]  # 增量拉取：只返回此时间之后的
-                    body = json.dumps(_signal_feed(limit=limit, since=since),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(_signal_feed(limit=limit, since=since), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9093,11 +10639,13 @@ def start_dashboard(state):
                 # #130 波动率目标化头寸：?vol_target_pct=N(默认1.0) &force=1
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     _vt = float((_q.get("vol_target_pct") or ["1.0"])[0])
-                    body = json.dumps(vol_target_position(vol_target_pct=_vt, force=_force),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        vol_target_position(vol_target_pct=_vt, force=_force), ensure_ascii=False, default=str
+                    )
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9110,10 +10658,10 @@ def start_dashboard(state):
                 # #131 流动性风险 Liquidity-at-Risk：?force=1
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
-                    body = json.dumps(liquidity_at_risk(force=_force),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(liquidity_at_risk(force=_force), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9126,10 +10674,10 @@ def start_dashboard(state):
                 # #132 组合预警规则引擎：?force=1 绕过缓存
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
-                    body = json.dumps(evaluate_risk_rules(force=_force),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(evaluate_risk_rules(force=_force), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9142,10 +10690,10 @@ def start_dashboard(state):
                 # #133 交互式历史回放（时间机器）：返回 [最早事件,最晚事件] 逐日组合状态帧序列
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
-                    body = json.dumps(build_playback_timeline(force=_force),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(build_playback_timeline(force=_force), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9158,14 +10706,14 @@ def start_dashboard(state):
                 # #133 单品种截至 asof 的日线(OHLC) + 交易记录开/平仓标记
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _sym = _q.get("symbol", [""])[0]
                     _asof = _q.get("asof", [None])[0]
                     if not _sym:
                         body = json.dumps({"ok": False, "error": "缺少 symbol"}, ensure_ascii=False)
                     else:
-                        body = json.dumps(playback_kline(_sym, _asof),
-                                          ensure_ascii=False, default=str)
+                        body = json.dumps(playback_kline(_sym, _asof), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9178,12 +10726,14 @@ def start_dashboard(state):
                 # #134 参数鲁棒性敏感性地图：?force=1&symbols=FG,SA,JM,jd
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     _sym_str = _q.get("symbols", [""])[0]
                     _symbols = [s for s in _sym_str.split(",") if s] or None
-                    body = json.dumps(parameter_sensitivity(force=_force, symbols=_symbols),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(
+                        parameter_sensitivity(force=_force, symbols=_symbols), ensure_ascii=False, default=str
+                    )
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9196,6 +10746,7 @@ def start_dashboard(state):
                 # #123 组合 VaR / CVaR（参数法 1 日）
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(portfolio_var(force=_force), ensure_ascii=False, default=str)
@@ -9244,8 +10795,7 @@ def start_dashboard(state):
                 try:
                     body = json.dumps(rollover_mismatch_check(), ensure_ascii=False, default=str)
                 except Exception as e:
-                    body = json.dumps({"mismatches": [], "count": 0, "error": str(e)},
-                                      ensure_ascii=False)
+                    body = json.dumps({"mismatches": [], "count": 0, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -9256,8 +10806,7 @@ def start_dashboard(state):
                 try:
                     body = json.dumps(gap_risk(), ensure_ascii=False, default=str)
                 except Exception as e:
-                    body = json.dumps({"rows": [], "summary": "计算异常", "error": str(e)},
-                                      ensure_ascii=False)
+                    body = json.dumps({"rows": [], "summary": "计算异常", "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -9278,6 +10827,7 @@ def start_dashboard(state):
                 # 报警历史（C4）：可按类型过滤
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     kind = (_q.get("kind") or [""])[0]
                     limit = int((_q.get("limit") or ["120"])[0])
@@ -9303,8 +10853,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/blunder":
                 # #12 纪律自动体检
                 try:
-                    body = json.dumps(state.get("blunder", bc.check()),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(state.get("blunder", bc.check()), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9316,10 +10865,10 @@ def start_dashboard(state):
                 # #13 事件日历闸门：?hours=N
                 try:
                     from urllib.parse import parse_qs, urlparse
+
                     _q = parse_qs(urlparse(self.path).query)
                     _h = int((_q.get("hours") or ["24"])[0])
-                    body = json.dumps(ec.upcoming(lookahead_hours=_h),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(ec.upcoming(lookahead_hours=_h), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9330,8 +10879,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/dataq":
                 # #14 数据质量/陈旧监控
                 try:
-                    body = json.dumps(state.get("data_quality", dq.check()),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(state.get("data_quality", dq.check()), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9346,8 +10894,7 @@ def start_dashboard(state):
                     if "test" in _q:
                         body = json.dumps(pn.test(), ensure_ascii=False, default=str)
                     else:
-                        body = json.dumps({"channels": pn.channels_status()},
-                                          ensure_ascii=False, default=str)
+                        body = json.dumps({"channels": pn.channels_status()}, ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"channels": {}, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9369,8 +10916,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/fund_metrics":
                 # G1 基本面指标（利润/比价/价差）
                 try:
-                    body = json.dumps(fm.fund_metrics(force=("force=1" in self.path)),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(fm.fund_metrics(force=("force=1" in self.path)), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9381,8 +10927,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/focus":
                 # G2/G4 关注品种盯盘板（评分 + 关键字段）
                 try:
-                    body = json.dumps(focus_board(force=("force=1" in self.path)),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(focus_board(force=("force=1" in self.path)), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9405,8 +10950,7 @@ def start_dashboard(state):
                 # G2 成交明细列表（含 id / note，供前端备注编辑）
                 try:
                     _tj = tj._load()
-                    body = json.dumps({"ok": True, "trades": _tj.get("trades", [])},
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps({"ok": True, "trades": _tj.get("trades", [])}, ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9436,12 +10980,14 @@ def start_dashboard(state):
                                 _code = None
                             if not _code or _code == _s:
                                 _code = CONTRACT_MAP.get(_s, _s)
-                        _meta.append({
-                            "symbol": _s,
-                            "name": _info.get("name", _s),
-                            "code": ml.normalize_contract_code(_code),
-                            "mode": ml._contract_mode(_s),
-                        })
+                        _meta.append(
+                            {
+                                "symbol": _s,
+                                "name": _info.get("name", _s),
+                                "code": ml.normalize_contract_code(_code),
+                                "mode": ml._contract_mode(_s),
+                            }
+                        )
                     body = json.dumps({"ok": True, "symbols": _meta}, ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
@@ -9466,16 +11012,18 @@ def start_dashboard(state):
                         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
                         '<span style="font-weight:600">%s</span><span style="font-size:12px;color:var(--mut)">%s</span>'
                         '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--amber)22;color:var(--amber);border:0.5px solid var(--amber)55">门控·暂停发信号</span>'
-                        '</div>'
+                        "</div>"
                         '<div style="font-size:12px;color:var(--mut);line-height:1.6">'
                         '模型判负向：期望R <b style="color:var(--amber)">%s</b> / 胜率 <b>%s</b>%s<br>'
                         '<b style="color:var(--fg)">定性建议：</b>%s'
-                        '</div></div>' % (
-                            g.get("symbol", ""), g.get("name", ""),
+                        "</div></div>"
+                        % (
+                            g.get("symbol", ""),
+                            g.get("name", ""),
                             g.get("expR", "?"),
                             ("%.0f%%" % (g["win_rate"] * 100)) if g.get("win_rate") is not None else "?",
                             (" / 校准OOS %s" % g["calibrated_oos"]) if g.get("calibrated_oos") is not None else "",
-                            g.get("advice", "")
+                            g.get("advice", ""),
                         )
                         for g in _gn
                     )
@@ -9483,7 +11031,7 @@ def start_dashboard(state):
                     _gated_html = '<div class="stamp">当前无门控品种（关注品种均正常发信号）</div>'
                 _html = _html.replace("__GATED_CONTENT__", _gated_html)
                 self.wfile.write(_html.encode("utf-8"))
-            elif self.path.split('?')[0] == "/chart.umd.js":
+            elif self.path.split("?")[0] == "/chart.umd.js":
                 _chart_js = os.path.join(HERE, "chart.umd.js")
                 if os.path.exists(_chart_js):
                     self.send_response(200)
@@ -9494,7 +11042,8 @@ def start_dashboard(state):
                     with open(_chart_js, "rb") as _f:
                         self.wfile.write(_f.read())
                 else:
-                    self.send_response(404); self.end_headers()
+                    self.send_response(404)
+                    self.end_headers()
             elif self.path.split("?")[0] == "/api/features":
                 # 特性开关：GET 查询所有开关或单个开关状态
                 try:
@@ -9507,10 +11056,14 @@ def start_dashboard(state):
                     else:
                         _cats = fmg.get_manager().list_by_category()
                         _logs = fmg.get_manager().get_change_log(limit=10)
-                        body = json.dumps({
-                            "features": _cats,
-                            "change_log": _logs,
-                        }, ensure_ascii=False, default=str)
+                        body = json.dumps(
+                            {
+                                "features": _cats,
+                                "change_log": _logs,
+                            },
+                            ensure_ascii=False,
+                            default=str,
+                        )
                 except Exception as e:
                     body = json.dumps({"error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -9520,13 +11073,16 @@ def start_dashboard(state):
                 self.wfile.write(body.encode("utf-8"))
 
             else:
-                self.send_response(404); self.end_headers()
+                self.send_response(404)
+                self.end_headers()
+
         # 全局异常保护：任何 handler 抛异常都返回 500 JSON，不让框架吞掉响应
         def handle_one_request(self):
             try:
                 super().handle_one_request()
             except Exception as _e:
                 import traceback
+
                 print(f"[HTTP] handle_one_request ERROR: {type(_e).__name__}: {_e}")
                 traceback.print_exc()
                 try:
@@ -9537,6 +11093,7 @@ def start_dashboard(state):
                     self.wfile.write(json.dumps({"error": str(_e)}, ensure_ascii=False).encode("utf-8"))
                 except Exception:
                     pass
+
         def log_message(self, *a):
             pass
 
@@ -9553,8 +11110,7 @@ def start_dashboard(state):
                         ok, msg = _recalibrate_apply(_sym)
                         body = json.dumps({"ok": ok, "msg": msg}, ensure_ascii=False)
                     else:
-                        body = json.dumps({"ok": False, "msg": f"unknown action: {_act}"},
-                                          ensure_ascii=False)
+                        body = json.dumps({"ok": False, "msg": f"unknown action: {_act}"}, ensure_ascii=False)
                 except Exception as e:
                     body = json.dumps({"ok": False, "msg": f"apply 异常: {e}"}, ensure_ascii=False)
                 self.send_response(200)
@@ -9564,14 +11120,14 @@ def start_dashboard(state):
                 self.wfile.write(body.encode("utf-8"))
                 return
             if self.path.split("?")[0] == "/api/journal_import":
-                self._handle_journal_import(); return
+                self._handle_journal_import()
+                return
             if self.path.split("?")[0] == "/api/positions_reconcile":
                 # A：手动对账。用户提交 CTP 真实持仓清单，重建 account_state + journal。
                 try:
                     n = int(self.headers.get("Content-Length", 0) or 0)
                     req = json.loads(self.rfile.read(n) or b"{}")
-                    body = json.dumps(positions_reconcile(req.get("positions")),
-                                      ensure_ascii=False, default=str)
+                    body = json.dumps(positions_reconcile(req.get("positions")), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "message": f"请求解析失败：{e}"}, ensure_ascii=False)
                 self.send_response(200)
@@ -9581,25 +11137,37 @@ def start_dashboard(state):
                 self.wfile.write(body.encode("utf-8"))
                 return
             if self.path.split("?")[0] == "/api/paper":
-                self._handle_paper(); return
-            if self.path.split('?')[0] == "/api/journal":
+                self._handle_paper()
+                return
+            if self.path.split("?")[0] == "/api/journal":
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     body = json.loads(self.rfile.read(n) or b"{}")
                     act = body.get("action")
                     if act == "entry":
-                        sym = body.get("symbol"); direction = body.get("direction")
-                        lots = body.get("lots"); price = body.get("price")
-                        _user_provided_price = (price is not None and price != 0)
-                        print(f"[journal] 开仓请求: sym={sym} dir={direction} lots={lots} price={price} (用户提供={_user_provided_price})")
-                        
+                        sym = body.get("symbol")
+                        direction = body.get("direction")
+                        lots = body.get("lots")
+                        price = body.get("price")
+                        _user_provided_price = price is not None and price != 0
+                        print(
+                            f"[journal] 开仓请求: sym={sym} dir={direction} lots={lots} price={price} (用户提供={_user_provided_price})"
+                        )
+
                         # ★★ 2026-08-26: 开仓前风控检查 - 熔断/锁定时禁止开仓
                         try:
                             _lock_info = rsm.get_combined_risk_scale()
                             if _lock_info.get("locked") or _lock_info.get("halted"):
-                                _reason = _lock_info.get("reasons", ["风控锁定中"])[0] if _lock_info.get("reasons") else "风控锁定中"
+                                _reason = (
+                                    _lock_info.get("reasons", ["风控锁定中"])[0]
+                                    if _lock_info.get("reasons")
+                                    else "风控锁定中"
+                                )
                                 print(f"[journal] 🚫 开仓被风控拦截: {_reason}")
-                                body = json.dumps({"ok": False, "msg": f"开仓被风控拦截: {_reason}", "risk": _lock_info}, ensure_ascii=False)
+                                body = json.dumps(
+                                    {"ok": False, "msg": f"开仓被风控拦截: {_reason}", "risk": _lock_info},
+                                    ensure_ascii=False,
+                                )
                                 self.send_response(200)
                                 self.send_header("Content-Type", "application/json; charset=utf-8")
                                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -9614,9 +11182,11 @@ def start_dashboard(state):
                                 print(f"[journal] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {lots} (系数={_scale})")
                         except Exception as _risk_e:
                             print(f"[journal] ⚠️ 风控检查异常(放行): {_risk_e}")
-                        
-                        stop = body.get("stop"); target = body.get("target")
-                        t1 = body.get("t1"); t2 = body.get("t2")
+
+                        stop = body.get("stop")
+                        target = body.get("target")
+                        t1 = body.get("t1")
+                        t2 = body.get("t2")
                         stop_dist = body.get("stop_dist")
                         auto_note = ""
                         a_tail = None
@@ -9634,10 +11204,13 @@ def start_dashboard(state):
                                     else:
                                         # ★ 强制还原用户价格，确保不被 _auto_levels 内部修改
                                         if _user_provided_price and used_px != _original_user_price:
-                                            print(f"[journal] 🔒 价格保护: 恢复用户价 {_original_user_price} (内部计算值 {used_px})")
+                                            print(
+                                                f"[journal] 🔒 价格保护: 恢复用户价 {_original_user_price} (内部计算值 {used_px})"
+                                            )
                                         price = _original_user_price
-                                    auto_note = (f"；已自动算止损/止盈(基准{a_src}ATR)："
-                                                 f"止损{a_stop}/t1平半{a_t1}/t2全平{a_t2}")
+                                    auto_note = (
+                                        f"；已自动算止损/止盈(基准{a_src}ATR)：止损{a_stop}/t1平半{a_t1}/t2全平{a_t2}"
+                                    )
                             except Exception as _e:
                                 print(f"[journal] _auto_levels 异常({sym}): {_e}")
                                 a_tail = None
@@ -9645,19 +11218,24 @@ def start_dashboard(state):
                                 price = _original_user_price
                         print(f"[journal] 最终成交: sym={sym} price={price} stop={stop}")
                         ok, msg, tid = tj.record_entry(
-                            sym, direction, lots, price,
+                            sym,
+                            direction,
+                            lots,
+                            price,
                             body.get("signal_id", ""),
-                            stop=stop, stop_dist=stop_dist,
+                            stop=stop,
+                            stop_dist=stop_dist,
                             strategy=body.get("strategy", ""),
-                            account=body.get("account", "主账户"))
+                            account=body.get("account", "主账户"),
+                        )
                         msg = (msg or "") + auto_note
                         # ★ 打通：同步写 account_tracker，让账户总览持仓表立即可见
                         if ok:
                             try:
                                 # 检查账户追踪器中是否已有该品种持仓
-                                _st = at.load_state() if hasattr(at, 'load_state') else {}
+                                _st = at.load_state() if hasattr(at, "load_state") else {}
                                 _existing_pos = _st.get("positions", {}).get(sym) if isinstance(_st, dict) else None
-                                
+
                                 if _existing_pos and _existing_pos.get("direction") != direction:
                                     # 方向冲突：先平掉旧仓，再开新仓
                                     _old_dir = _existing_pos.get("direction")
@@ -9666,48 +11244,64 @@ def start_dashboard(state):
                                     print(f"[journal] ⚠️ {sym} 方向冲突：旧仓 {_old_dir} {_old_lots}手，先平后开")
                                     if _old_lots > 0:
                                         _ok_close, _msg_close, _ = at.record_trade(
-                                            sym, "close", _old_dir, _old_lots, _avg_price)
+                                            sym, "close", _old_dir, _old_lots, _avg_price
+                                        )
                                         print(f"[journal] 平旧仓: ok={_ok_close} msg={_msg_close}")
                                     _ok2, _msg2, _ = at.record_trade(
-                                        sym, "open", direction, lots, price,
-                                        stop=stop, target=target, t1=t1, t2=t2,
-                                        tail_enabled=a_tail)
+                                        sym,
+                                        "open",
+                                        direction,
+                                        lots,
+                                        price,
+                                        stop=stop,
+                                        target=target,
+                                        t1=t1,
+                                        t2=t2,
+                                        tail_enabled=a_tail,
+                                    )
                                     print(f"[journal] 开新仓: {sym} open ok={_ok2} msg={_msg2}")
                                 else:
                                     _action = "open" if not _existing_pos else "add"
                                     _ok2, _msg2, _ = at.record_trade(
-                                        sym, _action, direction, lots, price,
-                                        stop=stop if _action == "open" else None, 
-                                        target=target if _action == "open" else None, 
-                                        t1=t1 if _action == "open" else None, 
+                                        sym,
+                                        _action,
+                                        direction,
+                                        lots,
+                                        price,
+                                        stop=stop if _action == "open" else None,
+                                        target=target if _action == "open" else None,
+                                        t1=t1 if _action == "open" else None,
                                         t2=t2 if _action == "open" else None,
-                                        tail_enabled=a_tail if _action == "open" else None)
+                                        tail_enabled=a_tail if _action == "open" else None,
+                                    )
                                     print(f"[journal] 账户同步: {sym} {_action} ok={_ok2} msg={_msg2}")
-                                
+
                                 if not _ok2:
                                     print(f"[journal] 账户持仓未同步（已静默）: {_msg2}")
                             except Exception as e:
                                 import traceback
+
                                 traceback.print_exc()
                                 print(f"[journal] 账户持仓同步失败（已静默）: {e}")
                         # 记录开仓纪律事件（含当时状态机状态，供锁死判定）
                         try:
-                            dr.log_event("entry", symbol=sym,
-                                         direction=direction,
-                                         lots=lots,
-                                         risk_state=rsm.RISK_FSM.state)
+                            dr.log_event(
+                                "entry", symbol=sym, direction=direction, lots=lots, risk_state=rsm.RISK_FSM.state
+                            )
                         except Exception:
                             pass
                     elif act == "exit":
-                        sym = body.get("symbol"); direction = body.get("direction")
-                        lots = body.get("lots"); price = body.get("price")
+                        sym = body.get("symbol")
+                        direction = body.get("direction")
+                        lots = body.get("lots")
+                        price = body.get("price")
                         # ★ 2026-08-27: 价格保护 - 记录用户提交的价格
-                        print(f"[journal] 平仓请求: sym={sym} dir={direction} lots={lots} price={price} (type={type(price).__name__})")
+                        print(
+                            f"[journal] 平仓请求: sym={sym} dir={direction} lots={lots} price={price} (type={type(price).__name__})"
+                        )
                         _user_price = float(price) if price is not None and price != 0 else 0
                         print(f"[journal] 平仓价格验证: 用户价={price} 转换后={_user_price}")
-                        ok, msg, pnl = tj.record_exit(
-                            sym, direction, lots, _user_price,
-                            body.get("reason", "手动"))
+                        ok, msg, pnl = tj.record_exit(sym, direction, lots, _user_price, body.get("reason", "手动"))
                         msg = f"{msg} (pnl={pnl})"
                         # ★ 打通：同步写 account_tracker（自动判平仓/减仓）
                         if ok:
@@ -9741,15 +11335,14 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/watch":
+            elif self.path.split("?")[0] == "/api/watch":
                 # 自选到价提醒（B1）增删改：add / remove / reset / toggle
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     body = json.loads(self.rfile.read(n) or b"{}")
                     act = body.get("action")
                     if act == "add":
-                        ok, msg = watch_add(body.get("symbol"), body.get("op"),
-                                            body.get("price"), body.get("note", ""))
+                        ok, msg = watch_add(body.get("symbol"), body.get("op"), body.get("price"), body.get("note", ""))
                     elif act in ("remove", "reset", "toggle"):
                         ok, msg = watch_update(body.get("id"), act)
                     else:
@@ -9762,20 +11355,28 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}, ensure_ascii=False).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/trade":
+            elif self.path.split("?")[0] == "/api/trade":
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     body = json.loads(self.rfile.read(n) or b"{}")
-                    act = body.get("action"); sym = body.get("symbol")
+                    act = body.get("action")
+                    sym = body.get("symbol")
                     if act in ("open", "add", "close", "reduce"):
                         # ★★ 2026-08-26: 开仓前风控检查 - 仅 open/add 需要检查，close/reduce 不受限
                         if act in ("open", "add"):
                             try:
                                 _lock_info = rsm.get_combined_risk_scale()
                                 if _lock_info.get("locked") or _lock_info.get("halted"):
-                                    _reason = _lock_info.get("reasons", ["风控锁定中"])[0] if _lock_info.get("reasons") else "风控锁定中"
+                                    _reason = (
+                                        _lock_info.get("reasons", ["风控锁定中"])[0]
+                                        if _lock_info.get("reasons")
+                                        else "风控锁定中"
+                                    )
                                     print(f"[trade] 🚫 开仓被风控拦截: {_reason}")
-                                    body = json.dumps({"ok": False, "msg": f"开仓被风控拦截: {_reason}", "risk": _lock_info}, ensure_ascii=False)
+                                    body = json.dumps(
+                                        {"ok": False, "msg": f"开仓被风控拦截: {_reason}", "risk": _lock_info},
+                                        ensure_ascii=False,
+                                    )
                                     self.send_response(200)
                                     self.send_header("Content-Type", "application/json; charset=utf-8")
                                     self.send_header("Access-Control-Allow-Origin", "*")
@@ -9787,22 +11388,29 @@ def start_dashboard(state):
                                 if _scale < 1.0:
                                     _orig_lots = body.get("lots")
                                     body["lots"] = max(1, int(int(_orig_lots) * _scale))
-                                    print(f"[trade] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {body['lots']} (系数={_scale})")
+                                    print(
+                                        f"[trade] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {body['lots']} (系数={_scale})"
+                                    )
                             except Exception as _risk_e:
                                 print(f"[trade] ⚠️ 风控检查异常(放行): {_risk_e}")
-                        
+
                         a_tail = None
                         _raw_price = body.get("price")
-                        _user_provided_price = (_raw_price is not None and _raw_price != 0)
+                        _user_provided_price = _raw_price is not None and _raw_price != 0
                         _original_user_price = _raw_price  # ★ 保存用户原始价格
-                        print(f"[trade] 请求: sym={sym} act={act} dir={body.get('direction')} price={_raw_price} (用户提供={_user_provided_price})")
-                        stop = body.get("stop"); target = body.get("target")
-                        t1 = body.get("t1"); t2 = body.get("t2")
+                        print(
+                            f"[trade] 请求: sym={sym} act={act} dir={body.get('direction')} price={_raw_price} (用户提供={_user_provided_price})"
+                        )
+                        stop = body.get("stop")
+                        target = body.get("target")
+                        t1 = body.get("t1")
+                        t2 = body.get("t2")
                         auto_note = ""
                         if act == "open" and all(v is None for v in (stop, target, t1, t2)):
                             try:
                                 a_stop, a_t1, a_t2, a_src, used_px, a_tail = _auto_levels(
-                                    sym, body.get("direction"), _raw_price)
+                                    sym, body.get("direction"), _raw_price
+                                )
                                 if a_stop is not None:
                                     stop, t1, t2, target = a_stop, a_t1, a_t2, a_t2
                                     if not _user_provided_price and used_px:
@@ -9811,10 +11419,14 @@ def start_dashboard(state):
                                     else:
                                         # ★ 强制还原用户价格，确保不被 _auto_levels 内部修改
                                         if _user_provided_price and used_px != _original_user_price:
-                                            print(f"[trade] 🔒 价格保护: 恢复用户价 {_original_user_price} (内部计算值 {used_px})")
+                                            print(
+                                                f"[trade] 🔒 价格保护: 恢复用户价 {_original_user_price} (内部计算值 {used_px})"
+                                            )
                                         body["price"] = _original_user_price
-                                    auto_note = (f"；已自动算止损/止盈(基准{a_src}ATR)："
-                                                 f"止损{a_stop} / t1平半{a_t1} / t2全平{a_t2}")
+                                    auto_note = (
+                                        f"；已自动算止损/止盈(基准{a_src}ATR)："
+                                        f"止损{a_stop} / t1平半{a_t1} / t2全平{a_t2}"
+                                    )
                                 else:
                                     # ★ 即使自动算失败，也要保护用户价格
                                     if _user_provided_price:
@@ -9830,29 +11442,43 @@ def start_dashboard(state):
                             if _user_provided_price:
                                 body["price"] = _original_user_price
                         print(f"[trade] 最终: sym={sym} act={act} price={body.get('price')} stop={stop}")
-                        ok, msg, _ = at.record_trade(sym, act, body.get("direction"),
-                                                     body.get("lots"), body.get("price"),
-                                                     stop, target, t1, t2,
-                                                     tail_enabled=a_tail if act == "open" else None)
+                        ok, msg, _ = at.record_trade(
+                            sym,
+                            act,
+                            body.get("direction"),
+                            body.get("lots"),
+                            body.get("price"),
+                            stop,
+                            target,
+                            t1,
+                            t2,
+                            tail_enabled=a_tail if act == "open" else None,
+                        )
                         msg = (msg or "") + auto_note
                         # ★ 打通：账户总览的交易记录同步写 trade_journal，使成交明细/绩效/对账/F.T.C 归因实时联动
                         if ok and act in ("open", "add", "close", "reduce"):
                             try:
                                 _dir = body.get("direction")
-                                _lots = body.get("lots"); _px = body.get("price")
+                                _lots = body.get("lots")
+                                _px = body.get("price")
                                 _signal_id = body.get("signal_id") or "manual"
                                 _strategy = body.get("strategy") or "手动"
                                 _account = body.get("account") or "主账户"
                                 if act in ("open", "add"):
                                     _ok2, _msg2, _tid = tj.record_entry(
-                                        sym, _dir, _lots, _px,
+                                        sym,
+                                        _dir,
+                                        _lots,
+                                        _px,
                                         signal_id=_signal_id,
-                                        stop=stop, strategy=_strategy, account=_account)
+                                        stop=stop,
+                                        strategy=_strategy,
+                                        account=_account,
+                                    )
                                     if not _ok2:
                                         msg = f"{msg}（⚠️ 成交记录未同步：{_msg2}）"
                                 else:  # close / reduce
-                                    _ok2, _msg2, _pnl = tj.record_exit(
-                                        sym, _dir, _lots, _px, reason=_strategy)
+                                    _ok2, _msg2, _pnl = tj.record_exit(sym, _dir, _lots, _px, reason=_strategy)
                                     if not _ok2:
                                         msg = f"{msg}（⚠️ 成交记录未同步：{_msg2}）"
                                     # v6.0 Phase 4: 知识增强更新（每笔交易后）
@@ -9863,17 +11489,22 @@ def start_dashboard(state):
                                             update_trader_state(_trade_r)
                                             # v6.0 Phase 4-E: 策略进化复盘记录
                                             _dir_emo = "贪婪" if _trade_r > 0 else ("恐惧" if _trade_r < 0 else "中性")
-                                            save_decision_diary_entry({
-                                                "symbol": _sym, "direction": _dir,
-                                                "trade_result": _trade_r,
-                                                "decision_quality": 60,
-                                                "execution_quality": 70,
-                                                "emotion_label": _dir_emo,
-                                                "reason": "auto_settlement"
-                                            })
+                                            save_decision_diary_entry(
+                                                {
+                                                    "symbol": _sym,
+                                                    "direction": _dir,
+                                                    "trade_result": _trade_r,
+                                                    "decision_quality": 60,
+                                                    "execution_quality": 70,
+                                                    "emotion_label": _dir_emo,
+                                                    "reason": "auto_settlement",
+                                                }
+                                            )
                                             _rq = calc_review_quality(_trade_r, 60)
                                             if _rq.get("total_score", 0) >= 80:
-                                                print(f'[v6.0 Phase4-E] {_sym} review={_rq.get("grade")} score={_rq.get("total_score")}')
+                                                print(
+                                                    f"[v6.0 Phase4-E] {_sym} review={_rq.get('grade')} score={_rq.get('total_score')}"
+                                                )
                                         except Exception:
                                             pass
                                     # v6.0 Phase 3: 参数自优化检查（每笔平仓/减仓后）
@@ -9882,16 +11513,26 @@ def start_dashboard(state):
                                             _all_trades = tj.get_all_trades()
                                             if _all_trades and len(_all_trades) >= AUTO_OPT_WINDOW_SHORT:
                                                 auto_opt_params, auto_opt_adjustment_logs, _rb = check_rollback_needed(
-                                                    auto_opt_params, _all_trades, auto_opt_adjustment_logs)
-                                                auto_opt_params, auto_opt_adjustment_logs, _adj = check_and_adjust_params(
-                                                    auto_opt_params, _all_trades, auto_opt_adjustment_logs)
+                                                    auto_opt_params, _all_trades, auto_opt_adjustment_logs
+                                                )
+                                                auto_opt_params, auto_opt_adjustment_logs, _adj = (
+                                                    check_and_adjust_params(
+                                                        auto_opt_params, _all_trades, auto_opt_adjustment_logs
+                                                    )
+                                                )
                                                 if _rb or _adj:
                                                     _rb_msg = "⚠️ 参数回退" if _rb else ""
                                                     _adj_msg = " | ".join(_adj) if _adj else ""
-                                                    notify({"name": "⚙️参数自优化", "direction": "",
+                                                    notify(
+                                                        {
+                                                            "name": "⚙️参数自优化",
+                                                            "direction": "",
                                                             "alert_type": "参数自优化",
-                                                            "reason": f"{_rb_msg} {_adj_msg}".strip()},
-                                                           voice=False, banner=False)
+                                                            "reason": f"{_rb_msg} {_adj_msg}".strip(),
+                                                        },
+                                                        voice=False,
+                                                        banner=False,
+                                                    )
                                         except Exception as _aoe:
                                             pass
                             except Exception as _e:
@@ -9913,9 +11554,11 @@ def start_dashboard(state):
                             # snapshot 一次给出同步后的动态权益，供前端直观确认
                             try:
                                 snap = at.snapshot(prices)
-                                msg = (f"同步权益 {float(eq):,.0f} · "
-                                       f"动态权益 {snap.get('equity', 0):,.0f} · "
-                                       f"浮动盈亏 {snap.get('float_total', 0):+,.2f}")
+                                msg = (
+                                    f"同步权益 {float(eq):,.0f} · "
+                                    f"动态权益 {snap.get('equity', 0):,.0f} · "
+                                    f"浮动盈亏 {snap.get('float_total', 0):+,.2f}"
+                                )
                             except Exception:
                                 msg = f"同步权益 {float(eq):,.0f} 成功"
                     else:
@@ -9928,14 +11571,15 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/position_levels":
+            elif self.path.split("?")[0] == "/api/position_levels":
                 # 给已有持仓设置/清除止损止盈位（用于触价报警）
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     body = json.loads(self.rfile.read(n) or b"{}")
                     sym = body.get("symbol")
-                    ok, msg, _ = at.set_levels(sym, body.get("stop"), body.get("target"),
-                                                body.get("t1"), body.get("t2"))
+                    ok, msg, _ = at.set_levels(
+                        sym, body.get("stop"), body.get("target"), body.get("t1"), body.get("t2")
+                    )
                     # ★ 2026-08-27: 用户修改止盈止损后，立即重置告警守卫
                     #   防止基于旧价位的告警持续触发
                     if ok and sym:
@@ -9951,7 +11595,7 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/notify":
+            elif self.path.split("?")[0] == "/api/notify":
                 # 运行时改写通知配置（并持久化到 trade_config.json）
                 global NOTIFY_CFG
                 try:
@@ -9977,7 +11621,7 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg, "cfg": NOTIFY_CFG}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/discipline/snapshot":
+            elif self.path.split("?")[0] == "/api/discipline/snapshot":
                 # 手动触发收盘复盘落账：
                 #   {"kind":"daily","date":"YYYY-MM-DD"}（默认今天）
                 #   {"kind":"weekly","week":"YYYY-MM-DD"}（周五日期）
@@ -10007,7 +11651,7 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": ok, "msg": msg}).encode("utf-8"))
                 return
-            elif self.path.split('?')[0] == "/api/push":
+            elif self.path.split("?")[0] == "/api/push":
                 # #15 手机推送配置：{"section":"telegram|bark|wecom", ...字段} 或 {"action":"test"}
                 try:
                     n = int(self.headers.get("Content-Length", 0))
@@ -10020,8 +11664,7 @@ def start_dashboard(state):
                         if sec not in ("telegram", "bark", "wecom"):
                             ok, msg = False, "section 须为 telegram|bark|wecom"
                         else:
-                            kw = {k: v for k, v in body.items()
-                                  if k not in ("section", "action")}
+                            kw = {k: v for k, v in body.items() if k not in ("section", "action")}
                             ok, msg = pn.configure(sec, **kw)
                 except Exception as e:
                     ok, msg = False, str(e)
@@ -10029,8 +11672,7 @@ def start_dashboard(state):
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(json.dumps({"ok": ok, "msg": msg,
-                                             "channels": pn.channels_status()}).encode("utf-8"))
+                self.wfile.write(json.dumps({"ok": ok, "msg": msg, "channels": pn.channels_status()}).encode("utf-8"))
                 return
             if self.path.split("?")[0] == "/api/features/toggle":
                 # 特性开关切换：POST /api/features/toggle?name=XXX
@@ -10051,6 +11693,7 @@ def start_dashboard(state):
                     if _result.get("ok") and _result.get("dangerous"):
                         try:
                             import push_notify as _pn
+
                             _pn.bark(f"⚠️ 特性开关变更: {_name} → {'ON' if _enabled else 'OFF'}")
                         except Exception:
                             pass
@@ -10065,7 +11708,8 @@ def start_dashboard(state):
                 return
 
             else:
-                self.send_response(404); self.end_headers()
+                self.send_response(404)
+                self.end_headers()
 
     srv = ThreadingHTTPServer(("0.0.0.0", ARGS.port), H)
     t = threading.Thread(target=srv.serve_forever, daemon=True)
@@ -10075,10 +11719,11 @@ def start_dashboard(state):
 
 
 # ---------------------------------------------------------------------------
-_LAST_SNAP_CHECK = 0   # 收盘复盘快照调度节流时间戳
+_LAST_SNAP_CHECK = 0  # 收盘复盘快照调度节流时间戳
 _LAST_BROKER_SCAN = 0  # #9 经纪商成交回灌扫描节流时间戳
 _LAST_BLUNDER_SCAN = 0  # #12 纪律体检节流时间戳
-_LAST_EVENT_CHECK = 0   # #13 事件日历闸门节流时间戳
+_LAST_EVENT_CHECK = 0  # #13 事件日历闸门节流时间戳
+
 
 def _refresh_main_contracts_external():
     """换月期全市场主力合约自动核对/强制更新（#6 换月闭环，2026-08-17 落地）。
@@ -10093,8 +11738,7 @@ def _refresh_main_contracts_external():
     py = "/usr/bin/python3"  # 系统 python3.9 + akshare；本进程 venv 无 akshare
     try:
         print(f"[换月核对] 调用 {py} {script} --apply (全市场扫描)")
-        r = subprocess.run([py, script, "--apply"], cwd=HERE, timeout=300,
-                           capture_output=True, text=True)
+        r = subprocess.run([py, script, "--apply"], cwd=HERE, timeout=300, capture_output=True, text=True)
         for line in (r.stdout or "").strip().splitlines()[-6:]:
             print(f"[换月核对] {line}")
         if r.returncode != 0:
@@ -10115,10 +11759,10 @@ def _refresh_main_contracts_external():
 #    跑信号（昨天 2609 滞后坑的根因）。此检查同时覆盖「文件滞后」与「runner
 #    未重启读到旧内存」两类场景。
 #  - best-effort：网络/采集器失败则保留旧缓存、不误报。
-_AK_MAIN_CACHE = {"t": 0.0, "v": {}}   # akshare 真主力映射缓存（节流 30min）
-_AK_MAIN_TS = 0.0                       # refresh_ak_main 节流时间戳
-_AK_MAIN_DONE = False                   # 启动后首次立即核对（同 _MAIN_REFRESH_DONE 模式）
-_AK_MAIN_LOCK = threading.Lock()        # 防 30s 轮询并发重复触发子进程
+_AK_MAIN_CACHE = {"t": 0.0, "v": {}}  # akshare 真主力映射缓存（节流 30min）
+_AK_MAIN_TS = 0.0  # refresh_ak_main 节流时间戳
+_AK_MAIN_DONE = False  # 启动后首次立即核对（同 _MAIN_REFRESH_DONE 模式）
+_AK_MAIN_LOCK = threading.Lock()  # 防 30s 轮询并发重复触发子进程
 
 
 def _seed_from_overrides():
@@ -10143,14 +11787,13 @@ def refresh_ak_main(force=False):
     script = os.path.join(HERE, "refresh_main_contracts.py")
     if not os.path.exists(script):
         return _AK_MAIN_CACHE.get("v")
-    py = "/usr/bin/python3"   # 系统 python3.9 + akshare；本进程 venv 无 akshare
+    py = "/usr/bin/python3"  # 系统 python3.9 + akshare；本进程 venv 无 akshare
     with _AK_MAIN_LOCK:
         # 加锁后二次检查（等待期间可能已被别的线程刷新）
         if not force and (time.time() - _AK_MAIN_CACHE.get("t", 0.0)) < 1800 and _AK_MAIN_CACHE.get("v"):
             return _AK_MAIN_CACHE.get("v")
         try:
-            r = subprocess.run([py, script, "--dump-akmap"], cwd=HERE, timeout=120,
-                               capture_output=True, text=True)
+            r = subprocess.run([py, script, "--dump-akmap"], cwd=HERE, timeout=120, capture_output=True, text=True)
             txt = (r.stdout or "").strip()
             # 取最后一行 JSON（防偶发 stderr 混入）
             data = None
@@ -10190,9 +11833,15 @@ def rollover_mismatch_check():
         if seeded:
             _AK_MAIN_CACHE["v"] = seeded
         else:
-            return {"mismatches": [], "count": 0, "checked_at": None,
-                    "ak_available": False, "error": "akshare 缓存尚未就绪（后台刷新中）", "pending": True}
-    refresh_contract_map()                  # 确保 CONTRACT_MAP 为最新在用合约
+            return {
+                "mismatches": [],
+                "count": 0,
+                "checked_at": None,
+                "ak_available": False,
+                "error": "akshare 缓存尚未就绪（后台刷新中）",
+                "pending": True,
+            }
+    refresh_contract_map()  # 确保 CONTRACT_MAP 为最新在用合约
     ak = _AK_MAIN_CACHE.get("v", {}) or {}
     mismatches = []
     err = _AK_MAIN_CACHE.get("error") if isinstance(_AK_MAIN_CACHE, dict) else None
@@ -10203,12 +11852,14 @@ def rollover_mismatch_check():
         if not cur or not akv or not any(ch.isdigit() for ch in cur):
             continue
         if cur != akv:
-            mismatches.append({
-                "symbol": sym,
-                "name": SYMBOLS.get(sym, {}).get("name", sym),
-                "current": cur,
-                "authoritative": akv,
-            })
+            mismatches.append(
+                {
+                    "symbol": sym,
+                    "name": SYMBOLS.get(sym, {}).get("name", sym),
+                    "current": cur,
+                    "authoritative": akv,
+                }
+            )
     return {
         "mismatches": mismatches,
         "count": len(mismatches),
@@ -10221,7 +11872,7 @@ def rollover_mismatch_check():
 
 def _update_aux(feed, state):
     """每轮更新：异动扫描 + 账户监控自动 papertrack + 仓位状态机。"""
-    global DAY_OPEN_EQUITY, DAY_OPEN_LABEL, _LAST_HEAL_TS   # 修 UnboundLocalError：函数内赋值会令 Python 视为局部
+    global DAY_OPEN_EQUITY, DAY_OPEN_LABEL, _LAST_HEAL_TS  # 修 UnboundLocalError：函数内赋值会令 Python 视为局部
     # —— 周期性自动对账（每 30 秒一次，确保 tp_targets 等数据实时同步）——
     global _LAST_HEAL_TS
     _now_ts = time.time()
@@ -10278,7 +11929,7 @@ def _update_aux(feed, state):
         #      推送层面由 check_position_alerts 内部 _should_suppress 自门控。
         try:
             check_position_alerts(snap["positions"])
-            save_pos_alert_dedup()   # 持仓触价告警去重状态落盘（原子写，防止连环重发）
+            save_pos_alert_dedup()  # 持仓触价告警去重状态落盘（原子写，防止连环重发）
         except Exception as e:
             print(f"[持仓触价报警] 异常: {repr(e)[:80]}")
         # —— 以下推送逻辑仅在市场开盘时执行 ——
@@ -10320,7 +11971,7 @@ def _update_aux(feed, state):
             DAY_OPEN_EQUITY = eq
             DAY_OPEN_LABEL = _td
         account_daily_pnl = (eq - DAY_OPEN_EQUITY) if DAY_OPEN_EQUITY > 0 else 0.0  # 亏为负
-        journal_daily = tj.today_pnl()   # 自然日已实现盈亏（交叉验证/展示）
+        journal_daily = tj.today_pnl()  # 自然日已实现盈亏（交叉验证/展示）
         daily_pnl = min(account_daily_pnl, journal_daily)  # 取更亏者（更保守）
         # P2 涨跌停锁死头寸尾部应力加计（可配置，默认 OFF；见 STRESS_LIMIT_LOCKED）
         _ll_stress, _ll_details = 0.0, []
@@ -10328,12 +11979,14 @@ def _update_aux(feed, state):
             try:
                 _ll_stress, _ll_details = _limit_locked_stress(_load_open_positions(), feed)
                 if _ll_stress:
-                    daily_pnl -= _ll_stress   # 让日亏更亏，更早触发熔断
+                    daily_pnl -= _ll_stress  # 让日亏更亏，更早触发熔断
             except Exception as e:
                 print(f"[P2 锁死应力] 计算异常: {repr(e)[:80]}")
-        state["limit_locked_stress"] = {"amount": round(_ll_stress, 1),
-                                        "details": _ll_details,
-                                        "enabled": STRESS_LIMIT_LOCKED}
+        state["limit_locked_stress"] = {
+            "amount": round(_ll_stress, 1),
+            "details": _ll_details,
+            "enabled": STRESS_LIMIT_LOCKED,
+        }
         consec = tj.current_loss_streak()
         prev_state = state.get("risk_state", {}).get("state")
         # #119 回撤水位线：每轮用动态权益更新峰值/回撤/档位（持久化），取回峰值喂硬熔断
@@ -10345,10 +11998,10 @@ def _update_aux(feed, state):
             print(f"[#119 回撤水位线] 更新异常: {repr(e)[:80]}")
             _dd_peak = None
         # 组合级硬熔断（#5）：把持仓一并喂进去，触发时直接生成一键全平清单
-        _res = rsm.update_risk_state(eq, used, daily_pnl, consec,
-                                     positions=snap.get("positions") or [],
-                                     peak_equity=_dd_peak)
-        new_state = rsm.RISK_FSM.summary()   # 含 daily_loss_pct / daily_loss_stop / killswitch
+        _res = rsm.update_risk_state(
+            eq, used, daily_pnl, consec, positions=snap.get("positions") or [], peak_equity=_dd_peak
+        )
+        new_state = rsm.RISK_FSM.summary()  # 含 daily_loss_pct / daily_loss_stop / killswitch
         state["risk_state"] = new_state
         # ── v5 新增：10%回撤硬熔断检测 ──
         _current_dd = new_state.get("drawdown", 0)
@@ -10358,10 +12011,14 @@ def _update_aux(feed, state):
             new_state["halted_reason"] = f"10%回撤硬熔断（当前{_current_dd:.1f}%）"
             new_state["force_rest_until"] = time.time() + DRAWDOWN_FORCE_REST_SEC
             new_state["scale"] = 0.0
-            log_alert("硬熔断触发", None, "熔断",
-                      f"账户回撤{_current_dd:.1f}%≥{DRAWDOWN_FULL_STOP_PCT}%，强制全平+休息24小时",
-                      {"drawdown": _current_dd})
-        
+            log_alert(
+                "硬熔断触发",
+                None,
+                "熔断",
+                f"账户回撤{_current_dd:.1f}%≥{DRAWDOWN_FULL_STOP_PCT}%，强制全平+休息24小时",
+                {"drawdown": _current_dd},
+            )
+
         state["killswitch"] = new_state.get("killswitch", {})
         if _res.get("kill_newly"):
             _ks = new_state.get("killswitch", {})
@@ -10370,15 +12027,13 @@ def _update_aux(feed, state):
             except Exception as e:
                 print(f"[熔断] 播报异常: {repr(e)[:80]}")
             try:
-                dr.log_event("killswitch", state="HALTED",
-                             reason=_ks.get("reason", ""))
+                dr.log_event("killswitch", state="HALTED", reason=_ks.get("reason", ""))
             except Exception:
                 pass
         # 状态机切换时记录事件（供「锁死时开仓」纪律判定）
         if prev_state is not None and new_state["state"] != prev_state:
             try:
-                dr.log_event("risk", state=new_state["state"],
-                             reason=new_state.get("lock_reason", ""))
+                dr.log_event("risk", state=new_state["state"], reason=new_state.get("lock_reason", ""))
             except Exception:
                 pass
     except Exception as e:
@@ -10391,8 +12046,7 @@ def _update_aux(feed, state):
             _bs = bi.scan(apply=False)
             state["broker_pending"] = _bs
             if _bs.get("new_fills"):
-                print(f"[成交回灌] 发现 {_bs['new_fills']} 笔未导入成交"
-                      f"（{_bs['files']} 个文件）→ 面板确认后落账")
+                print(f"[成交回灌] 发现 {_bs['new_fills']} 笔未导入成交（{_bs['files']} 个文件）→ 面板确认后落账")
     except Exception as e:
         print(f"[成交回灌] 扫描异常: {repr(e)[:80]}")
     # 3.11) 数据质量/陈旧监控（#14）：每轮观察行情新鲜度，检测断流/冻结/异常
@@ -10496,7 +12150,7 @@ def _update_aux(feed, state):
 # ---------------------------------------------------------------------------
 _RECAL_LAST_TS = 0.0
 _CONTRACT_MAP_TS = 0.0  # 5.2 动态合约映射刷新节流
-_INFO_TS = 0.0          # 5.3 #1 信息维度缓存刷新节流（30min）
+_INFO_TS = 0.0  # 5.3 #1 信息维度缓存刷新节流（30min）
 _MAIN_REFRESH_TS = 0.0  # 5.4 换月核对节流（2h）
 _MAIN_REFRESH_DONE = False  # 5.4 重启后首次 aux 立即跑一次用于核对
 
@@ -10528,19 +12182,20 @@ def _recalibrate_tick():
         try:
             _fm = fmg.get_manager()
             if _fm is not None:
-                if _fm.is_enabled('auto_optimize'):
-                    _feat_cfg = _fm.get_config('auto_optimize')
-                    if _feat_cfg and 'auto_adapt' in _feat_cfg:
-                        _auto_adapt = bool(_feat_cfg['auto_adapt'])
+                if _fm.is_enabled("auto_optimize"):
+                    _feat_cfg = _fm.get_config("auto_optimize")
+                    if _feat_cfg and "auto_adapt" in _feat_cfg:
+                        _auto_adapt = bool(_feat_cfg["auto_adapt"])
                 else:
                     _auto_adapt = False  # 主开关关闭 → 子配置失效
         except Exception:
             pass  # 特性开关读取失败，fallback 旧配置
-        _r = strategy_layer.backfill_robust_pool_gate(
-            auto_adapt=_auto_adapt, cfg=_rpg)
+        _r = strategy_layer.backfill_robust_pool_gate(auto_adapt=_auto_adapt, cfg=_rpg)
         if _r["written"]:
-            print(f"[稳健池] 门槛回灌: OOS_expR={_r['oos_expR']:.3f} "
-                  f"(ensemble_recent={_r['ensemble_recent_expR']}, relaxed={_r['relaxed']})")
+            print(
+                f"[稳健池] 门槛回灌: OOS_expR={_r['oos_expR']:.3f} "
+                f"(ensemble_recent={_r['ensemble_recent_expR']}, relaxed={_r['relaxed']})"
+            )
     except Exception as _e:
         print(f"[稳健池] 门槛回灌异常(忽略): {repr(_e)[:160]}")
     # ④ #5 训练/服务一致性看门狗：报告 live 服务参数相对 OOS 校验基线的偏离/未校验/失效服务/陈旧
@@ -10549,9 +12204,11 @@ def _recalibrate_tick():
         _STATE_CONSISTENCY["report"] = _cw
         _STATE_CONSISTENCY["last_run"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _cs = _cw["summary"]
-        print(f"[一致性] 偏离={_cs['divergences']} 未校验={_cs['unvalidated']} "
-              f"失效服务={_cs['broken_serving']} 陈旧={_cs['stale']} "
-              f"{'(✅一致)' if _cw['ok'] else '(⚠️存在不一致)'}")
+        print(
+            f"[一致性] 偏离={_cs['divergences']} 未校验={_cs['unvalidated']} "
+            f"失效服务={_cs['broken_serving']} 陈旧={_cs['stale']} "
+            f"{'(✅一致)' if _cw['ok'] else '(⚠️存在不一致)'}"
+        )
     except Exception as _e:
         print(f"[一致性] 看门狗异常(忽略): {repr(_e)[:160]}")
 
@@ -10569,6 +12226,7 @@ def _recalibrate_apply(symbol):
     仅写 T_thresh 决策参数 + 标记 recalibrated_at；备份原文件；清 strategy 缓存使其即时生效(无需重启)。
     返回 (ok, msg)。symbol='__all__' 时提交全部已 staged 候选。"""
     import shutil
+
     drift_path = os.path.join(HERE, "calibration_drift.json")
     calib_path = os.path.join(HERE, "calibration_params.json")
     try:
@@ -10579,8 +12237,7 @@ def _recalibrate_apply(symbol):
     if symbol == "__all__":
         targets = [it for it in items if it.get("proposed_T") is not None]
     else:
-        targets = [it for it in items
-                   if it.get("symbol") == symbol and it.get("proposed_T") is not None]
+        targets = [it for it in items if it.get("symbol") == symbol and it.get("proposed_T") is not None]
     if not targets:
         return False, f"品种 {symbol} 无已 staged 的候选 T_thresh（先 stage/refresh）"
     try:
@@ -10601,8 +12258,9 @@ def _recalibrate_apply(symbol):
         entry["T_thresh"] = pT
         entry["recalibrated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _note = entry.get("note", "")
-        entry["note"] = ((_note + f" | 漂移重校apply:T_thresh={pT}").strip(" |")
-                         if _note else f"漂移重校apply:T_thresh={pT}")
+        entry["note"] = (
+            (_note + f" | 漂移重校apply:T_thresh={pT}").strip(" |") if _note else f"漂移重校apply:T_thresh={pT}"
+        )
         applied.append(sym)
         _pe = it.get("proposed_expR")
         if _pe is not None and float(_pe) < 0:
@@ -10618,8 +12276,7 @@ def _recalibrate_apply(symbol):
     except Exception:
         pass
     _warn = ("；⚠️ 注意：" + "；".join(warns)) if warns else ""
-    return True, (f"已 apply {applied} 的候选 T_thresh 并备份{bak}；"
-                  f"即时生效(strategy 校准缓存已清，无需重启){_warn}")
+    return True, (f"已 apply {applied} 的候选 T_thresh 并备份{bak}；即时生效(strategy 校准缓存已清，无需重启){_warn}")
 
 
 def _recalibrate_stage_async():
@@ -10763,8 +12420,9 @@ def focus_board(force=False):
                 "spread": spread_score,
                 "heat": heat_score,
             }
-            score = round(0.30 * signal_score + 0.20 * vol_score
-                          + 0.20 * position_score + 0.15 * spread_score + 0.15 * heat_score)
+            score = round(
+                0.30 * signal_score + 0.20 * vol_score + 0.20 * position_score + 0.15 * spread_score + 0.15 * heat_score
+            )
             # 2026-08-20 修复：优先使用 _authoritative_contracts() 获取主力合约代码，
             # 而非 FEED.contract_of()（后者对有持仓品种返回开仓合约，非主力合约）。
             contract = None
@@ -10780,31 +12438,39 @@ def focus_board(force=False):
                         contract = ml.normalize_contract_code(_code)
             except Exception:
                 contract = None
-            out.append({
-                "symbol": sym,
-                "name": SYMBOLS.get(sym, {}).get("name", sym),
-                "contract": contract,
-                "score": score,
-                "breakdown": breakdown,
-                "last_price": last_price,
-                "dir": dirn,
-                "pnl_day": pnl_day,
-                "var_pct": var_pct,
-                "atr_pct": atr_pct,
-                "signal_state": sig_state,
-                "note": "",
-            })
+            out.append(
+                {
+                    "symbol": sym,
+                    "name": SYMBOLS.get(sym, {}).get("name", sym),
+                    "contract": contract,
+                    "score": score,
+                    "breakdown": breakdown,
+                    "last_price": last_price,
+                    "dir": dirn,
+                    "pnl_day": pnl_day,
+                    "var_pct": var_pct,
+                    "atr_pct": atr_pct,
+                    "signal_state": sig_state,
+                    "note": "",
+                }
+            )
         except Exception as _e:
             # 单项缺数据：仍返回占位，避免整板失败
-            out.append({
-                "symbol": sym,
-                "name": SYMBOLS.get(sym, {}).get("name", sym),
-                "score": 0,
-                "breakdown": {"signal": 0, "vol": 0, "position": 0, "spread": 0, "heat": 0},
-                "last_price": None, "dir": "—", "pnl_day": None,
-                "var_pct": None, "atr_pct": None, "signal_state": "—",
-                "note": f"数据缺失: {repr(_e)[:60]}",
-            })
+            out.append(
+                {
+                    "symbol": sym,
+                    "name": SYMBOLS.get(sym, {}).get("name", sym),
+                    "score": 0,
+                    "breakdown": {"signal": 0, "vol": 0, "position": 0, "spread": 0, "heat": 0},
+                    "last_price": None,
+                    "dir": "—",
+                    "pnl_day": None,
+                    "var_pct": None,
+                    "atr_pct": None,
+                    "signal_state": "—",
+                    "note": f"数据缺失: {repr(_e)[:60]}",
+                }
+            )
     out.sort(key=lambda x: x["score"], reverse=True)
     return {
         "ok": True,
@@ -10820,7 +12486,7 @@ def focus_board(force=False):
 def generate_report(kind="daily"):
     """合成 Markdown 复盘报告。kind: daily|weekly。返回 {ok, kind, title, markdown}。"""
     now = datetime.now()
-    is_weekly = (kind == "weekly")
+    is_weekly = kind == "weekly"
     s = tj.summary()
     pm = tj.performance_metrics()
     ss = tj.session_split()
@@ -10844,23 +12510,36 @@ def generate_report(kind="daily"):
     # 一、账户与权益
     L.append("## 一、账户与权益")
     L.append(f"- 总盈亏（估算）：**{pm.get('total_pnl', 0):.0f}**")
-    L.append(f"- 胜率：{s.get('win_rate', 0):.1f}% ｜ 笔数：{s.get('total', 0)} ｜ 盈利 {s.get('win', 0)} / 亏损 {s.get('loss', 0)}")
-    L.append(f"- 最大回撤：{pm.get('max_dd', 0):.1f}% ｜ 收益风险比(Sharpe)：{pm.get('sharpe', 0):.2f} ｜ Calmar：{pm.get('calmar', 0):.2f}")
-    L.append(f"- 平均 R：{pm.get('avg_R', 0):.2f} ｜ 利润因子：{pm.get('profit_factor', 0):.2f} ｜ 累计手续费：{pm.get('total_fee', 0):.0f}")
+    L.append(
+        f"- 胜率：{s.get('win_rate', 0):.1f}% ｜ 笔数：{s.get('total', 0)} ｜ 盈利 {s.get('win', 0)} / 亏损 {s.get('loss', 0)}"
+    )
+    L.append(
+        f"- 最大回撤：{pm.get('max_dd', 0):.1f}% ｜ 收益风险比(Sharpe)：{pm.get('sharpe', 0):.2f} ｜ Calmar：{pm.get('calmar', 0):.2f}"
+    )
+    L.append(
+        f"- 平均 R：{pm.get('avg_R', 0):.2f} ｜ 利润因子：{pm.get('profit_factor', 0):.2f} ｜ 累计手续费：{pm.get('total_fee', 0):.0f}"
+    )
     L.append("")
 
     # 二、时段分解
     L.append("## 二、日盘 / 夜盘分解")
-    day = ss.get("day", {}); night = ss.get("night", {})
-    L.append(f"- 日盘：净盈亏 {day.get('pnl', 0):.0f} ｜ 胜率 {day.get('win_rate', 0):.0f}% ｜ {day.get('trades', 0)} 笔")
-    L.append(f"- 夜盘：净盈亏 {night.get('pnl', 0):.0f} ｜ 胜率 {night.get('win_rate', 0):.0f}% ｜ {night.get('trades', 0)} 笔")
+    day = ss.get("day", {})
+    night = ss.get("night", {})
+    L.append(
+        f"- 日盘：净盈亏 {day.get('pnl', 0):.0f} ｜ 胜率 {day.get('win_rate', 0):.0f}% ｜ {day.get('trades', 0)} 笔"
+    )
+    L.append(
+        f"- 夜盘：净盈亏 {night.get('pnl', 0):.0f} ｜ 胜率 {night.get('win_rate', 0):.0f}% ｜ {night.get('trades', 0)} 笔"
+    )
     L.append("")
 
     # 三、风控状态
     L.append("## 三、风控状态")
     L.append(f"- 综合评级：**{rr.get('grade', '正常')}**（触发规则 {rr.get('n_triggered', 0)}/{rr.get('n_rules', 0)}）")
     ctx = rr.get("context", {})
-    L.append(f"- 权益 {ctx.get('equity', 0):.0f} ｜ 持仓 {ctx.get('n_positions', 0)} ｜ 资金使用率 {ctx.get('usage_rate', 0) if ctx.get('usage_rate') is not None else '—'}% ｜ 回撤 {ctx.get('dd_pct', 0) if ctx.get('dd_pct') is not None else '—'}%")
+    L.append(
+        f"- 权益 {ctx.get('equity', 0):.0f} ｜ 持仓 {ctx.get('n_positions', 0)} ｜ 资金使用率 {ctx.get('usage_rate', 0) if ctx.get('usage_rate') is not None else '—'}% ｜ 回撤 {ctx.get('dd_pct', 0) if ctx.get('dd_pct') is not None else '—'}%"
+    )
     if rr.get("triggered_rules"):
         L.append("- 触发项：")
         for t in rr["triggered_rules"][:6]:
@@ -10874,7 +12553,9 @@ def generate_report(kind="daily"):
     if disc:
         last = disc[0]
         L.append(f"- 最新{period_label}评分：**{last.get('score', '—')}**（{last.get('grade', '')}）")
-        L.append(f"- 开仓 {last.get('trades_opened', 0)} ｜ 跟信号 {last.get('signal_trades', 0)} ｜ 冲动 {last.get('impulse_trades', last.get('manual_trades', 0))} ｜ 锁违 {last.get('lock_violations', 0)} ｜ 区间盈亏 {last.get('period_pnl', 0):.0f}")
+        L.append(
+            f"- 开仓 {last.get('trades_opened', 0)} ｜ 跟信号 {last.get('signal_trades', 0)} ｜ 冲动 {last.get('impulse_trades', last.get('manual_trades', 0))} ｜ 锁违 {last.get('lock_violations', 0)} ｜ 区间盈亏 {last.get('period_pnl', 0):.0f}"
+        )
     else:
         L.append(f"- {period_label}暂无纪律评分记录。")
     L.append("")
@@ -10882,13 +12563,20 @@ def generate_report(kind="daily"):
     # 五、关注品种
     L.append("## 五、关注品种盯盘")
     for f in (fb.get("symbols", []) or [])[:8]:
-        L.append(f"- {f.get('name', f.get('symbol', ''))}（{f.get('symbol', '')}）：盯盘评分 {f.get('score', 0)} ｜ 当日盈亏 {f.get('pnl_day') if f.get('pnl_day') is not None else '—'} ｜ 信号 {f.get('signal_state', '—')}")
+        L.append(
+            f"- {f.get('name', f.get('symbol', ''))}（{f.get('symbol', '')}）：盯盘评分 {f.get('score', 0)} ｜ 当日盈亏 {f.get('pnl_day') if f.get('pnl_day') is not None else '—'} ｜ 信号 {f.get('signal_state', '—')}"
+        )
     L.append("")
 
     L.append("---")
     L.append("*本报由四维策略模型自动生成，仅供个人复盘参考，不构成投资建议。*")
-    return {"ok": True, "kind": kind, "title": title, "markdown": "\n".join(L),
-            "generated_at": now.strftime("%Y-%m-%d %H:%M:%S")}
+    return {
+        "ok": True,
+        "kind": kind,
+        "title": title,
+        "markdown": "\n".join(L),
+        "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -10949,34 +12637,58 @@ def paper_state():
     d = _paper_load()
     mtm = _paper_mtm(d)
     eq = round(d["cash"] + d["realized"] + mtm, 2)
-    return {"ok": True, "cash": round(d["cash"], 2), "realized": round(d["realized"], 2),
-            "mtm": mtm, "equity": eq,
-            "positions": d.get("positions", {}),
-            "trades": d.get("trades", []), "updated": d.get("updated", "")}
+    return {
+        "ok": True,
+        "cash": round(d["cash"], 2),
+        "realized": round(d["realized"], 2),
+        "mtm": mtm,
+        "equity": eq,
+        "positions": d.get("positions", {}),
+        "trades": d.get("trades", []),
+        "updated": d.get("updated", ""),
+    }
 
 
 def paper_open(symbol, direction, lots, price, signal_id="", strategy="模拟"):
     d = _paper_load()
     if symbol not in SYMBOLS:
         return False, f"未知品种 {symbol}"
-    lots = int(lots); price = float(price)
+    lots = int(lots)
+    price = float(price)
     if lots <= 0 or price <= 0:
         return False, "手数/价格无效"
     pos = d["positions"].get(symbol)
-    if pos and pos["direction"] == direction:           # 加仓：更新均价
+    if pos and pos["direction"] == direction:  # 加仓：更新均价
         tot = pos["lots"] + lots
         pos["avg"] = round((pos["avg"] * pos["lots"] + price * lots) / tot, 2)
         pos["lots"] = tot
-    elif pos and pos["direction"] != direction:          # 反手：先平旧仓再开新仓
+    elif pos and pos["direction"] != direction:  # 反手：先平旧仓再开新仓
         _paper_realize(d, symbol, price)
-        d["positions"][symbol] = {"direction": direction, "lots": lots, "avg": price,
-                                  "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        d["positions"][symbol] = {
+            "direction": direction,
+            "lots": lots,
+            "avg": price,
+            "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
     else:
-        d["positions"][symbol] = {"direction": direction, "lots": lots, "avg": price,
-                                  "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-    d["trades"].append({"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "symbol": symbol,
-                        "action": "开", "direction": direction, "lots": lots, "price": price,
-                        "signal_id": signal_id, "strategy": strategy})
+        d["positions"][symbol] = {
+            "direction": direction,
+            "lots": lots,
+            "avg": price,
+            "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    d["trades"].append(
+        {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "symbol": symbol,
+            "action": "开",
+            "direction": direction,
+            "lots": lots,
+            "price": price,
+            "signal_id": signal_id,
+            "strategy": strategy,
+        }
+    )
     d["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _paper_save(d)
     return True, "模拟开仓成功", paper_state()
@@ -10995,9 +12707,17 @@ def paper_close(symbol, price, lots=None, reason="手动"):
         del d["positions"][symbol]
     else:
         pos["lots"] -= close_lots
-    d["trades"].append({"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "symbol": symbol,
-                        "action": "平", "direction": pos["direction"], "lots": close_lots,
-                        "price": price, "reason": reason})
+    d["trades"].append(
+        {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "symbol": symbol,
+            "action": "平",
+            "direction": pos["direction"],
+            "lots": close_lots,
+            "price": price,
+            "reason": reason,
+        }
+    )
     d["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _paper_save(d)
     return True, "模拟平仓成功", paper_state()
@@ -11031,13 +12751,15 @@ def _holdings_kline(sym, bars=30):
     tail = df.tail(bars)
     klines = []
     for idx, row in tail.iterrows():
-        klines.append({
-            "date": idx.strftime("%m-%d"),
-            "open": round(float(row["open"]), 2),
-            "high": round(float(row["high"]), 2),
-            "low": round(float(row["low"]), 2),
-            "close": round(float(row["close"]), 2),
-        })
+        klines.append(
+            {
+                "date": idx.strftime("%m-%d"),
+                "open": round(float(row["open"]), 2),
+                "high": round(float(row["high"]), 2),
+                "low": round(float(row["low"]), 2),
+                "close": round(float(row["close"]), 2),
+            }
+        )
 
     # SR 位
     sr = sra.analyze(df.tail(80))
@@ -11118,25 +12840,27 @@ def _signal_feed(limit=30, since=None):
     for s in all_sigs[:limit]:
         pipe = s.get("pipeline", {})
         risk = s.get("risk_gate", {})
-        feed.append({
-            "time": s.get("time", ""),
-            "symbol": s.get("symbol", ""),
-            "name": s.get("name", s.get("symbol", "")),
-            "direction": s.get("direction", ""),
-            "price": s.get("price", s.get("entry_ref")),
-            "stop": s.get("stop"),
-            "t1": s.get("t1"),
-            "t2": s.get("t2"),
-            "rr_ratio": s.get("rr_ratio"),
-            "regime": s.get("regime_hmm"),
-            "T_5m": pipe.get("T_5m"),
-            "F": pipe.get("F"),
-            "C": pipe.get("C"),
-            "sentiment_filter": pipe.get("sentiment_filter_note"),
-            "sr_note": pipe.get("sr_note"),
-            "signal_type": s.get("signal_type", ""),
-            "reason": s.get("reason", ""),
-        })
+        feed.append(
+            {
+                "time": s.get("time", ""),
+                "symbol": s.get("symbol", ""),
+                "name": s.get("name", s.get("symbol", "")),
+                "direction": s.get("direction", ""),
+                "price": s.get("price", s.get("entry_ref")),
+                "stop": s.get("stop"),
+                "t1": s.get("t1"),
+                "t2": s.get("t2"),
+                "rr_ratio": s.get("rr_ratio"),
+                "regime": s.get("regime_hmm"),
+                "T_5m": pipe.get("T_5m"),
+                "F": pipe.get("F"),
+                "C": pipe.get("C"),
+                "sentiment_filter": pipe.get("sentiment_filter_note"),
+                "sr_note": pipe.get("sr_note"),
+                "signal_type": s.get("signal_type", ""),
+                "reason": s.get("reason", ""),
+            }
+        )
     return {"ok": True, "signals": feed, "total": len(all_sigs)}
 
 
@@ -11145,7 +12869,7 @@ def refresh_gates():
     某品种近期真实回测转负则暂停其信号，恢复正数后自动解除（自适应、不永久禁用）。"""
     global GATE_CACHE
     try:
-        pt.main()   # 增量重算真实回测（数据缓存，开销小）
+        pt.main()  # 增量重算真实回测（数据缓存，开销小）
     except Exception as e:
         print(f"[门控] papertrack 重算异常(沿用旧门控): {repr(e)[:120]}")
     try:
@@ -11168,13 +12892,20 @@ def main():
 
     global FEED
     FEED = ml.feed()
-    feed = FEED   # 兼容下方循环内 feed.* 引用（与 FEED 同一实例）
+    feed = FEED  # 兼容下方循环内 feed.* 引用（与 FEED 同一实例）
     feed_ok = FEED.available()
     if not feed_ok:
         print("[!] minishare 不可用，降级运行（面板照常，仅无实时信号）")
 
-    state = {"updated": "", "session": "", "online": True, "order": list(SYMBOLS.keys()),
-             "symbols": {}, "signals": [], "chat": load_chat_feed()}
+    state = {
+        "updated": "",
+        "session": "",
+        "online": True,
+        "order": list(SYMBOLS.keys()),
+        "symbols": {},
+        "signals": [],
+        "chat": load_chat_feed(),
+    }
     global STATE_REF
     STATE_REF = state
 
@@ -11188,8 +12919,10 @@ def main():
         _dd0 = ddg.current()
         if _dd0.get("peak_equity"):
             rsm.RISK_FSM.peak_equity = float(_dd0["peak_equity"])
-        print(f"[#119 回撤水位线] 已加载，档位={[(round(t*100,1),s) for t,s in ddg.waterlines()]}"
-              f" · 持久化峰值={_dd0.get('peak_equity')}")
+        print(
+            f"[#119 回撤水位线] 已加载，档位={[(round(t * 100, 1), s) for t, s in ddg.waterlines()]}"
+            f" · 持久化峰值={_dd0.get('peak_equity')}"
+        )
     except Exception as e:
         print(f"[#119 回撤水位线] 初始化异常(忽略): {repr(e)[:80]}")
     # #121 已接入 CLI 工具箱：载入上次的运行结果
@@ -11208,7 +12941,7 @@ def main():
     # —— #3 盘口级订单流连接器（默认关闭，TICK_FEED_ENABLED=1 才启；无源时静默降级）——
     if TICK_FEED_ENABLED:
         threading.Thread(target=TICK_CONNECTOR.loop, daemon=True).start()
-        print(f"[#3 订单流] 连接器已启动（源={'WS '+TICK_WS_URL if TICK_WS_URL else TICK_STREAM_FILE}）")
+        print(f"[#3 订单流] 连接器已启动（源={'WS ' + TICK_WS_URL if TICK_WS_URL else TICK_STREAM_FILE}）")
     else:
         print("[#3 订单流] 未启用（TICK_FEED_ENABLED=0，C_flow 维持 minishare 驱动）")
     last_fire = {}
@@ -11227,7 +12960,7 @@ def main():
         print("[once] 完成，状态已写", STATE_FILE)
         return
 
-    refresh_gates()   # 启动即刷新动态门控（预热评估前，让卡片即刻反映门控状态）
+    refresh_gates()  # 启动即刷新动态门控（预热评估前，让卡片即刻反映门控状态）
     # 启动预热：先评估一次填 symbols，避免刚启动恰逢休市时信号卡全空
     if feed_ok:
         try:
@@ -11244,15 +12977,16 @@ def main():
     else:
         print("[预热] 跳过（feed 不可用）")
     print(f"[runner] 启动 · 轮询 {POLL_SEC}s · 去抖(同号连续2轮)+签名去重 · 时段内评估")
+
     # —— #16 卡死自检线程：主循环停摆超过阈值则自杀，交由看门狗重启 ——
     def _stall_watchdog():
         global LAST_CYCLE_TS
         while True:
             time.sleep(30)
             if LAST_CYCLE_TS and time.time() - LAST_CYCLE_TS > 180:
-                print(f"[看门狗] 主循环已停摆 {int(time.time() - LAST_CYCLE_TS)}s，"
-                      f"自杀退出交看门狗重启")
+                print(f"[看门狗] 主循环已停摆 {int(time.time() - LAST_CYCLE_TS)}s，自杀退出交看门狗重启")
                 os._exit(3)
+
     threading.Thread(target=_stall_watchdog, daemon=True).start()
     # ★ 启动 minishare rt_fut_k 主数据源轮询线程（5秒/次，不限次快照）
     # rt_fut_k 返回全市场 948 个期货品种实时行情，系统自动筛选持仓品种
@@ -11271,7 +13005,7 @@ def main():
         print(f"[account_tracker] ak_poller 启动失败: {_e}")
     last_gate = time.time()
     global LAST_CYCLE_TS  # #16 心跳：main 内给模块全局赋值必须声明 global，否则只更新局部、看门狗读到永远 0.0
-    global last_recover   # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
+    global last_recover  # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
     while True:
         now = datetime.now()
         today = now.strftime("%Y%m%d")
@@ -11302,14 +13036,15 @@ def main():
             if feed_ok:
                 for sym in SYMBOLS:
                     px = feed.price(sym)
-                    if px: prices[sym] = px
+                    if px:
+                        prices[sym] = px
             tj.sample_equity(prices)
         except Exception:
             pass
         state["updated"] = now.strftime("%Y-%m-%d %H:%M:%S")
         state["session"] = session_label(now)
         json.dump(state, open(STATE_FILE, "w"), ensure_ascii=False, default=str)
-        LAST_CYCLE_TS = time.time()   # #16 心跳：主循环活着就打点
+        LAST_CYCLE_TS = time.time()  # #16 心跳：主循环活着就打点
         # 动态门控每 30 分钟刷新一次（重算真实回测 → 近期转负的品种自动暂停）
         if now.timestamp() - last_gate > 1800:
             refresh_gates()

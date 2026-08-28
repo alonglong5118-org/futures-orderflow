@@ -23,6 +23,7 @@ papertrack 评分与状态机**，否则优雅降级为手动记账（不影响�
   if acc:
       am.auto_sync(acc, prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
+
 from __future__ import annotations
 
 import json
@@ -34,8 +35,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(HERE, "account_monitor.json")
 
 _lock = threading.Lock()
-_synced_open = {}      # (sym, direction) -> {"lots","price"} 已镜像到成交记录器的持仓
-_last_account = None   # 最近一次账户快照（供状态机/面板读取）
+_synced_open = {}  # (sym, direction) -> {"lots","price"} 已镜像到成交记录器的持仓
+_last_account = None  # 最近一次账户快照（供状态机/面板读取）
 _last_fetch = 0
 
 
@@ -57,13 +58,14 @@ def _map_symbol(tqsdk_sym):
         import re
 
         import four_dim_strategy as fd
+
         s = str(tqsdk_sym).upper()
         # 去交易所前缀 (如 DCE.m| / CZCE. / KQ.m@)
         if "|" in s:
             s = s.split("|")[-1]
         if "." in s:
             s = s.split(".")[-1]
-        code = s.strip()                       # e.g. SA2609 / SA / FG2609
+        code = s.strip()  # e.g. SA2609 / SA / FG2609
         # ① 逐合约优先：SA2701 -> SA01
         if code in fd.CONTRACT_SYM_BY_CODE:
             return fd.CONTRACT_SYM_BY_CODE[code]
@@ -103,8 +105,7 @@ def _get_tqsdk_account(cfg):
         print("[账户监控] tqsdk 未安装，跳过自动读取（维持手动记账）")
         return None
     try:
-        api = TqApi(TqAccount(cfg.get("broker_id", ""), cfg.get("account_id", ""),
-                               cfg.get("password", "")))
+        api = TqApi(TqAccount(cfg.get("broker_id", ""), cfg.get("account_id", ""), cfg.get("password", "")))
         acc = api.get_account()
         pos_obj = api.get_position()
         balance = float(acc.get("balance", 0) or 0)
@@ -112,7 +113,7 @@ def _get_tqsdk_account(cfg):
         profit = float(acc.get("profit", 0) or 0)
         positions = []
         # pos_obj 是 dict-like：key=合约代码, value=持仓对象
-        for k in (pos_obj or {}):
+        for k in pos_obj or {}:
             try:
                 p = pos_obj[k]
                 sym = _map_symbol(k)
@@ -121,25 +122,34 @@ def _get_tqsdk_account(cfg):
                 long_vol = int(p.get("volume_long", 0) or 0)
                 short_vol = int(p.get("volume_short", 0) or 0)
                 if long_vol > 0:
-                    positions.append({
-                        "symbol": sym, "pos": long_vol,
-                        "open_price": float(p.get("open_price_long", 0) or 0),
-                        "direction": "多",
-                        "margin": float(p.get("margin_long", 0) or 0),
-                    })
+                    positions.append(
+                        {
+                            "symbol": sym,
+                            "pos": long_vol,
+                            "open_price": float(p.get("open_price_long", 0) or 0),
+                            "direction": "多",
+                            "margin": float(p.get("margin_long", 0) or 0),
+                        }
+                    )
                 if short_vol > 0:
-                    positions.append({
-                        "symbol": sym, "pos": short_vol,
-                        "open_price": float(p.get("open_price_short", 0) or 0),
-                        "direction": "空",
-                        "margin": float(p.get("margin_short", 0) or 0),
-                    })
+                    positions.append(
+                        {
+                            "symbol": sym,
+                            "pos": short_vol,
+                            "open_price": float(p.get("open_price_short", 0) or 0),
+                            "direction": "空",
+                            "margin": float(p.get("margin_short", 0) or 0),
+                        }
+                    )
             except Exception:
                 continue
         api.close()
         snap = {
-            "balance": balance, "available": available, "profit": profit,
-            "positions": positions, "updated": time.strftime("%H:%M:%S"),
+            "balance": balance,
+            "available": available,
+            "profit": profit,
+            "positions": positions,
+            "updated": time.strftime("%H:%M:%S"),
             "backend": "tqsdk",
         }
         with _lock:
@@ -159,10 +169,11 @@ def auto_sync(account, prices=None):
     try:
         import account_tracker as at
         import trade_journal as tj
+
         # 1) 权益同步
         at.set_equity(account["balance"])
         # 2) 持仓镜像对账
-        current = {}   # (sym, direction) -> {lots, price}
+        current = {}  # (sym, direction) -> {lots, price}
         for p in account.get("positions", []):
             key = (p["symbol"], p["direction"])
             current[key] = {"lots": p["pos"], "price": p["open_price"]}

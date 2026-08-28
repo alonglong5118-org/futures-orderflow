@@ -40,6 +40,7 @@ from signal_trigger_utils import (
 #  1. bias_FC 计算
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeBiasFC(unittest.TestCase):
     """F/C 合成背景偏置计算。"""
 
@@ -75,8 +76,8 @@ class TestComputeBiasFC(unittest.TestCase):
     def test_F_weight_heavier_than_C(self):
         """F 权重(0.25) > C 权重(0.15) — 验证权重比"""
         # F 和 C 绝对值相同，F 的贡献更大
-        result_F = compute_bias_FC(100, 0)   # 25
-        result_C = compute_bias_FC(0, 100)   # 15
+        result_F = compute_bias_FC(100, 0)  # 25
+        result_C = compute_bias_FC(0, 100)  # 15
         self.assertGreater(result_F, result_C)
         self.assertAlmostEqual(result_F / result_C, 0.25 / 0.15, places=2)
 
@@ -91,6 +92,7 @@ class TestComputeBiasFC(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. 硬否决
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHardVeto(unittest.TestCase):
     """F/C 反向硬否决判断。"""
@@ -164,13 +166,13 @@ class TestHardVeto(unittest.TestCase):
         # 恰好达到阈值 25 → 应该能否决
         bias_FC = compute_bias_FC(F=-70, C=-50)
         vetoed, _ = check_hard_veto(bias_FC=bias_FC, dir_T=1, fc_hard=25)
-        self.assertTrue(vetoed,
-            "P-C 回归 bug：硬否决阈值不可达，F/C 否决权是空转的")
+        self.assertTrue(vetoed, "P-C 回归 bug：硬否决阈值不可达，F/C 否决权是空转的")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. 同向确认
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFCConfirmation(unittest.TestCase):
     """F/C 同向确认判断。"""
@@ -234,14 +236,14 @@ class TestFCConfirmation(unittest.TestCase):
         # 再验证有效阈值确实降低了
         base_thr = 70.0
         eff_thr = compute_effective_threshold(base_thr, confirmed, confirm_relief=0.85)
-        self.assertLess(eff_thr, base_thr,
-            "P-B 回归 bug：同向确认没有降低阈值，是空转的")
+        self.assertLess(eff_thr, base_thr, "P-B 回归 bug：同向确认没有降低阈值，是空转的")
         self.assertAlmostEqual(eff_thr, base_thr * 0.85, places=4)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. 有效阈值
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEffectiveThreshold(unittest.TestCase):
     """有效阈值计算。"""
@@ -275,6 +277,7 @@ class TestEffectiveThreshold(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. 同向判断
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSameDirection(unittest.TestCase):
     """bias_G 与 T 方向同向判断。"""
@@ -320,14 +323,18 @@ class TestSameDirection(unittest.TestCase):
 #  6. 完整触发决策
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSignalTriggerDecision(unittest.TestCase):
     """完整触发决策集成测试。"""
 
     def test_basic_trigger_long(self):
         """多单：T 强 + 同向 + 无否决 → 触发"""
         result = signal_trigger_decision(
-            T_5m=80, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=20,
+            T_5m=80,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=20,
         )
         self.assertTrue(result["triggered"])
         self.assertFalse(result["hard_veto"])
@@ -336,8 +343,11 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_basic_trigger_short(self):
         """空单：T 强 + 同向 + 无否决 → 触发"""
         result = signal_trigger_decision(
-            T_5m=-80, dir_T=-1, T_thresh_eff=70,
-            bias_G=-30, bias_FC=-20,
+            T_5m=-80,
+            dir_T=-1,
+            T_thresh_eff=70,
+            bias_G=-30,
+            bias_FC=-20,
         )
         self.assertTrue(result["triggered"])
         self.assertTrue(result["same_dir"])
@@ -345,16 +355,22 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_T_below_threshold_no_trigger(self):
         """T 低于阈值 → 不触发"""
         result = signal_trigger_decision(
-            T_5m=60, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=20,
+            T_5m=60,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=20,
         )
         self.assertFalse(result["triggered"])
 
     def test_dir_zero_no_trigger(self):
         """dir_T=0 → 不触发（核心安全边界）"""
         result = signal_trigger_decision(
-            T_5m=90, dir_T=0, T_thresh_eff=70,
-            bias_G=30, bias_FC=30,
+            T_5m=90,
+            dir_T=0,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=30,
         )
         self.assertFalse(result["triggered"])
         self.assertFalse(result["hard_veto"])
@@ -364,8 +380,11 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_hard_veto_blocks_trigger(self):
         """硬否决 → 不触发，即使 T 很强"""
         result = signal_trigger_decision(
-            T_5m=90, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=-30,  # F/C 强反向
+            T_5m=90,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=-30,  # F/C 强反向
             fc_hard=25,
         )
         self.assertFalse(result["triggered"])
@@ -376,29 +395,38 @@ class TestSignalTriggerDecision(unittest.TestCase):
         """F/C 同向确认 → 降低阈值，原本不够的 T 也能触发"""
         # T_5m=62, base_thr=70 → 不够
         result_no_confirm = signal_trigger_decision(
-            T_5m=62, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=10,  # 弱同向，不确认
-            fc_confirm=25, confirm_relief=0.85,
+            T_5m=62,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=10,  # 弱同向，不确认
+            fc_confirm=25,
+            confirm_relief=0.85,
         )
-        self.assertFalse(result_no_confirm["triggered"],
-                         "无确认时 T=62 不应触发（阈值 70）")
+        self.assertFalse(result_no_confirm["triggered"], "无确认时 T=62 不应触发（阈值 70）")
 
         # 同样的 T，F/C 强同向确认 → 阈值降到 59.5，62 >= 59.5 → 触发
         result_with_confirm = signal_trigger_decision(
-            T_5m=62, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=30,  # 强同向，确认
-            fc_confirm=25, confirm_relief=0.85,
+            T_5m=62,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=30,  # 强同向，确认
+            fc_confirm=25,
+            confirm_relief=0.85,
         )
-        self.assertTrue(result_with_confirm["triggered"],
-                        "P-B 回归 bug：同向确认没有降低阈值，T 还是不够触发")
+        self.assertTrue(result_with_confirm["triggered"], "P-B 回归 bug：同向确认没有降低阈值，T 还是不够触发")
         self.assertTrue(result_with_confirm["fc_confirmed"])
         self.assertAlmostEqual(result_with_confirm["effective_thr"], 59.5, places=4)
 
     def test_opposite_biasG_blocks_trigger(self):
         """bias_G 反向 → 不同向 → 不触发，即使 T 很强"""
         result = signal_trigger_decision(
-            T_5m=90, dir_T=1, T_thresh_eff=70,
-            bias_G=-30, bias_FC=10,  # bias_G 反向
+            T_5m=90,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=-30,
+            bias_FC=10,  # bias_G 反向
         )
         self.assertFalse(result["triggered"])
         self.assertFalse(result["same_dir"])
@@ -406,8 +434,11 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_neutral_biasG_allows_trigger(self):
         """bias_G 中性（≈0）→ 放行，T 够就触发"""
         result = signal_trigger_decision(
-            T_5m=80, dir_T=1, T_thresh_eff=70,
-            bias_G=0, bias_FC=10,
+            T_5m=80,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=0,
+            bias_FC=10,
         )
         self.assertTrue(result["triggered"])
         self.assertTrue(result["same_dir"])
@@ -415,16 +446,22 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_exactly_at_threshold_triggers(self):
         """T 恰好等于阈值 → 触发（>= 判断）"""
         result = signal_trigger_decision(
-            T_5m=70, dir_T=1, T_thresh_eff=70,
-            bias_G=10, bias_FC=10,
+            T_5m=70,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=10,
+            bias_FC=10,
         )
         self.assertTrue(result["triggered"], "T 恰好等于阈值也应触发")
 
     def test_barely_below_threshold_no_trigger(self):
         """T 略低于阈值 → 不触发"""
         result = signal_trigger_decision(
-            T_5m=69.99, dir_T=1, T_thresh_eff=70,
-            bias_G=10, bias_FC=10,
+            T_5m=69.99,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=10,
+            bias_FC=10,
         )
         self.assertFalse(result["triggered"])
 
@@ -434,12 +471,14 @@ class TestSignalTriggerDecision(unittest.TestCase):
         历史 bug（P-C）：硬否决阈值太高，F/C 反向也拦不住 T。
         """
         result = signal_trigger_decision(
-            T_5m=100, dir_T=1, T_thresh_eff=70,
-            bias_G=50, bias_FC=-30,  # F/C 强反向
+            T_5m=100,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=50,
+            bias_FC=-30,  # F/C 强反向
             fc_hard=25,
         )
-        self.assertFalse(result["triggered"],
-            "P-C 回归 bug：F/C 强反向应该硬否决，但 T 还是触发了")
+        self.assertFalse(result["triggered"], "P-C 回归 bug：F/C 强反向应该硬否决，但 T 还是触发了")
         self.assertTrue(result["hard_veto"])
 
     def test_T_weak_with_confirm_triggers(self):
@@ -450,12 +489,15 @@ class TestSignalTriggerDecision(unittest.TestCase):
         # T=60, 阈值=70 → 差 10 点
         # F/C 强同向 → 阈值降到 70*0.85=59.5 → 60 >= 59.5 → 触发
         result = signal_trigger_decision(
-            T_5m=60, dir_T=1, T_thresh_eff=70,
-            bias_G=20, bias_FC=30,
-            fc_confirm=25, confirm_relief=0.85,
+            T_5m=60,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=20,
+            bias_FC=30,
+            fc_confirm=25,
+            confirm_relief=0.85,
         )
-        self.assertTrue(result["triggered"],
-            "P-B 回归 bug：F/C 同向确认没有降低阈值，T 本该触发但没触发")
+        self.assertTrue(result["triggered"], "P-B 回归 bug：F/C 同向确认没有降低阈值，T 本该触发但没触发")
         self.assertTrue(result["fc_confirmed"])
 
 
@@ -465,8 +507,11 @@ class TestDecisionEdgeCases(unittest.TestCase):
     def test_zero_T_zero_dir_no_trigger(self):
         """T=0, dir_T=0 → 不触发"""
         result = signal_trigger_decision(
-            T_5m=0, dir_T=0, T_thresh_eff=70,
-            bias_G=0, bias_FC=0,
+            T_5m=0,
+            dir_T=0,
+            T_thresh_eff=70,
+            bias_G=0,
+            bias_FC=0,
         )
         self.assertFalse(result["triggered"])
 
@@ -478,8 +523,11 @@ class TestDecisionEdgeCases(unittest.TestCase):
         所以会触发。这是符合设计的（abs 判断 + 方向独立判断）。
         """
         result = signal_trigger_decision(
-            T_5m=-80, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=20,
+            T_5m=-80,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=20,
         )
         # abs(-80) = 80 >= 70，同向 → 触发
         self.assertTrue(result["triggered"])
@@ -488,8 +536,11 @@ class TestDecisionEdgeCases(unittest.TestCase):
     def test_very_high_fc_hard_never_vetoes(self):
         """fc_hard 非常大 → 几乎不会否决"""
         result = signal_trigger_decision(
-            T_5m=80, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=-90,  # 强反向
+            T_5m=80,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=-90,  # 强反向
             fc_hard=100,  # 阈值极高
         )
         self.assertFalse(result["hard_veto"])
@@ -499,9 +550,13 @@ class TestDecisionEdgeCases(unittest.TestCase):
     def test_fc_confirm_zero_always_confirmed(self):
         """fc_confirm = 0 → 任何同向都算确认（极端配置）"""
         result = signal_trigger_decision(
-            T_5m=65, dir_T=1, T_thresh_eff=70,
-            bias_G=30, bias_FC=1,  # 极微弱同向
-            fc_confirm=0, confirm_relief=0.85,
+            T_5m=65,
+            dir_T=1,
+            T_thresh_eff=70,
+            bias_G=30,
+            bias_FC=1,  # 极微弱同向
+            fc_confirm=0,
+            confirm_relief=0.85,
         )
         self.assertTrue(result["fc_confirmed"])
         # 阈值降到 59.5，T=65 够 → 触发

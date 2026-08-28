@@ -9,6 +9,7 @@
   p = b - (a - b) * 0.618
 止损锚 = c 点（结构有效性锚点，被破则逻辑失效）。
 """
+
 from __future__ import annotations
 
 
@@ -108,6 +109,7 @@ def hidden_pivot(abc, tick, limit_up=None, limit_down=None):
 if __name__ == "__main__":
     # 简易自测：构造一段 a-b-c 多头结构
     import numpy as np
+
     np.random.seed(2)
     base = np.linspace(1000, 1050, 60)
     closes = base + np.sin(np.arange(60) / 3) * 8

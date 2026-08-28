@@ -6,6 +6,7 @@
 3. 信号预测力（触发后未来 N 日收益）
 4. 与 T_trend / T_mean 的相关性
 """
+
 import os
 import sys
 
@@ -22,6 +23,7 @@ GROUPS = ["化工", "农产品", "有色", "黑系", "能源", "贵金属", "航
 
 TAIL = 500
 FWD_DAYS = [1, 3, 5, 10]  # 未来 N 日收益
+
 
 def analyze_symbol(symbol):
     """分析单个品种的 seasonal 因子质量。"""
@@ -44,7 +46,7 @@ def analyze_symbol(symbol):
 
     # 逐日回测
     for i in range(60, len(df)):
-        sub_df = df.iloc[:i+1]
+        sub_df = df.iloc[: i + 1]
         try:
             sig, _ = s_seasonal(sub_df)
         except Exception:
@@ -117,29 +119,35 @@ def main():
         avg_ret_5d = np.mean([r["avg_aligned_rets"][5] for r in group_results])
 
         print(f"  有效品种: {len(group_results)}", flush=True)
-        print(f"  平均信号触发率: {avg_nonzero_pct*100:.1f}%", flush=True)
-        print(f"  5日平均命中率: {avg_hit_5d*100:.1f}%", flush=True)
+        print(f"  平均信号触发率: {avg_nonzero_pct * 100:.1f}%", flush=True)
+        print(f"  5日平均命中率: {avg_hit_5d * 100:.1f}%", flush=True)
         print(f"  5日平均对齐收益: {avg_ret_5d:+.3f}%", flush=True)
 
         # 列出表现最好和最差的品种
         sorted_by_ret = sorted(group_results, key=lambda x: x["avg_aligned_rets"][5], reverse=True)
         print(f"  最佳3品种 (5日对齐收益):", flush=True)
         for r in sorted_by_ret[:3]:
-            print(f"    {r['symbol']}: {r['avg_aligned_rets'][5]:+.3f}%  "
-                  f"命中率 {r['hit_rates'][5]*100:.0f}%  "
-                  f"触发率 {r['nonzero_pct']*100:.1f}%", flush=True)
+            print(
+                f"    {r['symbol']}: {r['avg_aligned_rets'][5]:+.3f}%  "
+                f"命中率 {r['hit_rates'][5] * 100:.0f}%  "
+                f"触发率 {r['nonzero_pct'] * 100:.1f}%",
+                flush=True,
+            )
         print(f"  最差3品种:", flush=True)
         for r in sorted_by_ret[-3:]:
-            print(f"    {r['symbol']}: {r['avg_aligned_rets'][5]:+.3f}%  "
-                  f"命中率 {r['hit_rates'][5]*100:.0f}%  "
-                  f"触发率 {r['nonzero_pct']*100:.1f}%", flush=True)
+            print(
+                f"    {r['symbol']}: {r['avg_aligned_rets'][5]:+.3f}%  "
+                f"命中率 {r['hit_rates'][5] * 100:.0f}%  "
+                f"触发率 {r['nonzero_pct'] * 100:.1f}%",
+                flush=True,
+            )
 
         all_results[group] = group_results
 
     # 全市场汇总
-    print(f"\n{'='*70}", flush=True)
+    print(f"\n{'=' * 70}", flush=True)
     print("全市场汇总", flush=True)
-    print(f"{'='*70}", flush=True)
+    print(f"{'=' * 70}", flush=True)
     all_nonzero = []
     all_hit5 = []
     all_ret5 = []
@@ -150,10 +158,10 @@ def main():
             all_ret5.append(r["avg_aligned_rets"][5])
 
     print(f"总品种数: {len(all_nonzero)}", flush=True)
-    print(f"平均触发率: {np.mean(all_nonzero)*100:.1f}%", flush=True)
-    print(f"平均5日命中率: {np.mean(all_hit5)*100:.1f}%", flush=True)
+    print(f"平均触发率: {np.mean(all_nonzero) * 100:.1f}%", flush=True)
+    print(f"平均5日命中率: {np.mean(all_hit5) * 100:.1f}%", flush=True)
     print(f"平均5日对齐收益: {np.mean(all_ret5):+.3f}%", flush=True)
-    print(f"对齐收益 > 0 的品种比例: {sum(1 for r in all_ret5 if r > 0)/len(all_ret5)*100:.1f}%", flush=True)
+    print(f"对齐收益 > 0 的品种比例: {sum(1 for r in all_ret5 if r > 0) / len(all_ret5) * 100:.1f}%", flush=True)
 
     print(f"\n诊断结论:", flush=True)
     mean_ret = np.mean(all_ret5)
@@ -165,7 +173,7 @@ def main():
         print(f"  ❌ 季节性因子没有预测力（平均5日对齐收益 {mean_ret:+.3f}%）", flush=True)
 
     if np.mean(all_nonzero) < 0.1:
-        print(f"  ⚠️ 信号触发率太低（{np.mean(all_nonzero)*100:.1f}%），可能因阈值过严", flush=True)
+        print(f"  ⚠️ 信号触发率太低（{np.mean(all_nonzero) * 100:.1f}%），可能因阈值过严", flush=True)
 
 
 if __name__ == "__main__":

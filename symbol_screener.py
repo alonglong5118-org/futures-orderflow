@@ -15,6 +15,7 @@
 
 参考 Kara说量化 的选股器条件引擎设计，适配到期货品种筛选。
 """
+
 from __future__ import annotations
 
 import os
@@ -31,12 +32,12 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily
 
 # 默认筛选条件
 DEFAULT_CRITERIA = {
-    "min_turnover": 50,         # 最低日均成交额（亿）
-    "atr_pct_min": 0.008,        # 最低 ATR%（太低无利润空间）
-    "atr_pct_max": 0.040,        # 最高 ATR%（太高风险大）
-    "min_abs_T_D": 10,           # 最低 |T_D|（无趋势不交易）
-    "max_correlation": 0.70,     # 与已持仓最大相关性
-    "min_volume_ratio": 0.80,    # 最低今日量比
+    "min_turnover": 50,  # 最低日均成交额（亿）
+    "atr_pct_min": 0.008,  # 最低 ATR%（太低无利润空间）
+    "atr_pct_max": 0.040,  # 最高 ATR%（太高风险大）
+    "min_abs_T_D": 10,  # 最低 |T_D|（无趋势不交易）
+    "max_correlation": 0.70,  # 与已持仓最大相关性
+    "min_volume_ratio": 0.80,  # 最低今日量比
 }
 
 # 条件权重（加权投票模式用）
@@ -63,12 +64,12 @@ def _compute_metrics(symbol, df_daily, cfg=DEFAULT_CONFIG):
         vol = df_daily["volume"].astype(float) if "volume" in df_daily else pd.Series(0, index=df_daily.index)
 
         # 1. 流动性：20日平均成交额
-        turnover = float((close * vol * 10).rolling(20, min_periods=10).mean().iloc[-1] / 1e8) if vol.iloc[-1] > 0 else 0
+        turnover = (
+            float((close * vol * 10).rolling(20, min_periods=10).mean().iloc[-1] / 1e8) if vol.iloc[-1] > 0 else 0
+        )
 
         # 2. 波动率：ATR%
-        tr = pd.concat([(high - low),
-                         (high - close.shift(1)).abs(),
-                         (low - close.shift(1)).abs()], axis=1).max(axis=1)
+        tr = pd.concat([(high - low), (high - close.shift(1)).abs(), (low - close.shift(1)).abs()], axis=1).max(axis=1)
         atr_val = float(tr.rolling(14, min_periods=14).mean().iloc[-1])
         atr_pct = atr_val / float(close.iloc[-1]) if float(close.iloc[-1]) > 0 else 0
 
@@ -81,7 +82,7 @@ def _compute_metrics(symbol, df_daily, cfg=DEFAULT_CONFIG):
 
         # 5. 回撤水位
         cum_max = close.cummax()
-        drawdown = (close / cum_max - 1.0)
+        drawdown = close / cum_max - 1.0
         current_dd = float(drawdown.iloc[-1])
 
         return {
@@ -209,10 +210,16 @@ def screen(symbols_dict, criteria=None, held_symbols=None, mode="weighted", cfg=
             "n_total": len(symbols_dict),
             "n_passed": len(passed),
             "n_rejected": len(rejected),
-            "top_picks": [{"symbol": p["symbol"], "score": p["screen_score"],
-                           "T_D": p["T_D"], "regime": p["regime"],
-                           "turnover": p["turnover_billion"]}
-                          for p in passed[:5]],
+            "top_picks": [
+                {
+                    "symbol": p["symbol"],
+                    "score": p["screen_score"],
+                    "T_D": p["T_D"],
+                    "regime": p["regime"],
+                    "turnover": p["turnover_billion"],
+                }
+                for p in passed[:5]
+            ],
         },
     }
 

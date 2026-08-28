@@ -53,6 +53,7 @@ from perf_breakdown import _hold_bucket, _stat
 #  1. _hold_bucket
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHoldBucket(unittest.TestCase):
     """_hold_bucket 持仓时长分桶。"""
 
@@ -124,6 +125,7 @@ class TestHoldBucket(unittest.TestCase):
 #  2. _stat
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestStat(unittest.TestCase):
     """_stat 交易切片统计。"""
 
@@ -142,7 +144,7 @@ class TestStat(unittest.TestCase):
         self.assertEqual(s["n"], 3)
         self.assertEqual(s["win_rate"], 100.0)
         self.assertEqual(s["pnl"], 1700)
-        self.assertEqual(s["avg_pnl"], round(1700/3, 2))
+        self.assertEqual(s["avg_pnl"], round(1700 / 3, 2))
         self.assertEqual(s["pf"], 99.0)  # 全赢 → pf=99.0
         self.assertEqual(s["avg_loss_R"], 0.0)
 
@@ -194,6 +196,7 @@ class TestStat(unittest.TestCase):
     def test_reliable_flag(self):
         """reliable: n >= MIN_N"""
         from perf_breakdown import _MIN_N
+
         # 不足 MIN_N
         trades = self._trades([(100, 1.0)] * 2)
         s = _stat(trades)
@@ -219,14 +222,26 @@ class TestStat(unittest.TestCase):
         """返回 11 字段"""
         trades = self._trades([(100, 1.0)])
         s = _stat(trades)
-        for key in ("n", "win_rate", "pnl", "avg_pnl", "expR",
-                     "avg_win_R", "avg_loss_R", "pf", "best", "worst", "reliable"):
+        for key in (
+            "n",
+            "win_rate",
+            "pnl",
+            "avg_pnl",
+            "expR",
+            "avg_win_R",
+            "avg_loss_R",
+            "pf",
+            "best",
+            "worst",
+            "reliable",
+        ):
             self.assertIn(key, s)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _to_ts
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestToTs(unittest.TestCase):
     """_to_ts 时间字符串转时间戳。"""
@@ -277,6 +292,7 @@ class TestToTs(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _b
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBlunderRecord(unittest.TestCase):
     """_b 违规记录构造。"""

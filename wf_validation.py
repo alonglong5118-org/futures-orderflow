@@ -18,6 +18,7 @@ wf_validation.py — Walk-Forward 滚动验证工具
     # 同时对比基线
     python3 wf_validation.py --result ga_tpsl_v2_ru_result.json --compare-baseline
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,6 +37,7 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 # ============================================================================
 # 指标计算
 # ============================================================================
+
 
 def _calc_max_drawdown(R_list):
     """从逐笔 R 收益序列计算最大回撤。"""
@@ -79,6 +81,7 @@ def _calc_metrics(result):
 # 配置生成（兼容 v2 和 v3）
 # ============================================================================
 
+
 def make_config_v2(params, symbol, base_cfg=DEFAULT_CONFIG):
     """Phase 2: 5 个出场参数。"""
     stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R = params
@@ -99,8 +102,9 @@ def make_config_v2(params, symbol, base_cfg=DEFAULT_CONFIG):
 
 def make_config_v3(params, symbol, base_cfg=DEFAULT_CONFIG):
     """Phase 3: 4 个入场 + 5 个出场参数。"""
-    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars,
-     stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = params
+    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars, stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = (
+        params
+    )
     cfg = copy.deepcopy(base_cfg)
 
     # 入场参数
@@ -181,8 +185,15 @@ def get_baseline_params(symbol, version):
             cfg["trailing_tail"]["min_profit_R"],
         ]
         param_names = [
-            "T_thresh_mult", "fc_confirm", "fc_hard", "cooldown_bars",
-            "stop_atr_mult", "rr_ratio", "tail_pct", "tail_trail_R", "min_profit_R",
+            "T_thresh_mult",
+            "fc_confirm",
+            "fc_hard",
+            "cooldown_bars",
+            "stop_atr_mult",
+            "rr_ratio",
+            "tail_pct",
+            "tail_trail_R",
+            "min_profit_R",
         ]
         make_cfg = make_config_v3
 
@@ -193,9 +204,10 @@ def get_baseline_params(symbol, version):
 # 滚动窗口回测
 # ============================================================================
 
+
 def rolling_windows(df, window_bars, step_bars, min_bars_init=60):
     """生成滚动窗口切片。
-    
+
     返回 [(start_idx, end_idx, df_slice), ...]
     每个窗口长度 = window_bars
     """
@@ -210,10 +222,11 @@ def rolling_windows(df, window_bars, step_bars, min_bars_init=60):
     return windows
 
 
-def run_wf_validation(symbol, params, make_cfg, df_full, window_bars=250,
-                      step_bars=60, min_bars_init=60, label="optimized"):
+def run_wf_validation(
+    symbol, params, make_cfg, df_full, window_bars=250, step_bars=60, min_bars_init=60, label="optimized"
+):
     """对一组参数做滚动窗口验证。
-    
+
     返回 windows 列表，每个元素包含:
       - window_idx, start_date, end_date
       - metrics: expR, trades, win_rate, calmar, max_drawdown, total_R
@@ -230,24 +243,30 @@ def run_wf_validation(symbol, params, make_cfg, df_full, window_bars=250,
         result = walk_forward_backtest(symbol, cfg=cfg, df_in=df_win, min_bars=min_bars_init)
         metrics = _calc_metrics(result)
 
-        start_date = str(df_win.index[min_bars_init].date()) if len(df_win) > min_bars_init else str(df_win.index[0].date())
+        start_date = (
+            str(df_win.index[min_bars_init].date()) if len(df_win) > min_bars_init else str(df_win.index[0].date())
+        )
         end_date = str(df_win.index[-1].date())
 
-        results.append({
-            "window_idx": i,
-            "start_idx": start_idx,
-            "end_idx": end_idx,
-            "start_date": start_date,
-            "end_date": end_date,
-            "metrics": {k: v for k, v in metrics.items() if k != "R_list"},
-        })
+        results.append(
+            {
+                "window_idx": i,
+                "start_idx": start_idx,
+                "end_idx": end_idx,
+                "start_date": start_date,
+                "end_date": end_date,
+                "metrics": {k: v for k, v in metrics.items() if k != "R_list"},
+            }
+        )
 
         status = "✅" if metrics["expR"] > 0 else "❌"
-        print(f"   窗口{i+1:2d} [{start_date} ~ {end_date}]: "
-              f"expR={metrics['expR']:.4f}, "
-              f"trades={metrics['trades']:3d}, "
-              f"win_rate={metrics['win_rate']:.1%} "
-              f"{status}")
+        print(
+            f"   窗口{i + 1:2d} [{start_date} ~ {end_date}]: "
+            f"expR={metrics['expR']:.4f}, "
+            f"trades={metrics['trades']:3d}, "
+            f"win_rate={metrics['win_rate']:.1%} "
+            f"{status}"
+        )
 
     return results
 
@@ -255,6 +274,7 @@ def run_wf_validation(symbol, params, make_cfg, df_full, window_bars=250,
 # ============================================================================
 # 统计分析
 # ============================================================================
+
 
 def analyze_windows(windows_results, label="optimized"):
     """分析窗口结果，计算一致性指标。"""
@@ -302,9 +322,11 @@ def print_analysis(analysis):
     """打印分析结果。"""
     label = analysis["label"]
     print(f"\n📊 Walk-Forward 分析结果 [{label}]")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"   有效窗口数: {analysis['valid_windows']} / {analysis['total_windows']}")
-    print(f"   盈利窗口占比: {analysis['profit_ratio']:.1%} ({analysis['profitable_windows']}/{analysis['valid_windows']})")
+    print(
+        f"   盈利窗口占比: {analysis['profit_ratio']:.1%} ({analysis['profitable_windows']}/{analysis['valid_windows']})"
+    )
     print()
     print(f"   expR 中位数:  {analysis['expR_median']:.4f}")
     print(f"   expR 均值:    {analysis['expR_mean']:.4f}")
@@ -323,6 +345,7 @@ def print_analysis(analysis):
 # ============================================================================
 # 按年度分析
 # ============================================================================
+
 
 def analyze_by_year(df_full, symbol, params, make_cfg, min_bars_init=60, label="optimized"):
     """按自然年分析表现。"""
@@ -343,15 +366,19 @@ def analyze_by_year(df_full, symbol, params, make_cfg, min_bars_init=60, label="
 
         if metrics["trades"] >= 3:
             status = "✅" if metrics["expR"] > 0 else "❌"
-            print(f"   {year}: expR={metrics['expR']:.4f}, "
-                  f"trades={metrics['trades']:3d}, "
-                  f"win_rate={metrics['win_rate']:.1%} "
-                  f"{status}")
+            print(
+                f"   {year}: expR={metrics['expR']:.4f}, "
+                f"trades={metrics['trades']:3d}, "
+                f"win_rate={metrics['win_rate']:.1%} "
+                f"{status}"
+            )
 
-            yearly_results.append({
-                "year": year,
-                "metrics": {k: v for k, v in metrics.items() if k != "R_list"},
-            })
+            yearly_results.append(
+                {
+                    "year": year,
+                    "metrics": {k: v for k, v in metrics.items() if k != "R_list"},
+                }
+            )
 
     return yearly_results
 
@@ -359,6 +386,7 @@ def analyze_by_year(df_full, symbol, params, make_cfg, min_bars_init=60, label="
 # ============================================================================
 # 主入口
 # ============================================================================
+
 
 def main():
     parser = argparse.ArgumentParser(description="Walk-Forward 滚动验证工具")
@@ -371,15 +399,15 @@ def main():
     args = parser.parse_args()
 
     # 加载结果
-    with open(args.result, 'r') as f:
+    with open(args.result, "r") as f:
         result_data = json.load(f)
 
     symbol = result_data["symbol"]
     version, param_names, opt_params, make_cfg_opt = detect_version_and_params(result_data)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"📈 Walk-Forward 滚动验证")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"   品种: {symbol}")
     print(f"   版本: {version} ({len(param_names)} 参数)")
     print(f"   窗口: {args.window} 根, 步长: {args.step} 根")
@@ -394,9 +422,7 @@ def main():
 
     # 优化参数验证
     opt_windows = run_wf_validation(
-        symbol, opt_params, make_cfg_opt, df_full,
-        window_bars=args.window, step_bars=args.step,
-        label="优化参数"
+        symbol, opt_params, make_cfg_opt, df_full, window_bars=args.window, step_bars=args.step, label="优化参数"
     )
     opt_analysis = analyze_windows(opt_windows, label="优化参数")
     print_analysis(opt_analysis)
@@ -411,33 +437,41 @@ def main():
             print(f"   {n} = {v}")
 
         baseline_windows = run_wf_validation(
-            symbol, bl_params, make_cfg_bl, df_full,
-            window_bars=args.window, step_bars=args.step,
-            label="基线参数"
+            symbol, bl_params, make_cfg_bl, df_full, window_bars=args.window, step_bars=args.step, label="基线参数"
         )
         baseline_analysis = analyze_windows(baseline_windows, label="基线参数")
         print_analysis(baseline_analysis)
 
         # 对比
         print(f"\n⚖️ 优化 vs 基线 对比")
-        print(f"{'='*50}")
+        print(f"{'=' * 50}")
         print(f"   指标          优化参数      基线参数      提升")
-        print(f"   {'-'*48}")
-        print(f"   盈利窗口占比   {opt_analysis['profit_ratio']:6.1%}      "
-              f"{baseline_analysis['profit_ratio']:6.1%}      "
-              f"{(opt_analysis['profit_ratio'] - baseline_analysis['profit_ratio']):+6.1%}")
-        print(f"   expR 中位数    {opt_analysis['expR_median']:8.4f}    "
-              f"{baseline_analysis['expR_median']:8.4f}    "
-              f"{(opt_analysis['expR_median'] - baseline_analysis['expR_median']):+8.4f}")
-        print(f"   expR 均值      {opt_analysis['expR_mean']:8.4f}    "
-              f"{baseline_analysis['expR_mean']:8.4f}    "
-              f"{(opt_analysis['expR_mean'] - baseline_analysis['expR_mean']):+8.4f}")
-        print(f"   expR 标准差    {opt_analysis['expR_std']:8.4f}    "
-              f"{baseline_analysis['expR_std']:8.4f}    "
-              f"{'更低' if opt_analysis['expR_std'] < baseline_analysis['expR_std'] else '更高':>6s}")
-        print(f"   Calmar 中位   {opt_analysis['calmar_median']:8.2f}    "
-              f"{baseline_analysis['calmar_median']:8.2f}    "
-              f"{(opt_analysis['calmar_median'] - baseline_analysis['calmar_median']):+8.2f}")
+        print(f"   {'-' * 48}")
+        print(
+            f"   盈利窗口占比   {opt_analysis['profit_ratio']:6.1%}      "
+            f"{baseline_analysis['profit_ratio']:6.1%}      "
+            f"{(opt_analysis['profit_ratio'] - baseline_analysis['profit_ratio']):+6.1%}"
+        )
+        print(
+            f"   expR 中位数    {opt_analysis['expR_median']:8.4f}    "
+            f"{baseline_analysis['expR_median']:8.4f}    "
+            f"{(opt_analysis['expR_median'] - baseline_analysis['expR_median']):+8.4f}"
+        )
+        print(
+            f"   expR 均值      {opt_analysis['expR_mean']:8.4f}    "
+            f"{baseline_analysis['expR_mean']:8.4f}    "
+            f"{(opt_analysis['expR_mean'] - baseline_analysis['expR_mean']):+8.4f}"
+        )
+        print(
+            f"   expR 标准差    {opt_analysis['expR_std']:8.4f}    "
+            f"{baseline_analysis['expR_std']:8.4f}    "
+            f"{'更低' if opt_analysis['expR_std'] < baseline_analysis['expR_std'] else '更高':>6s}"
+        )
+        print(
+            f"   Calmar 中位   {opt_analysis['calmar_median']:8.2f}    "
+            f"{baseline_analysis['calmar_median']:8.2f}    "
+            f"{(opt_analysis['calmar_median'] - baseline_analysis['calmar_median']):+8.2f}"
+        )
 
     # 年度分析
     opt_yearly = None
@@ -485,7 +519,7 @@ def main():
         base = os.path.splitext(os.path.basename(args.result))[0]
         output_path = os.path.join(HERE, f"{base}_wf_validation.json")
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(report, f, indent=2, ensure_ascii=False, default=str)
 
     print(f"\n💾 验证报告已保存: {output_path}")
@@ -493,7 +527,7 @@ def main():
 
     # 最终结论
     print(f"🎯 结论")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     pr = opt_analysis["profit_ratio"]
     if pr >= 0.7:
         print(f"   ✅ 稳健性良好：{pr:.0%} 的窗口盈利")

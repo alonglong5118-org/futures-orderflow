@@ -23,6 +23,7 @@ four_dim_strategy.py 的 DEFAULT_CONFIG["thresholds_by_symbol"][sym]["T_thresh"]
   3. 优化扫描循环：提前过滤无效候选
   4. 改进报告生成：结构化输出，便于程序化处理
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,25 +55,21 @@ def _make_config(base_cfg, symbol, **overrides):
     }
     # 只复制需要的部分
     if "thresholds_by_symbol" in base_cfg:
-        cfg["thresholds_by_symbol"] = {
-            k: dict(v) for k, v in base_cfg["thresholds_by_symbol"].items()
-        }
+        cfg["thresholds_by_symbol"] = {k: dict(v) for k, v in base_cfg["thresholds_by_symbol"].items()}
     if "per_symbol_risk" in base_cfg:
-        cfg["per_symbol_risk"] = {
-            k: dict(v) for k, v in base_cfg["per_symbol_risk"].items()
-        }
-    
+        cfg["per_symbol_risk"] = {k: dict(v) for k, v in base_cfg["per_symbol_risk"].items()}
+
     # 应用覆盖
     if "T_thresh" in overrides:
         cfg.setdefault("thresholds_by_symbol", {})
         cfg["thresholds_by_symbol"].setdefault(symbol, {})["T_thresh"] = overrides["T_thresh"]
-    
+
     if "stop_atr_mult" in overrides:
         cfg.setdefault("per_symbol_risk", {})
         cfg["per_symbol_risk"].setdefault(symbol, {})
         cfg["per_symbol_risk"][symbol]["stop_atr_mult"] = overrides["stop_atr_mult"]
         cfg["per_symbol_risk"][symbol]["rr_ratio"] = overrides.get("rr_ratio", 2.0)
-    
+
     return cfg
 
 
@@ -84,53 +81,52 @@ def _run_backtest(symbol, cfg, tail):
         return {"trades": 0, "expR": None, "win_rate": None, "error": str(e)[:60]}
 
 
-def sweep_T(symbol: str, tail: int = 250,
-            T_candidates=None, min_trades: int = 10):
+def sweep_T(symbol: str, tail: int = 250, T_candidates=None, min_trades: int = 10):
     """对单个品种在近期窗口扫描不同 T_thresh 的 walk-forward 表现。"""
     if T_candidates is None:
         T_candidates = DEFAULT_T_RANGE
-    
+
     # 预加载数据一次
     _ = load_daily(symbol)
-    
+
     results = []
     for T in T_candidates:
         cfg = _make_config(DEFAULT_CONFIG, symbol, T_thresh=T)
         r = _run_backtest(symbol, cfg, tail)
-        
+
         trades = r.get("trades", 0)
         expR = r.get("expR")
-        
+
         if trades < min_trades:
-            results.append({"T": T, "trades": trades, "expR": None,
-                            "win_rate": None, "note": "样本不足"})
+            results.append({"T": T, "trades": trades, "expR": None, "win_rate": None, "note": "样本不足"})
             continue
-        
-        results.append({
-            "T": T,
-            "trades": trades,
-            "expR": expR,
-            "win_rate": r.get("win_rate"),
-            "by_regime": r.get("by_regime", {}),
-        })
-    
+
+        results.append(
+            {
+                "T": T,
+                "trades": trades,
+                "expR": expR,
+                "win_rate": r.get("win_rate"),
+                "by_regime": r.get("by_regime", {}),
+            }
+        )
+
     return results
 
 
 def best_T(sweep_results, min_trades: int = 10):
     """从扫描结果挑最优 T：expR 优先、其次交易数(稳定性)。"""
-    valid = [x for x in sweep_results 
-             if x.get("expR") is not None and x.get("trades", 0) >= min_trades]
+    valid = [x for x in sweep_results if x.get("expR") is not None and x.get("trades", 0) >= min_trades]
     if not valid:
         return None
-    
+
     valid.sort(key=lambda x: (-x["expR"], -x["trades"]))
     best = valid[0]
-    
+
     if len(valid) > 1:
         if (valid[0]["expR"] - valid[1]["expR"]) < 0.02 and valid[1]["trades"] > valid[0]["trades"]:
             best = valid[1]
-    
+
     return best
 
 
@@ -144,54 +140,59 @@ def recalibrate_report(symbols, tail: int = 250, min_trades: int = 10, T_candida
     """对一组品种产出重校准提议（不落盘）。"""
     if T_candidates is None:
         T_candidates = DEFAULT_T_RANGE
-    
+
     print(f"##### 四维策略真重校准扫描 (tail={tail} 根日线≈近期1年) #####\n")
     report = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "tail": tail,
         "min_trades": min_trades,
-        "items": []
+        "items": [],
     }
-    
+
     for sym in symbols:
         cur = current_T(sym)
-        
+
         cfg_cur = _make_config(DEFAULT_CONFIG, sym, T_thresh=cur)
         r_cur = _run_backtest(sym, cfg_cur, tail)
-        
+
         sweep = sweep_T(sym, tail=tail, T_candidates=T_candidates, min_trades=min_trades)
         best = best_T(sweep, min_trades)
-        
+
         print(f"=== {sym} ===")
-        print(f"  当前 T_thresh={cur} → 近期 walk-forward: "
-              f"trades={r_cur.get('trades')} expR={r_cur.get('expR')} "
-              f"win={r_cur.get('win_rate')}")
-        
+        print(
+            f"  当前 T_thresh={cur} → 近期 walk-forward: "
+            f"trades={r_cur.get('trades')} expR={r_cur.get('expR')} "
+            f"win={r_cur.get('win_rate')}"
+        )
+
         if best:
             print(f"  候选 T 扫描 (trades>={min_trades}):")
             for x in sweep:
                 if x.get("expR") is not None:
                     mark = " <<提议" if x["T"] == best["T"] else ""
-                    print(f"    T={x['T']:>3}: n={x['trades']:>3} "
-                          f"expR={x['expR']:+.3f} win={x['win_rate']*100:.0f}%{mark}")
+                    print(
+                        f"    T={x['T']:>3}: n={x['trades']:>3} "
+                        f"expR={x['expR']:+.3f} win={x['win_rate'] * 100:.0f}%{mark}"
+                    )
             delta = best["T"] - cur
-            print(f"  -> 提议新 T_thresh={best['T']} (Δ{delta:+d}), "
-                  f"近期期望R≈{best['expR']:+.3f} (作新 mean_oos)")
+            print(f"  -> 提议新 T_thresh={best['T']} (Δ{delta:+d}), 近期期望R≈{best['expR']:+.3f} (作新 mean_oos)")
         else:
             print(f"  警告: 近期窗口内无任何 T 能达到 >= {min_trades} 笔有效交易")
             print(f"     该品种近期 walk-forward 极度稀疏/全负 -> 建议「维持门控/考虑剔除」")
         print()
-        
-        report["items"].append({
-            "symbol": sym,
-            "current_T": cur,
-            "current_expR": r_cur.get("expR"),
-            "current_trades": r_cur.get("trades"),
-            "sweep": sweep,
-            "proposed_T": best["T"] if best else None,
-            "proposed_expR": best["expR"] if best else None,
-        })
-    
+
+        report["items"].append(
+            {
+                "symbol": sym,
+                "current_T": cur,
+                "current_expR": r_cur.get("expR"),
+                "current_trades": r_cur.get("trades"),
+                "sweep": sweep,
+                "proposed_T": best["T"] if best else None,
+                "proposed_expR": best["expR"] if best else None,
+            }
+        )
+
     return report
 
 
@@ -200,51 +201,48 @@ def _load_real_broken():
     if not os.path.exists(DRIFT_JSON):
         return []
     d = json.load(open(DRIFT_JSON, encoding="utf-8"))
-    return [it["symbol"] for it in d.get("items", []) 
-            if it.get("evidence") == "real" and it.get("status") == "broken"]
+    return [it["symbol"] for it in d.get("items", []) if it.get("evidence") == "real" and it.get("status") == "broken"]
 
 
-def sweep_stop_rr(symbol, tail=250, min_trades=10,
-                  stop_cands=DEFAULT_STOP_CANDS,
-                  rr_cands=DEFAULT_RR_CANDS):
+def sweep_stop_rr(symbol, tail=250, min_trades=10, stop_cands=DEFAULT_STOP_CANDS, rr_cands=DEFAULT_RR_CANDS):
     """对单品种联合扫描 (stop_atr_mult, rr_ratio) 的 walk-forward 表现。"""
     baseline = _run_backtest(symbol, DEFAULT_CONFIG, tail)
     all_res = []
-    
+
     for sm in stop_cands:
         for rr in rr_cands:
-            cfg = _make_config(DEFAULT_CONFIG, symbol, 
-                              stop_atr_mult=sm, rr_ratio=rr)
+            cfg = _make_config(DEFAULT_CONFIG, symbol, stop_atr_mult=sm, rr_ratio=rr)
             r = _run_backtest(symbol, cfg, tail)
             all_res.append((sm, rr, r))
-    
+
     return {"symbol": symbol, "baseline": baseline, "best": None, "all": all_res}
 
 
 def best_stop_rr(sweep, min_trades=10):
     """从 sweep 结果挑最优 (stop_atr_mult, rr_ratio)。"""
-    valid = [(sm, rr, r) for sm, rr, r in sweep.get("all", [])
-             if r.get("trades", 0) >= min_trades and r.get("win_rate", 0) >= 0.4]
+    valid = [
+        (sm, rr, r)
+        for sm, rr, r in sweep.get("all", [])
+        if r.get("trades", 0) >= min_trades and r.get("win_rate", 0) >= 0.4
+    ]
     if not valid:
-        valid = [(sm, rr, r) for sm, rr, r in sweep.get("all", [])
-                 if r.get("trades", 0) >= min_trades]
+        valid = [(sm, rr, r) for sm, rr, r in sweep.get("all", []) if r.get("trades", 0) >= min_trades]
     if not valid:
         return None
-    
+
     best = max(valid, key=lambda x: x[2]["expR"])
     return {
-        "stop_atr_mult": best[0], 
-        "rr_ratio": best[1], 
+        "stop_atr_mult": best[0],
+        "rr_ratio": best[1],
         "expR": best[2]["expR"],
-        "win_rate": best[2]["win_rate"], 
-        "trades": best[2]["trades"]
+        "win_rate": best[2]["win_rate"],
+        "trades": best[2]["trades"],
     }
 
 
-def calibrate_stop_rr_report(symbols, tail=250, min_trades=10,
-                             stop_cands=DEFAULT_STOP_CANDS,
-                             rr_cands=DEFAULT_RR_CANDS,
-                             min_lift=0.05):
+def calibrate_stop_rr_report(
+    symbols, tail=250, min_trades=10, stop_cands=DEFAULT_STOP_CANDS, rr_cands=DEFAULT_RR_CANDS, min_lift=0.05
+):
     """对一组品种产出 止损/止盈 联合校准提议（不落盘）。"""
     print(f"##### 四维策略 止损/止盈 联合校准 (tail={tail}, 候选 stop×rr={len(stop_cands)}×{len(rr_cands)}) #####\n")
     report = {
@@ -252,47 +250,47 @@ def calibrate_stop_rr_report(symbols, tail=250, min_trades=10,
         "tail": tail,
         "min_trades": min_trades,
         "min_lift": min_lift,
-        "items": []
+        "items": [],
     }
     proposed = {}
-    
+
     for sym in symbols:
-        sw = sweep_stop_rr(sym, tail=tail, min_trades=min_trades,
-                           stop_cands=stop_cands, rr_cands=rr_cands)
+        sw = sweep_stop_rr(sym, tail=tail, min_trades=min_trades, stop_cands=stop_cands, rr_cands=rr_cands)
         sw["best"] = best_stop_rr(sw, min_trades)
         base = sw["baseline"]
         b_expR = base.get("expR") or 0.0
         best = sw["best"]
-        
+
         print(f"=== {sym} ===")
-        print(f"  全局默认(stop=1.5,rr=2.0) -> n={base.get('trades')} expR={b_expR:+.3f} "
-              f"win={(base.get('win_rate') or 0)*100:.0f}%")
-        
+        print(
+            f"  全局默认(stop=1.5,rr=2.0) -> n={base.get('trades')} expR={b_expR:+.3f} "
+            f"win={(base.get('win_rate') or 0) * 100:.0f}%"
+        )
+
         if best:
             lift = best["expR"] - b_expR
             flag = "采用" if lift >= min_lift else "提升不足,维持默认"
-            print(f"  最优(stop={best['stop_atr_mult']}, rr={best['rr_ratio']}) -> "
-                  f"n={best['trades']} expR={best['expR']:+.3f} win={best['win_rate']*100:.0f}% "
-                  f"ΔexpR={lift:+.3f} {flag}")
+            print(
+                f"  最优(stop={best['stop_atr_mult']}, rr={best['rr_ratio']}) -> "
+                f"n={best['trades']} expR={best['expR']:+.3f} win={best['win_rate'] * 100:.0f}% "
+                f"ΔexpR={lift:+.3f} {flag}"
+            )
             if lift >= min_lift:
                 proposed[sym] = {
                     "stop_atr_mult": best["stop_atr_mult"],
                     "rr_ratio": best["rr_ratio"],
-                    "expR": best["expR"], 
+                    "expR": best["expR"],
                     "win_rate": best["win_rate"],
-                    "trades": best["trades"]
+                    "trades": best["trades"],
                 }
         else:
             print("  警告: 近期窗口内无满足最小交易数的组合")
         print()
-        
-        report["items"].append({
-            "symbol": sym, 
-            "baseline_expR": round(b_expR, 4),
-            "best": best, 
-            "proposed": sym in proposed
-        })
-    
+
+        report["items"].append(
+            {"symbol": sym, "baseline_expR": round(b_expR, 4), "best": best, "proposed": sym in proposed}
+        )
+
     report["proposed_overrides"] = proposed
     return report
 
@@ -303,8 +301,7 @@ def main():
     ap.add_argument("--all-broken", action="store_true")
     ap.add_argument("--tail", type=int, default=250)
     ap.add_argument("--min-trades", type=int, default=10)
-    ap.add_argument("--range", nargs=3, type=int, default=[8, 40, 2],
-                    metavar=("START", "STOP", "STEP"))
+    ap.add_argument("--range", nargs=3, type=int, default=[8, 40, 2], metavar=("START", "STOP", "STEP"))
     args = ap.parse_args()
 
     if args.all_broken:

@@ -53,6 +53,7 @@ from four_dim_strategy import _norm_daily_cols, combine_bias, regime_weights
 #  1. combine_bias
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCombineBias(unittest.TestCase):
     """combine_bias 三维偏置合成（参数顺序: F, T, C）。"""
 
@@ -98,7 +99,7 @@ class TestCombineBias(unittest.TestCase):
     def test_custom_weights_effective(self):
         """自定义权重生效（改 T 权重影响最大）"""
         cfg1 = self._cfg(tw=0.9, fw=0.05, cw=0.05)  # T 权重高
-        cfg2 = self._cfg(tw=0.1, fw=0.8, cw=0.1)   # T 权重低
+        cfg2 = self._cfg(tw=0.1, fw=0.8, cw=0.1)  # T 权重低
         r1 = combine_bias(0, 100, 0, cfg=cfg1)  # T 高 → 结果大
         r2 = combine_bias(0, 100, 0, cfg=cfg2)  # T 低 → 结果小
         self.assertGreater(r1, r2)
@@ -124,6 +125,7 @@ class TestCombineBias(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. regime_weights
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRegimeWeights(unittest.TestCase):
     """regime_weights 市场状态策略权重。"""
@@ -209,21 +211,24 @@ class TestRegimeWeights(unittest.TestCase):
 #  3. _norm_daily_cols
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNormDailyCols(unittest.TestCase):
     """_norm_daily_cols 日线列名标准化。"""
 
     def test_english_columns(self):
         """英文列名：hold→oi, settle→settlement, open_interest→oi"""
-        df = pd.DataFrame({
-            "date": ["2026-01-01", "2026-01-02"],
-            "open": [100, 101],
-            "high": [102, 103],
-            "low": [99, 100],
-            "close": [101, 102],
-            "volume": [1000, 2000],
-            "hold": [500, 600],
-            "settle": [100.5, 101.5],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-01", "2026-01-02"],
+                "open": [100, 101],
+                "high": [102, 103],
+                "low": [99, 100],
+                "close": [101, 102],
+                "volume": [1000, 2000],
+                "hold": [500, 600],
+                "settle": [100.5, 101.5],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("oi", result.columns)
         self.assertIn("settlement", result.columns)
@@ -232,15 +237,17 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_chinese_columns(self):
         """中文列名：日期/开盘/最高/最低/收盘/成交量/持仓量"""
-        df = pd.DataFrame({
-            "日期": ["2026-01-01", "2026-01-02"],
-            "开盘": [100, 101],
-            "最高": [102, 103],
-            "最低": [99, 100],
-            "收盘": [101, 102],
-            "成交量": [1000, 2000],
-            "持仓量": [500, 600],
-        })
+        df = pd.DataFrame(
+            {
+                "日期": ["2026-01-01", "2026-01-02"],
+                "开盘": [100, 101],
+                "最高": [102, 103],
+                "最低": [99, 100],
+                "收盘": [101, 102],
+                "成交量": [1000, 2000],
+                "持仓量": [500, 600],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("open", result.columns)
         self.assertIn("high", result.columns)
@@ -251,20 +258,24 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_date_becomes_index(self):
         """date 列转 datetime 并设为索引"""
-        df = pd.DataFrame({
-            "date": ["2026-01-02", "2026-01-01"],  # 乱序
-            "close": [101, 100],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-02", "2026-01-01"],  # 乱序
+                "close": [101, 100],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIsInstance(result.index, pd.DatetimeIndex)
         self.assertEqual(result.index.name, "date")
 
     def test_sorted_by_date(self):
         """按日期排序"""
-        df = pd.DataFrame({
-            "date": ["2026-01-03", "2026-01-01", "2026-01-02"],
-            "close": [102, 100, 101],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-03", "2026-01-01", "2026-01-02"],
+                "close": [102, 100, 101],
+            }
+        )
         result = _norm_daily_cols(df)
         # 索引应该是升序
         self.assertTrue(result.index.is_monotonic_increasing)
@@ -282,21 +293,25 @@ class TestNormDailyCols(unittest.TestCase):
 
     def test_no_date_column_no_index(self):
         """无 date 列 → 不设索引"""
-        df = pd.DataFrame({
-            "close": [100, 101, 102],
-            "volume": [1000, 2000, 3000],
-        })
+        df = pd.DataFrame(
+            {
+                "close": [100, 101, 102],
+                "volume": [1000, 2000, 3000],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertNotIsInstance(result.index, pd.DatetimeIndex)
 
     def test_mixed_columns(self):
         """中英文混合也能识别"""
-        df = pd.DataFrame({
-            "date": ["2026-01-01"],
-            "close": [100],
-            "成交量": [1000],
-            "hold": [500],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2026-01-01"],
+                "close": [100],
+                "成交量": [1000],
+                "hold": [500],
+            }
+        )
         result = _norm_daily_cols(df)
         self.assertIn("volume", result.columns)
         self.assertIn("oi", result.columns)

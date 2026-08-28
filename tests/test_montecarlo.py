@@ -40,6 +40,7 @@ from montecarlo import _risk_amount, simulate
 #  1. _risk_amount
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskAmount(unittest.TestCase):
     """_risk_amount 单笔风险金额计算。"""
 
@@ -90,9 +91,9 @@ class TestRiskAmount(unittest.TestCase):
         """stop_dist 和 entry+stop 都有时 → 优先用 stop_dist"""
         t = {
             "symbol": "rb",
-            "stop_dist": 50,       # 50 × 10 × 2 = 1000
+            "stop_dist": 50,  # 50 × 10 × 2 = 1000
             "entry_price": 3300,
-            "stop": 3280,          # 20 × 10 × 2 = 400
+            "stop": 3280,  # 20 × 10 × 2 = 400
             "lots": 2,
         }
         r = _risk_amount(t, equity=100000, risk_pct=2.0)
@@ -114,6 +115,7 @@ class TestRiskAmount(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. simulate
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSimulate(unittest.TestCase):
     """simulate 蒙特卡洛 bootstrap 模拟。"""

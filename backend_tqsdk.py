@@ -27,6 +27,7 @@ tick 输出格式（严格对齐 tick_orderflow.TickOrderflow.push）：
   python backend_tqsdk.py                 # 生产：连天勤，写 jsonl + 起 HTTP
   SELFTEST=1 python backend_tqsdk.py      # 自测：合成 tick，不连网
 """
+
 import json
 import os
 import signal
@@ -42,10 +43,10 @@ SELFTEST = os.environ.get("SELFTEST", "0") == "1"
 # 品种 → 天勤主连候选 / akshare 回退 symbol / 交易所
 # CZCE(FG/SA) 免费真 tick；DCE(JM/J/jd/lh) 免费无 tick → akshare 分钟线近似
 SYMBOL_MAP = {
-    "FG": {"tq": ["KQ.m@CZCE.FG"],                          "ak": "FG0", "ex": "CZCE"},
-    "SA": {"tq": ["KQ.m@CZCE.SA"],                          "ak": "SA0", "ex": "CZCE"},
+    "FG": {"tq": ["KQ.m@CZCE.FG"], "ak": "FG0", "ex": "CZCE"},
+    "SA": {"tq": ["KQ.m@CZCE.SA"], "ak": "SA0", "ex": "CZCE"},
     "JM": {"tq": ["DCE.JM2609", "DCE.JM2610", "KQ.m@DCE.JM"], "ak": "JM0", "ex": "DCE"},
-    "J":  {"tq": ["DCE.J2609",  "DCE.J2610",  "KQ.m@DCE.J"],   "ak": "J0",  "ex": "DCE"},
+    "J": {"tq": ["DCE.J2609", "DCE.J2610", "KQ.m@DCE.J"], "ak": "J0", "ex": "DCE"},
     "jd": {"tq": ["DCE.JD2509", "DCE.JD2510", "KQ.m@DCE.jd"], "ak": "JD0", "ex": "DCE"},
     "lh": {"tq": ["DCE.LH2509", "DCE.LH2510", "KQ.m@DCE.lh"], "ak": "LH0", "ex": "DCE"},
 }
@@ -89,6 +90,7 @@ def in_trading_session():
 # ─────────────────────────── TqSdk 主线程行情循环（CZCE 真 tick） ───────────────────────────
 def run_tqsdk():
     from tqsdk import TqApi, TqAuth
+
     # P0-17 fix: 优先使用环境变量，回退到配置文件
     _tq_user = os.environ.get("TQ_USERNAME", "")
     _tq_pass = os.environ.get("TQ_PASSWORD", "")
@@ -101,11 +103,11 @@ def run_tqsdk():
     if not _tq_user or not _tq_pass:
         raise RuntimeError("天勤账号未配置：请设置环境变量 TQ_USERNAME/TQ_PASSWORD 或编辑 tq_config.json")
     api = TqApi(auth=TqAuth(_tq_user, _tq_pass))
-    quotes = {}          # sym -> (code, quote)
+    quotes = {}  # sym -> (code, quote)
     prev_vol = {}
     for sym, m in SYMBOL_MAP.items():
         if m["ex"] != "CZCE":
-            continue     # DCE 走 akshare 回退，不在天勤订阅
+            continue  # DCE 走 akshare 回退，不在天勤订阅
         for cand in m["tq"]:
             try:
                 q = api.get_quote(cand)
@@ -128,7 +130,7 @@ def run_tqsdk():
         for sym, (code, q) in quotes.items():
             vol = q.volume
             pv = prev_vol.get(sym)
-            if pv is None or vol < pv:        # 首笔 / 换日重置
+            if pv is None or vol < pv:  # 首笔 / 换日重置
                 prev_vol[sym] = vol
                 continue
             dvol = vol - pv
@@ -146,25 +148,31 @@ def run_tqsdk():
             else:
                 side = "U"
             rec = {
-                "ts": time.time(), "symbol": sym, "price": float(lp),
-                "vol": float(dvol), "side": side,
+                "ts": time.time(),
+                "symbol": sym,
+                "price": float(lp),
+                "vol": float(dvol),
+                "side": side,
                 "bid_vol": float(q.bid_volume1) if q.bid_volume1 else None,
                 "ask_vol": float(q.ask_volume1) if q.ask_volume1 else None,
                 "data_mode": "tqsdk",
             }
             write_tick(rec)
             with _MEM_LOCK:
-                _MEM[sym].push(rec["price"], rec["vol"], rec["side"],
-                               rec.get("bid_vol"), rec.get("ask_vol"), rec["ts"])
+                _MEM[sym].push(rec["price"], rec["vol"], rec["side"], rec.get("bid_vol"), rec.get("ask_vol"), rec["ts"])
 
 
 # ─────────────────────────── akshare 分钟线回退（DCE 近似 tick） ───────────────────────────
 def _emit_ak_min(sym, close, dvol, side):
     """写一条 akshare 分钟线近似 tick 到 jsonl + 内存累积器。"""
     rec = {
-        "ts": time.time(), "symbol": sym, "price": close,
-        "vol": dvol, "side": side,
-        "bid_vol": None, "ask_vol": None,
+        "ts": time.time(),
+        "symbol": sym,
+        "price": close,
+        "vol": dvol,
+        "side": side,
+        "bid_vol": None,
+        "ask_vol": None,
         "data_mode": "akshare_min",
     }
     write_tick(rec)
@@ -183,7 +191,7 @@ def run_akshare_fallback():
         print(f"[ak] akshare 未安装，DCE 品种无回退: {e}", flush=True)
         return
     prev_min_vol = {}
-    seen_keys = {}        # sym -> set(datetime) 已回放历史，避免重复写
+    seen_keys = {}  # sym -> set(datetime) 已回放历史，避免重复写
     while not _stop.is_set():
         trading = in_trading_session()
         try:
@@ -203,9 +211,10 @@ def run_akshare_fallback():
                 if trading:
                     # 实时增量（DCE 无真 tick，此路兜底；与 TqSdk 不冲突）
                     last = day_df.iloc[-1]
-                    close = float(last["close"]); vol = float(last["volume"])
+                    close = float(last["close"])
+                    vol = float(last["volume"])
                     pv = prev_min_vol.get(sym)
-                    if pv is None or vol < pv:      # 首根 / 新交易日重置
+                    if pv is None or vol < pv:  # 首根 / 新交易日重置
                         prev_min_vol[sym] = vol
                         continue
                     dvol = vol - pv
@@ -225,7 +234,8 @@ def run_akshare_fallback():
                         prev_close = float(row["close"])
                         continue
                     seen.add(f"{sym}|{dt}")
-                    close = float(row["close"]); dvol = float(row["dvol"])
+                    close = float(row["close"])
+                    dvol = float(row["dvol"])
                     side = "B" if (prev_close is None or close >= prev_close) else "S"
                     prev_close = close
                     _emit_ak_min(sym, close, dvol, side)
@@ -244,8 +254,7 @@ def run_http():
             if self.path.startswith("/api/signals"):
                 with _MEM_LOCK:
                     data = {s: _MEM[s].as_dict() for s in SYMBOLS}
-                body = json.dumps({"ok": True, "symbols": data,
-                                   "ts": time.time()}, ensure_ascii=False)
+                body = json.dumps({"ok": True, "symbols": data, "ts": time.time()}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -272,24 +281,42 @@ def run_http():
 def selftest():
     print("[selftest] 合成 tick 写 jsonl + tof 消费校验 ...", flush=True)
     import random
+
     random.seed(7)
     # FG：强主动买流（真 tick 形态）
     p = 1500.0
     for i in range(200):
         buy = random.random() < 0.72
         p += 0.3 if buy else -0.3
-        write_tick({"ts": time.time(), "symbol": "FG", "price": p,
-                    "vol": random.uniform(5, 25), "side": "B" if buy else "S",
-                    "bid_vol": random.uniform(100, 300), "ask_vol": random.uniform(100, 300),
-                    "data_mode": "tqsdk"})
+        write_tick(
+            {
+                "ts": time.time(),
+                "symbol": "FG",
+                "price": p,
+                "vol": random.uniform(5, 25),
+                "side": "B" if buy else "S",
+                "bid_vol": random.uniform(100, 300),
+                "ask_vol": random.uniform(100, 300),
+                "data_mode": "tqsdk",
+            }
+        )
     # JM：分钟线回退近似（DCE，价格缓涨）
     q = 1480.0
     for i in range(60):
         buy = random.random() < 0.6
         q += 0.5 if buy else -0.5
-        write_tick({"ts": time.time(), "symbol": "JM", "price": q,
-                    "vol": random.uniform(40, 120), "side": "B" if buy else "S",
-                    "bid_vol": None, "ask_vol": None, "data_mode": "akshare_min"})
+        write_tick(
+            {
+                "ts": time.time(),
+                "symbol": "JM",
+                "price": q,
+                "vol": random.uniform(40, 120),
+                "side": "B" if buy else "S",
+                "bid_vol": None,
+                "ask_vol": None,
+                "data_mode": "akshare_min",
+            }
+        )
     # 用 tick_orderflow 从 jsonl 回放，校验消费链路
     tof = ticks_from_jsonl(TICK_STREAM_FILE, symbol="FG")
     d = tof.as_dict()
@@ -310,7 +337,7 @@ def main():
     threading.Thread(target=run_http, daemon=True).start()
     threading.Thread(target=run_akshare_fallback, daemon=True).start()
     try:
-        run_tqsdk()                      # 主线程跑 TqSdk 行情循环
+        run_tqsdk()  # 主线程跑 TqSdk 行情循环
     except Exception:
         print(f"[main] TqSdk 主循环异常: {traceback.format_exc()}", flush=True)
     finally:

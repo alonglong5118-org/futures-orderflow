@@ -100,6 +100,7 @@ from price_protection import (
 #  1. validate_price
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestValidatePrice(unittest.TestCase):
     """validate_price 价格合法性校验。"""
 
@@ -162,6 +163,7 @@ class TestValidatePrice(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _dir_sign
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDirSign(unittest.TestCase):
     """_dir_sign 方向符号。"""
@@ -244,6 +246,7 @@ class TestDirSign(unittest.TestCase):
 #  3. validate_entry_stop
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestValidateEntryStop(unittest.TestCase):
     """validate_entry_stop 止损方向校验+镜像修正。"""
 
@@ -312,6 +315,7 @@ class TestValidateEntryStop(unittest.TestCase):
 #  4. protect_user_price
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestProtectUserPrice(unittest.TestCase):
     """protect_user_price 用户价格保护。"""
 
@@ -378,6 +382,7 @@ class TestProtectUserPrice(unittest.TestCase):
 #  5. validate_take_profit
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestValidateTakeProfit(unittest.TestCase):
     """validate_take_profit 止盈方向校验。"""
 
@@ -438,6 +443,7 @@ class TestValidateTakeProfit(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. _pearson_corr
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPearsonCorr(unittest.TestCase):
     """_pearson_corr 皮尔逊相关系数。"""
@@ -501,6 +507,7 @@ class TestPearsonCorr(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. apply_corr_gate
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestApplyCorrGate(unittest.TestCase):
     """apply_corr_gate 相关性闸门。"""

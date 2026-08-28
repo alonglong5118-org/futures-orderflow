@@ -48,6 +48,7 @@ from macro_context import _norm_tanh
 #  1. blend_weights
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBlendWeights(unittest.TestCase):
     """blend_weights GA 权重与默认权重融合。"""
 
@@ -64,6 +65,7 @@ class TestBlendWeights(unittest.TestCase):
         ga_w = {"T": 0.6, "F": 0.3, "C": 0.1}
         result = blend_weights(ga_w, alpha=0.0)
         from apply_blended_weights import DEFAULT_W
+
         self.assertAlmostEqual(result["T"], DEFAULT_W["T"], places=6)
         self.assertAlmostEqual(result["F"], DEFAULT_W["F"], places=6)
         self.assertAlmostEqual(result["C"], DEFAULT_W["C"], places=6)
@@ -72,6 +74,7 @@ class TestBlendWeights(unittest.TestCase):
         """alpha=0.5 → 各取一半"""
         ga_w = {"T": 0.6, "F": 0.3, "C": 0.1}
         from apply_blended_weights import DEFAULT_W
+
         result = blend_weights(ga_w, alpha=0.5)
         expected_T = 0.5 * 0.6 + 0.5 * DEFAULT_W["T"]
         expected_F = 0.5 * 0.3 + 0.5 * DEFAULT_W["F"]
@@ -88,7 +91,7 @@ class TestBlendWeights(unittest.TestCase):
 
     def test_rounds_to_6_decimals(self):
         """结果保留 6 位小数"""
-        ga_w = {"T": 1/3, "F": 1/3, "C": 1/3}
+        ga_w = {"T": 1 / 3, "F": 1 / 3, "C": 1 / 3}
         result = blend_weights(ga_w, alpha=0.5)
         # round(1/3, 6) = 0.333333
         for v in result.values():
@@ -111,6 +114,7 @@ class TestBlendWeights(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. best_stop_rr
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBestStopRr(unittest.TestCase):
     """best_stop_rr 从 sweep 结果挑最优参数。"""
@@ -170,9 +174,7 @@ class TestBestStopRr(unittest.TestCase):
 
     def test_return_fields_complete(self):
         """返回字段齐全"""
-        sweep = {
-            "all": [(1.0, 1.5, self._make_result(1.0, 0.5, 20))]
-        }
+        sweep = {"all": [(1.0, 1.5, self._make_result(1.0, 0.5, 20))]}
         best = best_stop_rr(sweep, min_trades=10)
         self.assertIn("stop_atr_mult", best)
         self.assertIn("rr_ratio", best)
@@ -194,7 +196,7 @@ class TestBestStopRr(unittest.TestCase):
         """min_trades 门槛正确"""
         sweep = {
             "all": [
-                (1.0, 1.5, self._make_result(1.0, 0.5, 9)),   # 不够
+                (1.0, 1.5, self._make_result(1.0, 0.5, 9)),  # 不够
                 (1.5, 2.0, self._make_result(0.8, 0.5, 10)),  # 刚好够
             ]
         }
@@ -205,6 +207,7 @@ class TestBestStopRr(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _norm_tanh
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNormTanh(unittest.TestCase):
     """_norm_tanh tanh 归一化。"""

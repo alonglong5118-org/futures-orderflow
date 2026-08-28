@@ -38,6 +38,7 @@ from calibration import _future_close
 #  1. anomaly_scan.compute
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAnomalyScan(unittest.TestCase):
     """anomaly_scan.compute 异动扫描。"""
 
@@ -74,7 +75,7 @@ class TestAnomalyScan(unittest.TestCase):
         snaps = {
             "up_big": {"close": 110, "open": 100, "high": 112, "low": 98},  # +10%
             "up_small": {"close": 103, "open": 100, "high": 105, "low": 99},  # +3%
-            "down": {"close": 95, "open": 100, "high": 101, "low": 94},     # -5%
+            "down": {"close": 95, "open": 100, "high": 101, "low": 94},  # -5%
         }
         result = anomaly_compute(snaps)
         top_up = result["top_up"]
@@ -84,9 +85,9 @@ class TestAnomalyScan(unittest.TestCase):
     def test_top_down_sorted_ascending(self):
         """领跌榜按 pct 升序（最跌的在前）"""
         snaps = {
-            "up": {"close": 110, "open": 100, "high": 112, "low": 98},       # +10%
-            "down_small": {"close": 97, "open": 100, "high": 101, "low": 96}, # -3%
-            "down_big": {"close": 90, "open": 100, "high": 101, "low": 89},   # -10%
+            "up": {"close": 110, "open": 100, "high": 112, "low": 98},  # +10%
+            "down_small": {"close": 97, "open": 100, "high": 101, "low": 96},  # -3%
+            "down_big": {"close": 90, "open": 100, "high": 101, "low": 89},  # -10%
         }
         result = anomaly_compute(snaps)
         top_down = result["top_down"]
@@ -150,10 +151,7 @@ class TestAnomalyScan(unittest.TestCase):
             "wild": {"close": 110, "open": 100, "high": 115, "low": 90},
         }
         result = anomaly_compute(snaps)
-        self.assertGreater(
-            result["by_symbol"]["wild"]["score"],
-            result["by_symbol"]["calm"]["score"]
-        )
+        self.assertGreater(result["by_symbol"]["wild"]["score"], result["by_symbol"]["calm"]["score"])
 
     def test_by_symbol_dict_access(self):
         """by_symbol 可以按品种名访问"""
@@ -169,6 +167,7 @@ class TestAnomalyScan(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _future_close
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFutureClose(unittest.TestCase):
     """_future_close 未来收盘价。"""
@@ -225,6 +224,7 @@ class TestFutureClose(unittest.TestCase):
     def test_datetime_objects(self):
         """也可以用 datetime 对象（只要支持 >= 比较）"""
         from datetime import datetime
+
         t1 = datetime(2026, 1, 15, 9, 30)
         t2 = datetime(2026, 1, 15, 10, 30)
         t3 = datetime(2026, 1, 15, 11, 30)

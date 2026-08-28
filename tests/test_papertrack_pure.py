@@ -79,6 +79,7 @@ from four_dim_papertrack import (
 #  1. bars_to_records
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBarsToRecords(unittest.TestCase):
     """bars_to_records DataFrame → 记录列表。"""
 
@@ -94,12 +95,15 @@ class TestBarsToRecords(unittest.TestCase):
     def test_normal_conversion(self):
         """正常转换：ISO 时间 + OHLC 4位小数"""
         dates = pd.date_range("2026-08-28 09:30:00", periods=3, freq="5min")
-        df = pd.DataFrame({
-            "open": [100.0, 101.0, 102.0],
-            "high": [100.5, 101.5, 102.5],
-            "low": [99.5, 100.5, 101.5],
-            "close": [100.2, 101.2, 102.2],
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0],
+                "high": [100.5, 101.5, 102.5],
+                "low": [99.5, 100.5, 101.5],
+                "close": [100.2, 101.2, 102.2],
+            },
+            index=dates,
+        )
         recs = bars_to_records(df)
         self.assertEqual(len(recs), 3)
         # 每行 5 个元素
@@ -115,9 +119,15 @@ class TestBarsToRecords(unittest.TestCase):
     def test_datetime_index_preserved(self):
         """DatetimeIndex 正确转换为字符串"""
         dates = pd.date_range("2026-01-15 14:00:00", periods=1, freq="D")
-        df = pd.DataFrame({
-            "open": [100], "high": [110], "low": [90], "close": [105],
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": [100],
+                "high": [110],
+                "low": [90],
+                "close": [105],
+            },
+            index=dates,
+        )
         recs = bars_to_records(df)
         self.assertIn("2026-01-15", recs[0][0])
         self.assertIn("14:00:00", recs[0][0])
@@ -125,12 +135,15 @@ class TestBarsToRecords(unittest.TestCase):
     def test_rounding_to_4_decimals(self):
         """价格 4 位小数取整"""
         dates = pd.date_range("2026-08-28", periods=1, freq="D")
-        df = pd.DataFrame({
-            "open": [100.12345],
-            "high": [101.67890],
-            "low": [99.11111],
-            "close": [100.99999],
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": [100.12345],
+                "high": [101.67890],
+                "low": [99.11111],
+                "close": [100.99999],
+            },
+            index=dates,
+        )
         recs = bars_to_records(df)
         self.assertEqual(recs[0][1], 100.1235)  # round(100.12345, 4) = 100.1235
         self.assertEqual(recs[0][2], 101.6789)
@@ -140,13 +153,14 @@ class TestBarsToRecords(unittest.TestCase):
     def test_returns_list(self):
         """返回 list"""
         dates = pd.date_range("2026-08-28", periods=2, freq="D")
-        df = pd.DataFrame({"open":[1,2],"high":[2,3],"low":[0,1],"close":[1.5,2.5]}, index=dates)
+        df = pd.DataFrame({"open": [1, 2], "high": [2, 3], "low": [0, 1], "close": [1.5, 2.5]}, index=dates)
         self.assertIsInstance(bars_to_records(df), list)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. records_to_bars
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRecordsToBars(unittest.TestCase):
     """records_to_bars 记录列表 → DataFrame。"""
@@ -196,12 +210,15 @@ class TestRecordsToBars(unittest.TestCase):
     def test_roundtrip_consistency(self):
         """双向转换一致性（DataFrame → records → DataFrame）"""
         dates = pd.date_range("2026-08-28 09:30:00", periods=3, freq="5min")
-        df_orig = pd.DataFrame({
-            "open": [100.0, 101.0, 102.0],
-            "high": [100.5, 101.5, 102.5],
-            "low": [99.5, 100.5, 101.5],
-            "close": [100.2, 101.2, 102.2],
-        }, index=dates)
+        df_orig = pd.DataFrame(
+            {
+                "open": [100.0, 101.0, 102.0],
+                "high": [100.5, 101.5, 102.5],
+                "low": [99.5, 100.5, 101.5],
+                "close": [100.2, 101.2, 102.2],
+            },
+            index=dates,
+        )
         recs = bars_to_records(df_orig)
         df_back = records_to_bars(recs)
         self.assertEqual(len(df_back), 3)
@@ -215,28 +232,42 @@ class TestRecordsToBars(unittest.TestCase):
 #  3. sig_id
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSigId(unittest.TestCase):
     """sig_id 信号 ID 哈希。"""
 
     def test_same_signal_same_id(self):
         """相同信号 → 相同 ID"""
-        s = {"symbol": "rb", "time": "2026-08-28 10:00:00", "price": 3500,
-             "direction": 1, "stop": 3450, "target": 3600, "lots": 2}
+        s = {
+            "symbol": "rb",
+            "time": "2026-08-28 10:00:00",
+            "price": 3500,
+            "direction": 1,
+            "stop": 3450,
+            "target": 3600,
+            "lots": 2,
+        }
         id1 = sig_id(s)
         id2 = sig_id(dict(s))
         self.assertEqual(id1, id2)
 
     def test_different_price_different_id(self):
         """不同价格 → 不同 ID"""
-        s1 = {"symbol": "rb", "time": "2026-08-28", "price": 3500,
-              "direction": 1, "stop": 3450, "target": 3600, "lots": 1}
+        s1 = {
+            "symbol": "rb",
+            "time": "2026-08-28",
+            "price": 3500,
+            "direction": 1,
+            "stop": 3450,
+            "target": 3600,
+            "lots": 1,
+        }
         s2 = dict(s1, price=3501)
         self.assertNotEqual(sig_id(s1), sig_id(s2))
 
     def test_16_char_hex(self):
         """16 位十六进制"""
-        s = {"symbol": "rb", "time": "t", "price": 1, "direction": 1,
-             "stop": 2, "target": 3, "lots": 1}
+        s = {"symbol": "rb", "time": "t", "price": 1, "direction": 1, "stop": 2, "target": 3, "lots": 1}
         sid = sig_id(s)
         self.assertEqual(len(sid), 16)
         # 都是十六进制字符
@@ -256,6 +287,7 @@ class TestSigId(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. parse_signal
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestParseSignal(unittest.TestCase):
     """parse_signal 信号解析。"""
@@ -342,9 +374,23 @@ class TestParseSignal(unittest.TestCase):
         """返回字段完整"""
         s = self._base_signal()
         p = parse_signal(s)
-        for key in ("id", "symbol", "direction", "time", "entry", "stop",
-                     "target", "stop_dist", "dist_to_target", "target_R",
-                     "lots", "regime", "F_bias", "T_D", "C_score"):
+        for key in (
+            "id",
+            "symbol",
+            "direction",
+            "time",
+            "entry",
+            "stop",
+            "target",
+            "stop_dist",
+            "dist_to_target",
+            "target_R",
+            "lots",
+            "regime",
+            "F_bias",
+            "T_D",
+            "C_score",
+        ):
             self.assertIn(key, p)
 
     def test_passthrough_pipeline_fields(self):
@@ -359,6 +405,7 @@ class TestParseSignal(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. aggregate
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestAggregate(unittest.TestCase):
     """aggregate 交易统计聚合。"""
@@ -461,6 +508,7 @@ class TestAggregate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. _dim_vote
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDimVote(unittest.TestCase):
     """_dim_vote 维度投票。"""

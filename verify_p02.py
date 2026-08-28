@@ -3,6 +3,7 @@
 确认：①重放 outcome/R 与已存储完全一致(=可复现, 确定性修复生效) ②快照上 P0-2
 换月跳空跳过总根数(应在冻结数据上稳定为 0, 验证 P0-2 空转)。
 不写回任何文件。"""
+
 import json
 import os
 import sys
@@ -42,8 +43,16 @@ for t in trades:
         mismatch += 1
         if len(mismatch_examples) < 8:
             mismatch_examples.append(
-                (t.get("symbol"), t.get("id"), t.get("outcome"), bt["outcome"],
-                 t.get("R"), bt.get("R"), t.get("snapshot_approx")))
+                (
+                    t.get("symbol"),
+                    t.get("id"),
+                    t.get("outcome"),
+                    bt["outcome"],
+                    t.get("R"),
+                    bt.get("R"),
+                    t.get("snapshot_approx"),
+                )
+            )
 
 print("=== papertrack 确定性校验 ===")
 print(f"已判定交易总数 : {len(trades)}")

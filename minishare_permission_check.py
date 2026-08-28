@@ -7,12 +7,14 @@
     fut_cont/fut_daily_main/fut_kline/fut_basis/fut_inventory/fut_spot
   → 历史/基本面端点需单独权限；当前 token 只能做实时快照。
 """
+
 import minishare as m
 
 TOKEN = None
 try:
     import json
     import os
+
     cfg = json.load(open(os.path.join(os.path.dirname(__file__), "minishare.json")))
     TOKEN = cfg.get("token")
 except Exception:
@@ -24,9 +26,21 @@ if not TOKEN:
 
 m.set_token(TOKEN)
 pro = m.pro_api()
-ENDPOINTS = ["rt_fut_k", "fut_daily", "fut_5min", "fut_1min", "fut_tick", "fut_k",
-             "fut_main", "fut_cont", "fut_daily_main", "fut_kline", "fut_basis",
-             "fut_inventory", "fut_spot"]
+ENDPOINTS = [
+    "rt_fut_k",
+    "fut_daily",
+    "fut_5min",
+    "fut_1min",
+    "fut_tick",
+    "fut_k",
+    "fut_main",
+    "fut_cont",
+    "fut_daily_main",
+    "fut_kline",
+    "fut_basis",
+    "fut_inventory",
+    "fut_spot",
+]
 print(f"{'端点':<16}{'状态':<10}说明")
 print("-" * 50)
 for api in ENDPOINTS:

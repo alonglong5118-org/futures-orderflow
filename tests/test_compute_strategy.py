@@ -55,18 +55,22 @@ from strategy_layer import (
 #  测试数据构造
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _make_trend_df(n=120, start=1000, slope=5, vol=2, seed=42):
     """构造趋势行情数据。"""
     np.random.seed(seed)
     px = start + np.arange(n) * slope + np.cumsum(np.random.randn(n) * vol)
     idx = pd.date_range("2026-01-01", periods=n, freq="D")
-    df = pd.DataFrame({
-        "open": px,
-        "high": px + abs(np.random.randn(n) * 3),
-        "low": px - abs(np.random.randn(n) * 3),
-        "close": px,
-        "volume": 1000 + np.random.randn(n) * 100,
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": px,
+            "high": px + abs(np.random.randn(n) * 3),
+            "low": px - abs(np.random.randn(n) * 3),
+            "close": px,
+            "volume": 1000 + np.random.randn(n) * 100,
+        },
+        index=idx,
+    )
     # 确保 high >= close >= low
     df["high"] = df[["high", "close"]].max(axis=1)
     df["low"] = df[["low", "close"]].min(axis=1)
@@ -80,13 +84,16 @@ def _make_range_df(n=120, center=1000, amp=20, seed=42):
     t = np.arange(n)
     px = center + amp * np.sin(t * 0.15) + np.random.randn(n) * 2
     idx = pd.date_range("2026-01-01", periods=n, freq="D")
-    df = pd.DataFrame({
-        "open": px,
-        "high": px + abs(np.random.randn(n) * 3),
-        "low": px - abs(np.random.randn(n) * 3),
-        "close": px,
-        "volume": 1000 + np.random.randn(n) * 100,
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": px,
+            "high": px + abs(np.random.randn(n) * 3),
+            "low": px - abs(np.random.randn(n) * 3),
+            "close": px,
+            "volume": 1000 + np.random.randn(n) * 100,
+        },
+        index=idx,
+    )
     df["high"] = df[["high", "close"]].max(axis=1)
     df["low"] = df[["low", "close"]].min(axis=1)
     return df
@@ -108,6 +115,7 @@ COMMON_KWARGS = dict(
 #  1. 输出结构完整性
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeStrategyOutputStructure(unittest.TestCase):
     """compute_strategy 输出结构完整性。"""
 
@@ -116,11 +124,23 @@ class TestComputeStrategyOutputStructure(unittest.TestCase):
         df = _make_trend_df()
         result = compute_strategy(df, **COMMON_KWARGS)
         required = [
-            "regime", "regime_desc", "direction", "direction_text",
-            "confidence", "main_strategy", "stop_pts", "stop_price",
-            "size", "risk_amount", "strategies",
-            "pool_status", "pool_passed", "wf_stability", "wf_oos_expR",
-            "gate_reason", "gated",
+            "regime",
+            "regime_desc",
+            "direction",
+            "direction_text",
+            "confidence",
+            "main_strategy",
+            "stop_pts",
+            "stop_price",
+            "size",
+            "risk_amount",
+            "strategies",
+            "pool_status",
+            "pool_passed",
+            "wf_stability",
+            "wf_oos_expR",
+            "gate_reason",
+            "gated",
         ]
         for key in required:
             self.assertIn(key, result, f"缺少字段: {key}")
@@ -164,8 +184,7 @@ class TestComputeStrategyOutputStructure(unittest.TestCase):
         df = _make_trend_df()
         result = compute_strategy(df, **COMMON_KWARGS)
         for name in STRATS:
-            self.assertIn(name, result["strategies"],
-                f"strategies 缺少策略: {name}")
+            self.assertIn(name, result["strategies"], f"strategies 缺少策略: {name}")
             self.assertIn("signal", result["strategies"][name])
             self.assertIn("detail", result["strategies"][name])
 
@@ -175,13 +194,13 @@ class TestComputeStrategyOutputStructure(unittest.TestCase):
         result = compute_strategy(df, **COMMON_KWARGS)
         for name, info in result["strategies"].items():
             sig = info["signal"]
-            self.assertIn(sig, [-1, 0, 1],
-                f"策略 {name} 信号 = {sig}，应该是 -1/0/1")
+            self.assertIn(sig, [-1, 0, 1], f"策略 {name} 信号 = {sig}，应该是 -1/0/1")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. 止损与仓位约束
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeStrategyRiskConstraints(unittest.TestCase):
     """止损与仓位约束验证。"""
@@ -192,9 +211,9 @@ class TestComputeStrategyRiskConstraints(unittest.TestCase):
         result = compute_strategy(df, **COMMON_KWARGS)
         if result["direction"] != 0:
             from strategy_layer import atr
+
             a = atr(df).iloc[-1]
-            self.assertGreaterEqual(result["stop_pts"], a * 1.5 - 0.01,
-                "stop_pts 应该 >= ATR * 1.5")
+            self.assertGreaterEqual(result["stop_pts"], a * 1.5 - 0.01, "stop_pts 应该 >= ATR * 1.5")
 
     def test_stop_pts_at_least_half_point_value(self):
         """stop_pts >= point_value * 0.5"""
@@ -202,8 +221,7 @@ class TestComputeStrategyRiskConstraints(unittest.TestCase):
         pv = 20
         result = compute_strategy(df, **dict(COMMON_KWARGS, point_value=pv))
         if result["direction"] != 0:
-            self.assertGreaterEqual(result["stop_pts"], pv * 0.5 - 0.01,
-                "stop_pts 应该 >= point_value * 0.5")
+            self.assertGreaterEqual(result["stop_pts"], pv * 0.5 - 0.01, "stop_pts 应该 >= point_value * 0.5")
 
     def test_size_respects_risk_budget(self):
         """仓位满足风险预算约束：size * risk_hand <= equity * risk_pct
@@ -213,11 +231,11 @@ class TestComputeStrategyRiskConstraints(unittest.TestCase):
         equity = 100000
         risk_pct = 0.03
         df = _make_trend_df()
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            equity=equity, risk_pct=risk_pct))
+        result = compute_strategy(df, **dict(COMMON_KWARGS, equity=equity, risk_pct=risk_pct))
         risk_budget = equity * risk_pct
-        self.assertLessEqual(result["risk_amount"], risk_budget + 1,
-            f"风险金额 {result['risk_amount']} 超过预算 {risk_budget}")
+        self.assertLessEqual(
+            result["risk_amount"], risk_budget + 1, f"风险金额 {result['risk_amount']} 超过预算 {risk_budget}"
+        )
 
     def test_size_respects_margin_constraint(self):
         """仓位满足保证金约束"""
@@ -227,14 +245,13 @@ class TestComputeStrategyRiskConstraints(unittest.TestCase):
         mult = 20
         price = 1000
         df = _make_trend_df()
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            equity=equity, margin_rate=margin_rate,
-            red_line=red_line, mult=mult, price=price))
+        result = compute_strategy(
+            df, **dict(COMMON_KWARGS, equity=equity, margin_rate=margin_rate, red_line=red_line, mult=mult, price=price)
+        )
         margin_per = price * mult * margin_rate
         budget = equity * red_line
         max_by_margin = int(budget // margin_per)
-        self.assertLessEqual(result["size"], max_by_margin,
-            f"仓位 {result['size']} 超过保证金上限 {max_by_margin}")
+        self.assertLessEqual(result["size"], max_by_margin, f"仓位 {result['size']} 超过保证金上限 {max_by_margin}")
 
     def test_zero_equity_zero_size(self):
         """equity = 0 → size = 0"""
@@ -257,6 +274,7 @@ class TestComputeStrategyRiskConstraints(unittest.TestCase):
 #  3. 稳健池闸门
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeStrategyWfGate(unittest.TestCase):
     """walk-forward 稳健池闸门集成。"""
 
@@ -277,8 +295,7 @@ class TestComputeStrategyWfGate(unittest.TestCase):
         df = _make_trend_df()
         # 把阈值设极高，让所有品种都不通过
         set_robust_gate(stability=0.99, oos_expR=0.50)
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            symbol="JM", wf_gate=True))
+        result = compute_strategy(df, **dict(COMMON_KWARGS, symbol="JM", wf_gate=True))
         self.assertTrue(result["gated"])
         self.assertEqual(result["direction"], 0)
         self.assertEqual(result["direction_text"], "观望")
@@ -289,8 +306,7 @@ class TestComputeStrategyWfGate(unittest.TestCase):
         """wf_gate=False → 即使不在稳健池也正常交易"""
         df = _make_trend_df()
         set_robust_gate(stability=0.99, oos_expR=0.50)  # 极高门槛
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            symbol="xyz_nonexistent", wf_gate=False))
+        result = compute_strategy(df, **dict(COMMON_KWARGS, symbol="xyz_nonexistent", wf_gate=False))
         self.assertFalse(result["gated"])
         # 没有被闸门关掉，应该有正常的方向判断
         self.assertIn(result["direction"], [-1, 0, 1])
@@ -298,8 +314,7 @@ class TestComputeStrategyWfGate(unittest.TestCase):
     def test_no_symbol_no_gating(self):
         """symbol=None → 不启用闸门"""
         df = _make_trend_df()
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            symbol=None, wf_gate=True))
+        result = compute_strategy(df, **dict(COMMON_KWARGS, symbol=None, wf_gate=True))
         self.assertFalse(result["gated"])
         self.assertEqual(result["pool_status"], "—")
 
@@ -307,8 +322,7 @@ class TestComputeStrategyWfGate(unittest.TestCase):
         """pool_status 字段正确反映状态"""
         df = _make_trend_df()
         set_robust_gate(stability=0.99, oos_expR=0.50)
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            symbol="JM", wf_gate=True))
+        result = compute_strategy(df, **dict(COMMON_KWARGS, symbol="JM", wf_gate=True))
         self.assertTrue(result["gated"])
         self.assertEqual(result["pool_status"], "观察池")
 
@@ -316,6 +330,7 @@ class TestComputeStrategyWfGate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. 策略权重定制
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeStrategyWeights(unittest.TestCase):
     """策略权重定制效果。"""
@@ -327,10 +342,8 @@ class TestComputeStrategyWeights(unittest.TestCase):
         r_normal = compute_strategy(df, **COMMON_KWARGS)
 
         # 把趋势策略权重全设为 0，均值权重放大
-        zero_trend = {k: 0.0 for k in STRATS if k in [
-            "ma_break", "dma", "turtle", "donchian", "pullback"]}
-        r_zerotrend = compute_strategy(df, **dict(COMMON_KWARGS,
-            strategy_weights=zero_trend))
+        zero_trend = {k: 0.0 for k in STRATS if k in ["ma_break", "dma", "turtle", "donchian", "pullback"]}
+        r_zerotrend = compute_strategy(df, **dict(COMMON_KWARGS, strategy_weights=zero_trend))
 
         # 权重不同，confidence 应该不同
         # （方向不一定变，因为可能还有均值策略同向）
@@ -340,8 +353,7 @@ class TestComputeStrategyWeights(unittest.TestCase):
         """禁用所有策略 → direction = 0, confidence = 0"""
         df = _make_trend_df()
         all_zero = {k: 0.0 for k in STRATS}
-        result = compute_strategy(df, **dict(COMMON_KWARGS,
-            strategy_weights=all_zero))
+        result = compute_strategy(df, **dict(COMMON_KWARGS, strategy_weights=all_zero))
         # 所有策略权重为 0 → score = 0 → direction = 0
         self.assertEqual(result["direction"], 0)
         self.assertEqual(result["confidence"], 0.0)
@@ -360,6 +372,7 @@ class TestComputeStrategyWeights(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. 行情类型与方向
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeStrategyMarketTypes(unittest.TestCase):
     """不同行情类型下的策略行为。"""

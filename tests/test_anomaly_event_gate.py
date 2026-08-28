@@ -53,6 +53,7 @@ from event_calendar import _next_occurrence, scale_factor
 #  1. anomaly_scan.compute
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAnomalyScan(unittest.TestCase):
     """anomaly_scan.compute 异动评分。"""
 
@@ -120,7 +121,7 @@ class TestAnomalyScan(unittest.TestCase):
         snaps = {
             "A": {"close": 120, "open": 100, "high": 120, "low": 100},  # +20%
             "B": {"close": 110, "open": 100, "high": 110, "low": 100},  # +10%
-            "C": {"close": 90, "open": 100, "high": 100, "low": 90},    # -10%
+            "C": {"close": 90, "open": 100, "high": 100, "low": 90},  # -10%
         }
         r = asc.compute(snaps)
         self.assertEqual(r["top_up"][0]["symbol"], "A")
@@ -132,7 +133,7 @@ class TestAnomalyScan(unittest.TestCase):
         snaps = {
             "A": {"close": 120, "open": 100, "high": 120, "low": 100},  # +20%
             "B": {"close": 110, "open": 100, "high": 110, "low": 100},  # +10%
-            "C": {"close": 90, "open": 100, "high": 100, "low": 90},    # -10%
+            "C": {"close": 90, "open": 100, "high": 100, "low": 90},  # -10%
         }
         r = asc.compute(snaps)
         self.assertEqual(r["top_down"][0]["symbol"], "C")
@@ -143,7 +144,7 @@ class TestAnomalyScan(unittest.TestCase):
         """top_n 限制数量"""
         snaps = {}
         for i in range(20):
-            sym = chr(ord('A') + i)
+            sym = chr(ord("A") + i)
             snaps[sym] = {"close": 100 + i, "open": 100, "high": 100 + i, "low": 100}
         r = asc.compute(snaps, top_n=5)
         self.assertEqual(len(r["top_up"]), 5)
@@ -206,20 +207,21 @@ class TestAnomalyScan(unittest.TestCase):
 #  2. _next_occurrence
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNextOccurrence(unittest.TestCase):
     """_next_occurrence 事件下一次发生时间。"""
 
     def test_daily_not_yet_today(self):
         """每日事件：今日未到 → 今日"""
-        now = datetime(2026, 8, 28, 8, 0, 0)   # 早上 8 点
-        ev = {"hh": 9, "mm": 30, "wd": None}   # 9:30 每日
+        now = datetime(2026, 8, 28, 8, 0, 0)  # 早上 8 点
+        ev = {"hh": 9, "mm": 30, "wd": None}  # 9:30 每日
         result = _next_occurrence(ev, now)
         self.assertEqual(result, datetime(2026, 8, 28, 9, 30, 0))
 
     def test_daily_already_passed(self):
         """每日事件：今日已过 → 明天"""
         now = datetime(2026, 8, 28, 10, 0, 0)  # 早上 10 点
-        ev = {"hh": 9, "mm": 30, "wd": None}   # 9:30 每日
+        ev = {"hh": 9, "mm": 30, "wd": None}  # 9:30 每日
         result = _next_occurrence(ev, now)
         self.assertEqual(result, datetime(2026, 8, 29, 9, 30, 0))
 
@@ -227,7 +229,7 @@ class TestNextOccurrence(unittest.TestCase):
         """每周事件：本周未到 → 本周"""
         # 2026-08-28 是周五（weekday=4）
         now = datetime(2026, 8, 28, 8, 0, 0)
-        ev = {"hh": 9, "mm": 0, "wd": 4}       # 每周五 9:00
+        ev = {"hh": 9, "mm": 0, "wd": 4}  # 每周五 9:00
         result = _next_occurrence(ev, now)
         self.assertEqual(result, datetime(2026, 8, 28, 9, 0, 0))
 
@@ -235,7 +237,7 @@ class TestNextOccurrence(unittest.TestCase):
         """每周事件：本周已过 → 下周"""
         # 2026-08-28 是周五（weekday=4），已过 9:00
         now = datetime(2026, 8, 28, 10, 0, 0)
-        ev = {"hh": 9, "mm": 0, "wd": 4}       # 每周五 9:00
+        ev = {"hh": 9, "mm": 0, "wd": 4}  # 每周五 9:00
         result = _next_occurrence(ev, now)
         # 下周五 = 2026-09-04
         self.assertEqual(result, datetime(2026, 9, 4, 9, 0, 0))
@@ -253,7 +255,7 @@ class TestNextOccurrence(unittest.TestCase):
         """每周事件：目标 weekday 在未来几天"""
         # 2026-08-28 周五（weekday=4）
         now = datetime(2026, 8, 28, 8, 0, 0)
-        ev = {"hh": 10, "mm": 0, "wd": 6}      # 每周日 10:00
+        ev = {"hh": 10, "mm": 0, "wd": 6}  # 每周日 10:00
         result = _next_occurrence(ev, now)
         # 周日 = 8/30
         self.assertEqual(result, datetime(2026, 8, 30, 10, 0, 0))
@@ -276,6 +278,7 @@ class TestNextOccurrence(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. scale_factor
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestScaleFactor(unittest.TestCase):
     """scale_factor 闸门缩放系数。"""

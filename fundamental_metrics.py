@@ -9,6 +9,7 @@
 数据来源：four_dim_strategy.load_daily_refreshed(sym) 的最新收盘 + 近 60 日序列。
 纯只读、不接券商 API、不代下单；数值缺则 latest=None / value_ok=False（前端标注）。
 """
+
 from __future__ import annotations
 
 import datetime
@@ -28,44 +29,70 @@ except Exception:  # 极端环境兜底
 # ---------------------------------------------------------------------------
 METRIC_DEFS = [
     {
-        "id": "fg_sa_profit", "cat": "利润", "name": "玻璃-纯碱加工利润",
-        "unit": "元/吨", "kind": "profit",
-        "legs": [("FG", 1), ("SA", -0.2)], "fixed": -500,
+        "id": "fg_sa_profit",
+        "cat": "利润",
+        "name": "玻璃-纯碱加工利润",
+        "unit": "元/吨",
+        "kind": "profit",
+        "legs": [("FG", 1), ("SA", -0.2)],
+        "fixed": -500,
         "note": "每吨玻璃耗约0.2吨纯碱；固定成本约500元/吨(燃料+人工)为经验值，可调",
     },
     {
-        "id": "jm_j_profit", "cat": "利润", "name": "焦煤-焦炭化利润",
-        "unit": "元/吨", "kind": "profit",
-        "legs": [("J", 1), ("JM", -1.33)], "fixed": -300,
+        "id": "jm_j_profit",
+        "cat": "利润",
+        "name": "焦煤-焦炭化利润",
+        "unit": "元/吨",
+        "kind": "profit",
+        "legs": [("J", 1), ("JM", -1.33)],
+        "fixed": -300,
         "note": "吨焦耗约1.33吨焦煤；固定成本约300为经验值",
     },
     {
-        "id": "lh_breed_profit", "cat": "利润", "name": "生猪自繁自养利润",
-        "unit": "元/头", "kind": "profit_feed",
-        "legs": [("lh", 16)], "feed": [("c", 2.6), ("m", 0.9)],
+        "id": "lh_breed_profit",
+        "cat": "利润",
+        "name": "生猪自繁自养利润",
+        "unit": "元/头",
+        "kind": "profit_feed",
+        "legs": [("lh", 16)],
+        "feed": [("c", 2.6), ("m", 0.9)],
         "note": "头均16kg；饲料=玉米×2.6+豆粕×0.9 为经验估算",
     },
     {
-        "id": "jd_layer_profit", "cat": "利润", "name": "蛋鸡养殖利润",
-        "unit": "元/500kg", "kind": "profit_feed",
-        "legs": [("jd", 1)], "feed": [("c", 2.2), ("m", 0.8)], "fixed": -300,
+        "id": "jd_layer_profit",
+        "cat": "利润",
+        "name": "蛋鸡养殖利润",
+        "unit": "元/500kg",
+        "kind": "profit_feed",
+        "legs": [("jd", 1)],
+        "feed": [("c", 2.2), ("m", 0.8)],
+        "fixed": -300,
         "note": "蛋鸡饲料经验估算，系数可调；固定成本约300元/500kg为经验值",
     },
     {
-        "id": "fg_sa_ratio", "cat": "比价", "name": "玻璃/纯碱比价",
-        "unit": "×", "kind": "ratio",
+        "id": "fg_sa_ratio",
+        "cat": "比价",
+        "name": "玻璃/纯碱比价",
+        "unit": "×",
+        "kind": "ratio",
         "legs": [("FG", 1), ("SA", -1)],
         "note": "FG/SA 价格比",
     },
     {
-        "id": "jm_j_ratio", "cat": "比价", "name": "焦煤/焦炭比价",
-        "unit": "×", "kind": "ratio",
+        "id": "jm_j_ratio",
+        "cat": "比价",
+        "name": "焦煤/焦炭比价",
+        "unit": "×",
+        "kind": "ratio",
         "legs": [("JM", 1), ("J", -1)],
         "note": "JM/J 价格比",
     },
     {
-        "id": "rb_hc_spread", "cat": "价差", "name": "螺卷差",
-        "unit": "元/吨", "kind": "spread",
+        "id": "rb_hc_spread",
+        "cat": "价差",
+        "name": "螺卷差",
+        "unit": "元/吨",
+        "kind": "spread",
         "legs": [("rb", 1), ("hc", -1)],
         "note": "rb-hc 价差",
     },
@@ -120,7 +147,7 @@ def _value_at(hist_map, kind, legs, fixed, feed):
                 if h is None or len(h) == 0:
                     return None
                 s += coef * h[-1]
-            for sym, coef in (feed or []):
+            for sym, coef in feed or []:
                 h = hist_map.get(sym)
                 if h is None or len(h) == 0:
                     return None
@@ -158,8 +185,9 @@ def compute_metric(d):
     all_syms += [s for s, _ in (d.get("feed") or [])]
 
     # 最新值
-    latest = _value_at({s: [_last_close(s)] for s in all_syms},
-                       d["kind"], d.get("legs", []), d.get("fixed"), d.get("feed"))
+    latest = _value_at(
+        {s: [_last_close(s)] for s in all_syms}, d["kind"], d.get("legs", []), d.get("fixed"), d.get("feed")
+    )
     if latest is None:
         return (None, None, None, None, False)
 
@@ -175,14 +203,12 @@ def compute_metric(d):
     for i in range(n):
         # _value_at 用 [-1]，需传“到当日为止”的序列：截断到 i+1 长度
         day_hist = {s: hists[s][: i + 1] for s in all_syms}
-        v = _value_at(day_hist, d["kind"], d.get("legs", []),
-                      d.get("fixed"), d.get("feed"))
+        v = _value_at(day_hist, d["kind"], d.get("legs", []), d.get("fixed"), d.get("feed"))
         if v is None:
             return (None, None, None, None, False)
         series.append(v)
     if len(series) < 30:
-        return (round(latest, 2) if latest is not None else None,
-                None, None, None, True)
+        return (round(latest, 2) if latest is not None else None, None, None, None, True)
     mean30 = sum(series[-30:]) / 30.0
     std30 = (sum((x - mean30) ** 2 for x in series[-30:]) / 30.0) ** 0.5
     zscore = round((latest - mean30) / std30, 2) if std30 and std30 > 0 else None
@@ -215,11 +241,20 @@ def fund_metrics(force=False, cache_sec=300):
     metrics = []
     for d in METRIC_DEFS:
         latest, mean30, zscore, trend, ok = compute_metric(d)
-        metrics.append({
-            "id": d["id"], "cat": d["cat"], "name": d["name"], "unit": d["unit"],
-            "latest": latest, "mean30": mean30, "zscore": zscore,
-            "trend": trend, "value_ok": ok, "note": d.get("note", ""),
-        })
+        metrics.append(
+            {
+                "id": d["id"],
+                "cat": d["cat"],
+                "name": d["name"],
+                "unit": d["unit"],
+                "latest": latest,
+                "mean30": mean30,
+                "zscore": zscore,
+                "trend": trend,
+                "value_ok": ok,
+                "note": d.get("note", ""),
+            }
+        )
     out = {
         "ok": True,
         "updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

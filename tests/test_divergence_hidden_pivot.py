@@ -76,6 +76,7 @@ from hidden_pivot import hidden_pivot, latest_abc, round_tick
 #  1. divergence
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDivergence(unittest.TestCase):
     """divergence 单笔方向一致性。"""
 
@@ -124,6 +125,7 @@ class TestDivergence(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. DivergenceTracker
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDivergenceTracker(unittest.TestCase):
     """DivergenceTracker 滚动分歧率追踪。"""
@@ -206,7 +208,7 @@ class TestDivergenceTracker(unittest.TestCase):
         """SA 样本独立追踪"""
         t = DivergenceTracker()
         t.update("SA", 50, -30)  # SA 异号
-        t.update("rb", 50, 30)   # 非 SA 同号
+        t.update("rb", 50, 30)  # 非 SA 同号
         s = t.summary()
         self.assertEqual(s["n"], 2)
         # SA 只有 1 个样本，全异号 → 1.0
@@ -225,8 +227,7 @@ class TestDivergenceTracker(unittest.TestCase):
         t = DivergenceTracker()
         t.update("rb", 50, 30)
         s = t.summary()
-        for key in ("divergence_rate", "baseline", "level",
-                     "sa_divergence_rate", "sa_sensitive", "n"):
+        for key in ("divergence_rate", "baseline", "level", "sa_divergence_rate", "sa_sensitive", "n"):
             self.assertIn(key, s, f"missing key: {key}")
 
     def test_rate_three_decimals(self):
@@ -242,8 +243,8 @@ class TestDivergenceTracker(unittest.TestCase):
     def test_none_divergence_skipped(self):
         """divergence 返回 None 的样本不记录"""
         t = DivergenceTracker()
-        t.update("rb", 0, 50)   # T_D=0 → None
-        t.update("rb", 50, 0)   # T_5m=0 → None
+        t.update("rb", 0, 50)  # T_D=0 → None
+        t.update("rb", 50, 0)  # T_5m=0 → None
         s = t.summary()
         self.assertEqual(s["n"], 0)
 
@@ -251,6 +252,7 @@ class TestDivergenceTracker(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. round_tick
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRoundTick(unittest.TestCase):
     """round_tick tick 取整。"""
@@ -298,6 +300,7 @@ class TestRoundTick(unittest.TestCase):
 #  4. latest_abc
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLatestAbc(unittest.TestCase):
     """latest_abc 最近 a-b-c 结构。"""
 
@@ -342,7 +345,7 @@ class TestLatestAbc(unittest.TestCase):
         swings = [
             (0, "low", 100),
             (1, "high", 120),
-            (2, "low", 95),   # c < a → 不构成多头
+            (2, "low", 95),  # c < a → 不构成多头
         ]
         # 只有 3 个，且不构成 → None
         self.assertIsNone(latest_abc(swings))
@@ -391,9 +394,9 @@ class TestLatestAbc(unittest.TestCase):
         swings = [
             (0, "low", 100),
             (1, "high", 120),
-            (2, "low", 105),   # 第1个多头
+            (2, "low", 105),  # 第1个多头
             (3, "high", 130),
-            (4, "low", 115),   # 第2个多头（更近）
+            (4, "low", 115),  # 第2个多头（更近）
         ]
         result = latest_abc(swings)
         a, b, c, d = result
@@ -406,6 +409,7 @@ class TestLatestAbc(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. hidden_pivot
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHiddenPivot(unittest.TestCase):
     """hidden_pivot 隐藏枢轴目标位。"""
@@ -479,8 +483,7 @@ class TestHiddenPivot(unittest.TestCase):
     def test_return_fields_complete(self):
         """返回 8 个字段"""
         result = hidden_pivot(self._bull_abc(), 1.0)
-        for key in ("direction", "direction_text", "a", "b", "c",
-                     "p", "stop", "p_reachable", "gain_pts"):
+        for key in ("direction", "direction_text", "a", "b", "c", "p", "stop", "p_reachable", "gain_pts"):
             self.assertIn(key, result, f"missing key: {key}")
 
     def test_all_prices_tick_rounded(self):

@@ -30,8 +30,8 @@ def _market_open_now(now=None):
     t = now.hour * 60 + now.minute
     # 日盘: 09:00-10:15, 10:30-11:30, 13:30-15:00
     # 夜盘: 21:00-23:00, 23:00-02:30 (凌晨品种)
-    # t in minutes: 540=09:00, 615=10:15, 630=10:30, 690=11:30, 
-    #               810=13:30, 900=15:00, 1260=21:00, 1380=23:00, 
+    # t in minutes: 540=09:00, 615=10:15, 630=10:30, 690=11:30,
+    #               810=13:30, 900=15:00, 1260=21:00, 1380=23:00,
     #               1380-1590=23:00-次日02:30
     return (540 <= t <= 615) or (630 <= t <= 690) or (810 <= t <= 900) or (1260 <= t <= 1590)
 
@@ -58,7 +58,8 @@ def ym_of(code):
     if not m:
         return None
     d = m.group(2)
-    yy = int(d[:2]); mm = int(d[2:])
+    yy = int(d[:2])
+    mm = int(d[2:])
     yy += 2000 if yy < 70 else 1900
     return yy * 100 + mm
 
@@ -116,8 +117,7 @@ def check():
             fails.append(f"edge error: {edge['error']}")
         nn = sum(1 for r in rows if r.get("mean_oos") is not None)
         disk = load_disk_json(CALIB)
-        disk_nn = sum(1 for v in disk.values()
-                      if isinstance(v, dict) and v.get("mean_oos") is not None)
+        disk_nn = sum(1 for v in disk.values() if isinstance(v, dict) and v.get("mean_oos") is not None)
         summary["edge_rows"] = len(rows)
         summary["edge_mean_oos_nn"] = nn
         summary["disk_calib_nn"] = disk_nn
@@ -187,7 +187,7 @@ def check():
 def main():
     fails, summary = check()
     now = time.strftime("%Y-%m-%d %H:%M:%S")
-    cur_ok = (len(fails) == 0)
+    cur_ok = len(fails) == 0
 
     prev = load_disk_json(STATUS_FILE)
     first_run = "ok" not in prev
@@ -195,8 +195,13 @@ def main():
     transition_to_fail = (not cur_ok) and (prev_ok or first_run)
     transition_to_ok = cur_ok and (not prev_ok) and (not first_run)
 
-    status = {"ok": cur_ok, "ts": now, "fails": fails,
-              "summary": summary, "rollover_symbols": summary.get("rollover_symbols", [])}
+    status = {
+        "ok": cur_ok,
+        "ts": now,
+        "fails": fails,
+        "summary": summary,
+        "rollover_symbols": summary.get("rollover_symbols", []),
+    }
     try:
         json.dump(status, open(STATUS_FILE, "w"), ensure_ascii=False, indent=2)
     except Exception:
@@ -207,6 +212,7 @@ def main():
     try:
         sys.path.insert(0, HERE)
         import push_notify as pn
+
         ch = pn.channels_status()
         has_ch = any(ch.get(k) for k in ("telegram", "bark", "wecom"))
     except Exception:

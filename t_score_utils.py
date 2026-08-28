@@ -188,9 +188,7 @@ def compute_T_score(
     cv, cc = cluster_vote_and_consensus(sig, clusters)
 
     # 2. 拥挤降权（仅趋势簇）
-    cf = crowd_penalty_factor(
-        cc.get("trend", 0.0), crowd_thresh, crowd_pen
-    )
+    cf = crowd_penalty_factor(cc.get("trend", 0.0), crowd_thresh, crowd_pen)
 
     # 3. 各簇贡献
     trend_contrib = cluster_weights.get("trend", 0) * cv.get("trend", 0) * cf
@@ -209,10 +207,8 @@ def compute_T_score(
         T_score = 0.0
     else:
         import math
-        T_score = math.copysign(
-            min(100.0, abs(raw) / maxw * 100.0),
-            raw
-        )
+
+        T_score = math.copysign(min(100.0, abs(raw) / maxw * 100.0), raw)
 
     return {
         "T_score": round(T_score, 1),

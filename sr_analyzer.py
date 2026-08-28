@@ -16,28 +16,29 @@ exit_plan 动态止盈止损参考。三重验证：局部极值 + 成交量剖�
   3. 强度评分：触及次数 × 成交量确认 × 时间新鲜度 → 0-100
   4. 角色判定：当前价上方=压力位，下方=支撑位
 """
+
 from __future__ import annotations
 
 import numpy as np
 
 # ── 参数 ──
-SWING_WINDOW = 5          # 局部极值窗口（左右各 5 根 K 线）
-CLUSTER_PCT = 0.003       # 聚类阈值：±0.3% 内合并
-MAX_LEVELS = 8            # 最多保留 N 个结构位（按强度排序）
-MIN_TOUCHES = 2           # 最少触及次数（<2 丢弃）
+SWING_WINDOW = 5  # 局部极值窗口（左右各 5 根 K 线）
+CLUSTER_PCT = 0.003  # 聚类阈值：±0.3% 内合并
+MAX_LEVELS = 8  # 最多保留 N 个结构位（按强度排序）
+MIN_TOUCHES = 2  # 最少触及次数（<2 丢弃）
 VOLUME_CONFIRM_RATIO = 1.2  # 成交量确认：该位成交量 > 均量×1.2 加分
-PROXIMITY_PCT = 0.008     # 近位判定：价格在结构位 ±0.8% 内算"接近"
+PROXIMITY_PCT = 0.008  # 近位判定：价格在结构位 ±0.8% 内算"接近"
 
 # ── 逆向位危险区（方向感知过滤）──
 # 逻辑：做多时离压力位太近 → 易被压回；做空时离支撑位太近 → 易被弹回
 # 极近位（<0.3%）：逆向位极近可能是真突破，不惩罚
 # 危险区（0.3% ~ 1.0%）：靠近但没突破，胜率最低，提高 T 阈值
 # 安全区（>=1.0%）：离逆向位够远，正常阈值
-HOSTILE_TIGHT_PCT = 0.003    # 极近位阈值：0.3%
-HOSTILE_DANGER_LOW = 0.003   # 危险区下限：0.3%
+HOSTILE_TIGHT_PCT = 0.003  # 极近位阈值：0.3%
+HOSTILE_DANGER_LOW = 0.003  # 危险区下限：0.3%
 HOSTILE_DANGER_HIGH = 0.010  # 危险区上限：1.0%
 HOSTILE_DANGER_PENALTY = 0.30  # 危险区 T阈值惩罚：×1.30（提高门槛）
-HOSTILE_TIGHT_BOOST = 0.00     # 极近位：不调整（真突破假设）
+HOSTILE_TIGHT_BOOST = 0.00  # 极近位：不调整（真突破假设）
 
 # ── 旧参数（保留兼容，现用逆向位方案替代）──
 GREY_ZONE_LOW = 0.008
@@ -45,7 +46,7 @@ GREY_ZONE_HIGH = 0.016
 GREY_ZONE_PENALTY = 0.25
 NEAR_ZONE_BOOST = 0.00
 
-TIME_DECAY_DAYS = 60      # 超过 60 天的极值权重衰减
+TIME_DECAY_DAYS = 60  # 超过 60 天的极值权重衰减
 
 # 缓存：sym -> {levels, nearest_support, nearest_resistance, updated}
 _CACHE = {}
@@ -68,13 +69,13 @@ def _find_swing_extrema(df, window=SWING_WINDOW):
     extrema = []
     for i in range(window, n - window):
         # Swing High
-        left = high[i - window:i]
-        right = high[i + 1:i + 1 + window]
+        left = high[i - window : i]
+        right = high[i + 1 : i + 1 + window]
         if high[i] > left.max() and high[i] > right.max():
             extrema.append((dates[i], float(high[i]), "high", float(vol[i])))
         # Swing Low
-        left_l = low[i - window:i]
-        right_l = low[i + 1:i + 1 + window]
+        left_l = low[i - window : i]
+        right_l = low[i + 1 : i + 1 + window]
         if low[i] < left_l.min() and low[i] < right_l.min():
             extrema.append((dates[i], float(low[i]), "low", float(vol[i])))
 
@@ -304,6 +305,7 @@ def _empty_result(current_price):
 
 # ── pipeline 集成接口 ──
 
+
 def signal_quality_boost(sr_result, direction):
     """根据 SR 位给信号质量加分/减分（逆向位方向感知版 v2）。
 
@@ -412,13 +414,13 @@ def adjust_exit_plan(exit_dict, sr_result, direction, entry_price):
 # 回测验证：全局平均 +18.2%（2.5R），但板块差异大，分板块配置更优
 # None = 不启用放宽止损（该板块 SR 位反而有害）
 SR_WIDEN_STOP_GROUP_CONFIG = {
-    "农产品": 2.5,     # 2.5R · 提升 +2383%（16品种）
-    "化工": 2.5,       # 2.5R · 提升 +16.0%（16品种）
-    "有色": 1.8,       # 1.8R · 提升 +102%（5品种）
-    "能源": 1.8,       # 1.8R · 提升 +76.5%（3品种）
-    "黑系": 1.5,       # 1.5R · 提升 +2.4%（6品种，保守）
-    "航运": None,      # 不启用 · 反而有害
-    "贵金属": None,    # 不启用 · 无效果
+    "农产品": 2.5,  # 2.5R · 提升 +2383%（16品种）
+    "化工": 2.5,  # 2.5R · 提升 +16.0%（16品种）
+    "有色": 1.8,  # 1.8R · 提升 +102%（5品种）
+    "能源": 1.8,  # 1.8R · 提升 +76.5%（3品种）
+    "黑系": 1.5,  # 1.5R · 提升 +2.4%（6品种，保守）
+    "航运": None,  # 不启用 · 反而有害
+    "贵金属": None,  # 不启用 · 无效果
 }
 
 # 默认值（不在上面列表的板块）

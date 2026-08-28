@@ -27,6 +27,7 @@
 
 依赖：four_dim_strategy.walk_forward_backtest / walk_forward_backtest_5m_exit（需 pandas/numpy + 本地数据）。
 """
+
 import copy
 import fcntl
 import json
@@ -40,8 +41,10 @@ import four_dim_strategy as fd
 
 PER_SYM_TIMEOUT = 900  # 单品种(on+off两遍)超时秒数，超时跳过防止永久卡死（2026-08-16 放宽至900s以容纳FG等慢品种≈505s）
 
+
 def _on_alarm(signum, frame):
     raise TimeoutError("per-symbol timeout")
+
 
 # 用户固定关注的 6 个品种（省略命令行参数时默认）
 DEFAULT_TARGETS = ["jd", "lh", "FG", "SA", "JM", "J"]
@@ -50,8 +53,7 @@ DEFAULT_TARGETS = ["jd", "lh", "FG", "SA", "JM", "J"]
 FIVE_M_TARGETS = ["FG", "J", "JM", "SA", "lh"]
 
 # 受本轮整改控制的开关块（enabled 决定生效与否）
-SWITCH_BLOCKS = ["decorrelate", "seasonal_boost", "regime_params",
-                 "trailing_tail", "robust_pool_gate"]
+SWITCH_BLOCKS = ["decorrelate", "seasonal_boost", "regime_params", "trailing_tail", "robust_pool_gate"]
 
 
 def make_cfg(enabled: bool):
@@ -98,8 +100,7 @@ def run_one(symbol, cfg, fn):
     try:
         return fn(symbol, cfg)
     except Exception as e:
-        return {"symbol": symbol, "trades": 0,
-                "note": f"异常:{repr(e)[:60]}", "trades_detail": []}
+        return {"symbol": symbol, "trades": 0, "note": f"异常:{repr(e)[:60]}", "trades_detail": []}
 
 
 # 中金所(CFFEX)金融期货代码——非商品，全市场扫描时默认排除
@@ -131,10 +132,14 @@ def _build_out(targets, mode_str, rows):
         "mode": mode_str,
         "note": "on=整改后(DEFAULT_CONFIG) off=全部开关False(v12)",
         "rows": [
-            {"symbol": s, "on": a, "off": b,
-             "delta_expR": round(a["expR"] - b["expR"], 4),
-             "delta_win": round(a["win_rate"] - b["win_rate"], 3),
-             "delta_dd": round(a["max_dd_R"] - b["max_dd_R"], 3)}
+            {
+                "symbol": s,
+                "on": a,
+                "off": b,
+                "delta_expR": round(a["expR"] - b["expR"], 4),
+                "delta_win": round(a["win_rate"] - b["win_rate"], 3),
+                "delta_dd": round(a["max_dd_R"] - b["max_dd_R"], 3),
+            }
             for s, a, b in rows
         ],
     }
@@ -144,9 +149,14 @@ def _build_out(targets, mode_str, rows):
     n_dec = sum(1 for x in valid if x["delta_expR"] < -0.02)
     n_flat = len(valid) - n_imp - n_dec
     avg_de = round(sum(x["delta_expR"] for x in valid) / len(valid), 4) if valid else 0.0
-    out["summary"] = {"n_total": len(rs), "n_valid": len(valid),
-                      "n_improve": n_imp, "n_degrade": n_dec, "n_flat": n_flat,
-                      "avg_delta_expR": avg_de}
+    out["summary"] = {
+        "n_total": len(rs),
+        "n_valid": len(valid),
+        "n_improve": n_imp,
+        "n_degrade": n_dec,
+        "n_flat": n_flat,
+        "avg_delta_expR": avg_de,
+    }
     return out
 
 
@@ -217,8 +227,7 @@ def main():
     print("四维策略 OOS 对比：整改后(on) vs 整改前(off=v12)")
     print(f"（数据：本地 ｜ 回测：{fn_label} ｜ 品种数：{len(targets)}）")
     print("=" * 80)
-    hdr = (f"{'品种':4} {'模式':4} {'笔':>5} {'期望R':>8} {'胜率':>7} "
-           f"{'最大回撤R':>9} {'t2率':>6} {'尾仓占':>6}")
+    hdr = f"{'品种':4} {'模式':4} {'笔':>5} {'期望R':>8} {'胜率':>7} {'最大回撤R':>9} {'t2率':>6} {'尾仓占':>6}"
     print(hdr)
     print("-" * 80)
     mode_str = "1h_exit" if use_1h else ("5m_exit" if use_5m else ("all" if use_all else "default"))
@@ -240,12 +249,15 @@ def main():
             signal.alarm(0)
         rows.append((sym, r_on, r_off))
         for tag, r in (("on ", r_on), ("off", r_off)):
-            print(f"{sym:4} {tag:4} {r['trades']:>5} {r['expR']:>8} "
-                  f"{r['win_rate']*100:>6.1f}% {r['max_dd_R']:>9} "
-                  f"{r['t2_rate']*100:>5.1f}% {r['tail_share']*100:>5.1f}%", flush=True)
-        de = r_on['expR'] - r_off['expR']
-        dw = (r_on['win_rate'] - r_off['win_rate']) * 100
-        dd = r_on['max_dd_R'] - r_off['max_dd_R']
+            print(
+                f"{sym:4} {tag:4} {r['trades']:>5} {r['expR']:>8} "
+                f"{r['win_rate'] * 100:>6.1f}% {r['max_dd_R']:>9} "
+                f"{r['t2_rate'] * 100:>5.1f}% {r['tail_share'] * 100:>5.1f}%",
+                flush=True,
+            )
+        de = r_on["expR"] - r_off["expR"]
+        dw = (r_on["win_rate"] - r_off["win_rate"]) * 100
+        dd = r_on["max_dd_R"] - r_off["max_dd_R"]
         verdict = "改善▲" if de > 0.02 else ("退化▼" if de < -0.02 else "持平=")
         print(f"   └ ΔexpR={de:+.3f}  Δ胜率={dw:+.1f}pp  Δ回撤={dd:+.2f}R   → {verdict}", flush=True)
         print(flush=True)
@@ -261,9 +273,12 @@ def main():
     print(f"结果已写入 {out_name}", flush=True)
     valid = [x for x in out["rows"] if x["on"]["trades"] > 0 and x["off"]["trades"] > 0]
     if valid:
-        print(f"汇总（{len(valid)} 个有效品种）：{out['summary']['n_improve']} 改善 / "
-              f"{out['summary']['n_degrade']} 退化 / {out['summary']['n_flat']} 持平 "
-              f"｜ 平均 ΔexpR={out['summary']['avg_delta_expR']:+.4f}", flush=True)
+        print(
+            f"汇总（{len(valid)} 个有效品种）：{out['summary']['n_improve']} 改善 / "
+            f"{out['summary']['n_degrade']} 退化 / {out['summary']['n_flat']} 持平 "
+            f"｜ 平均 ΔexpR={out['summary']['avg_delta_expR']:+.4f}",
+            flush=True,
+        )
     if failures:
         print(f"[失败/跳过] {len(failures)} 个: {failures}", flush=True)
 

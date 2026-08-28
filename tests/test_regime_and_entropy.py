@@ -43,16 +43,19 @@ from strategy_layer import classify_regime
 def _make_df(prices):
     """构造 OHLC DataFrame，high=price*1.01, low=price*0.99"""
     n = len(prices)
-    return pd.DataFrame({
-        "close": prices,
-        "high": [p * 1.01 for p in prices],
-        "low": [p * 0.99 for p in prices],
-    })
+    return pd.DataFrame(
+        {
+            "close": prices,
+            "high": [p * 1.01 for p in prices],
+            "low": [p * 0.99 for p in prices],
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. classify_regime
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClassifyRegime(unittest.TestCase):
     """classify_regime 市场状态分类。"""
@@ -69,11 +72,13 @@ class TestClassifyRegime(unittest.TestCase):
         # 构造大波动：价格大幅跳动
         prices = [100.0] * 25
         # 用 high/low 制造大 ATR
-        df = pd.DataFrame({
-            "close": prices,
-            "high": [p * 1.08 for p in prices],  # 8% 的振幅
-            "low": [p * 0.92 for p in prices],
-        })
+        df = pd.DataFrame(
+            {
+                "close": prices,
+                "high": [p * 1.08 for p in prices],  # 8% 的振幅
+                "low": [p * 0.92 for p in prices],
+            }
+        )
         regime, desc = classify_regime(df)
         # ATR 占比 > 默认阈值 → "波动"
         self.assertEqual(regime, "波动")
@@ -86,11 +91,11 @@ class TestClassifyRegime(unittest.TestCase):
         df = _make_df(prices)
         # 用宽松的阈值来确保进入震荡
         params = {
-            "atr_thresh": 0.05,    # 5% 才算高波动
-            "flat_dev": 0.02,      # 偏离 < 2%
-            "flat_atr": 0.03,      # ATR < 3%（1% 价差的 ATR 约 2%）
-            "trend_slope": 0.03,   # 斜率 > 3%
-            "trend_dev": 0.02,     # 偏离 > 2%
+            "atr_thresh": 0.05,  # 5% 才算高波动
+            "flat_dev": 0.02,  # 偏离 < 2%
+            "flat_atr": 0.03,  # ATR < 3%（1% 价差的 ATR 约 2%）
+            "trend_slope": 0.03,  # 斜率 > 3%
+            "trend_dev": 0.02,  # 偏离 > 2%
         }
         regime, desc = classify_regime(df, params)
         # 横盘 + 低波动 → "震荡"
@@ -135,7 +140,7 @@ class TestClassifyRegime(unittest.TestCase):
         df = _make_df(prices)
         params = {
             "atr_thresh": 0.05,
-            "flat_dev": 0.005,   # 偏离 > 0.5% 就不算震荡
+            "flat_dev": 0.005,  # 偏离 > 0.5% 就不算震荡
             "flat_atr": 0.005,
             "trend_slope": 0.02,  # 斜率 > 2% 才算趋势
             "trend_dev": 0.02,
@@ -157,11 +162,13 @@ class TestClassifyRegime(unittest.TestCase):
         """优先级：高波动优先于其他状态"""
         # 同时满足趋势和高波动 → 应该判"波动"（先判断）
         prices = [100 + i * 2.0 for i in range(30)]  # 大涨，同时 ATR 也大
-        df = pd.DataFrame({
-            "close": prices,
-            "high": [p * 1.10 for p in prices],  # 10% 振幅 → 高波动
-            "low": [p * 0.90 for p in prices],
-        })
+        df = pd.DataFrame(
+            {
+                "close": prices,
+                "high": [p * 1.10 for p in prices],  # 10% 振幅 → 高波动
+                "low": [p * 0.90 for p in prices],
+            }
+        )
         params = {
             "atr_thresh": 0.05,  # 5% 阈值
             "flat_dev": 0.02,
@@ -179,9 +186,9 @@ class TestClassifyRegime(unittest.TestCase):
         df = _make_df(prices)
         params = {
             "atr_thresh": 0.05,
-            "flat_dev": 0.01,     # 偏离 < 1% → 震荡
-            "flat_atr": 0.03,     # ATR < 3%
-            "trend_slope": 0.001, # 斜率门槛极低
+            "flat_dev": 0.01,  # 偏离 < 1% → 震荡
+            "flat_atr": 0.03,  # ATR < 3%
+            "trend_slope": 0.001,  # 斜率门槛极低
             "trend_dev": 0.001,
         }
         regime, desc = classify_regime(df, params)
@@ -192,6 +199,7 @@ class TestClassifyRegime(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _weight_entropy
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestWeightEntropy(unittest.TestCase):
     """_weight_entropy 权重归一化熵。"""

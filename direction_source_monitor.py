@@ -16,13 +16,14 @@
   · SA 单独记一个专项序列（对方向源最敏感），面板可单独看。
   · 纯函数 + 单例 tracker，runner 每轮调用 alert_level() 即可，零副作用风险。
 """
+
 from __future__ import annotations
 
 # ── 回测实测基准 ──
-BASELINE_DIVERGENCE = 0.484   # TD vs T5m 全样本分歧率
-WARN_DIVERGENCE = 0.55        # 滚动分歧率 ≥ 此 → WARN（建议信号降权）
-HIGH_DIVERGENCE = 0.65        # 滚动分歧率 ≥ 此 → HIGH（建议暂停新开/人工复核）
-SA_SENSITIVE = True           # SA 对方向源最敏感
+BASELINE_DIVERGENCE = 0.484  # TD vs T5m 全样本分歧率
+WARN_DIVERGENCE = 0.55  # 滚动分歧率 ≥ 此 → WARN（建议信号降权）
+HIGH_DIVERGENCE = 0.65  # 滚动分歧率 ≥ 此 → HIGH（建议暂停新开/人工复核）
+SA_SENSITIVE = True  # SA 对方向源最敏感
 
 _tracker = None
 
@@ -41,9 +42,9 @@ class DivergenceTracker:
 
     def __init__(self, window=200):
         self.window = window
-        self.samples = []        # 一致性 True/False 序列（全品种）
-        self.sa_samples = []     # SA 专项一致性序列
-        self.last = None         # 最近一次 summary 快照
+        self.samples = []  # 一致性 True/False 序列（全品种）
+        self.sa_samples = []  # SA 专项一致性序列
+        self.last = None  # 最近一次 summary 快照
 
     def update(self, symbol, T_D, T_5m):
         ag = divergence(T_D, T_5m)
@@ -63,7 +64,7 @@ class DivergenceTracker:
     def _rate(arr):
         if not arr:
             return None
-        return 1.0 - sum(arr) / len(arr)   # 分歧率
+        return 1.0 - sum(arr) / len(arr)  # 分歧率
 
     def summary(self):
         rate = self._rate(self.samples)
@@ -116,5 +117,4 @@ if __name__ == "__main__":
     for _ in range(10):
         t.update("rb", 1, -1)
     s = t.summary()
-    print("分歧率(全):", s["divergence_rate"], "level:", s["level"],
-          "SA专项:", s["sa_divergence_rate"])
+    print("分歧率(全):", s["divergence_rate"], "level:", s["level"], "SA专项:", s["sa_divergence_rate"])

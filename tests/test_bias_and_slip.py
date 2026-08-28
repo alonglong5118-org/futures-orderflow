@@ -85,9 +85,7 @@ class TestCombineBias(unittest.TestCase):
 
     def test_custom_weights_from_cfg(self):
         """自定义权重（通过 cfg 传入）"""
-        custom_cfg = {
-            "combine_weights": {"T": 0.5, "F": 0.3, "C": 0.2}
-        }
+        custom_cfg = {"combine_weights": {"T": 0.5, "F": 0.3, "C": 0.2}}
         # 0.5*60 + 0.3*40 + 0.2*30 = 30 + 12 + 6 = 48
         result = combine_bias(F=40, T=60, C=30, cfg=custom_cfg)
         self.assertAlmostEqual(result, 48.0, places=1)
@@ -110,8 +108,7 @@ class TestCombineBias(unittest.TestCase):
         extreme_cfg = {"combine_weights": {"T": 1.0, "F": 0, "C": 0}}
         result = combine_bias(F=100, T=50, C=100, cfg=extreme_cfg)
         # 只有 T 有贡献 → 50
-        self.assertAlmostEqual(result, 50.0, places=1,
-            msg="P2-④ 回归：combine_weights 配置没有生效，还是用的硬编码值")
+        self.assertAlmostEqual(result, 50.0, places=1, msg="P2-④ 回归：combine_weights 配置没有生效，还是用的硬编码值")
 
     def test_result_rounded_to_1_decimal(self):
         """结果保留 1 位小数"""
@@ -125,6 +122,7 @@ class TestCombineBias(unittest.TestCase):
 #  流动性滑点分级
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSlipPts(unittest.TestCase):
     """get_slip_pts — 流动性敏感滑点分级。"""
 
@@ -132,6 +130,7 @@ class TestSlipPts(unittest.TestCase):
         """从 four_dim_strategy 导入 get_slip_pts。"""
         sys.path.insert(0, ROOT)
         from four_dim_strategy import get_slip_pts
+
         return get_slip_pts
 
     def test_a_tier_super_liquid(self):
@@ -207,9 +206,8 @@ class TestSlipPts(unittest.TestCase):
         get_slip_pts = self._import_slip_fn()
         # 超流动品种（rb）和低流动品种（ap）滑点不同
         slip_high = get_slip_pts("rb")  # A 档 1.0
-        slip_low = get_slip_pts("ap")   # C 档 2.0
-        self.assertGreater(slip_low, slip_high,
-            "P2 回归：低流动品种滑点应该更高，不是全局统一的")
+        slip_low = get_slip_pts("ap")  # C 档 2.0
+        self.assertGreater(slip_low, slip_high, "P2 回归：低流动品种滑点应该更高，不是全局统一的")
         # 验证确实是分级的（C 档是 A 档的 2 倍）
         self.assertAlmostEqual(slip_low / slip_high, 2.0, places=1)
 

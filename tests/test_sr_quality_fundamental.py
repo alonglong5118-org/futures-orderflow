@@ -55,6 +55,7 @@ from sr_analyzer import _classify, signal_quality_boost
 #  1. _classify
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSrClassify(unittest.TestCase):
     """_classify 支撑/压力位分类。"""
 
@@ -99,10 +100,10 @@ class TestSrClassify(unittest.TestCase):
     def test_multiple_levels(self):
         """多个位都正确分类"""
         levels = [
-            {"price": 90},    # support
-            {"price": 95},    # support
-            {"price": 105},   # resistance
-            {"price": 110},   # resistance
+            {"price": 90},  # support
+            {"price": 95},  # support
+            {"price": 105},  # resistance
+            {"price": 110},  # resistance
         ]
         result = _classify(levels, 100)
         self.assertEqual(result[0]["role"], "support")
@@ -126,6 +127,7 @@ class TestSrClassify(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. signal_quality_boost
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSignalQualityBoost(unittest.TestCase):
     """signal_quality_boost 信号质量调整。"""
@@ -234,6 +236,7 @@ class TestSignalQualityBoost(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _value_at
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestValueAt(unittest.TestCase):
     """_value_at 基本面指标单日计算。"""

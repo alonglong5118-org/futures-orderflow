@@ -31,6 +31,7 @@ try:
 
     import numpy as np
     from deap import algorithms, base, creator, tools
+
     _HAVE_DEAP = True
 except ImportError:
     _HAVE_DEAP = False
@@ -98,8 +99,7 @@ def _evaluate(ind, group_data, cfg_template=None):
     total_trades = 0
     for sym, df in group_data.items():
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=300,
-                                      min_bars=60, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=300, min_bars=60, df_in=df)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES_PER_SYMBOL:
                 expRs.append(float(r.get("expR", 0)))
@@ -119,8 +119,7 @@ def _evaluate(ind, group_data, cfg_template=None):
     return (avg_expR,)
 
 
-def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN,
-                   verbose=True, tail=600, min_bars=200):
+def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN, verbose=True, tail=600, min_bars=200):
     """对一个板块运行 GA 6 因子优化。
 
     返回 dict:
@@ -137,8 +136,7 @@ def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN,
         return {"error": f"有效品种不足（{len(group_data)}个）", "group": group}
 
     if verbose:
-        print(f"[板块GA] {group}: {len(group_data)} 个有效品种, "
-              f"pop={pop_size}, gen={n_gen}, tail={tail}")
+        print(f"[板块GA] {group}: {len(group_data)} 个有效品种, pop={pop_size}, gen={n_gen}, tail={tail}")
         for sym in sorted(group_data.keys()):
             print(f"  - {sym}: {len(group_data[sym])} 根")
 
@@ -154,8 +152,7 @@ def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN,
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.IndividualGroup,
-                     toolbox.attr_float, n=n_genes)
+    toolbox.register("individual", tools.initRepeat, creator.IndividualGroup, toolbox.attr_float, n=n_genes)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval_ind(ind):
@@ -184,14 +181,16 @@ def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN,
         pop = toolbox.select(offspring, k=len(pop))
 
         record = stats.compile(pop)
-        history.append({
-            "gen": gen + 1,
-            "avg": round(record["avg"], 4),
-            "max": round(record["max"], 4),
-        })
+        history.append(
+            {
+                "gen": gen + 1,
+                "avg": round(record["avg"], 4),
+                "max": round(record["max"], 4),
+            }
+        )
 
         if verbose:
-            print(f"  Gen {gen+1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}")
+            print(f"  Gen {gen + 1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}")
 
         # 早停：连续 5 代无提升
         if gen >= 5 and all(h["max"] >= record["max"] - 0.001 for h in history[-5:]):
@@ -210,8 +209,7 @@ def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN,
     total_trades = 0
     for sym, df in group_data.items():
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=300,
-                                      min_bars=60, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=300, min_bars=60, df_in=df)
             nt = int(r.get("trades", 0))
             per_symbol[sym] = {
                 "expR": round(float(r.get("expR", 0)), 4),
@@ -249,7 +247,7 @@ def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN,
             if "expR" in v:
                 print(f"    {sym}: expR={v['expR']:+.4f} wr={v['win_rate']:.1%} trades={v['trades']}")
             else:
-                print(f"    {sym}: 失败 {v.get('error','')}")
+                print(f"    {sym}: 失败 {v.get('error', '')}")
 
     return result
 
@@ -278,11 +276,12 @@ def main():
     t0 = time.time()
 
     for i, g in enumerate(groups):
-        print(f"\n{'='*60}")
-        print(f"[{i+1}/{len(groups)}] 优化板块: {g}")
-        print(f"{'='*60}")
-        result = optimize_group(g, pop_size=args.pop, n_gen=args.gen,
-                                verbose=True, tail=args.tail, min_bars=args.min_bars)
+        print(f"\n{'=' * 60}")
+        print(f"[{i + 1}/{len(groups)}] 优化板块: {g}")
+        print(f"{'=' * 60}")
+        result = optimize_group(
+            g, pop_size=args.pop, n_gen=args.gen, verbose=True, tail=args.tail, min_bars=args.min_bars
+        )
         all_results[g] = result
 
         if args.save:
@@ -292,15 +291,14 @@ def main():
             print(f"  已保存到 {out_path}")
 
     elapsed = time.time() - t0
-    print(f"\n{'='*60}")
-    print(f"全部完成，耗时 {elapsed/60:.1f} 分钟")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print(f"全部完成，耗时 {elapsed / 60:.1f} 分钟")
+    print(f"{'=' * 60}")
     for g, r in all_results.items():
         if "best_weights" in r:
-            print(f"  {g}: avg_expR={r['best_avg_expR']:+.4f} "
-                  f"({r['n_valid_symbols']}品种/{r['total_trades']}笔)")
+            print(f"  {g}: avg_expR={r['best_avg_expR']:+.4f} ({r['n_valid_symbols']}品种/{r['total_trades']}笔)")
         else:
-            print(f"  {g}: 失败 - {r.get('error','')}")
+            print(f"  {g}: 失败 - {r.get('error', '')}")
 
 
 if __name__ == "__main__":

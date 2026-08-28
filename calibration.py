@@ -23,6 +23,7 @@
   r = cal.evaluate(window_h=4)        # 返回 buckets + overall + reliability
   # /api/calibration 直接返回 r
 """
+
 from __future__ import annotations
 
 import json
@@ -35,17 +36,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 LIVEBARS = os.path.join(HERE, "live_bars.json")
 
-WINDOW_H = 4          # 评估窗口：信号后 4 小时看方向
+WINDOW_H = 4  # 评估窗口：信号后 4 小时看方向
 _CACHE = {"ts": 0, "data": None, "lock": threading.Lock()}
-_CACHE_TTL = 300      # 缓存 300s
+_CACHE_TTL = 300  # 缓存 300s
 
 # |bias_G| 分桶（基于实测分布 q25≈8 / 中位≈14 / q75≈19 / q90≈29 划定）
 # 每桶给一个「名义置信度」= 模型自以为的胜率（用于可靠性图对比）
 TIERS = [
-    {"key": "low",    "label": "低自信",  "lo": 0.0,  "hi": 8.0,  "nominal": 0.55},
-    {"key": "mid",    "label": "中自信",  "lo": 8.0,  "hi": 14.0, "nominal": 0.62},
-    {"key": "high",   "label": "高自信",  "lo": 14.0, "hi": 20.0, "nominal": 0.70},
-    {"key": "vhigh",  "label": "极高自信", "lo": 20.0, "hi": 1e9,  "nominal": 0.78},
+    {"key": "low", "label": "低自信", "lo": 0.0, "hi": 8.0, "nominal": 0.55},
+    {"key": "mid", "label": "中自信", "lo": 8.0, "hi": 14.0, "nominal": 0.62},
+    {"key": "high", "label": "高自信", "lo": 14.0, "hi": 20.0, "nominal": 0.70},
+    {"key": "vhigh", "label": "极高自信", "lo": 20.0, "hi": 1e9, "nominal": 0.78},
 ]
 
 
@@ -110,10 +111,20 @@ def evaluate(window_h=WINDOW_H, force=False):
     overall_n = 0
     overall_hits = 0
     overall_brier = 0.0
-    buckets = {t["key"]: {"label": t["label"], "lo": t["lo"], "hi": t["hi"],
-                           "nominal": t["nominal"], "n": 0, "hits": 0,
-                           "miss": 0, "hit_rate": 0.0, "avg_move": 0.0}
-               for t in TIERS}
+    buckets = {
+        t["key"]: {
+            "label": t["label"],
+            "lo": t["lo"],
+            "hi": t["hi"],
+            "nominal": t["nominal"],
+            "n": 0,
+            "hits": 0,
+            "miss": 0,
+            "hit_rate": 0.0,
+            "avg_move": 0.0,
+        }
+        for t in TIERS
+    }
     pending = 0
 
     for s in sigs:
@@ -143,7 +154,7 @@ def evaluate(window_h=WINDOW_H, force=False):
         t_end = t + __import__("datetime").timedelta(hours=window_h)
         fprice = _future_close(bars, t_end)
         if fprice is None:
-            pending += 1          # 信号太新，窗口尚未走完
+            pending += 1  # 信号太新，窗口尚未走完
             continue
         move = fprice - ref
         real_dir = 1 if move > 0 else (-1 if move < 0 else 0)
@@ -152,13 +163,14 @@ def evaluate(window_h=WINDOW_H, force=False):
         tier = None
         for t in TIERS:
             if t["lo"] <= bg < t["hi"]:
-                tier = t["key"]; break
+                tier = t["key"]
+                break
         if tier is None:
             tier = TIERS[-1]["key"]
         b = buckets[tier]
         b["n"] += 1
         b["hits"] += hit
-        b["miss"] += (1 - hit)
+        b["miss"] += 1 - hit
         b["avg_move"] += move
         overall_n += 1
         overall_hits += hit
@@ -169,13 +181,17 @@ def evaluate(window_h=WINDOW_H, force=False):
         if b["n"]:
             b["hit_rate"] = round(b["hits"] / b["n"], 4)
             b["avg_move"] = round(b["avg_move"] / b["n"], 2)
-        b["n"] = int(b["n"]); b["hits"] = int(b["hits"]); b["miss"] = int(b["miss"])
-    reliability = [{"nominal": round(b["nominal"], 3),
-                    "empirical": b["hit_rate"],
-                    "n": b["n"], "label": b["label"]}
-                   for b in buckets.values()]
+        b["n"] = int(b["n"])
+        b["hits"] = int(b["hits"])
+        b["miss"] = int(b["miss"])
+    reliability = [
+        {"nominal": round(b["nominal"], 3), "empirical": b["hit_rate"], "n": b["n"], "label": b["label"]}
+        for b in buckets.values()
+    ]
     overall = {
-        "n": overall_n, "hits": overall_hits, "miss": overall_n - overall_hits,
+        "n": overall_n,
+        "hits": overall_hits,
+        "miss": overall_n - overall_hits,
         "hit_rate": round(overall_hits / overall_n, 4) if overall_n else 0.0,
         "brier": round(overall_brier / overall_n, 4) if overall_n else 0.0,
     }
@@ -198,8 +214,10 @@ def evaluate(window_h=WINDOW_H, force=False):
 if __name__ == "__main__":
     r = evaluate(force=True)
     print(f"信号总数={r['total_signals']} 已评估={r['evaluated']} 待窗口={r['pending']}")
-    print(f"整体命中率={r['overall']['hit_rate']*100:.1f}%  Brier={r['overall']['brier']}")
+    print(f"整体命中率={r['overall']['hit_rate'] * 100:.1f}%  Brier={r['overall']['brier']}")
     for b in r["buckets"]:
-        print(f"  {b['label']:>4}(|bg|{b['lo']:.0f}-{b['hi']:.0f}) "
-              f"名义{b['nominal']*100:.0f}% → 实际{b['hit_rate']*100:.1f}% "
-              f"n={b['n']} avg_move={b['avg_move']}")
+        print(
+            f"  {b['label']:>4}(|bg|{b['lo']:.0f}-{b['hi']:.0f}) "
+            f"名义{b['nominal'] * 100:.0f}% → 实际{b['hit_rate'] * 100:.1f}% "
+            f"n={b['n']} avg_move={b['avg_move']}"
+        )

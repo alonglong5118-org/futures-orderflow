@@ -57,6 +57,7 @@ from regression_test import (
 #  1. calc_signal_agreement
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSignalAgreement(unittest.TestCase):
     """calc_signal_agreement 信号一致率。"""
 
@@ -135,6 +136,7 @@ class TestSignalAgreement(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. classify_status
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestClassifyStatus(unittest.TestCase):
     """classify_status 四维度状态分类。"""
@@ -224,6 +226,7 @@ class TestClassifyStatus(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. fmt_delta
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFmtDelta(unittest.TestCase):
     """fmt_delta 带颜色格式化。"""

@@ -100,6 +100,7 @@ from signal_trigger_utils import (
 #  1. compute_kelly_factor
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestKellyFactor(unittest.TestCase):
     """compute_kelly_factor Kelly 仓位缩放。"""
 
@@ -123,10 +124,7 @@ class TestKellyFactor(unittest.TestCase):
     def test_half_edge_linear_interp(self):
         """edge 在中间 → 线性插值"""
         # edge=0.25, target=0.5 → ratio=0.5 → 0.6 + 0.6*0.5 = 0.9
-        self.assertAlmostEqual(
-            compute_kelly_factor(0.25, kelly_min=0.6, kelly_max=1.2, target_edge=0.5),
-            0.9, places=6
-        )
+        self.assertAlmostEqual(compute_kelly_factor(0.25, kelly_min=0.6, kelly_max=1.2, target_edge=0.5), 0.9, places=6)
 
     def test_edge_exceeds_target_capped(self):
         """edge > target → 封顶 kelly_max"""
@@ -148,33 +146,28 @@ class TestKellyFactor(unittest.TestCase):
 
     def test_positive_near_allows_above_one(self):
         """近景正 → 允许 >1.0 杠杆"""
-        result = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5,
-                                       cur_full_expR=0.3)
+        result = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5, cur_full_expR=0.3)
         self.assertEqual(result, 1.2)
         self.assertGreater(result, 1.0)
 
     def test_negative_near_caps_at_one(self):
         """近景负 → 封顶 1.0"""
-        result = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5,
-                                       cur_full_expR=-0.2)
+        result = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5, cur_full_expR=-0.2)
         self.assertEqual(result, 1.0)
 
     def test_none_near_uses_far_edge_sign(self):
         """近景 None → 用远 edge 符号"""
         # 远 edge 正 → 允许 >1.0
-        r1 = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5,
-                                   cur_full_expR=None)
+        r1 = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5, cur_full_expR=None)
         self.assertEqual(r1, 1.2)
         # 远 edge 负 → 封顶 1.0
-        r2 = compute_kelly_factor(-0.1, kelly_min=0.6, kelly_max=1.2, target_edge=0.5,
-                                   cur_full_expR=None)
+        r2 = compute_kelly_factor(-0.1, kelly_min=0.6, kelly_max=1.2, target_edge=0.5, cur_full_expR=None)
         # 负 edge 按 0 算 → mult=0.6，且 near_pos=False → min(0.6, 1.0) = 0.6
         self.assertEqual(r2, 0.6)
 
     def test_invalid_near_falls_back(self):
         """近景数据异常 → 退回远 edge"""
-        result = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5,
-                                       cur_full_expR="bad")
+        result = compute_kelly_factor(0.5, kelly_min=0.6, kelly_max=1.2, target_edge=0.5, cur_full_expR="bad")
         self.assertEqual(result, 1.2)
 
     def test_invalid_params_return_one(self):
@@ -189,6 +182,7 @@ class TestKellyFactor(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. check_gap_stop_triggered
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestGapStopTriggered(unittest.TestCase):
     """check_gap_stop_triggered 缺口击穿判定。"""
@@ -295,6 +289,7 @@ class TestGapStopTriggered(unittest.TestCase):
 #  3. check_hard_veto
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHardVeto(unittest.TestCase):
     """check_hard_veto F/C 反向硬否决。"""
 
@@ -347,6 +342,7 @@ class TestHardVeto(unittest.TestCase):
 #  4. check_fc_confirmation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFcConfirmation(unittest.TestCase):
     """check_fc_confirmation F/C 同向确认。"""
 
@@ -387,6 +383,7 @@ class TestFcConfirmation(unittest.TestCase):
 #  5. compute_effective_threshold
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestEffectiveThreshold(unittest.TestCase):
     """compute_effective_threshold 有效触发阈值。"""
 
@@ -417,6 +414,7 @@ class TestEffectiveThreshold(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. check_same_direction
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSameDirection(unittest.TestCase):
     """check_same_direction bias_G 与 T 同向判断。"""
@@ -457,6 +455,7 @@ class TestSameDirection(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. signal_trigger_decision
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSignalTriggerDecision(unittest.TestCase):
     """signal_trigger_decision 信号触发决策。"""
@@ -520,10 +519,10 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_full_pipeline_triggers(self):
         """完整流程：确认+同向+强T → 触发"""
         r = self._base(
-            T_5m=45,          # 原本 45 < 50
+            T_5m=45,  # 原本 45 < 50
             T_thresh_eff=50,
-            bias_G=20,        # 同向
-            bias_FC=30,       # 同向确认
+            bias_G=20,  # 同向
+            bias_FC=30,  # 同向确认
             fc_confirm=25,
             confirm_relief=0.8,  # 阈值降到 40
         )
@@ -536,8 +535,7 @@ class TestSignalTriggerDecision(unittest.TestCase):
     def test_return_six_fields(self):
         """返回 6 字段"""
         r = self._base()
-        for key in ("triggered", "hard_veto", "hard_veto_reason",
-                     "fc_confirmed", "effective_thr", "same_dir"):
+        for key in ("triggered", "hard_veto", "hard_veto_reason", "fc_confirmed", "effective_thr", "same_dir"):
             self.assertIn(key, r)
 
     def test_at_threshold_triggers(self):

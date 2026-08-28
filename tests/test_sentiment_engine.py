@@ -104,6 +104,7 @@ from sentiment_engine import (
 #  1. is_hard_filtered
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsHardFiltered(unittest.TestCase):
     """is_hard_filtered 情绪硬过滤。"""
 
@@ -166,6 +167,7 @@ class TestIsHardFiltered(unittest.TestCase):
 #  2. _label_for
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLabelFor(unittest.TestCase):
     """_label_for 分数 → 标签映射。"""
 
@@ -224,6 +226,7 @@ class TestLabelFor(unittest.TestCase):
 #  3. _thr_mult
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestThrMult(unittest.TestCase):
     """_thr_mult 阈值乘数。"""
 
@@ -270,6 +273,7 @@ class TestThrMult(unittest.TestCase):
 #  4. _risk_scale
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskScale(unittest.TestCase):
     """_risk_scale 仓位系数。"""
 
@@ -311,6 +315,7 @@ class TestRiskScale(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. _factor_breadth
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFactorBreadth(unittest.TestCase):
     """_factor_breadth 市场广度。"""
@@ -371,6 +376,7 @@ class TestFactorBreadth(unittest.TestCase):
 #  6. _factor_momentum
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFactorMomentum(unittest.TestCase):
     """_factor_momentum 动量共识。"""
 
@@ -422,6 +428,7 @@ class TestFactorMomentum(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. _factor_activity
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFactorActivity(unittest.TestCase):
     """_factor_activity 资金活跃度。"""
@@ -481,6 +488,7 @@ class TestFactorActivity(unittest.TestCase):
 #  8. _factor_amplitude
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFactorAmplitude(unittest.TestCase):
     """_factor_amplitude 涨跌幅度分布。"""
 
@@ -538,6 +546,7 @@ class TestFactorAmplitude(unittest.TestCase):
 #  9. _factor_trend_conc
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFactorTrendConc(unittest.TestCase):
     """_factor_trend_conc 趋势集中度。"""
 
@@ -580,6 +589,7 @@ class TestFactorTrendConc(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  10. _factor_volatility
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFactorVolatility(unittest.TestCase):
     """_factor_volatility 波动率因子。"""
@@ -629,6 +639,7 @@ class TestFactorVolatility(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  11. _factor_divergence
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFactorDivergence(unittest.TestCase):
     """_factor_divergence 板块分歧。"""

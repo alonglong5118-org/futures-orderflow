@@ -34,12 +34,13 @@ def run_backtest(df_slice, symbol, weights_dict, window=150):
 
 def main():
     parser = argparse.ArgumentParser(description="权重融合比例 OOS 扫描")
-    parser.add_argument("--oos-file", type=str, default="logs/ga_oos_validation.json",
-                        help="OOS 验证结果文件（取 GA 权重和数据范围）")
-    parser.add_argument("--alphas", type=str, default="0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0",
-                        help="扫描的 alpha 值（逗号分隔）")
-    parser.add_argument("--output", type=str, default="logs/ga_blend_sweep.json",
-                        help="结果输出")
+    parser.add_argument(
+        "--oos-file", type=str, default="logs/ga_oos_validation.json", help="OOS 验证结果文件（取 GA 权重和数据范围）"
+    )
+    parser.add_argument(
+        "--alphas", type=str, default="0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0", help="扫描的 alpha 值（逗号分隔）"
+    )
+    parser.add_argument("--output", type=str, default="logs/ga_blend_sweep.json", help="结果输出")
     args = parser.parse_args()
 
     alphas = [float(a) for a in args.alphas.split(",")]
@@ -114,13 +115,12 @@ def main():
         }
 
         elapsed = time.time() - t_start
-        print(f"  α={alpha:.1f}: avg_expR={avg_expR:+.4f} pos={n_pos} neg={n_neg} ({elapsed:.0f}s)",
-              flush=True)
+        print(f"  α={alpha:.1f}: avg_expR={avg_expR:+.4f} pos={n_pos} neg={n_neg} ({elapsed:.0f}s)", flush=True)
 
     # 汇总
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"[3/3] 汇总")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"{'alpha':>6} {'avg_expR':>10} {'变化(vs默认)':>14} {'正收益':>6} {'负收益':>6}")
     print("-" * 50)
 
@@ -136,16 +136,21 @@ def main():
         if r["avg_expR"] > best_expR:
             best_expR = r["avg_expR"]
             best_alpha = alpha
-        print(f"{alpha:>6.1f} {r['avg_expR']:>+10.4f} {delta:>+9.4f} ({delta_pct:>+6.1f}%) "
-              f"{r['n_pos']:>6} {r['n_neg']:>6}{marker}")
+        print(
+            f"{alpha:>6.1f} {r['avg_expR']:>+10.4f} {delta:>+9.4f} ({delta_pct:>+6.1f}%) "
+            f"{r['n_pos']:>6} {r['n_neg']:>6}{marker}"
+        )
 
     print()
     print(f"最优 alpha: {best_alpha} (avg_expR={best_expR:.4f})")
-    print(f"相比纯默认: {best_expR - baseline:+.4f} ({(best_expR-baseline)/abs(baseline)*100 if baseline!=0 else 0:+.1f}%)")
+    print(
+        f"相比纯默认: {best_expR - baseline:+.4f} ({(best_expR - baseline) / abs(baseline) * 100 if baseline != 0 else 0:+.1f}%)"
+    )
     print(f"相比纯GA:  {best_expR - sweep_results[1.0]['avg_expR']:+.4f}")
 
     # 按板块最优 alpha
     from collections import defaultdict
+
     print(f"\n--- 各板块最优 alpha ---")
     groups = defaultdict(list)
     for sym, data in sym_data.items():
@@ -167,19 +172,26 @@ def main():
                 best_g_alpha = alpha
 
         delta = best_g_expR - d_avg
-        print(f"{grp:<6} {len(syms):>5} {d_avg:>+9.4f} {g_avg:>+9.4f} "
-              f"{best_g_alpha:>6.1f} {best_g_expR:>+9.4f} {delta:>+8.4f}")
+        print(
+            f"{grp:<6} {len(syms):>5} {d_avg:>+9.4f} {g_avg:>+9.4f} "
+            f"{best_g_alpha:>6.1f} {best_g_expR:>+9.4f} {delta:>+8.4f}"
+        )
 
     # 保存
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
-        json.dump({
-            "alphas": alphas,
-            "best_alpha": best_alpha,
-            "best_avg_expR": best_expR,
-            "baseline_avg_expR": baseline,
-            "sweep": {str(k): v for k, v in sweep_results.items()},
-        }, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "alphas": alphas,
+                "best_alpha": best_alpha,
+                "best_avg_expR": best_expR,
+                "baseline_avg_expR": baseline,
+                "sweep": {str(k): v for k, v in sweep_results.items()},
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     print(f"\n详细结果已保存到: {args.output}")
 

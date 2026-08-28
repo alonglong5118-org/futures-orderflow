@@ -16,6 +16,7 @@ Phase 1：2 参数（stop_atr_mult + rr_ratio）+ 单目标 + 全样本回测
     - 纯 OOS 检验
     - 参数稳健性检验
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,18 +42,18 @@ from four_dim_strategy import DEFAULT_CONFIG, walk_forward_backtest
 
 # 参数范围（基因 0: stop_atr_mult, 基因 1: rr_ratio）
 PARAM_BOUNDS = [
-    (0.8, 3.0),   # stop_atr_mult
-    (1.2, 4.0),   # rr_ratio
+    (0.8, 3.0),  # stop_atr_mult
+    (1.2, 4.0),  # rr_ratio
 ]
 PARAM_NAMES = ["stop_atr_mult", "rr_ratio"]
 
 # GA 参数（Phase 1 用较小种群和代数，快速验证）
 DEFAULT_POP_SIZE = 50
 DEFAULT_GEN_COUNT = 30
-CXPB = 0.9      # 交叉概率
-MUTPB = 0.2     # 变异概率（每个基因）
-SBX_ETA = 20    # SBX 分布指数
-PM_ETA = 20     # 多项式变异分布指数
+CXPB = 0.9  # 交叉概率
+MUTPB = 0.2  # 变异概率（每个基因）
+SBX_ETA = 20  # SBX 分布指数
+PM_ETA = 20  # 多项式变异分布指数
 
 # 最低交易笔数（低于此值的解惩罚）
 MIN_TRADES = 10
@@ -69,6 +70,7 @@ def _cache_key(stop_mult, rr_ratio, symbol, tail):
 # ============================================================================
 # 适应度函数
 # ============================================================================
+
 
 def _make_config(stop_mult, rr_ratio, symbol, base_cfg=DEFAULT_CONFIG):
     """根据参数生成分品种配置。"""
@@ -123,6 +125,7 @@ def evaluate(individual, symbol, tail=None):
 # DEAP 初始化
 # ============================================================================
 
+
 def setup_deap(symbol, tail=None):
     """初始化 DEAP toolbox。"""
     # 单目标最大化
@@ -142,8 +145,7 @@ def setup_deap(symbol, tail=None):
     toolbox.register("attr_rr", attr_float, 1)
 
     # 个体结构：2 个实数基因
-    toolbox.register("individual", tools.initCycle, creator.Individual,
-                     (toolbox.attr_stop, toolbox.attr_rr), n=1)
+    toolbox.register("individual", tools.initCycle, creator.Individual, (toolbox.attr_stop, toolbox.attr_rr), n=1)
 
     # 种群
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
@@ -152,17 +154,23 @@ def setup_deap(symbol, tail=None):
     toolbox.register("evaluate", evaluate, symbol=symbol, tail=tail)
 
     # 交叉：模拟二进制交叉（SBX）
-    toolbox.register("mate", tools.cxSimulatedBinaryBounded,
-                     low=[b[0] for b in PARAM_BOUNDS],
-                     up=[b[1] for b in PARAM_BOUNDS],
-                     eta=SBX_ETA)
+    toolbox.register(
+        "mate",
+        tools.cxSimulatedBinaryBounded,
+        low=[b[0] for b in PARAM_BOUNDS],
+        up=[b[1] for b in PARAM_BOUNDS],
+        eta=SBX_ETA,
+    )
 
     # 变异：多项式变异
-    toolbox.register("mutate", tools.mutPolynomialBounded,
-                     low=[b[0] for b in PARAM_BOUNDS],
-                     up=[b[1] for b in PARAM_BOUNDS],
-                     eta=PM_ETA,
-                     indpb=MUTPB)
+    toolbox.register(
+        "mutate",
+        tools.mutPolynomialBounded,
+        low=[b[0] for b in PARAM_BOUNDS],
+        up=[b[1] for b in PARAM_BOUNDS],
+        eta=PM_ETA,
+        indpb=MUTPB,
+    )
 
     # 选择：锦标赛选择
     toolbox.register("select", tools.selTournament, tournsize=3)
@@ -174,8 +182,8 @@ def setup_deap(symbol, tail=None):
 # 主优化流程
 # ============================================================================
 
-def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_COUNT,
-                     tail=None, seed=42):
+
+def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_COUNT, tail=None, seed=42):
     """运行 GA 优化。
 
     返回:
@@ -207,14 +215,14 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
     if "rr_ratio" in psr:
         baseline_params["rr_ratio"] = psr["rr_ratio"]
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"📊 基线参数（{symbol}）:")
     print(f"   stop_atr_mult = {baseline_params['stop_atr_mult']}")
     print(f"   rr_ratio = {baseline_params['rr_ratio']}")
     print(f"   expR = {baseline_result.get('expR', 'N/A')}")
     print(f"   trades = {baseline_result.get('trades', 0)}")
     print(f"   win_rate = {baseline_result.get('win_rate', 'N/A')}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # 初始化种群
     pop = toolbox.population(n=pop_size)
@@ -271,8 +279,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         best_expR = max(fits)
         avg_expR = sum(fits) / len(fits)
         gen_time = time.time() - gen_start
-        print(f"  Gen {gen:2d}: best={best_expR:.4f}, avg={avg_expR:.4f}  "
-              f"({gen_time:.1f}s)")
+        print(f"  Gen {gen:2d}: best={best_expR:.4f}, avg={avg_expR:.4f}  ({gen_time:.1f}s)")
         history.append({"gen": gen, "best": best_expR, "avg": avg_expR})
 
     runtime = time.time() - start_time
@@ -280,22 +287,19 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
 
     # 选出最优个体
     best_ind = tools.selBest(pop, 1)[0]
-    best_params = {
-        PARAM_NAMES[i]: round(best_ind[i], 3)
-        for i in range(len(PARAM_NAMES))
-    }
-    best_result = walk_forward_backtest(
-        symbol, cfg=_make_config(best_ind[0], best_ind[1], symbol), tail=tail
-    )
+    best_params = {PARAM_NAMES[i]: round(best_ind[i], 3) for i in range(len(PARAM_NAMES))}
+    best_result = walk_forward_backtest(symbol, cfg=_make_config(best_ind[0], best_ind[1], symbol), tail=tail)
 
     # 最终种群（前 20 名）
     top_individuals = tools.selBest(pop, min(20, len(pop)))
     final_pop = []
     for ind in top_individuals:
-        final_pop.append({
-            "params": {PARAM_NAMES[i]: round(ind[i], 3) for i in range(len(PARAM_NAMES))},
-            "fitness": round(ind.fitness.values[0], 4),
-        })
+        final_pop.append(
+            {
+                "params": {PARAM_NAMES[i]: round(ind[i], 3) for i in range(len(PARAM_NAMES))},
+                "fitness": round(ind.fitness.values[0], 4),
+            }
+        )
 
     print(f"\n🏆 最优解:")
     for k, v in best_params.items():
@@ -304,10 +308,12 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
     print(f"   trades = {best_result.get('trades', 0)}")
     print(f"   win_rate = {best_result.get('win_rate', 'N/A')}")
 
-    improvement = (best_result.get("expR", 0) - baseline_result.get("expR", 0))
+    improvement = best_result.get("expR", 0) - baseline_result.get("expR", 0)
     improvement_pct = (improvement / baseline_result.get("expR", 1)) * 100 if baseline_result.get("expR", 0) > 0 else 0
-    print(f"\n📈 相比基线: {'+' if improvement >= 0 else ''}{improvement:.4f} "
-          f"({'+' if improvement_pct >= 0 else ''}{improvement_pct:.1f}%)")
+    print(
+        f"\n📈 相比基线: {'+' if improvement >= 0 else ''}{improvement:.4f} "
+        f"({'+' if improvement_pct >= 0 else ''}{improvement_pct:.1f}%)"
+    )
 
     return {
         "symbol": symbol,
@@ -337,6 +343,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
 # 网格搜索对比（验证 GA 是否有效）
 # ============================================================================
 
+
 def grid_search_baseline(symbol, tail=None):
     """网格搜索作为基线对比：和 four_dim_calibrate.py 类似的离散扫描。"""
     stop_cands = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
@@ -347,7 +354,7 @@ def grid_search_baseline(symbol, tail=None):
     best_result = None
     results = []
 
-    print(f"\n🔍 网格搜索基线对比：{len(stop_cands)} × {len(rr_cands)} = {len(stop_cands)*len(rr_cands)} 组")
+    print(f"\n🔍 网格搜索基线对比：{len(stop_cands)} × {len(rr_cands)} = {len(stop_cands) * len(rr_cands)} 组")
 
     for s in stop_cands:
         for r in rr_cands:
@@ -360,14 +367,17 @@ def grid_search_baseline(symbol, tail=None):
                 best_params = {"stop_atr_mult": s, "rr_ratio": r}
                 best_result = result
 
-    print(f"   网格最优: stop={best_params['stop_atr_mult']}, "
-          f"rr={best_params['rr_ratio']}, expR={best_result.get('expR')}")
+    print(
+        f"   网格最优: stop={best_params['stop_atr_mult']}, "
+        f"rr={best_params['rr_ratio']}, expR={best_result.get('expR')}"
+    )
     return {"best_params": best_params, "best_result": best_result, "all_results": results}
 
 
 # ============================================================================
 # 输出结果
 # ============================================================================
+
 
 def save_results(result, grid_result=None, output_dir=None):
     """保存优化结果到 JSON。"""
@@ -395,6 +405,7 @@ def save_results(result, grid_result=None, output_dir=None):
 # ============================================================================
 # CLI
 # ============================================================================
+
 
 def main():
     parser = argparse.ArgumentParser(description="止盈止损参数 GA 联合优化器（Phase 1 原型）")
@@ -433,8 +444,7 @@ def main():
         print(f"\n📊 GA vs 网格搜索对比:")
         print(f"   网格搜索最优 expR = {grid_best:.4f}")
         print(f"   GA 最优 expR     = {ga_best:.4f}")
-        print(f"   GA 优势 = {'+' if diff >= 0 else ''}{diff:.4f} "
-              f"({'+' if diff_pct >= 0 else ''}{diff_pct:.1f}%)")
+        print(f"   GA 优势 = {'+' if diff >= 0 else ''}{diff:.4f} ({'+' if diff_pct >= 0 else ''}{diff_pct:.1f}%)")
 
     # 保存结果
     save_results(result, grid_result, args.output)

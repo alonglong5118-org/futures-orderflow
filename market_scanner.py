@@ -15,6 +15,7 @@
   - 扫描结果仅用于预选/排序，不直接触发交易
   - 并行度自动适配 CPU 核数
 """
+
 from __future__ import annotations
 
 import os
@@ -31,8 +32,8 @@ import four_dim_strategy as fd
 from four_dim_strategy import DEFAULT_CONFIG, load_daily
 
 # 扫描参数
-MAX_WORKERS = 8          # 默认线程数（IO 密集型，线程池足够）
-SCAN_CACHE_TTL = 30      # 缓存 30 秒（盘中实时扫描不需更频繁）
+MAX_WORKERS = 8  # 默认线程数（IO 密集型，线程池足够）
+SCAN_CACHE_TTL = 30  # 缓存 30 秒（盘中实时扫描不需更频繁）
 _CACHE = {"ts": 0, "data": None, "lock": __import__("threading").Lock()}
 
 
@@ -61,8 +62,7 @@ def _light_eval(symbol, df_daily, cfg=DEFAULT_CONFIG):
             "chg_pct": chg_pct,
         }
     except Exception:
-        return {"symbol": symbol, "T_D": 0, "regime": "?", "bias_G": 0,
-                "F": 0, "C": 0, "close": 0, "chg_pct": 0}
+        return {"symbol": symbol, "T_D": 0, "regime": "?", "bias_G": 0, "F": 0, "C": 0, "close": 0, "chg_pct": 0}
 
 
 def scan_all(symbols_dict, max_workers=MAX_WORKERS, use_cache=True):
@@ -109,9 +109,18 @@ def scan_all(symbols_dict, max_workers=MAX_WORKERS, use_cache=True):
                 r["name"] = symbols_dict.get(sym, {}).get("name", sym)
                 results.append(r)
             except Exception:
-                results.append({"symbol": sym, "group": group,
-                                "T_D": 0, "regime": "?", "bias_G": 0,
-                                "close": 0, "chg_pct": 0, "name": sym})
+                results.append(
+                    {
+                        "symbol": sym,
+                        "group": group,
+                        "T_D": 0,
+                        "regime": "?",
+                        "bias_G": 0,
+                        "close": 0,
+                        "chg_pct": 0,
+                        "name": sym,
+                    }
+                )
 
     # 排序：按 |T_D| 降序
     results.sort(key=lambda x: -abs(float(x.get("T_D", 0))))
@@ -133,7 +142,9 @@ def scan_all(symbols_dict, max_workers=MAX_WORKERS, use_cache=True):
         "by_group": by_group,
         "summary": {
             "n_total": len(results),
-            "n_up": n_up, "n_down": n_down, "n_neutral": n_neutral,
+            "n_up": n_up,
+            "n_down": n_down,
+            "n_neutral": n_neutral,
             "avg_abs_T": round(avg_T, 2),
             "strongest": strongest,
         },

@@ -15,6 +15,7 @@ consistency_watchdog.py · #5 训练/服务一致性看门狗（train/serve pari
   3b. broken_gated：漂移判 broken 但已被动态门控 papertrack_gated 压制（不发信号）→ 风险已控，仅提示（不计入 ok=false）。
   4. stale：recalibrated_at 超过 STALE_DAYS 天未刷新 → 建议重校。
 """
+
 import json
 import os
 from datetime import datetime, timedelta
@@ -23,9 +24,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 DRIFT_FILE = os.path.join(HERE, "calibration_drift.json")
 
-DEVIATE_PCT = 0.35      # 服务T 相对基线T 偏离 >35% 视为需复验
-STALE_DAYS = 30         # recalibrated_at 超过 30 天未刷新视为陈旧
-RECAL_GRACE_DAYS = 7    # 近期已主动重校(apply)的品种，偏离基线属有意行为，不重复报 divergence
+DEVIATE_PCT = 0.35  # 服务T 相对基线T 偏离 >35% 视为需复验
+STALE_DAYS = 30  # recalibrated_at 超过 30 天未刷新视为陈旧
+RECAL_GRACE_DAYS = 7  # 近期已主动重校(apply)的品种，偏离基线属有意行为，不重复报 divergence
 
 
 def _load_calib():
@@ -53,6 +54,7 @@ def _load_drift():
 def check_consistency(focus_symbols=None, disabled_set=None):
     """返回一致性报告 dict。focus_symbols 缺省取 fd.DEFAULT_CONFIG 全部键。"""
     import four_dim_strategy as fd
+
     focus = focus_symbols or list(fd.DEFAULT_CONFIG.get("thresholds_by_symbol", {}).keys())
     disabled = disabled_set or set()
     calib = _load_calib()
@@ -82,31 +84,44 @@ def check_consistency(focus_symbols=None, disabled_set=None):
         if (not _recently_recal) and base_T is not None and served_T is not None and base_T != 0:
             dev = abs(served_T - base_T) / abs(base_T)
             if dev > DEVIATE_PCT:
-                divergences.append({
-                    "symbol": sym, "baseline_T": base_T, "served_T": served_T,
-                    "deviation_pct": round(dev * 100, 1),
-                    "needs_revalidation": True,
-                })
+                divergences.append(
+                    {
+                        "symbol": sym,
+                        "baseline_T": base_T,
+                        "served_T": served_T,
+                        "deviation_pct": round(dev * 100, 1),
+                        "needs_revalidation": True,
+                    }
+                )
 
         # 2) 未校验（无 mean_oos）
         if mean_oos is None and sym not in calib.get("__note_only__", {}):
             # 仅对确实有 calib 条目但缺 mean_oos 的关注品种报警（纯默认占位不算）
             if sym in calib:
-                unvalidated.append({"symbol": sym, "served_T": served_T,
-                                     "note": "calibration_params 有条目但缺 mean_oos，未做 OOS 校验"})
+                unvalidated.append(
+                    {
+                        "symbol": sym,
+                        "served_T": served_T,
+                        "note": "calibration_params 有条目但缺 mean_oos，未做 OOS 校验",
+                    }
+                )
 
         # 3) 失效却在服务。已被动态门控 papertrack_gated 压制 → 归入 broken_gated（风险已控，仅提示）；
         #    未门控且未禁用 → 真在服务失效模型，归入 broken_serving（计入 ok=false）。
         d = drift_map.get(sym)
         if d and d.get("status") == "broken" and sym not in disabled:
             _gated = bool(d.get("papertrack_gated"))
-            _entry = {"symbol": sym,
-                      "current_expR": d.get("current_expR"),
-                      "evidence": d.get("evidence"),
-                      "papertrack_gated": _gated,
-                      "note": ("漂移判 broken 且已被动态门控压制（不发信号），风险已控"
-                               if _gated else
-                               "漂移判 broken 但未禁用，仍在服务该模型")}
+            _entry = {
+                "symbol": sym,
+                "current_expR": d.get("current_expR"),
+                "evidence": d.get("evidence"),
+                "papertrack_gated": _gated,
+                "note": (
+                    "漂移判 broken 且已被动态门控压制（不发信号），风险已控"
+                    if _gated
+                    else "漂移判 broken 但未禁用，仍在服务该模型"
+                ),
+            }
             if _gated:
                 broken_gated.append(_entry)
             else:
@@ -118,8 +133,7 @@ def check_consistency(focus_symbols=None, disabled_set=None):
             try:
                 dt = datetime.strptime(ra, "%Y-%m-%d %H:%M:%S")
                 if datetime.now() - dt > timedelta(days=STALE_DAYS):
-                    stale.append({"symbol": sym, "recalibrated_at": ra,
-                                  "days_ago": (datetime.now() - dt).days})
+                    stale.append({"symbol": sym, "recalibrated_at": ra, "days_ago": (datetime.now() - dt).days})
             except Exception:
                 pass
 

@@ -8,6 +8,7 @@
 
 直接在训练集上跑，结果与无约束版对比。
 """
+
 import argparse
 import copy
 import json
@@ -32,11 +33,11 @@ from ga_group_six_factor import (
 )
 
 # ===== 稳健性参数 =====
-MAX_WEIGHT = 0.35        # 单因子权重上限
-ENTROPY_LAMBDA = 0.15    # 熵惩罚系数（越大越鼓励分散）
-MIN_TRADES_ROBUST = 8    # 最低交易数（每品种）
-NOISE_ROUNDS = 1         # 噪声扰动次数（0=关闭）
-NOISE_STD = 0.02         # 噪声标准差（权重的相对扰动）
+MAX_WEIGHT = 0.35  # 单因子权重上限
+ENTROPY_LAMBDA = 0.15  # 熵惩罚系数（越大越鼓励分散）
+MIN_TRADES_ROBUST = 8  # 最低交易数（每品种）
+NOISE_ROUNDS = 1  # 噪声扰动次数（0=关闭）
+NOISE_STD = 0.02  # 噪声标准差（权重的相对扰动）
 
 GROUPS = ["化工", "农产品", "有色", "黑系", "能源", "贵金属", "航运"]
 
@@ -95,8 +96,7 @@ def _evaluate_robust(ind, group_data, cfg_template=None):
                 cfg_noisy = cfg
 
             try:
-                r = walk_forward_backtest(sym, cfg=cfg_noisy, window=WINDOW,
-                                          min_bars=MIN_BARS, df_in=df)
+                r = walk_forward_backtest(sym, cfg=cfg_noisy, window=WINDOW, min_bars=MIN_BARS, df_in=df)
                 nt = int(r.get("trades", 0))
                 if nt >= MIN_TRADES_ROBUST:
                     sym_expRs.append(float(r.get("expR", 0)))
@@ -107,8 +107,7 @@ def _evaluate_robust(ind, group_data, cfg_template=None):
             expRs.append(float(np.mean(sym_expRs)))
             # 总交易数取第一次（无噪声）的结果
             try:
-                r0 = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                           min_bars=MIN_BARS, df_in=df)
+                r0 = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df)
                 total_trades += int(r0.get("trades", 0))
             except Exception:
                 pass
@@ -134,11 +133,12 @@ def _evaluate_robust(ind, group_data, cfg_template=None):
 
 def optimize_group(group_name, pop_size=POP, n_gen=GEN, tail=TAIL_BARS):
     """对单个板块做带约束的 GA 优化。"""
-    print(f"\n{'='*60}", flush=True)
+    print(f"\n{'=' * 60}", flush=True)
     print(f"[稳健版] 板块: {group_name}", flush=True)
-    print(f"  约束: max_weight={MAX_WEIGHT}, entropy_lambda={ENTROPY_LAMBDA}, "
-          f"min_trades={MIN_TRADES_ROBUST}", flush=True)
-    print(f"{'='*60}", flush=True)
+    print(
+        f"  约束: max_weight={MAX_WEIGHT}, entropy_lambda={ENTROPY_LAMBDA}, min_trades={MIN_TRADES_ROBUST}", flush=True
+    )
+    print(f"{'=' * 60}", flush=True)
 
     group_data = load_group_data(group_name, min_bars=MIN_BARS + WINDOW, tail=tail)
     if len(group_data) < 3:
@@ -157,8 +157,7 @@ def optimize_group(group_name, pop_size=POP, n_gen=GEN, tail=TAIL_BARS):
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.IndividualRobust,
-                     toolbox.attr_float, n=len(SF_NAMES))
+    toolbox.register("individual", tools.initRepeat, creator.IndividualRobust, toolbox.attr_float, n=len(SF_NAMES))
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval_ind(ind):
@@ -186,8 +185,8 @@ def optimize_group(group_name, pop_size=POP, n_gen=GEN, tail=TAIL_BARS):
         hof.update(offspring)
         pop = toolbox.select(offspring, k=len(pop))
         record = stats.compile(pop)
-        history.append({"gen": gen+1, "avg": record["avg"], "max": record["max"]})
-        print(f"  Gen {gen+1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}", flush=True)
+        history.append({"gen": gen + 1, "avg": record["avg"], "max": record["max"]})
+        print(f"  Gen {gen + 1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}", flush=True)
         if record["max"] > best_max + 0.001:
             best_max = record["max"]
             stall = 0
@@ -203,6 +202,7 @@ def optimize_group(group_name, pop_size=POP, n_gen=GEN, tail=TAIL_BARS):
     # 计算纯 expR（不含惩罚项）
     # 用原始评估函数算一遍纯 expR
     from ga_group_six_factor import _evaluate as _raw_eval
+
     raw_result = _raw_eval(best, group_data)
     pure_expR = raw_result[0]
 
@@ -248,14 +248,17 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     elapsed = time.time() - t0
-    print(f"\n{'='*60}", flush=True)
-    print(f"全部完成，耗时 {elapsed/60:.1f} 分钟", flush=True)
-    print(f"{'='*60}", flush=True)
+    print(f"\n{'=' * 60}", flush=True)
+    print(f"全部完成，耗时 {elapsed / 60:.1f} 分钟", flush=True)
+    print(f"{'=' * 60}", flush=True)
     print(f"{'板块':<8s} {'纯expR':>10s} {'约束适应度':>10s} {'最大权重':>10s} {'熵':>8s}", flush=True)
     print("-" * 50, flush=True)
     for g, r in results.items():
-        print(f"{g:<8s} {r['pure_expR']:+.4f}    {r['constrained_fitness']:+.4f}    "
-              f"{r['max_weight']:.3f}    {r['entropy']:.3f}", flush=True)
+        print(
+            f"{g:<8s} {r['pure_expR']:+.4f}    {r['constrained_fitness']:+.4f}    "
+            f"{r['max_weight']:.3f}    {r['entropy']:.3f}",
+            flush=True,
+        )
     print(f"\n结果已保存到: {OUTFILE}", flush=True)
 
 

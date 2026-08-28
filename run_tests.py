@@ -138,12 +138,12 @@ SKIP_BY_DEFAULT = {
 # ── 测试分类套件 ──────────────────────────────────────────────────────────
 # 冒烟测试：核心功能快速验证，目标 <10s
 SMOKE_TESTS = {
-    "kelly_factor",       # Kelly 因子核心
-    "risk_gate",          # 风险闸门
-    "take_profit",        # 止盈
-    "regime",             # 市场状态
-    "property_fuzz",      # 属性测试（快速验证数学属性）
-    "four_dim_pure",      # 四维纯函数
+    "kelly_factor",  # Kelly 因子核心
+    "risk_gate",  # 风险闸门
+    "take_profit",  # 止盈
+    "regime",  # 市场状态
+    "property_fuzz",  # 属性测试（快速验证数学属性）
+    "four_dim_pure",  # 四维纯函数
 }
 
 # 单元测试（不含集成/属性/基准/性能）
@@ -169,13 +169,14 @@ CATEGORY_ALIASES = {
     "unit": None,  # 动态计算
     "integration": INTEGRATION_TESTS,
     "advanced": ADVANCED_TESTS,
-    "all": None,   # 全部（含默认跳过的）
+    "all": None,  # 全部（含默认跳过的）
 }
 
 # ── JavaScript 测试模块清单（新增测试在这里注册） ────────────────────────
 JS_TESTS = {
     "user_action_lock": "tests/test_user_action_lock.js",
 }
+
 
 # ── 颜色 ──────────────────────────────────────────────────────────────────
 class C:
@@ -235,8 +236,7 @@ def list_modules():
     print()
 
 
-def _make_runner(verbosity=1, failfast=False, slow_threshold_ms=0,
-                 junit_output=None):
+def _make_runner(verbosity=1, failfast=False, slow_threshold_ms=0, junit_output=None):
     """创建 unittest 测试运行器（支持慢测试标记和 JUnit XML）。"""
     resultclass = None
     if slow_threshold_ms > 0 or junit_output:
@@ -259,9 +259,7 @@ def _make_runner(verbosity=1, failfast=False, slow_threshold_ms=0,
 
         resultclass = _TimedResult
 
-    runner = unittest.TextTestRunner(
-        verbosity=verbosity, failfast=failfast, resultclass=resultclass
-    )
+    runner = unittest.TextTestRunner(verbosity=verbosity, failfast=failfast, resultclass=resultclass)
 
     # 附加属性供调用方读取
     runner._slow_threshold = slow_threshold_ms
@@ -280,8 +278,7 @@ def _report_slow_tests(result, threshold_ms):
 
     if slow:
         print()
-        print(color(f"  🐢 慢测试（>{threshold_ms}ms，共 {len(slow)} 个）",
-                    C.BOLD, C.YELLOW))
+        print(color(f"  🐢 慢测试（>{threshold_ms}ms，共 {len(slow)} 个）", C.BOLD, C.YELLOW))
         print(color("  " + "-" * 40, C.DIM))
         for name, t in slow[:20]:
             short = name[:55]
@@ -339,8 +336,7 @@ def _write_junit_xml(result, output_path):
                     break
 
         test_cases.append(
-            f'    <testcase classname="{classname}" name="{name}" time="{t:.6f}">'
-            f'{status_elem}</testcase>'
+            f'    <testcase classname="{classname}" name="{name}" time="{t:.6f}">{status_elem}</testcase>'
         )
 
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -356,9 +352,16 @@ def _write_junit_xml(result, output_path):
     print(color(f"  📄 JUnit XML 报告已生成: {output_path}", C.DIM))
 
 
-def run_py_tests(module_name=None, verbose=False, module_set=None,
-                  coverage=False, failfast=False, random_order=False,
-                  slow_threshold_ms=0, junit_output=None):
+def run_py_tests(
+    module_name=None,
+    verbose=False,
+    module_set=None,
+    coverage=False,
+    failfast=False,
+    random_order=False,
+    slow_threshold_ms=0,
+    junit_output=None,
+):
     """运行 Python 测试。
 
     Args:
@@ -400,7 +403,8 @@ def run_py_tests(module_name=None, verbose=False, module_set=None,
         print(color(f"  ❌ 加载失败: {name} (尝试路径: {[p for p, _ in errors]})", C.RED))
         print(color(f"     错误: {first_err}", C.RED))
         import traceback
-        tb_lines = traceback.format_exc().strip().split('\n')
+
+        tb_lines = traceback.format_exc().strip().split("\n")
         for line in tb_lines[-8:]:
             print(color(f"     {line}", C.DIM))
 
@@ -424,6 +428,7 @@ def run_py_tests(module_name=None, verbose=False, module_set=None,
     # 随机打乱测试顺序
     if random_order:
         import random
+
         tests = list(suite)
         random.shuffle(tests)
         suite = unittest.TestSuite(tests)
@@ -468,8 +473,7 @@ def run_py_tests(module_name=None, verbose=False, module_set=None,
     return result
 
 
-def run_py_tests_suite(suite, verbose=False, coverage=False, failfast=False,
-                       slow_threshold_ms=0, junit_output=None):
+def run_py_tests_suite(suite, verbose=False, coverage=False, failfast=False, slow_threshold_ms=0, junit_output=None):
     """运行一个已组装好的测试套件。"""
     verbosity = 2 if verbose else 1
     runner = _make_runner(verbosity, failfast, slow_threshold_ms, junit_output)
@@ -540,9 +544,7 @@ def _run_single_js_test(js_file, verbose=False):
     """运行单个 JS 测试文件。返回 (success, test_count)"""
     cmd = ["node", js_file]
     try:
-        result = subprocess.run(
-            cmd, cwd=HERE, capture_output=True, text=True, timeout=30
-        )
+        result = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, timeout=30)
         # 输出结果（测试脚本自己会打印）
         if result.stdout:
             # 去掉首行标题（避免重复打印）
@@ -561,6 +563,7 @@ def _run_single_js_test(js_file, verbose=False):
         # 从输出中提取测试数量
         # 输出格式："结果：X 通过，Y 失败"
         import re
+
         m = re.search(r"结果：(\d+) 通过", result.stdout)
         count = int(m.group(1)) if m else 0
         return True, count
@@ -573,15 +576,24 @@ def _run_single_js_test(js_file, verbose=False):
         return False, 0
 
 
-def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
-              coverage=False, failfast=False, random_order=False,
-              slow_threshold_ms=0, junit_output=None, max_retries=0):
+def run_tests(
+    module_name=None,
+    verbose=False,
+    py_only=False,
+    js_only=False,
+    coverage=False,
+    failfast=False,
+    random_order=False,
+    slow_threshold_ms=0,
+    junit_output=None,
+    max_retries=0,
+):
     """运行测试（Python + JS）。"""
     all_ok = True
     total_tests = 0
     py_result = None
     module_timings = []  # [(module_name, elapsed_ms, test_count, passed)]
-    failed_tests = []    # [(module_name, test_name, error_msg)]
+    failed_tests = []  # [(module_name, test_name, error_msg)]
 
     # 处理分类别名
     py_module_set = None
@@ -592,10 +604,7 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
             py_module_set = set(TEST_MODULES.keys())  # 全部，包括默认跳过的
         elif module_name == "unit":
             # 单元测试 = 全部 - 集成 - 高级
-            py_module_set = (set(TEST_MODULES.keys())
-                             - INTEGRATION_TESTS
-                             - ADVANCED_TESTS
-                             - SKIP_BY_DEFAULT)
+            py_module_set = set(TEST_MODULES.keys()) - INTEGRATION_TESTS - ADVANCED_TESTS - SKIP_BY_DEFAULT
         else:
             py_module_set = CATEGORY_ALIASES[module_name]
         module_name = None  # 重置，走批量逻辑
@@ -604,16 +613,20 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
     if module_name:
         if module_name in TEST_MODULES:
             t0 = time.time()
-            result = run_py_tests(module_name, verbose, coverage=coverage,
-                                  failfast=failfast, random_order=random_order,
-                                  slow_threshold_ms=slow_threshold_ms,
-                                  junit_output=junit_output)
+            result = run_py_tests(
+                module_name,
+                verbose,
+                coverage=coverage,
+                failfast=failfast,
+                random_order=random_order,
+                slow_threshold_ms=slow_threshold_ms,
+                junit_output=junit_output,
+            )
             elapsed = (time.time() - t0) * 1000
             if result:
                 total_tests += result.testsRun
                 all_ok = all_ok and result.wasSuccessful()
-                module_timings.append((module_name, elapsed, result.testsRun,
-                                       result.wasSuccessful()))
+                module_timings.append((module_name, elapsed, result.testsRun, result.wasSuccessful()))
                 # 收集失败
                 for test, trace in result.failures + result.errors:
                     failed_tests.append((module_name, str(test), trace))
@@ -642,12 +655,9 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
 
             # 确定要跑的模块
             if py_module_set is not None:
-                modules_to_run = [(n, TEST_MODULES[n])
-                                  for n in sorted(py_module_set)
-                                  if n in TEST_MODULES]
+                modules_to_run = [(n, TEST_MODULES[n]) for n in sorted(py_module_set) if n in TEST_MODULES]
             else:
-                modules_to_run = [(n, p) for n, p in TEST_MODULES.items()
-                                  if n not in SKIP_BY_DEFAULT]
+                modules_to_run = [(n, p) for n, p in TEST_MODULES.items() if n not in SKIP_BY_DEFAULT]
 
             # 逐个运行
             combined_suite = unittest.TestSuite()
@@ -659,16 +669,13 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
                     print(color(f"  ⚠️  加载模块失败 {name}: {e}", C.YELLOW))
 
             t0 = time.time()
-            result = run_py_tests_suite(combined_suite, verbose, coverage,
-                                        failfast, slow_threshold_ms,
-                                        junit_output)
+            result = run_py_tests_suite(combined_suite, verbose, coverage, failfast, slow_threshold_ms, junit_output)
             elapsed = (time.time() - t0) * 1000
 
             # 失败重试（检测不稳定测试）
             if max_retries > 0 and not result.wasSuccessful():
                 result, flaky, n_retry = _rerun_failed_tests(
-                    result, combined_suite, max_retries, verbose,
-                    slow_threshold_ms, junit_output
+                    result, combined_suite, max_retries, verbose, slow_threshold_ms, junit_output
                 )
                 elapsed = (time.time() - t0) * 1000
 
@@ -677,8 +684,7 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
             all_ok = all_ok and result.wasSuccessful()
 
             # 记录总计时（不拆分到模块，因为是一起跑的）
-            module_timings.append(("python_total", elapsed, result.testsRun,
-                                   result.wasSuccessful()))
+            module_timings.append(("python_total", elapsed, result.testsRun, result.wasSuccessful()))
 
             # 收集失败
             for test, trace in result.failures + result.errors:
@@ -729,7 +735,7 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
     # 总耗时
     total_elapsed = sum(t for _, t, _, _ in module_timings)
     print(color(f"  总测试数: {total_tests}", C.BOLD))
-    print(color(f"  总耗时: {total_elapsed/1000:.2f}s", C.BOLD))
+    print(color(f"  总耗时: {total_elapsed / 1000:.2f}s", C.BOLD))
 
     if all_ok:
         print(color(f"  状态: ✅ 全部通过", C.BOLD, C.GREEN))
@@ -740,8 +746,7 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
     return all_ok
 
 
-def _rerun_failed_tests(result, original_suite, max_retries, verbose,
-                        slow_threshold_ms, junit_output):
+def _rerun_failed_tests(result, original_suite, max_retries, verbose, slow_threshold_ms, junit_output):
     """重跑失败的测试，检测不稳定（flake）测试。
 
     返回 (最终结果, flaky_tests列表, 总重试次数)
@@ -773,13 +778,12 @@ def _rerun_failed_tests(result, original_suite, max_retries, verbose,
             break
 
         print()
-        print(color(f"  🔄 第 {attempt} 次重跑失败测试 "
-                    f"({retry_suite.countTestCases()} 个)", C.YELLOW))
+        print(color(f"  🔄 第 {attempt} 次重跑失败测试 ({retry_suite.countTestCases()} 个)", C.YELLOW))
         print(color("  " + "-" * 40, C.DIM))
 
-        runner = _make_runner(verbosity, failfast=False,
-                              slow_threshold_ms=slow_threshold_ms,
-                              junit_output=None)  # 重试不生成 junit
+        runner = _make_runner(
+            verbosity, failfast=False, slow_threshold_ms=slow_threshold_ms, junit_output=None
+        )  # 重试不生成 junit
         retry_result = runner.run(retry_suite)
         total_retries += 1
         last_result = retry_result
@@ -809,8 +813,7 @@ def _rerun_failed_tests(result, original_suite, max_retries, verbose,
     flaky_tests = [(tid, p, f) for tid, (p, f) in flaky.items() if p > 0]
     if flaky_tests:
         print()
-        print(color(f"  ⚠️  不稳定测试（{len(flaky_tests)} 个）",
-                    C.BOLD, C.YELLOW))
+        print(color(f"  ⚠️  不稳定测试（{len(flaky_tests)} 个）", C.BOLD, C.YELLOW))
         print(color("  " + "-" * 40, C.DIM))
         for tid, p, f in sorted(flaky_tests, key=lambda x: -x[1]):
             short = tid[:55]
@@ -851,7 +854,7 @@ def main():
             try:
                 slow_threshold_ms = float(args[idx + 1])
             except ValueError:
-                print(color(f"  ⚠️  --slow 参数无效: {args[idx+1]}", C.YELLOW))
+                print(color(f"  ⚠️  --slow 参数无效: {args[idx + 1]}", C.YELLOW))
 
     # --junit <path>
     junit_output = None
@@ -868,16 +871,25 @@ def main():
             try:
                 max_retries = int(args[idx + 1])
             except ValueError:
-                print(color(f"  ⚠️  --retry 参数无效: {args[idx+1]}", C.YELLOW))
+                print(color(f"  ⚠️  --retry 参数无效: {args[idx + 1]}", C.YELLOW))
 
     # 找出模块名（第一个非参数项）
     known_flags = {
-        "-v", "--verbose", "--list", "-l",
-        "--py-only", "--js-only",
-        "--coverage", "-c",
-        "-f", "--failfast",
-        "-r", "--random",
-        "--slow", "--junit", "--retry",
+        "-v",
+        "--verbose",
+        "--list",
+        "-l",
+        "--py-only",
+        "--js-only",
+        "--coverage",
+        "-c",
+        "-f",
+        "--failfast",
+        "-r",
+        "--random",
+        "--slow",
+        "--junit",
+        "--retry",
     }
     module_name = None
     skip_next = False
@@ -892,9 +904,18 @@ def main():
         module_name = a
         break
 
-    ok = run_tests(module_name, verbose, py_only, js_only,
-                   coverage, failfast, random_order,
-                   slow_threshold_ms, junit_output, max_retries)
+    ok = run_tests(
+        module_name,
+        verbose,
+        py_only,
+        js_only,
+        coverage,
+        failfast,
+        random_order,
+        slow_threshold_ms,
+        junit_output,
+        max_retries,
+    )
     sys.exit(0 if ok else 1)
 
 

@@ -21,6 +21,7 @@
     pn.push("玻璃 FG 多单触发，建议 30 手")        # 推所有已启用通道
     pn.push_alert(sig)                            # 推送一条信号（自动格式化）
 """
+
 from __future__ import annotations
 
 import json
@@ -87,9 +88,9 @@ def _http_get(url):
 
 def _http_post(url, payload):
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={
-        "Content-Type": "application/json; charset=utf-8",
-        "User-Agent": "da-ge/1.0"})
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "da-ge/1.0"}
+    )
     with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
         return r.read().decode("utf-8", "replace")
 
@@ -100,9 +101,11 @@ def _send_telegram(cfg, title, text):
     if not tok or not cid:
         return False, "未配置"
     msg = f"【{title}】\n{text}"
-    url = (f"https://api.telegram.org/bot{tok}/sendMessage"
-           f"?chat_id={urllib.parse.quote(str(cid))}"
-           f"&text={urllib.parse.quote(msg)}")
+    url = (
+        f"https://api.telegram.org/bot{tok}/sendMessage"
+        f"?chat_id={urllib.parse.quote(str(cid))}"
+        f"&text={urllib.parse.quote(msg)}"
+    )
     _http_get(url)
     return True, "ok"
 
@@ -122,8 +125,7 @@ def _send_wecom(cfg, title, text):
     wh = cfg["wecom"].get("webhook")
     if not wh:
         return False, "未配置"
-    payload = {"msgtype": "text",
-               "text": {"content": f"【{title}】\n{text}"}}
+    payload = {"msgtype": "text", "text": {"content": f"【{title}】\n{text}"}}
     _http_post(wh, payload)
     return True, "ok"
 
@@ -132,9 +134,7 @@ def push(text, title="四维策略"):
     """推送到所有已启用通道。返回 {sent:[], failed:[], at}。"""
     cfg = _load_cfg()
     sent, failed = [], []
-    dispatchers = [("telegram", _send_telegram),
-                   ("bark", _send_bark),
-                   ("wecom", _send_wecom)]
+    dispatchers = [("telegram", _send_telegram), ("bark", _send_bark), ("wecom", _send_wecom)]
     for name, fn in dispatchers:
         try:
             ok, info = fn(cfg, title, text)
@@ -145,8 +145,7 @@ def push(text, title="四维策略"):
                 pass
         except Exception as e:
             failed.append(f"{name}:{e}")
-    return {"sent": sent, "failed": failed,
-            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    return {"sent": sent, "failed": failed, "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 
 def push_alert(sig):
@@ -171,24 +170,27 @@ def push_alert(sig):
                 reason = v
                 break
         advice = sig.get("action_advice", "")
-        log.info(f"[SUPPRESSED] {sig.get('symbol','?')} {sig.get('direction','?')} | 原因: {reason} | 建议: {advice}")
+        log.info(f"[SUPPRESSED] {sig.get('symbol', '?')} {sig.get('direction', '?')} | 原因: {reason} | 建议: {advice}")
         return {"suppressed": True, "reason": reason, "advice": advice}
-    
+
     at = sig.get("alert_type")
     if at:
-        line = (f"{sig['name']} {sig['direction']} {at}！持仓 {sig['lots']}手，"
-                f"价 {sig.get('price') or '—'} 触及{sig.get('alert_label','止损')}位 {sig.get('alert_level')}")
+        line = (
+            f"{sig['name']} {sig['direction']} {at}！持仓 {sig['lots']}手，"
+            f"价 {sig.get('price') or '—'} 触及{sig.get('alert_label', '止损')}位 {sig.get('alert_level')}"
+        )
     else:
-        line = (f"{sig['name']} {sig['direction']} 触发，建议 {sig['lots']}手，"
-                f"开 {sig.get('price') or '—'} / 损 {sig.get('stop')} / "
-                f"t1 {sig.get('t1') or '—'} / t2 {sig.get('target') or '—'}")
+        line = (
+            f"{sig['name']} {sig['direction']} 触发，建议 {sig['lots']}手，"
+            f"开 {sig.get('price') or '—'} / 损 {sig.get('stop')} / "
+            f"t1 {sig.get('t1') or '—'} / t2 {sig.get('target') or '—'}"
+        )
     # 持仓感知增强：附加持仓上下文和行动建议
     extra = ""
     hc = sig.get("hold_context") or {}
     if hc.get("held"):
         pnl_val = hc.get("float_pnl", 0)
-        pnl_str = (f" 浮盈{pnl_val}元" if pnl_val > 0 else
-                   (f" 浮亏{abs(pnl_val)}元" if pnl_val < 0 else ""))
+        pnl_str = f" 浮盈{pnl_val}元" if pnl_val > 0 else (f" 浮亏{abs(pnl_val)}元" if pnl_val < 0 else "")
         extra = f"\n📍 持仓：{hc.get('direction')} {hc.get('lots')}手@{hc.get('avg')}{pnl_str}"
         if hc.get("conflict"):
             extra += " ⚠️方向冲突！"
@@ -197,8 +199,12 @@ def push_alert(sig):
     advice = sig.get("action_advice", "")
     if advice:
         extra += f"\n💡 {advice[:150]}"
-    log.info(f"[PUSH] {sig.get('symbol','?')} {sig.get('direction','?')} | {sig.get('signal_type','信号')} | {sig.get('lots',0)}手")
-    return push(f"{line}{extra}\n{sig.get('reason','')}", title="四维信号")
+    log.info(
+        f"[PUSH] {sig.get('symbol', '?')} {sig.get('direction', '?')} | {sig.get('signal_type', '信号')} | {sig.get('lots', 0)}手"
+    )
+    return push(f"{line}{extra}\n{sig.get('reason', '')}", title="四维信号")
+
+
 def configure(section, **kw):
     """更新某通道配置并落盘。section ∈ telegram|bark|wecom。"""
     cfg = _load_cfg()

@@ -16,6 +16,7 @@ Phase 3 升级内容（相对 Phase 2.5）：
     python3 ga_tpsl_optimizer_v3.py --symbol jd
     python3 ga_tpsl_optimizer_v3.py --symbol jd --pop 80 --gen 30 --train-bars 400 --valid-bars 120 --step-bars 60 --full
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,9 +29,9 @@ import sys
 import time
 
 # 防止 numpy/pandas 内部多线程与 multiprocessing 争抢 CPU
-os.environ.setdefault('OMP_NUM_THREADS', '1')
-os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
-os.environ.setdefault('MKL_NUM_THREADS', '1')
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 import numpy as np
 
@@ -56,19 +57,26 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 # [7] tail_trail_R: 尾仓跟踪距离
 # [8] min_profit_R: 尾仓启动门槛
 PARAM_BOUNDS = [
-    (0.5, 1.8),    # gene[0]: T_thresh_mult
+    (0.5, 1.8),  # gene[0]: T_thresh_mult
     (10.0, 40.0),  # gene[1]: fc_confirm
     (10.0, 50.0),  # gene[2]: fc_hard
-    (2.0, 15.0),   # gene[3]: cooldown_bars
-    (0.8, 3.0),    # gene[4]: stop_atr_mult
-    (1.2, 4.0),    # gene[5]: rr_ratio
-    (0.1, 0.5),    # gene[6]: tail_pct
-    (1.0, 4.0),    # gene[7]: tail_trail_R
-    (1.0, 3.5),    # gene[8]: min_profit_R
+    (2.0, 15.0),  # gene[3]: cooldown_bars
+    (0.8, 3.0),  # gene[4]: stop_atr_mult
+    (1.2, 4.0),  # gene[5]: rr_ratio
+    (0.1, 0.5),  # gene[6]: tail_pct
+    (1.0, 4.0),  # gene[7]: tail_trail_R
+    (1.0, 3.5),  # gene[8]: min_profit_R
 ]
 PARAM_NAMES = [
-    "T_thresh_mult", "fc_confirm", "fc_hard", "cooldown_bars",
-    "stop_atr_mult", "rr_ratio", "tail_pct", "tail_trail_R", "min_profit_R",
+    "T_thresh_mult",
+    "fc_confirm",
+    "fc_hard",
+    "cooldown_bars",
+    "stop_atr_mult",
+    "rr_ratio",
+    "tail_pct",
+    "tail_trail_R",
+    "min_profit_R",
 ]
 N_PARAMS = len(PARAM_BOUNDS)
 
@@ -87,29 +95,29 @@ EARLY_STOP_MIN_IMPROVE = 0.001  # 早停：最小提升阈值
 DEFAULT_N_JOBS = 8  # 并行评估进程数
 
 # 约束
-MIN_TRADES = 10          # 最低交易笔数
-MIN_WIN_RATE = 0.15      # 最低胜率（低于则惩罚）
-MAX_DRAWDOWN = 0.50      # 最大回撤上限（R 单位，超过则不可行）
+MIN_TRADES = 10  # 最低交易笔数
+MIN_WIN_RATE = 0.15  # 最低胜率（低于则惩罚）
+MAX_DRAWDOWN = 0.50  # 最大回撤上限（R 单位，超过则不可行）
 
 # WF 配置
-DEFAULT_TRAIN_BARS = 400    # 训练窗口长度（日K）
-DEFAULT_VALID_BARS = 120     # 验证窗口长度
-DEFAULT_STEP_BARS = 60       # 滚动步长
+DEFAULT_TRAIN_BARS = 400  # 训练窗口长度（日K）
+DEFAULT_VALID_BARS = 120  # 验证窗口长度
+DEFAULT_STEP_BARS = 60  # 滚动步长
 
 # OOS 配置
-OOS_RATIO = 0.20        # 最后 20% 作为纯 OOS
+OOS_RATIO = 0.20  # 最后 20% 作为纯 OOS
 
 # 稳健性检验
-ROBUST_PERTURB = 0.20   # ±20% 扰动
-ROBUST_POINTS = 11      # 每个参数的扰动点数
+ROBUST_PERTURB = 0.20  # ±20% 扰动
+ROBUST_POINTS = 11  # 每个参数的扰动点数
 
 # L1 正则化（防止过拟合：参数偏离基线越远，惩罚越大）
-REG_L1_ENABLED = True   # 是否启用 L1 正则
-REG_L1_WEIGHT = 0.5     # L1 正则权重（越大越保守）
-REG_L1_TARGETS = [0, 1] # 惩罚哪些目标：0=expR, 1=calmar
+REG_L1_ENABLED = True  # 是否启用 L1 正则
+REG_L1_WEIGHT = 0.5  # L1 正则权重（越大越保守）
+REG_L1_TARGETS = [0, 1]  # 惩罚哪些目标：0=expR, 1=calmar
 
 # 参数范围收缩模式（在基线附近 ±SHRINK_PCT 范围内搜索）
-SHRINK_PCT = 0.40       # 基线 ±40%
+SHRINK_PCT = 0.40  # 基线 ±40%
 
 # 结果缓存
 _eval_cache = {}
@@ -118,8 +126,9 @@ _eval_cache = {}
 _worker_data = {}
 
 
-def _init_worker(symbol, df_is, train_bars, valid_bars, step_bars, data_slice_id,
-                 baseline_ind=None, bounds=None, use_l1=False):
+def _init_worker(
+    symbol, df_is, train_bars, valid_bars, step_bars, data_slice_id, baseline_ind=None, bounds=None, use_l1=False
+):
     """Pool initializer：在每个 worker 进程中设置全局数据。"""
     global _worker_data
     _worker_data = {
@@ -160,6 +169,7 @@ def _cache_key(params_tuple, symbol, data_slice_id):
 # ============================================================================
 # 基线参数获取
 # ============================================================================
+
 
 def _get_baseline_params(symbol):
     """获取某品种的基线参数值。"""
@@ -263,12 +273,14 @@ def _get_shrunk_bounds(baseline_ind, shrink_pct=SHRINK_PCT):
 # 配置生成
 # ============================================================================
 
+
 def _make_config(individual, symbol, base_cfg=DEFAULT_CONFIG):
     """根据 9 个基因生成配置。
     返回 (cfg, cooldown_bars) 元组，因为 cooldown 是函数参数不是 cfg 字段。
     """
-    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars,
-     stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = individual
+    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars, stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = (
+        individual
+    )
 
     cfg = copy.deepcopy(base_cfg)
 
@@ -308,6 +320,7 @@ def _make_config(individual, symbol, base_cfg=DEFAULT_CONFIG):
 # ============================================================================
 # 指标计算
 # ============================================================================
+
 
 def _calc_max_drawdown(R_list):
     """从逐笔 R 收益序列计算最大回撤（基于累计 R 曲线）。"""
@@ -361,14 +374,24 @@ def _calc_metrics(result):
 # Walk-Forward 适应度评估
 # ============================================================================
 
+
 def _slice_data(df, start_i, end_i):
     """返回 df 的切片（用于 WF 窗口）。"""
     return df.iloc[start_i:end_i].copy()
 
 
-def wf_evaluate(individual, symbol, df, train_bars=DEFAULT_TRAIN_BARS,
-                valid_bars=DEFAULT_VALID_BARS, step_bars=DEFAULT_STEP_BARS,
-                data_slice_id="full", baseline_ind=None, bounds=None, use_l1=False):
+def wf_evaluate(
+    individual,
+    symbol,
+    df,
+    train_bars=DEFAULT_TRAIN_BARS,
+    valid_bars=DEFAULT_VALID_BARS,
+    step_bars=DEFAULT_STEP_BARS,
+    data_slice_id="full",
+    baseline_ind=None,
+    bounds=None,
+    use_l1=False,
+):
     """Walk-Forward 评估：在多个训练-验证窗口上评估，返回验证窗口的聚合指标。
 
     返回 (expR_median, calmar_median, winrate_stability) —— 三个目标，全部最大化。
@@ -379,23 +402,29 @@ def wf_evaluate(individual, symbol, df, train_bars=DEFAULT_TRAIN_BARS,
     if key in _eval_cache:
         return _eval_cache[key]
 
-    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars,
-     stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = individual
+    (T_thresh_mult, fc_confirm, fc_hard, cooldown_bars, stop_mult, rr_ratio, tail_pct, tail_trail_R, min_profit_R) = (
+        individual
+    )
 
     # 结构约束检查
     invalid = False
 
     # 出场参数约束
-    if (rr_ratio < 1.2 or stop_mult < 0.8 or
-        min_profit_R > rr_ratio + 0.01 or
-        tail_pct < 0.05 or tail_pct > 0.6 or
-        tail_trail_R < 0.5 or tail_trail_R > 5.0):
+    if (
+        rr_ratio < 1.2
+        or stop_mult < 0.8
+        or min_profit_R > rr_ratio + 0.01
+        or tail_pct < 0.05
+        or tail_pct > 0.6
+        or tail_trail_R < 0.5
+        or tail_trail_R > 5.0
+    ):
         invalid = True
 
     # 入场参数约束
-    if (T_thresh_mult < 0.3 or T_thresh_mult > 2.0 or
-        fc_confirm < 5 or fc_hard < 5 or
-        fc_confirm > fc_hard + 0.1):  # fc_confirm 必须 <= fc_hard
+    if (
+        T_thresh_mult < 0.3 or T_thresh_mult > 2.0 or fc_confirm < 5 or fc_hard < 5 or fc_confirm > fc_hard + 0.1
+    ):  # fc_confirm 必须 <= fc_hard
         invalid = True
 
     # cooldown 约束
@@ -424,7 +453,9 @@ def wf_evaluate(individual, symbol, df, train_bars=DEFAULT_TRAIN_BARS,
 
         df_segment = df.iloc[start:valid_end].copy()
         result = walk_forward_backtest(
-            symbol, cfg=cfg, df_in=df_segment,
+            symbol,
+            cfg=cfg,
+            df_in=df_segment,
             min_bars=train_bars - 10,
             cooldown_bars=cooldown,
         )
@@ -478,12 +509,16 @@ def wf_evaluate(individual, symbol, df, train_bars=DEFAULT_TRAIN_BARS,
 # 单窗口回测（用于 OOS 和最终全样本评估）
 # ============================================================================
 
+
 def single_evaluate(individual, symbol, df):
     """在单个数据集上做完整回测，返回详细指标。"""
     cfg, cooldown = _make_config(individual, symbol)
     result = walk_forward_backtest(
-        symbol, cfg=cfg, df_in=df,
-        min_bars=60, cooldown_bars=cooldown,
+        symbol,
+        cfg=cfg,
+        df_in=df,
+        min_bars=60,
+        cooldown_bars=cooldown,
     )
     return _calc_metrics(result)
 
@@ -492,8 +527,8 @@ def single_evaluate(individual, symbol, df):
 # DEAP 初始化（多目标 NSGA-II）
 # ============================================================================
 
-def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size,
-                     use_shrink=False, use_l1=False):
+
+def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size, use_shrink=False, use_l1=False):
     """初始化 NSGA-II 多目标优化。
 
     Args:
@@ -520,38 +555,54 @@ def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size,
 
     # 属性生成
     for i in range(N_PARAMS):
+
         def _attr_factory(idx):
             def _f():
                 low, high = actual_bounds[idx]
                 return random.uniform(low, high)
+
             return _f
+
         toolbox.register(f"attr_float_{i}", _attr_factory(i))
 
     # 动态构建 individual 的 initCycle 参数
     attr_funcs = [getattr(toolbox, f"attr_float_{i}") for i in range(N_PARAMS)]
-    toolbox.register("individual", tools.initCycle, creator.Individual,
-                     tuple(attr_funcs), n=1)
+    toolbox.register("individual", tools.initCycle, creator.Individual, tuple(attr_funcs), n=1)
 
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     # 评估
-    toolbox.register("evaluate", wf_evaluate, symbol=symbol, df=df_is,
-                     train_bars=train_bars, valid_bars=valid_bars,
-                     step_bars=step_bars, data_slice_id="IS_WF",
-                     baseline_ind=baseline_ind, bounds=actual_bounds,
-                     use_l1=use_l1)
+    toolbox.register(
+        "evaluate",
+        wf_evaluate,
+        symbol=symbol,
+        df=df_is,
+        train_bars=train_bars,
+        valid_bars=valid_bars,
+        step_bars=step_bars,
+        data_slice_id="IS_WF",
+        baseline_ind=baseline_ind,
+        bounds=actual_bounds,
+        use_l1=use_l1,
+    )
 
     # 遗传算子
-    toolbox.register("mate", tools.cxSimulatedBinaryBounded,
-                     low=[b[0] for b in actual_bounds],
-                     up=[b[1] for b in actual_bounds],
-                     eta=SBX_ETA)
+    toolbox.register(
+        "mate",
+        tools.cxSimulatedBinaryBounded,
+        low=[b[0] for b in actual_bounds],
+        up=[b[1] for b in actual_bounds],
+        eta=SBX_ETA,
+    )
 
-    toolbox.register("mutate", tools.mutPolynomialBounded,
-                     low=[b[0] for b in actual_bounds],
-                     up=[b[1] for b in actual_bounds],
-                     eta=PM_ETA,
-                     indpb=MUTPB)
+    toolbox.register(
+        "mutate",
+        tools.mutPolynomialBounded,
+        low=[b[0] for b in actual_bounds],
+        up=[b[1] for b in actual_bounds],
+        eta=PM_ETA,
+        indpb=MUTPB,
+    )
 
     # NSGA-II 选择
     toolbox.register("select", tools.selNSGA2)
@@ -568,6 +619,7 @@ def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size,
 # ============================================================================
 # 帕累托前沿分析
 # ============================================================================
+
 
 def select_candidates(pareto_front):
     """从帕累托前沿中选出 4 个代表性候选方案。"""
@@ -630,6 +682,7 @@ def select_candidates(pareto_front):
 # 稳健性检验
 # ============================================================================
 
+
 def robustness_test(individual, symbol, df, perturb=ROBUST_PERTURB, n_points=ROBUST_POINTS):
     """参数稳健性检验：对每个参数做 ±perturb 的扰动，观察 expR 变化。
 
@@ -676,11 +729,21 @@ def robustness_test(individual, symbol, df, perturb=ROBUST_PERTURB, n_points=ROB
 # 主优化流程
 # ============================================================================
 
-def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_COUNT,
-                     train_bars=DEFAULT_TRAIN_BARS, valid_bars=DEFAULT_VALID_BARS,
-                     step_bars=DEFAULT_STEP_BARS, full_data=False, seed=42,
-                     n_jobs=DEFAULT_N_JOBS, early_stop_patience=EARLY_STOP_PATIENCE,
-                     use_shrink=False, use_l1=False):
+
+def run_optimization(
+    symbol,
+    pop_size=DEFAULT_POP_SIZE,
+    gen_count=DEFAULT_GEN_COUNT,
+    train_bars=DEFAULT_TRAIN_BARS,
+    valid_bars=DEFAULT_VALID_BARS,
+    step_bars=DEFAULT_STEP_BARS,
+    full_data=False,
+    seed=42,
+    n_jobs=DEFAULT_N_JOBS,
+    early_stop_patience=EARLY_STOP_PATIENCE,
+    use_shrink=False,
+    use_l1=False,
+):
     """运行完整的 Phase 3 GA 优化（入场+出场联合优化）。
 
     Args:
@@ -719,23 +782,24 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
     baseline_metrics_is = single_evaluate(baseline_ind, symbol, df_is)
     baseline_metrics_oos = single_evaluate(baseline_ind, symbol, df_oos)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"📊 数据概览（{symbol}）:")
     print(f"   总数据量: {n_total} 根日K")
     print(f"   IS (训练+验证): {len(df_is)} 根日K ({df_is.index[0].date()} ~ {df_is.index[-1].date()})")
     print(f"   OOS (纯样本外): {len(df_oos)} 根日K ({df_oos.index[0].date()} ~ {df_oos.index[-1].date()})")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     print(f"\n📐 基线参数:")
     for i, name in enumerate(PARAM_NAMES):
         print(f"   {name} = {baseline_ind[i]}")
     print(f"   (T_thresh 绝对值 = {baseline_dict['T_thresh_base']})")
-    print(f"   IS expR = {baseline_metrics_is['expR']:.4f}  "
-          f"(trades={baseline_metrics_is['trades']}, "
-          f"win_rate={baseline_metrics_is['win_rate']:.1%}, "
-          f"calmar={baseline_metrics_is['calmar']:.2f})")
-    print(f"   OOS expR = {baseline_metrics_oos['expR']:.4f}  "
-          f"(trades={baseline_metrics_oos['trades']})")
+    print(
+        f"   IS expR = {baseline_metrics_is['expR']:.4f}  "
+        f"(trades={baseline_metrics_is['trades']}, "
+        f"win_rate={baseline_metrics_is['win_rate']:.1%}, "
+        f"calmar={baseline_metrics_is['calmar']:.2f})"
+    )
+    print(f"   OOS expR = {baseline_metrics_oos['expR']:.4f}  (trades={baseline_metrics_oos['trades']})")
 
     # 调整种群大小为 4 的倍数（selTournamentDCD 要求）
     if pop_size % 4 != 0:
@@ -743,8 +807,9 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         print(f"   (调整种群到 {pop_size}，确保为4的倍数)")
 
     # 初始化 DEAP
-    toolbox = setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size,
-                               use_shrink=use_shrink, use_l1=use_l1)
+    toolbox = setup_deap_nsga2(
+        symbol, df_is, train_bars, valid_bars, step_bars, pop_size, use_shrink=use_shrink, use_l1=use_l1
+    )
 
     # 打印收缩后的范围信息
     if use_shrink:
@@ -758,11 +823,21 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
 
     # 并行评估（multiprocessing + initializer，避免重复序列化 DataFrame）
     from multiprocessing import Pool
+
     pool = Pool(
         processes=n_jobs,
         initializer=_init_worker,
-        initargs=(symbol, df_is, train_bars, valid_bars, step_bars, "IS_WF",
-                  toolbox.baseline_ind, toolbox.actual_bounds, use_l1),
+        initargs=(
+            symbol,
+            df_is,
+            train_bars,
+            valid_bars,
+            step_bars,
+            "IS_WF",
+            toolbox.baseline_ind,
+            toolbox.actual_bounds,
+            use_l1,
+        ),
     )
     # 用 worker 版本的 evaluate（从全局读数据，更快）
     toolbox.register("evaluate", _worker_evaluate)
@@ -800,19 +875,23 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
     f2_vals = [ind.fitness.values[1] for ind in pop]
     f3_vals = [ind.fitness.values[2] for ind in pop]
     pareto_size_0 = len(tools.sortNondominated(pop, len(pop), first_front_only=True))
-    print(f"  Gen 0: best_expR={max(f1_vals):.4f}, "
-          f"best_calmar={max(f2_vals):.2f}, "
-          f"best_stability={max(f3_vals):.4f}, "
-          f"pareto_size={pareto_size_0}")
-    history.append({
-        "gen": 0,
-        "best_expR": max(f1_vals),
-        "best_calmar": max(f2_vals),
-        "best_stability": max(f3_vals),
-        "avg_expR": float(np.mean(f1_vals)),
-        "avg_calmar": float(np.mean(f2_vals)),
-        "pareto_size": pareto_size_0,
-    })
+    print(
+        f"  Gen 0: best_expR={max(f1_vals):.4f}, "
+        f"best_calmar={max(f2_vals):.2f}, "
+        f"best_stability={max(f3_vals):.4f}, "
+        f"pareto_size={pareto_size_0}"
+    )
+    history.append(
+        {
+            "gen": 0,
+            "best_expR": max(f1_vals),
+            "best_calmar": max(f2_vals),
+            "best_stability": max(f3_vals),
+            "avg_expR": float(np.mean(f1_vals)),
+            "avg_calmar": float(np.mean(f2_vals)),
+            "pareto_size": pareto_size_0,
+        }
+    )
 
     # 早停机制初始化
     best_expR_so_far = max(f1_vals)
@@ -866,20 +945,24 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
 
         gen_time = time.time() - gen_start
-        print(f"  Gen {gen:2d}: best_expR={max(f1_vals):.4f}, "
-              f"best_calmar={max(f2_vals):.2f}, "
-              f"pareto_size={len(pareto_front)}  "
-              f"({gen_time:.1f}s)")
+        print(
+            f"  Gen {gen:2d}: best_expR={max(f1_vals):.4f}, "
+            f"best_calmar={max(f2_vals):.2f}, "
+            f"pareto_size={len(pareto_front)}  "
+            f"({gen_time:.1f}s)"
+        )
 
-        history.append({
-            "gen": gen,
-            "best_expR": max(f1_vals),
-            "best_calmar": max(f2_vals),
-            "best_stability": max(f3_vals),
-            "avg_expR": float(np.mean(f1_vals)),
-            "avg_calmar": float(np.mean(f2_vals)),
-            "pareto_size": len(pareto_front),
-        })
+        history.append(
+            {
+                "gen": gen,
+                "best_expR": max(f1_vals),
+                "best_calmar": max(f2_vals),
+                "best_stability": max(f3_vals),
+                "avg_expR": float(np.mean(f1_vals)),
+                "avg_calmar": float(np.mean(f2_vals)),
+                "pareto_size": len(pareto_front),
+            }
+        )
 
         # 早停检查
         current_best_expR = max(f1_vals)
@@ -894,7 +977,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
                 break
 
     runtime = time.time() - start_time
-    print(f"\n✅ 优化完成，用时 {runtime:.1f} 秒 ({runtime/60:.1f} 分钟)")
+    print(f"\n✅ 优化完成，用时 {runtime:.1f} 秒 ({runtime / 60:.1f} 分钟)")
 
     # 获取帕累托前沿
     pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
@@ -908,9 +991,11 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         print(f"   [{cand['label']}]")
         for pname, pval in cand["params"].items():
             print(f"     {pname} = {pval}")
-        print(f"     fitness: expR={cand['fitness'][0]:.4f}, "
-              f"calmar={cand['fitness'][1]:.2f}, "
-              f"stability={cand['fitness'][2]:.4f}")
+        print(
+            f"     fitness: expR={cand['fitness'][0]:.4f}, "
+            f"calmar={cand['fitness'][1]:.2f}, "
+            f"stability={cand['fitness'][2]:.4f}"
+        )
 
     # OOS 验证
     print(f"\n🔬 纯 OOS 验证:")
@@ -947,9 +1032,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         status = "✅ 通过" if passed else "❌ 失败"
         deg_str = f"退化 {deg_expR:.1%}" if deg_expR > 0 else f"OOS更优 {-deg_expR:.1%}"
         print(f"   [{candidates[key]['label']}] {status}")
-        print(f"     IS expR={metrics_is_full['expR']:.4f} → "
-              f"OOS expR={metrics_oos['expR']:.4f}  "
-              f"({deg_str})")
+        print(f"     IS expR={metrics_is_full['expR']:.4f} → OOS expR={metrics_oos['expR']:.4f}  ({deg_str})")
 
     # 稳健性检验
     print(f"\n🔍 参数稳健性检验:")
@@ -960,8 +1043,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         robustness_results[key] = rob
         passed = rob["overall_score"] >= 0.5
         status = "✅ 稳健" if passed else "⚠️ 脆弱"
-        print(f"   [{candidates[key]['label']}] {status}  "
-              f"综合得分={rob['overall_score']:.2f}")
+        print(f"   [{candidates[key]['label']}] {status}  综合得分={rob['overall_score']:.2f}")
 
     # 组装最终结果
     result = {
@@ -1015,6 +1097,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
 # 保存结果
 # ============================================================================
 
+
 def save_results(result, output_dir=None):
     """保存结果到 JSON。"""
     if output_dir is None:
@@ -1035,6 +1118,7 @@ def save_results(result, output_dir=None):
 # CLI
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="入场+出场参数 GA 联合优化器（Phase 3）")
     parser.add_argument("--symbol", type=str, default="jd", help="品种代码")
@@ -1047,8 +1131,9 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--output", type=str, default=None, help="输出目录")
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="并行评估进程数")
-    parser.add_argument("--early-stop-patience", type=int, default=EARLY_STOP_PATIENCE,
-                        help="早停耐心值（连续多少代无提升则终止）")
+    parser.add_argument(
+        "--early-stop-patience", type=int, default=EARLY_STOP_PATIENCE, help="早停耐心值（连续多少代无提升则终止）"
+    )
     parser.add_argument("--fast", action="store_true", help="快速模式：步长翻倍，窗口减半，适合快速探索")
     parser.add_argument("--shrink", action="store_true", help="参数范围收缩模式（基线 ±40%）")
     parser.add_argument("--l1", action="store_true", help="启用 L1 正则惩罚（防止过拟合）")
@@ -1098,9 +1183,11 @@ def main():
         status = "✅" if passed_oos and passed_rob else "⚠️"
         deg_str = f"退化 {deg:.1%}" if deg > 0 else f"OOS更优 {-deg:.1%}"
         print(f"  {status} {cand['label']}:")
-        print(f"     expR: IS={oos.get('metrics_is', {}).get('expR', 0):.4f} "
-              f"→ OOS={oos.get('metrics_oos', {}).get('expR', 0):.4f} "
-              f"({deg_str})")
+        print(
+            f"     expR: IS={oos.get('metrics_is', {}).get('expR', 0):.4f} "
+            f"→ OOS={oos.get('metrics_oos', {}).get('expR', 0):.4f} "
+            f"({deg_str})"
+        )
         print(f"     稳健性得分: {rob_score:.2f}")
 
     return result

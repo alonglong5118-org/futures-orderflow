@@ -62,6 +62,7 @@ from sr_widen_sweep import widen_stop_with_sr
 #  1. widen_stop_with_sr
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestWidenStopWithSr(unittest.TestCase):
     """widen_stop_with_sr 用 SR 位放宽止损。"""
 
@@ -181,6 +182,7 @@ class TestWidenStopWithSr(unittest.TestCase):
 #  2. _classify_exchange
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestClassifyExchange(unittest.TestCase):
     """_classify_exchange 交易所分类。"""
 
@@ -237,6 +239,7 @@ class TestClassifyExchange(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. _in_trading_session
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestInTradingSession(unittest.TestCase):
     """_in_trading_session 交易时段判断。"""
@@ -325,6 +328,7 @@ class TestInTradingSession(unittest.TestCase):
 #  4. _is_rate_limit
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsRateLimit(unittest.TestCase):
     """_is_rate_limit 限流识别。"""
 
@@ -333,11 +337,11 @@ class TestIsRateLimit(unittest.TestCase):
         self.assertTrue(_is_rate_limit("HTTP 429 Too Many Requests"))
 
     def test_chinese_limit_true(self):
-        """"调用次数超过限制" → True"""
+        """ "调用次数超过限制" → True"""
         self.assertTrue(_is_rate_limit("调用次数超过限制"))
 
     def test_short_limit_true(self):
-        """"超过限制" → True"""
+        """ "超过限制" → True"""
         self.assertTrue(_is_rate_limit("超过限制，请明日再试"))
 
     def test_normal_error_false(self):

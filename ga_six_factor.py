@@ -24,6 +24,7 @@ try:
 
     import numpy as np
     from deap import algorithms, base, creator, tools
+
     _HAVE_DEAP = True
 except ImportError:
     _HAVE_DEAP = False
@@ -63,8 +64,7 @@ def _evaluate(ind, symbol, df_daily, tail=None):
     cfg["subfactor_weights"] = w
 
     try:
-        r = walk_forward_backtest(symbol, cfg=cfg, window=300,
-                                  min_bars=60, tail=tail, df_in=df_daily)
+        r = walk_forward_backtest(symbol, cfg=cfg, window=300, min_bars=60, tail=tail, df_in=df_daily)
         expR = float(r.get("expR", 0))
         win_rate = float(r.get("win_rate", 0))
         n_trades = int(r.get("trades", 0))
@@ -75,8 +75,7 @@ def _evaluate(ind, symbol, df_daily, tail=None):
         return -5.0, 0.0, 0
 
 
-def optimize_six_factor(symbol, df_daily=None, pop_size=SF_POP, n_gen=SF_GEN,
-                        verbose=True, tail=None):
+def optimize_six_factor(symbol, df_daily=None, pop_size=SF_POP, n_gen=SF_GEN, verbose=True, tail=None):
     """6 因子 GA 权重优化。
 
     返回 dict:
@@ -107,8 +106,7 @@ def optimize_six_factor(symbol, df_daily=None, pop_size=SF_POP, n_gen=SF_GEN,
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.IndividualSF,
-                     toolbox.attr_float, n=n_genes)
+    toolbox.register("individual", tools.initRepeat, creator.IndividualSF, toolbox.attr_float, n=n_genes)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval_ind(ind):
@@ -139,14 +137,16 @@ def optimize_six_factor(symbol, df_daily=None, pop_size=SF_POP, n_gen=SF_GEN,
         pop = toolbox.select(offspring, k=len(pop))
 
         record = stats.compile(pop)
-        history.append({
-            "gen": gen + 1,
-            "avg": round(record["avg"], 4),
-            "max": round(record["max"], 4),
-        })
+        history.append(
+            {
+                "gen": gen + 1,
+                "avg": round(record["avg"], 4),
+                "max": round(record["max"], 4),
+            }
+        )
 
         if verbose:
-            print(f"  Gen {gen+1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}")
+            print(f"  Gen {gen + 1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}")
 
         # 早停：连续 5 代无提升
         if gen >= 5 and history[-5]["max"] >= record["max"] - 0.001:
@@ -186,8 +186,9 @@ def main():
     parser.add_argument("--save", action="store_true", help="保存结果到 logs/ga_six_factor.json")
     args = parser.parse_args()
 
-    result = optimize_six_factor(args.symbol, pop_size=args.pop, n_gen=args.gen,
-                                 verbose=True, tail=args.tail if args.tail > 0 else None)
+    result = optimize_six_factor(
+        args.symbol, pop_size=args.pop, n_gen=args.gen, verbose=True, tail=args.tail if args.tail > 0 else None
+    )
 
     if args.save and "best_weights" in result:
         out_path = os.path.join(HERE, "logs", "ga_six_factor.json")

@@ -35,6 +35,7 @@ from price_protection import (
 #  价格有效性校验
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestValidatePrice(unittest.TestCase):
     """价格有效性校验测试。"""
 
@@ -96,6 +97,7 @@ class TestValidatePrice(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  止损方向校验 & 自动修正
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestValidateEntryStop(unittest.TestCase):
     """止损方向校验 & 自动修正测试。"""
@@ -219,6 +221,7 @@ class TestValidateEntryStop(unittest.TestCase):
 #  用户价格保护（核心历史 bug 回归）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestProtectUserPrice(unittest.TestCase):
     """
     用户价格保护测试 —— 确保用户输入的价格不被自动计算篡改。
@@ -231,8 +234,7 @@ class TestProtectUserPrice(unittest.TestCase):
     def test_user_price_preserved_when_computed_differs(self):
         """用户提供了价格，且计算价不同 → 强制还原用户价"""
         # 模拟：用户输入 4830，_auto_levels 算出 4829.7
-        r = protect_user_price(original_price=4830, computed_price=4829.7,
-                               user_provided_price=True)
+        r = protect_user_price(original_price=4830, computed_price=4829.7, user_provided_price=True)
         self.assertAlmostEqual(r["final_price"], 4830.0)
         self.assertTrue(r["was_protected"])
         self.assertTrue(r["price_changed"])
@@ -240,59 +242,49 @@ class TestProtectUserPrice(unittest.TestCase):
     def test_user_price_preserved_small_difference(self):
         """计算价与用户价差异很小（浮点精度）→ 仍保护，还原用户价"""
         # 模拟：用户输入 8732.3，_auto_levels 改成 8732.8
-        r = protect_user_price(original_price=8732.3, computed_price=8732.8,
-                               user_provided_price=True)
+        r = protect_user_price(original_price=8732.3, computed_price=8732.8, user_provided_price=True)
         self.assertAlmostEqual(r["final_price"], 8732.3)
         self.assertTrue(r["was_protected"])
 
     def test_user_price_same_as_computed_no_protection_needed(self):
         """用户价 = 计算价 → 不需要保护（但 final_price 仍是用户价）"""
-        r = protect_user_price(original_price=100.0, computed_price=100.0,
-                               user_provided_price=True)
+        r = protect_user_price(original_price=100.0, computed_price=100.0, user_provided_price=True)
         self.assertAlmostEqual(r["final_price"], 100.0)
         self.assertFalse(r["was_protected"])
         self.assertFalse(r["price_changed"])
 
     def test_user_not_provided_price_uses_computed(self):
         """用户没提供价格 → 使用计算价，不触发保护"""
-        r = protect_user_price(original_price=0, computed_price=100.0,
-                               user_provided_price=False)
+        r = protect_user_price(original_price=0, computed_price=100.0, user_provided_price=False)
         self.assertAlmostEqual(r["final_price"], 100.0)
         self.assertFalse(r["was_protected"])
 
     def test_paper_example_4830_regression(self):
         """回归测试：纸浆 4830 → 4829.7 的 bug 必须被修复"""
         # 这是真实发生过的 bug：用户输入 4830，系统记录成 4829.7
-        r = protect_user_price(original_price=4830, computed_price=4829.7,
-                               user_provided_price=True)
-        self.assertAlmostEqual(r["final_price"], 4830.0,
-                               msg="纸浆价格 4830 被改成 4829.7 的 bug 复发了！")
+        r = protect_user_price(original_price=4830, computed_price=4829.7, user_provided_price=True)
+        self.assertAlmostEqual(r["final_price"], 4830.0, msg="纸浆价格 4830 被改成 4829.7 的 bug 复发了！")
 
     def test_paper_example_8732_regression(self):
         """回归测试：苯乙烯 8732.3 → 8732.8 的 bug 必须被修复"""
         # 真实 bug：用户输入 8732.3，系统记录成 8732.8
-        r = protect_user_price(original_price=8732.3, computed_price=8732.8,
-                               user_provided_price=True)
-        self.assertAlmostEqual(r["final_price"], 8732.3,
-                               msg="苯乙烯价格 8732.3 被改成 8732.8 的 bug 复发了！")
+        r = protect_user_price(original_price=8732.3, computed_price=8732.8, user_provided_price=True)
+        self.assertAlmostEqual(r["final_price"], 8732.3, msg="苯乙烯价格 8732.3 被改成 8732.8 的 bug 复发了！")
 
     def test_string_prices_converted(self):
         """字符串价格 → 自动转换，正常保护"""
-        r = protect_user_price(original_price="4830", computed_price="4829.7",
-                               user_provided_price=True)
+        r = protect_user_price(original_price="4830", computed_price="4829.7", user_provided_price=True)
         self.assertAlmostEqual(r["final_price"], 4830.0)
         self.assertTrue(r["was_protected"])
 
     def test_none_computed_price(self):
         """计算价为 None → 使用用户价（0 或用户提供的）"""
-        r = protect_user_price(original_price=4830, computed_price=None,
-                               user_provided_price=True)
+        r = protect_user_price(original_price=4830, computed_price=None, user_provided_price=True)
         self.assertAlmostEqual(r["final_price"], 4830.0)
 
     def test_none_original_price(self):
         """用户价为 None → 视为 0，计算价有效则用计算价"""
-        r = protect_user_price(original_price=None, computed_price=100.0,
-                               user_provided_price=True)
+        r = protect_user_price(original_price=None, computed_price=100.0, user_provided_price=True)
         # original_price=None → 转换为 0.0，计算价 100 不同 → 触发保护
         # 但用户价是 0，final_price 会是 0... 这是边界情况
         # 实际场景中 None 不应该出现（validate_price 会拦住）
@@ -302,6 +294,7 @@ class TestProtectUserPrice(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  止盈方向校验
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestValidateTakeProfit(unittest.TestCase):
     """止盈方向校验测试。"""
@@ -349,6 +342,7 @@ class TestValidateTakeProfit(unittest.TestCase):
 #  综合场景：3 层防线模拟
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestThreeLayerDefense(unittest.TestCase):
     """
     价格保护 3 层防线的综合模拟测试。
@@ -376,8 +370,7 @@ class TestThreeLayerDefense(unittest.TestCase):
 
         # 第 1 层：保护用户价格
         pp = protect_user_price(user_price, computed_price, user_provided_price=True)
-        self.assertAlmostEqual(pp["final_price"], 4830.0,
-                               msg="第 1 层防线失效：用户价格被篡改")
+        self.assertAlmostEqual(pp["final_price"], 4830.0, msg="第 1 层防线失效：用户价格被篡改")
         self.assertTrue(pp["was_protected"], "应该触发价格保护")
 
         # 止损方向校验
@@ -398,8 +391,7 @@ class TestThreeLayerDefense(unittest.TestCase):
         computed_stop = 8592.0
 
         pp = protect_user_price(user_price, computed_price, user_provided_price=True)
-        self.assertAlmostEqual(pp["final_price"], 8732.3,
-                               msg="第 1 层防线失效：苯乙烯价格被篡改")
+        self.assertAlmostEqual(pp["final_price"], 8732.3, msg="第 1 层防线失效：苯乙烯价格被篡改")
 
         sv = validate_entry_stop(direction, pp["final_price"], computed_stop)
         self.assertFalse(sv["fixed"])

@@ -50,13 +50,16 @@ from strategy_layer import (
 def _make_df_from_closes(closes, start="2026-01-01"):
     """从收盘价序列构造 OHLCV DataFrame（简化：high=low=close=close）。"""
     dates = pd.date_range(start, periods=len(closes), freq="D")
-    df = pd.DataFrame({
-        "open": closes,
-        "high": [c + 0.5 for c in closes],
-        "low": [c - 0.5 for c in closes],
-        "close": closes,
-        "volume": [1000] * len(closes),
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "open": closes,
+            "high": [c + 0.5 for c in closes],
+            "low": [c - 0.5 for c in closes],
+            "close": closes,
+            "volume": [1000] * len(closes),
+        },
+        index=dates,
+    )
     return df
 
 
@@ -68,6 +71,7 @@ def _trend_closes(n=100, start=100, slope=1.0):
 def _flat_closes(n=100, base=100):
     """生成横盘行情收盘价（小幅波动）。"""
     import random
+
     random.seed(42)
     return [base + random.uniform(-1, 1) for _ in range(n)]
 
@@ -75,6 +79,7 @@ def _flat_closes(n=100, base=100):
 # ═══════════════════════════════════════════════════════════════════════════
 #  工具函数
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestUtils(unittest.TestCase):
     """基础技术指标工具函数。"""
@@ -104,6 +109,7 @@ class TestUtils(unittest.TestCase):
     def test_rsi_oscillating_mid_range(self):
         """震荡行情 → RSI 在中间范围"""
         import random
+
         random.seed(42)
         closes = [100 + random.uniform(-2, 2) for _ in range(50)]
         df = _make_df_from_closes(closes)
@@ -154,6 +160,7 @@ class TestUtils(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  趋势策略
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestMaBreak(unittest.TestCase):
     """s_ma_break — MA 突破（c > ma20 > ma60 → 多）。"""
@@ -258,10 +265,16 @@ class TestDonchian(unittest.TestCase):
         highs = [100 + i for i in range(n)] + [110]  # 第 21 根 high = 110（故意压低）
         lows = [95 + i for i in range(n)] + [105]
         closes = [98 + i for i in range(n)] + [200]  # 第 21 根 close = 200，远高于前 20 根 high
-        df = pd.DataFrame({
-            "open": closes, "high": highs, "low": lows, "close": closes,
-            "volume": [1000] * (n + 1),
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": closes,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000] * (n + 1),
+            },
+            index=dates,
+        )
         # hh.iloc[-1] = max(highs[1:21]) = max(101...119, 110) = 119
         # c = 200 >= 119 → 1
         sig, _ = s_donchian(df)
@@ -274,10 +287,16 @@ class TestDonchian(unittest.TestCase):
         highs = [110 - i for i in range(n)] + [90]
         lows = [100 - i for i in range(n)] + [95]  # 第 21 根 low = 95（故意抬高）
         closes = [102 - i for i in range(n)] + [50]  # 第 21 根 close = 50，远低于前 20 根 low
-        df = pd.DataFrame({
-            "open": closes, "high": highs, "low": lows, "close": closes,
-            "volume": [1000] * (n + 1),
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": closes,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000] * (n + 1),
+            },
+            index=dates,
+        )
         # ll.iloc[-1] = min(lows[1:21]) = min(99...81, 95) = 81
         # c = 50 <= 81 → -1
         sig, _ = s_donchian(df)
@@ -321,6 +340,7 @@ class TestPullback(unittest.TestCase):
 #  均值回归策略
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBoll(unittest.TestCase):
     """s_boll — 布林带（跌破下轨做多，突破上轨做空）。"""
 
@@ -361,6 +381,7 @@ class TestRSI(unittest.TestCase):
         确保 RSI 真正低于 30（避免 dn=0 → fillna(50) 的情况）。
         """
         import random
+
         random.seed(42)
         closes = [100 + random.uniform(-1, 1) for _ in range(30)]
         # 14 根里 12 根跌 2 点，2 根涨 0.5 点
@@ -377,6 +398,7 @@ class TestRSI(unittest.TestCase):
     def test_overbought_short(self):
         """RSI > 70 → -1（超买做空）"""
         import random
+
         random.seed(42)
         closes = [100 + random.uniform(-1, 1) for _ in range(30)]
         # 14 根里 12 根涨 2 点，2 根跌 0.5 点
@@ -409,6 +431,7 @@ class TestRSI(unittest.TestCase):
 #  季节性策略
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSeasonal(unittest.TestCase):
     """s_seasonal — 季节性策略（同月历史平均收益 > 阈值）。"""
 
@@ -430,11 +453,16 @@ class TestSeasonal(unittest.TestCase):
                     daily_ret = month_return / 20
                     price = price * (1 + daily_ret)
                     closes.append(price)
-        df = pd.DataFrame({
-            "open": closes, "high": [c * 1.005 for c in closes],
-            "low": [c * 0.995 for c in closes], "close": closes,
-            "volume": [1000] * len(closes),
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": closes,
+                "high": [c * 1.005 for c in closes],
+                "low": [c * 0.995 for c in closes],
+                "close": closes,
+                "volume": [1000] * len(closes),
+            },
+            index=dates,
+        )
         return df
 
     def test_insufficient_samples_neutral(self):
@@ -442,10 +470,16 @@ class TestSeasonal(unittest.TestCase):
         # 只有 3 年数据
         dates = pd.date_range("2023-01-01", periods=100, freq="D")
         closes = [100 + i * 0.1 for i in range(100)]
-        df = pd.DataFrame({
-            "open": closes, "high": closes, "low": closes, "close": closes,
-            "volume": [1000] * 100,
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": closes,
+                "high": closes,
+                "low": closes,
+                "close": closes,
+                "volume": [1000] * 100,
+            },
+            index=dates,
+        )
         sig, detail = s_seasonal(df)
         self.assertEqual(sig, 0)
         self.assertIn("reason", detail)
@@ -458,10 +492,12 @@ class TestSeasonal(unittest.TestCase):
 
     def test_no_date_column_neutral(self):
         """没有日期索引也没有 date 列 → 0"""
-        df = pd.DataFrame({
-            "close": [100, 101, 102],
-            "volume": [1000, 1000, 1000],
-        })
+        df = pd.DataFrame(
+            {
+                "close": [100, 101, 102],
+                "volume": [1000, 1000, 1000],
+            }
+        )
         sig, detail = s_seasonal(df)
         self.assertEqual(sig, 0)
         self.assertEqual(detail["reason"], "无日期")
@@ -471,13 +507,13 @@ class TestSeasonal(unittest.TestCase):
 #  策略注册完整性
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestStrategyRegistration(unittest.TestCase):
     """策略注册表完整性。"""
 
     def test_all_strats_registered(self):
         """所有策略都在 STRATS 里注册了"""
-        expected = {"ma_break", "dma", "turtle", "donchian", "pullback",
-                    "boll", "rsi", "seasonal"}
+        expected = {"ma_break", "dma", "turtle", "donchian", "pullback", "boll", "rsi", "seasonal"}
         self.assertEqual(set(STRATS.keys()), expected)
 
     def test_trend_strats_count(self):

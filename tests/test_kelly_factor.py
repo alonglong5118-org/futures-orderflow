@@ -32,6 +32,7 @@ from kelly_utils import compute_kelly_factor
 #  基础线性映射
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBasicLinearMapping(unittest.TestCase):
     """基础线性映射逻辑测试。"""
 
@@ -70,6 +71,7 @@ class TestBasicLinearMapping(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  近景门槛（P2-A 整改）
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNearTermGate(unittest.TestCase):
     """近景期望收益门槛测试。"""
@@ -132,6 +134,7 @@ class TestNearTermGate(unittest.TestCase):
 #  （决策 20：Kelly 因子标准化 + 高 edge 降杠杆 25%）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHistoricalBugRegression(unittest.TestCase):
     """
     历史 bug 回归测试 —— 确保修复后的问题不再复发。
@@ -181,6 +184,7 @@ class TestHistoricalBugRegression(unittest.TestCase):
 #  参数化：kelly_min / kelly_max / target_edge
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParameterization(unittest.TestCase):
     """参数自定义测试。"""
 
@@ -225,6 +229,7 @@ class TestParameterization(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  异常输入 & 边界情况
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEdgeCases(unittest.TestCase):
     """异常输入和边界情况测试。"""
@@ -274,6 +279,7 @@ class TestEdgeCases(unittest.TestCase):
 #  数值精度 & 单调性
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMonotonicity(unittest.TestCase):
     """单调性和数值准确性测试。"""
 
@@ -282,8 +288,7 @@ class TestMonotonicity(unittest.TestCase):
         prev = 0.0
         for edge in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 2.0]:
             mult = compute_kelly_factor(edge=edge)
-            self.assertGreaterEqual(mult, prev,
-                                    f"edge={edge} 时 mult={mult} < 前一个 {prev}")
+            self.assertGreaterEqual(mult, prev, f"edge={edge} 时 mult={mult} < 前一个 {prev}")
             prev = mult
 
     def test_within_bounds_always(self):
@@ -292,10 +297,8 @@ class TestMonotonicity(unittest.TestCase):
         for edge in [-1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 10.0]:
             for near in [None, -0.5, 0.0, 0.5]:
                 mult = compute_kelly_factor(edge=edge, cur_full_expR=near)
-                self.assertGreaterEqual(mult, 0.6,
-                                        f"edge={edge}, near={near}: mult={mult} < 0.6")
-                self.assertLessEqual(mult, 1.2,
-                                     f"edge={edge}, near={near}: mult={mult} > 1.2")
+                self.assertGreaterEqual(mult, 0.6, f"edge={edge}, near={near}: mult={mult} < 0.6")
+                self.assertLessEqual(mult, 1.2, f"edge={edge}, near={near}: mult={mult} > 1.2")
 
     def test_near_term_never_increases(self):
         """近景门槛只会降低或保持 mult，绝不会增加"""
@@ -317,6 +320,7 @@ class TestMonotonicity(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ── 补充：参数鲁棒性 & 深层边界 ──────────────────────────────────────────
+
 
 class TestParamRobustness(unittest.TestCase):
     """kelly_min / kelly_max / target_edge 参数的类型鲁棒性。"""
@@ -358,9 +362,7 @@ class TestParamRobustness(unittest.TestCase):
 
     def test_all_params_invalid_still_returns_1(self):
         """所有参数都无效 → 仍安全返回 1.0，不崩溃"""
-        mult = compute_kelly_factor(
-            edge="bad", kelly_min=None, kelly_max="x", target_edge=[]
-        )
+        mult = compute_kelly_factor(edge="bad", kelly_min=None, kelly_max="x", target_edge=[])
         self.assertEqual(mult, 1.0)
 
 
@@ -369,19 +371,13 @@ class TestNearGateWithCustomParams(unittest.TestCase):
 
     def test_wide_range_near_neg_capped_at_1(self):
         """kelly 范围宽（0.5~2.0）+ 近景负 → 封顶 1.0"""
-        mult = compute_kelly_factor(
-            edge=1.0, kelly_min=0.5, kelly_max=2.0,
-            target_edge=0.5, cur_full_expR=-0.1
-        )
+        mult = compute_kelly_factor(edge=1.0, kelly_min=0.5, kelly_max=2.0, target_edge=0.5, cur_full_expR=-0.1)
         self.assertAlmostEqual(mult, 1.0, places=4)
         self.assertLessEqual(mult, 1.0)
 
     def test_wide_range_near_pos_goes_to_max(self):
         """kelly 范围宽 + 近景正 → 正常达到 kelly_max"""
-        mult = compute_kelly_factor(
-            edge=1.0, kelly_min=0.5, kelly_max=2.0,
-            target_edge=0.5, cur_full_expR=0.3
-        )
+        mult = compute_kelly_factor(edge=1.0, kelly_min=0.5, kelly_max=2.0, target_edge=0.5, cur_full_expR=0.3)
         self.assertAlmostEqual(mult, 2.0, places=4)
 
     def test_min_above_1_near_neg_drops_below_min(self):
@@ -390,10 +386,7 @@ class TestNearGateWithCustomParams(unittest.TestCase):
         注意：这是当前实现的行为——近景门槛优先级高于 kelly_min。
         语义上合理：近景都亏了，宁可用低于"最小缩放"的保守仓位，也不加杠杆。
         """
-        mult = compute_kelly_factor(
-            edge=0.5, kelly_min=1.5, kelly_max=2.0,
-            target_edge=0.5, cur_full_expR=-0.1
-        )
+        mult = compute_kelly_factor(edge=0.5, kelly_min=1.5, kelly_max=2.0, target_edge=0.5, cur_full_expR=-0.1)
         # 原计算：1.5 + 0.5 * 1.0 = 2.0，近景负 → min(2.0, 1.0) = 1.0
         self.assertAlmostEqual(mult, 1.0, places=4)
         # 确实低于 kelly_min（近景门槛优先级更高）
@@ -401,10 +394,7 @@ class TestNearGateWithCustomParams(unittest.TestCase):
 
     def test_max_below_1_near_neg_no_effect(self):
         """kelly_max < 1.0 + 近景负 → 封顶 1.0 不生效（本来就低于 1.0）"""
-        mult = compute_kelly_factor(
-            edge=0.5, kelly_min=0.4, kelly_max=0.8,
-            target_edge=0.5, cur_full_expR=-0.1
-        )
+        mult = compute_kelly_factor(edge=0.5, kelly_min=0.4, kelly_max=0.8, target_edge=0.5, cur_full_expR=-0.1)
         self.assertAlmostEqual(mult, 0.8, places=4)
         self.assertLess(mult, 1.0)
 
@@ -428,24 +418,24 @@ class TestSpecialFloatValues(unittest.TestCase):
 
     def test_edge_inf_capped_at_max(self):
         """edge = +inf → 按极大值处理，封顶 kelly_max"""
-        mult = compute_kelly_factor(edge=float('inf'))
+        mult = compute_kelly_factor(edge=float("inf"))
         self.assertAlmostEqual(mult, 1.2, places=4)
 
     def test_edge_neg_inf_returns_min(self):
         """edge = -inf → 按 0 处理，返回 kelly_min"""
-        mult = compute_kelly_factor(edge=float('-inf'))
+        mult = compute_kelly_factor(edge=float("-inf"))
         self.assertAlmostEqual(mult, 0.6, places=4)
 
     def test_edge_nan_returns_min(self):
         """edge = NaN → float() 成功但值为 NaN，max(NaN, 0) = NaN，
         最终计算结果为 NaN？验证一下实际行为。"""
         import math
-        mult = compute_kelly_factor(edge=float('nan'))
+
+        mult = compute_kelly_factor(edge=float("nan"))
         # NaN 经过 max(NaN, 0) 还是 NaN，除以 target_edge 还是 NaN
         # min(NaN, 1.0) 取决于实现，但通常 NaN 传播
         # 我们验证结果是有限值（不崩溃即可，行为由实现决定）
-        self.assertTrue(math.isfinite(mult) or math.isnan(mult),
-                        "NaN 输入不应导致崩溃")
+        self.assertTrue(math.isfinite(mult) or math.isnan(mult), "NaN 输入不应导致崩溃")
 
     def test_very_small_positive_edge(self):
         """edge = 1e-10（极小正值）→ 略高于 kelly_min"""
@@ -488,8 +478,7 @@ class TestLinearInterpolation(unittest.TestCase):
                 increment = mult - prev_mult
                 if prev_increment is not None:
                     self.assertAlmostEqual(
-                        increment, prev_increment, places=10,
-                        msg=f"edge={edge} 时增量不均，说明不是线性映射"
+                        increment, prev_increment, places=10, msg=f"edge={edge} 时增量不均，说明不是线性映射"
                     )
                 prev_increment = increment
             prev_mult = mult

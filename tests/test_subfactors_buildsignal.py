@@ -43,15 +43,23 @@ from four_dim_strategy import (
 #  测试数据
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _make_trend_df(n=120, slope=3, seed=42):
     """趋势行情。"""
     np.random.seed(seed)
     px = 1000 + np.arange(n) * slope + np.cumsum(np.random.randn(n) * 2)
     idx = pd.date_range("2026-01-01", periods=n, freq="D")
-    df = pd.DataFrame({
-        "open": px, "high": px + 3, "low": px - 3, "close": px,
-        "volume": 10000, "open_interest": 50000,
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": px,
+            "high": px + 3,
+            "low": px - 3,
+            "close": px,
+            "volume": 10000,
+            "open_interest": 50000,
+        },
+        index=idx,
+    )
     return df
 
 
@@ -61,16 +69,24 @@ def _make_range_df(n=120, amp=20, seed=42):
     t = np.arange(n)
     px = 1000 + amp * np.sin(t * 0.12) + np.random.randn(n) * 2
     idx = pd.date_range("2026-01-01", periods=n, freq="D")
-    df = pd.DataFrame({
-        "open": px, "high": px + 3, "low": px - 3, "close": px,
-        "volume": 10000, "open_interest": 50000,
-    }, index=idx)
+    df = pd.DataFrame(
+        {
+            "open": px,
+            "high": px + 3,
+            "low": px - 3,
+            "close": px,
+            "volume": 10000,
+            "open_interest": 50000,
+        },
+        index=idx,
+    )
     return df
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. compute_T_subfactors — 基本
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTSubfactorsBasic(unittest.TestCase):
     """compute_T_subfactors 基本行为。"""
@@ -110,6 +126,7 @@ class TestTSubfactorsBasic(unittest.TestCase):
 #  2. compute_T_subfactors — 行情类型
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestTSubfactorsMarketTypes(unittest.TestCase):
     """不同行情下的子因子表现。"""
 
@@ -117,27 +134,25 @@ class TestTSubfactorsMarketTypes(unittest.TestCase):
         """上升趋势 → T_trend > 0"""
         df = _make_trend_df(slope=4, seed=1)
         t_trend, t_mean, t_seas, _, _ = compute_T_subfactors(df)
-        self.assertGreater(t_trend, 0,
-            "上升趋势中 T_trend 应该为正")
+        self.assertGreater(t_trend, 0, "上升趋势中 T_trend 应该为正")
 
     def test_downtrend_negative_trend_factor(self):
         """下降趋势 → T_trend < 0"""
         df = _make_trend_df(slope=-4, seed=1)
         t_trend, t_mean, t_seas, _, _ = compute_T_subfactors(df)
-        self.assertLess(t_trend, 0,
-            "下降趋势中 T_trend 应该为负")
+        self.assertLess(t_trend, 0, "下降趋势中 T_trend 应该为负")
 
     def test_trend_factor_stronger_than_mean_in_trend(self):
         """趋势行情 → |T_trend| > |T_mean|"""
         df = _make_trend_df(slope=4, seed=1)
         t_trend, t_mean, t_seas, _, _ = compute_T_subfactors(df)
-        self.assertGreater(abs(t_trend), abs(t_mean),
-            "趋势行情中 T_trend 绝对值应该大于 T_mean")
+        self.assertGreater(abs(t_trend), abs(t_mean), "趋势行情中 T_trend 绝对值应该大于 T_mean")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. compute_T_subfactors — decorrelate 开关
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTSubfactorsDecorrelateSwitch(unittest.TestCase):
     """decorrelate 开关效果。"""
@@ -176,13 +191,13 @@ class TestTSubfactorsDecorrelateSwitch(unittest.TestCase):
     def test_decorrelate_default_enabled(self):
         """默认配置下 decorrelate 应该是开启的"""
         dc = DEFAULT_CONFIG.get("decorrelate", {})
-        self.assertTrue(dc.get("enabled", True),
-            "默认 decorrelate 应该开启")
+        self.assertTrue(dc.get("enabled", True), "默认 decorrelate 应该开启")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. compute_T_subfactors — 子因子独立性
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTSubfactorsIndependence(unittest.TestCase):
     """子因子独立性验证。"""
@@ -213,6 +228,7 @@ class TestTSubfactorsIndependence(unittest.TestCase):
 #  5. build_signal — 输出结构
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBuildSignalStructure(unittest.TestCase):
     """build_signal 输出结构。"""
 
@@ -226,11 +242,10 @@ class TestBuildSignalStructure(unittest.TestCase):
             pipe = dict(pipe)
             pipe["dir_T"] = direction
         price = df["close"].iloc[-1]
-        rg = risk_gate(symbol, price=price, atr_val=50,
-                       t_strength=abs(pipe.get("T_5m", 60)),
-                       t_thresh=pipe.get("T_thresh_eff", 50))
-        ep = exit_plan(symbol, entry=price, dir_T=pipe["dir_T"],
-                       atr_val=50, regime=pipe["regime"] or "趋势")
+        rg = risk_gate(
+            symbol, price=price, atr_val=50, t_strength=abs(pipe.get("T_5m", 60)), t_thresh=pipe.get("T_thresh_eff", 50)
+        )
+        ep = exit_plan(symbol, entry=price, dir_T=pipe["dir_T"], atr_val=50, regime=pipe["regime"] or "趋势")
         return pipe, rg, ep, price
 
     def test_output_has_required_fields(self):
@@ -238,10 +253,21 @@ class TestBuildSignalStructure(unittest.TestCase):
         pipe, rg, ep, price = self._make_signal_inputs()
         sig = build_signal("rb", pipe, rg, ep, entry_ref=price)
         required = [
-            "symbol", "name", "direction", "entry_ref",
-            "stop", "target", "t1", "t2",
-            "stop_dist", "lots",
-            "pipeline", "risk_gate", "cost", "exit_plan", "reason",
+            "symbol",
+            "name",
+            "direction",
+            "entry_ref",
+            "stop",
+            "target",
+            "t1",
+            "t2",
+            "stop_dist",
+            "lots",
+            "pipeline",
+            "risk_gate",
+            "cost",
+            "exit_plan",
+            "reason",
         ]
         for key in required:
             self.assertIn(key, sig, "缺少字段: %s" % key)
@@ -307,6 +333,7 @@ class TestBuildSignalStructure(unittest.TestCase):
         pipe, rg, ep, price = self._make_signal_inputs("rb")
         sig = build_signal("rb", pipe, rg, ep, entry_ref=price)
         from four_dim_strategy import SYMBOLS
+
         self.assertEqual(sig["name"], SYMBOLS["rb"]["name"])
 
 

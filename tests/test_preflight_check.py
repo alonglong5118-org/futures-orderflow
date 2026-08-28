@@ -38,6 +38,7 @@ from preflight_check import is_trading_day, parse_ts
 #  1. parse_ts
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseTs(unittest.TestCase):
     """parse_ts 时间戳解析（兼容秒/毫秒）。"""
 
@@ -101,6 +102,7 @@ class TestParseTs(unittest.TestCase):
 #  2. is_trading_day
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsTradingDay(unittest.TestCase):
     """is_trading_day 是否交易日。"""
 
@@ -129,12 +131,12 @@ class TestIsTradingDay(unittest.TestCase):
         """整个假期区间都是非交易日"""
         # 检查几个假期中的日子
         holiday_samples = [
-            date(2026, 1, 1),    # 元旦
-            date(2026, 2, 18),   # 春节期间
-            date(2026, 4, 6),    # 清明
-            date(2026, 5, 1),    # 劳动节
-            date(2026, 6, 19),   # 端午
-            date(2026, 10, 1),   # 国庆
+            date(2026, 1, 1),  # 元旦
+            date(2026, 2, 18),  # 春节期间
+            date(2026, 4, 6),  # 清明
+            date(2026, 5, 1),  # 劳动节
+            date(2026, 6, 19),  # 端午
+            date(2026, 10, 1),  # 国庆
         ]
         for d in holiday_samples:
             self.assertFalse(is_trading_day(d), f"{d} 应该是假期")

@@ -71,8 +71,7 @@ def _assert_almost_equal(test_obj, actual, expected, name, places=6):
     """近似相等断言，支持更新模式。"""
     if UPDATE_BASELINE:
         return  # 更新模式下不校验
-    test_obj.assertAlmostEqual(actual, expected, places=places,
-                               msg=f"{name}: got {actual}, expected {expected}")
+    test_obj.assertAlmostEqual(actual, expected, places=places, msg=f"{name}: got {actual}, expected {expected}")
 
 
 def _load_baselines():
@@ -107,6 +106,7 @@ def _baseline(key, value):
 #  一、策略管线基准回归
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPipelineBaseline(unittest.TestCase):
     """策略管线基准回归测试。"""
 
@@ -126,14 +126,17 @@ class TestPipelineBaseline(unittest.TestCase):
         result = risk_gate(self.symbol, price, atr, cfg=DEFAULT_CONFIG)
 
         key = f"risk_gate_{self.symbol}_{price}_{atr}"
-        expected = _baseline(key, {
-            "passed": result["passed"],
-            "N_risk": result["N_risk"],
-            "N_margin": result["N_margin"],
-            "N_plan": result["N_plan"],
-            "stop_pts": result["stop_pts"],
-            "kelly_mult": result["kelly_mult"],
-        })
+        expected = _baseline(
+            key,
+            {
+                "passed": result["passed"],
+                "N_risk": result["N_risk"],
+                "N_margin": result["N_margin"],
+                "N_plan": result["N_plan"],
+                "stop_pts": result["stop_pts"],
+                "kelly_mult": result["kelly_mult"],
+            },
+        )
 
         self.assertEqual(result["passed"], expected["passed"])
         _assert_almost_equal(self, result["N_risk"], expected["N_risk"], f"{key}.N_risk")
@@ -148,12 +151,15 @@ class TestPipelineBaseline(unittest.TestCase):
         result = risk_gate("FG", price, atr, cfg=DEFAULT_CONFIG)
 
         key = f"risk_gate_FG_{price}_{atr}"
-        expected = _baseline(key, {
-            "passed": result["passed"],
-            "N_plan": result["N_plan"],
-            "N_risk": result["N_risk"],
-            "N_margin": result["N_margin"],
-        })
+        expected = _baseline(
+            key,
+            {
+                "passed": result["passed"],
+                "N_plan": result["N_plan"],
+                "N_risk": result["N_risk"],
+                "N_margin": result["N_margin"],
+            },
+        )
 
         self.assertEqual(result["passed"], expected["passed"])
         _assert_almost_equal(self, result["N_plan"], expected["N_plan"], f"{key}.N_plan")
@@ -164,13 +170,16 @@ class TestPipelineBaseline(unittest.TestCase):
         result = risk_gate("rb", price, atr, cfg=DEFAULT_CONFIG, held_lots=3)
 
         key = f"risk_gate_rb_{price}_{atr}_held3"
-        expected = _baseline(key, {
-            "passed": result["passed"],
-            "N_plan": result["N_plan"],
-            "N_risk": result["N_risk"],
-            "N_margin": result["N_margin"],
-            "kelly_mult": result["kelly_mult"],
-        })
+        expected = _baseline(
+            key,
+            {
+                "passed": result["passed"],
+                "N_plan": result["N_plan"],
+                "N_risk": result["N_risk"],
+                "N_margin": result["N_margin"],
+                "kelly_mult": result["kelly_mult"],
+            },
+        )
 
         self.assertEqual(result["passed"], expected["passed"])
         _assert_almost_equal(self, result["N_plan"], expected["N_plan"], f"{key}.N_plan")
@@ -179,6 +188,7 @@ class TestPipelineBaseline(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  二、回测基准回归
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBacktestBaseline(unittest.TestCase):
     """回测基准回归测试。"""
@@ -212,8 +222,7 @@ class TestBacktestBaseline(unittest.TestCase):
         self._run_backtest_baseline("FG")
 
     def _run_backtest_baseline(self, symbol):
-        result = walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self.data[symbol])
+        result = walk_forward_backtest(symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.data[symbol])
 
         key = f"backtest_{symbol}_tail500"
         baseline_data = {
@@ -227,24 +236,18 @@ class TestBacktestBaseline(unittest.TestCase):
         }
         expected = _baseline(key, baseline_data)
 
-        self.assertEqual(result["trades"], expected["trades"],
-                         f"{key}: trades 不匹配")
-        _assert_almost_equal(self, result["expR"], expected["expR"],
-                             f"{key}.expR", places=4)
-        _assert_almost_equal(self, result["win_rate"], expected["win_rate"],
-                             f"{key}.win_rate", places=4)
+        self.assertEqual(result["trades"], expected["trades"], f"{key}: trades 不匹配")
+        _assert_almost_equal(self, result["expR"], expected["expR"], f"{key}.expR", places=4)
+        _assert_almost_equal(self, result["win_rate"], expected["win_rate"], f"{key}.win_rate", places=4)
 
         # 退出原因分布（每笔数一致）
         if "exit_reasons" in expected:
             for reason, count in expected["exit_reasons"].items():
-                self.assertEqual(result["exit_reasons"].get(reason, 0), count,
-                                 f"{key}.exit_reasons['{reason}']")
+                self.assertEqual(result["exit_reasons"].get(reason, 0), count, f"{key}.exit_reasons['{reason}']")
 
     def test_backtest_cooldown_baseline(self):
         """冷却期=5 的回测结果稳定"""
-        result = walk_forward_backtest("rb", cfg=DEFAULT_CONFIG,
-                                       min_bars=60, cooldown_bars=5,
-                                       df_in=self.data["rb"])
+        result = walk_forward_backtest("rb", cfg=DEFAULT_CONFIG, min_bars=60, cooldown_bars=5, df_in=self.data["rb"])
         key = "backtest_rb_cooldown5"
         baseline_data = {
             "trades": result["trades"],
@@ -260,6 +263,7 @@ class TestBacktestBaseline(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  三、数据质量基准回归
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDataQualityBaseline(unittest.TestCase):
     """数据质量基准回归测试。"""
@@ -354,13 +358,13 @@ class TestDataQualityBaseline(unittest.TestCase):
         self.assertEqual(rb["status"], expected["rb_status"])
         self.assertEqual(hc["status"], expected["hc_status"])
         self.assertEqual(fg["status"], expected["fg_status"])
-        _assert_almost_equal(self, rep["health_pct"], expected["health_pct"],
-                             f"{key}.health_pct", places=1)
+        _assert_almost_equal(self, rep["health_pct"], expected["health_pct"], f"{key}.health_pct", places=1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  四、Kelly 基准回归
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestKellyBaseline(unittest.TestCase):
     """Kelly 因子基准回归测试。"""
@@ -405,6 +409,7 @@ class TestKellyBaseline(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  五、数学函数基准回归
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestMathBaseline(unittest.TestCase):
     """数学函数基准回归测试。"""

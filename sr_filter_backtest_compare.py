@@ -26,8 +26,7 @@ from four_dim_strategy import (
 )
 
 
-def backtest_with_sr_filter(symbol, cfg=DEFAULT_CONFIG, min_bars=60,
-                            filter_mode="none", cooldown=5):
+def backtest_with_sr_filter(symbol, cfg=DEFAULT_CONFIG, min_bars=60, filter_mode="none", cooldown=5):
     """逐 bar 回测，可选 SR 过滤模式。
 
     filter_mode:
@@ -53,7 +52,7 @@ def backtest_with_sr_filter(symbol, cfg=DEFAULT_CONFIG, min_bars=60,
             i += 1
             continue
 
-        df_seg = df.iloc[:i + 1]
+        df_seg = df.iloc[: i + 1]
         pipe = pipeline(symbol, df_seg, cfg=cfg)
 
         T_D = pipe["T_D"]
@@ -172,11 +171,13 @@ def backtest_with_sr_filter(symbol, cfg=DEFAULT_CONFIG, min_bars=60,
         fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
         R_adj = R - slip_R - fee_R
 
-        trades.append({
-            "R_adj": R_adj,
-            "regime": regime,
-            "reason": reason,
-        })
+        trades.append(
+            {
+                "R_adj": R_adj,
+                "regime": regime,
+                "reason": reason,
+            }
+        )
 
         last_trade_i = i
         i = i + exit_j + 1
@@ -201,8 +202,7 @@ def backtest_with_sr_filter(symbol, cfg=DEFAULT_CONFIG, min_bars=60,
 
 def main():
     parser = argparse.ArgumentParser(description="SR 过滤方案对比回测")
-    parser.add_argument("--symbols", type=str,
-                        default="J,eb,SH,cu,al,zn,sp,ag,au,rb")
+    parser.add_argument("--symbols", type=str, default="J,eb,SH,cu,al,zn,sp,ag,au,rb")
     args = parser.parse_args()
 
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
@@ -223,7 +223,7 @@ def main():
     results = {name: [] for _, name in modes}
 
     for idx, sym in enumerate(symbols):
-        row = f"\n[{idx+1}/{len(symbols)}] {sym}: "
+        row = f"\n[{idx + 1}/{len(symbols)}] {sym}: "
         print(row, end="", flush=True)
 
         for mode, name in modes:
@@ -235,9 +235,9 @@ def main():
                 print(f"  {name}:无", end="", flush=True)
 
     # 汇总
-    print(f"\n\n{'='*80}")
+    print(f"\n\n{'=' * 80}")
     print("汇总对比")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # 全市场合并统计
     all_Rs = {}
@@ -266,12 +266,12 @@ def main():
             diff = expR - baseline_expR
             pct = diff / abs(baseline_expR) * 100 if baseline_expR != 0 else 0
             diff_str = f"{diff:+.4f} ({pct:+.1f}%)"
-        print(f"{name:<14} {n:>6} {expR:>8.4f} {wr*100:>7.1f}% {diff_str:>10}")
+        print(f"{name:<14} {n:>6} {expR:>8.4f} {wr * 100:>7.1f}% {diff_str:>10}")
 
     # 逐品种对比表
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("逐品种对比")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"{'品种':<6} {'无过滤 expR':>12} {'旧灰色 expR':>12} {'逆向危险 expR':>14} {'逆向提升':>10}")
     print("-" * 62)
 
@@ -280,9 +280,9 @@ def main():
         r_old = results["旧灰色(B)"][idx]
         r_new = results["逆向危险(C)"][idx]
 
-        e_none = r_none.get("expR", 0) if r_none["trades"] > 0 else float('nan')
-        e_old = r_old.get("expR", 0) if r_old["trades"] > 0 else float('nan')
-        e_new = r_new.get("expR", 0) if r_new["trades"] > 0 else float('nan')
+        e_none = r_none.get("expR", 0) if r_none["trades"] > 0 else float("nan")
+        e_old = r_old.get("expR", 0) if r_old["trades"] > 0 else float("nan")
+        e_new = r_new.get("expR", 0) if r_new["trades"] > 0 else float("nan")
 
         # 相对无过滤的提升
         if not np.isnan(e_none) and not np.isnan(e_new) and e_none != 0:
@@ -293,13 +293,15 @@ def main():
 
         n_none = r_none["trades"]
         n_new = r_new["trades"]
-        print(f"{sym:<6} {e_none:>8.4f}({n_none:>3}) {e_old:>8.4f}({r_old['trades']:>3}) "
-              f"{e_new:>8.4f}({n_new:>3}) {lift_str:>10}")
+        print(
+            f"{sym:<6} {e_none:>8.4f}({n_none:>3}) {e_old:>8.4f}({r_old['trades']:>3}) "
+            f"{e_new:>8.4f}({n_new:>3}) {lift_str:>10}"
+        )
 
     # 胜率对比
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("胜率对比")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"{'品种':<6} {'无过滤':>8} {'旧灰色':>8} {'逆向危险':>10} {'变化':>8}")
     print("-" * 48)
 
@@ -308,9 +310,9 @@ def main():
         r_old = results["旧灰色(B)"][idx]
         r_new = results["逆向危险(C)"][idx]
 
-        w_none = r_none.get("win_rate", 0) * 100 if r_none["trades"] > 0 else float('nan')
-        w_old = r_old.get("win_rate", 0) * 100 if r_old["trades"] > 0 else float('nan')
-        w_new = r_new.get("win_rate", 0) * 100 if r_new["trades"] > 0 else float('nan')
+        w_none = r_none.get("win_rate", 0) * 100 if r_none["trades"] > 0 else float("nan")
+        w_old = r_old.get("win_rate", 0) * 100 if r_old["trades"] > 0 else float("nan")
+        w_new = r_new.get("win_rate", 0) * 100 if r_new["trades"] > 0 else float("nan")
 
         if not np.isnan(w_none) and not np.isnan(w_new):
             diff = w_new - w_none
@@ -321,26 +323,36 @@ def main():
         print(f"{sym:<6} {w_none:>7.1f}% {w_old:>7.1f}% {w_new:>9.1f}% {diff_str:>8}")
 
     # 结论
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("结论")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     new_expR = sum(all_Rs["逆向危险(C)"]) / len(all_Rs["逆向危险(C)"]) if all_Rs["逆向危险(C)"] else 0
     old_expR = sum(all_Rs["旧灰色(B)"]) / len(all_Rs["旧灰色(B)"]) if all_Rs["旧灰色(B)"] else 0
 
     print(f"\n  整体 expR:")
     print(f"    无过滤 (基准): {baseline_expR:.4f}")
-    print(f"    旧灰色地带:   {old_expR:.4f} ({(old_expR-baseline_expR)/abs(baseline_expR)*100 if baseline_expR else 0:+.1f}%)")
-    print(f"    逆向位危险区: {new_expR:.4f} ({(new_expR-baseline_expR)/abs(baseline_expR)*100 if baseline_expR else 0:+.1f}%)")
+    print(
+        f"    旧灰色地带:   {old_expR:.4f} ({(old_expR - baseline_expR) / abs(baseline_expR) * 100 if baseline_expR else 0:+.1f}%)"
+    )
+    print(
+        f"    逆向位危险区: {new_expR:.4f} ({(new_expR - baseline_expR) / abs(baseline_expR) * 100 if baseline_expR else 0:+.1f}%)"
+    )
 
-    n_better = sum(1 for idx in range(len(symbols))
-                   if results["逆向危险(C)"][idx]["trades"] > 0
-                   and results["无过滤(A)"][idx]["trades"] > 0
-                   and results["逆向危险(C)"][idx]["expR"] > results["无过滤(A)"][idx]["expR"])
-    n_worse = sum(1 for idx in range(len(symbols))
-                  if results["逆向危险(C)"][idx]["trades"] > 0
-                  and results["无过滤(A)"][idx]["trades"] > 0
-                  and results["逆向危险(C)"][idx]["expR"] < results["无过滤(A)"][idx]["expR"])
+    n_better = sum(
+        1
+        for idx in range(len(symbols))
+        if results["逆向危险(C)"][idx]["trades"] > 0
+        and results["无过滤(A)"][idx]["trades"] > 0
+        and results["逆向危险(C)"][idx]["expR"] > results["无过滤(A)"][idx]["expR"]
+    )
+    n_worse = sum(
+        1
+        for idx in range(len(symbols))
+        if results["逆向危险(C)"][idx]["trades"] > 0
+        and results["无过滤(A)"][idx]["trades"] > 0
+        and results["逆向危险(C)"][idx]["expR"] < results["无过滤(A)"][idx]["expR"]
+    )
     print(f"\n  逐品种胜负（逆向危险 vs 无过滤）:")
     print(f"    提升: {n_better} 个品种")
     print(f"    下降: {n_worse} 个品种")

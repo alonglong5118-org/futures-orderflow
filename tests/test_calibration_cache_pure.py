@@ -57,6 +57,7 @@ from four_dim_recalibrate import _status_of, papertrack_recent
 #  1. sym_from_cache
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSymFromCache(unittest.TestCase):
     """sym_from_cache 缓存文件名 → 品种名。"""
 
@@ -84,6 +85,7 @@ class TestSymFromCache(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. sym_from_std
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSymFromStd(unittest.TestCase):
     """sym_from_std 标准文件名 → 品种名。"""
@@ -117,6 +119,7 @@ class TestSymFromStd(unittest.TestCase):
 #  3. papertrack_recent
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPapertrackRecent(unittest.TestCase):
     """papertrack_recent 最近 window 笔交易统计。"""
 
@@ -148,11 +151,13 @@ class TestPapertrackRecent(unittest.TestCase):
         """超过 window 笔 → 取最近 window 笔"""
         trades = []
         for i in range(20):
-            trades.append({
-                "symbol": "rb",
-                "time": f"2026-08-{i+1:02d}",
-                "R": float(i),  # 0, 1, 2, ..., 19
-            })
+            trades.append(
+                {
+                    "symbol": "rb",
+                    "time": f"2026-08-{i + 1:02d}",
+                    "R": float(i),  # 0, 1, 2, ..., 19
+                }
+            )
         result = papertrack_recent(trades, "rb", window=5)
         self.assertEqual(result["n"], 5)
         # 最近 5 笔 R = 15, 16, 17, 18, 19
@@ -199,14 +204,13 @@ class TestPapertrackRecent(unittest.TestCase):
     def test_returns_dict_or_none(self):
         """返回 dict 或 None"""
         self.assertIsNone(papertrack_recent([], "rb"))
-        self.assertIsInstance(papertrack_recent(
-            [{"symbol": "rb", "time": "2026-08-28", "R": 1.0}], "rb"
-        ), dict)
+        self.assertIsInstance(papertrack_recent([{"symbol": "rb", "time": "2026-08-28", "R": 1.0}], "rb"), dict)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _status_of
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestStatusOf(unittest.TestCase):
     """_status_of 模型状态判定。"""
@@ -270,6 +274,7 @@ class TestStatusOf(unittest.TestCase):
 #  5. best_stop_rr
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBestStopRr(unittest.TestCase):
     """best_stop_rr 最优止损止盈选择。"""
 
@@ -279,19 +284,23 @@ class TestBestStopRr(unittest.TestCase):
 
     def test_all_below_min_trades_none(self):
         """全部不达标（交易数不够） → None"""
-        sweep = {"all": [
-            (1.0, 2.0, {"trades": 5, "win_rate": 0.6, "expR": 0.8}),
-        ]}
+        sweep = {
+            "all": [
+                (1.0, 2.0, {"trades": 5, "win_rate": 0.6, "expR": 0.8}),
+            ]
+        }
         # min_trades=10（默认）, 5 < 10 → 不达标
         self.assertIsNone(best_stop_rr(sweep))
 
     def test_fallback_to_trades_only(self):
         """达标组为空但有交易 → 回退选择（只看交易数）"""
-        sweep = {"all": [
-            (1.0, 2.0, {"trades": 15, "win_rate": 0.3, "expR": 0.5}),
-            # 胜率 0.3 < 0.4 → 不达标
-            # 但 trades 15 >= 10 → 回退组
-        ]}
+        sweep = {
+            "all": [
+                (1.0, 2.0, {"trades": 15, "win_rate": 0.3, "expR": 0.5}),
+                # 胜率 0.3 < 0.4 → 不达标
+                # 但 trades 15 >= 10 → 回退组
+            ]
+        }
         result = best_stop_rr(sweep)
         self.assertIsNotNone(result)
         self.assertEqual(result["stop_atr_mult"], 1.0)
@@ -299,11 +308,13 @@ class TestBestStopRr(unittest.TestCase):
 
     def test_picks_highest_expR_in_valid(self):
         """达标组选 expR 最高的"""
-        sweep = {"all": [
-            (1.0, 2.0, {"trades": 20, "win_rate": 0.5, "expR": 0.5}),
-            (1.5, 2.5, {"trades": 20, "win_rate": 0.55, "expR": 0.8}),
-            (2.0, 3.0, {"trades": 20, "win_rate": 0.45, "expR": 0.6}),
-        ]}
+        sweep = {
+            "all": [
+                (1.0, 2.0, {"trades": 20, "win_rate": 0.5, "expR": 0.5}),
+                (1.5, 2.5, {"trades": 20, "win_rate": 0.55, "expR": 0.8}),
+                (2.0, 3.0, {"trades": 20, "win_rate": 0.45, "expR": 0.6}),
+            ]
+        }
         result = best_stop_rr(sweep)
         # expR 最高的是第二个 (1.5, 2.5) → 0.8
         self.assertEqual(result["stop_atr_mult"], 1.5)
@@ -312,12 +323,14 @@ class TestBestStopRr(unittest.TestCase):
 
     def test_win_rate_filter_threshold(self):
         """胜率过滤阈值 0.4"""
-        sweep = {"all": [
-            (1.0, 2.0, {"trades": 20, "win_rate": 0.39, "expR": 1.0}),
-            # 胜率 0.39 < 0.4 → 不达标（但交易数够，进回退组）
-            (1.5, 2.5, {"trades": 20, "win_rate": 0.4, "expR": 0.5}),
-            # 胜率 = 0.4 → 不达标（>=0.4? 用 >= 才达标）
-        ]}
+        sweep = {
+            "all": [
+                (1.0, 2.0, {"trades": 20, "win_rate": 0.39, "expR": 1.0}),
+                # 胜率 0.39 < 0.4 → 不达标（但交易数够，进回退组）
+                (1.5, 2.5, {"trades": 20, "win_rate": 0.4, "expR": 0.5}),
+                # 胜率 = 0.4 → 不达标（>=0.4? 用 >= 才达标）
+            ]
+        }
         # 要看函数中是 >= 0.4 还是 > 0.4
         result = best_stop_rr(sweep)
         # 如果 win_rate >= 0.4 才算达标：第二个达标，选 expR=0.5 的
@@ -328,18 +341,22 @@ class TestBestStopRr(unittest.TestCase):
 
     def test_return_fields_complete(self):
         """返回字段完整"""
-        sweep = {"all": [
-            (1.5, 2.0, {"trades": 15, "win_rate": 0.55, "expR": 0.7}),
-        ]}
+        sweep = {
+            "all": [
+                (1.5, 2.0, {"trades": 15, "win_rate": 0.55, "expR": 0.7}),
+            ]
+        }
         result = best_stop_rr(sweep)
         for key in ("stop_atr_mult", "rr_ratio", "expR", "win_rate", "trades"):
             self.assertIn(key, result)
 
     def test_custom_min_trades(self):
         """自定义 min_trades"""
-        sweep = {"all": [
-            (1.0, 2.0, {"trades": 8, "win_rate": 0.5, "expR": 0.5}),
-        ]}
+        sweep = {
+            "all": [
+                (1.0, 2.0, {"trades": 8, "win_rate": 0.5, "expR": 0.5}),
+            ]
+        }
         # 默认 min_trades=10 → 8 < 10 → None
         self.assertIsNone(best_stop_rr(sweep))
         # min_trades=5 → 8 >= 5 → 有结果

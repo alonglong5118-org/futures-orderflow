@@ -51,6 +51,7 @@ from strategy_layer import atr, crossover, ema, rsi, sma
 #  1. sma
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSMA(unittest.TestCase):
     """sma 简单移动平均。"""
 
@@ -86,8 +87,8 @@ class TestSMA(unittest.TestCase):
         s = pd.Series(range(1, 11), dtype=float)
         n = 5
         result = sma(s, n)
-        self.assertTrue(result.iloc[:n-1].isna().all())
-        self.assertFalse(pd.isna(result.iloc[n-1]))
+        self.assertTrue(result.iloc[: n - 1].isna().all())
+        self.assertFalse(pd.isna(result.iloc[n - 1]))
 
     def test_linear_trend(self):
         """线性递增序列 → 最后 SMA 接近中间值"""
@@ -99,6 +100,7 @@ class TestSMA(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. ema
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEMA(unittest.TestCase):
     """ema 指数移动平均。"""
@@ -144,6 +146,7 @@ class TestEMA(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. atr
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestATR(unittest.TestCase):
     """atr 平均真实波幅。"""
@@ -200,7 +203,7 @@ class TestATR(unittest.TestCase):
         # 收盘 100，次日高开高走，gap up
         df = self._make_df(
             high=[100, 120],  # 第二天 high=120
-            low=[90, 110],    # 第二天 low=110
+            low=[90, 110],  # 第二天 low=110
             close=[95, 115],  # 第一天 close=95
         )
         # TR = max(high-low, |high-prev_close|, |low-prev_close|)
@@ -214,6 +217,7 @@ class TestATR(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. rsi
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRSI(unittest.TestCase):
     """rsi 相对强弱指数。"""
@@ -280,18 +284,19 @@ class TestRSI(unittest.TestCase):
 #  5. crossover
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCrossover(unittest.TestCase):
     """crossover 金叉死叉。"""
 
     def test_golden_cross(self):
         """上穿（金叉）→ 1"""
-        a = pd.Series([9.0, 11.0])   # 从下往上穿
+        a = pd.Series([9.0, 11.0])  # 从下往上穿
         b = pd.Series([10.0, 10.0])
         self.assertEqual(crossover(a, b), 1)
 
     def test_death_cross(self):
         """下穿（死叉）→ -1"""
-        a = pd.Series([11.0, 9.0])   # 从上往下穿
+        a = pd.Series([11.0, 9.0])  # 从上往下穿
         b = pd.Series([10.0, 10.0])
         self.assertEqual(crossover(a, b), -1)
 
@@ -341,8 +346,8 @@ class TestCrossover(unittest.TestCase):
 
     def test_long_series_only_latest_matters(self):
         """长序列只看最后两根"""
-        a = pd.Series([1, 2, 3, 4, 5, 4, 6])   # 最后两根: 4 → 6
-        b = pd.Series([3, 3, 3, 5, 5, 5, 5])   # 最后两根: 5 → 5
+        a = pd.Series([1, 2, 3, 4, 5, 4, 6])  # 最后两根: 4 → 6
+        b = pd.Series([3, 3, 3, 5, 5, 5, 5])  # 最后两根: 5 → 5
         # a[-2]=4 < 5, a[-1]=6 > 5 → 金叉
         self.assertEqual(crossover(a, b), 1)
 

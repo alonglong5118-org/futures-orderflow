@@ -43,6 +43,7 @@ from four_dim_strategy import (
 #  一、深度回测集成
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDeepBacktestIntegration(unittest.TestCase):
     """深度回测集成：消融、一致性、确定性。"""
 
@@ -59,11 +60,10 @@ class TestDeepBacktestIntegration(unittest.TestCase):
 
     def test_ablate_F_changes_result(self):
         """消融 F 维度 → 结果可能变化（F 有贡献）"""
-        result_full = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, df_in=self._df_tail)
-        result_no_F = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, df_in=self._df_tail,
-                                            ablate="F")
+        result_full = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
+        result_no_F = walk_forward_backtest(
+            self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail, ablate="F"
+        )
         # F 消融后 expR 可能不同（F 维度有贡献时）
         # 至少不崩溃，返回有效结果
         self.assertIsInstance(result_no_F["expR"], float)
@@ -71,11 +71,10 @@ class TestDeepBacktestIntegration(unittest.TestCase):
 
     def test_ablate_T_reduces_or_zeroes_trades(self):
         """消融 T 维度 → 交易数减少或为零（T 是主要触发源）"""
-        result_full = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, df_in=self._df_tail)
-        result_no_T = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, df_in=self._df_tail,
-                                            ablate="T")
+        result_full = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
+        result_no_T = walk_forward_backtest(
+            self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail, ablate="T"
+        )
         # T 消融后交易数应该 <= 完整版本
         self.assertLessEqual(result_no_T["trades"], result_full["trades"])
         # 至少不崩溃，返回有效结果
@@ -83,18 +82,16 @@ class TestDeepBacktestIntegration(unittest.TestCase):
 
     def test_ablate_C_changes_result(self):
         """消融 C 维度 → 结果可能变化"""
-        result_full = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, df_in=self._df_tail)
-        result_no_C = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                            min_bars=60, df_in=self._df_tail,
-                                            ablate="C")
+        result_full = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
+        result_no_C = walk_forward_backtest(
+            self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail, ablate="C"
+        )
         self.assertIsInstance(result_no_C["expR"], float)
         self.assertIsInstance(result_no_C["win_rate"], float)
 
     def test_expR_equals_mean_R_adj(self):
         """expR ≈ 所有交易 R_adj 的平均值"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self._df_tail)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         detail = result["trades_detail"]
         if len(detail) > 0:
             avg_r_adj = np.mean([t["R_adj"] for t in detail])
@@ -103,8 +100,7 @@ class TestDeepBacktestIntegration(unittest.TestCase):
 
     def test_win_rate_matches_count(self):
         """win_rate == 盈利笔数 / 总笔数"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self._df_tail)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         detail = result["trades_detail"]
         if len(detail) > 0:
             wins = sum(1 for t in detail if t["R_adj"] > 0)
@@ -113,8 +109,7 @@ class TestDeepBacktestIntegration(unittest.TestCase):
 
     def test_by_regime_structure(self):
         """by_regime 包含各 regime 的 expR"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self._df_tail)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         br = result["by_regime"]
         self.assertIsInstance(br, dict)
         for regime, expR in br.items():
@@ -123,8 +118,7 @@ class TestDeepBacktestIntegration(unittest.TestCase):
 
     def test_by_regime_trades_match_detail(self):
         """by_regime 中各 regime 的交易数 ≈ trades_detail 中该 regime 的数量"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self._df_tail)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         detail = result["trades_detail"]
         if len(detail) == 0:
             self.skipTest("无交易")
@@ -137,25 +131,20 @@ class TestDeepBacktestIntegration(unittest.TestCase):
         # by_regime 中每个 regime 都应该在 trades_detail 中有对应
         for regime in result["by_regime"]:
             # by_regime 的 key 应该出现在 trades_detail 的 regime 中
-            self.assertIn(regime, regime_counts,
-                          f"regime '{regime}' in by_regime but not in trades_detail")
+            self.assertIn(regime, regime_counts, f"regime '{regime}' in by_regime but not in trades_detail")
 
     def test_deterministic_results(self):
         """相同输入 → 相同输出（确定性）"""
-        result1 = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                        min_bars=60, df_in=self._df_tail)
-        result2 = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                        min_bars=60, df_in=self._df_tail)
+        result1 = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
+        result2 = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         self.assertEqual(result1["trades"], result2["trades"])
         self.assertAlmostEqual(result1["expR"], result2["expR"], places=10)
         self.assertAlmostEqual(result1["win_rate"], result2["win_rate"], places=10)
 
     def test_more_data_more_trades_or_same(self):
         """更多数据 → 交易数更多或相等（样本量更大）"""
-        result_small = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                             min_bars=60, df_in=self.df.tail(200))
-        result_large = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                             min_bars=60, df_in=self.df.tail(500))
+        result_small = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(200))
+        result_large = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self.df.tail(500))
         # 更多数据通常有更多交易，但也可能刚好持平
         self.assertGreaterEqual(result_large["trades"], 0)
         self.assertGreaterEqual(result_small["trades"], 0)
@@ -167,37 +156,32 @@ class TestDeepBacktestIntegration(unittest.TestCase):
         if df_rb is None or df_hc is None or len(df_rb) < 300 or len(df_hc) < 300:
             self.skipTest("数据不足")
 
-        result_rb = walk_forward_backtest("rb", cfg=DEFAULT_CONFIG,
-                                          min_bars=60, df_in=df_rb.tail(300))
-        result_hc = walk_forward_backtest("hc", cfg=DEFAULT_CONFIG,
-                                          min_bars=60, df_in=df_hc.tail(300))
+        result_rb = walk_forward_backtest("rb", cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_rb.tail(300))
+        result_hc = walk_forward_backtest("hc", cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_hc.tail(300))
 
         # 结构应该一致
-        for key in ["symbol", "trades", "expR", "win_rate",
-                    "trades_detail", "by_regime", "exit_reasons"]:
+        for key in ["symbol", "trades", "expR", "win_rate", "trades_detail", "by_regime", "exit_reasons"]:
             self.assertIn(key, result_rb)
             self.assertIn(key, result_hc)
 
     def test_trade_detail_regime_valid(self):
         """每笔交易的 regime 是有效值"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self._df_tail)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         detail = result["trades_detail"]
         valid_regimes = set(result["by_regime"].keys()) | {"趋势", "波动", "震荡", "过渡", "高波动"}
         for t in detail:
-            self.assertIn(t["regime"], valid_regimes,
-                          f"invalid regime: {t['regime']}")
+            self.assertIn(t["regime"], valid_regimes, f"invalid regime: {t['regime']}")
 
     def test_roll_skipped_nonnegative(self):
         """roll_skipped >= 0"""
-        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG,
-                                       min_bars=60, df_in=self._df_tail)
+        result = walk_forward_backtest(self.symbol, cfg=DEFAULT_CONFIG, min_bars=60, df_in=self._df_tail)
         self.assertGreaterEqual(result.get("roll_skipped", 0), 0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  二、数据质量状态机集成
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class _FakeFeed:
     def __init__(self, prices=None):
@@ -330,22 +314,26 @@ class TestDataQualityStateMachine(unittest.TestCase):
         base_ts = 1000000.0
 
         # 3 个正常 + 1 个陈旧 + 1 个冻结 → 健康度 = 3/5 = 60%
-        feed = _FakeFeed({
-            "rb": 3500.0,
-            "hc": 3800.0,
-            "FG": 1500.0,
-            "SA": 1800.0,
-            "MA": 2500.0,
-        })
+        feed = _FakeFeed(
+            {
+                "rb": 3500.0,
+                "hc": 3800.0,
+                "FG": 1500.0,
+                "SA": 1800.0,
+                "MA": 2500.0,
+            }
+        )
         dq.observe(feed, now_ts=base_ts)
 
         # 让 SA 陈旧（只更新其他 4 个）
-        feed2 = _FakeFeed({
-            "rb": 3501.0,
-            "hc": 3801.0,
-            "FG": 1501.0,
-            "MA": 2501.0,
-        })
+        feed2 = _FakeFeed(
+            {
+                "rb": 3501.0,
+                "hc": 3801.0,
+                "FG": 1501.0,
+                "MA": 2501.0,
+            }
+        )
         check_ts = base_ts + 200.0
         dq.observe(feed2, now_ts=check_ts - 1.0)  # 这 4 个是新鲜的
 

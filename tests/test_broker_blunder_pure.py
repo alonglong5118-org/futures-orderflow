@@ -79,6 +79,7 @@ from broker_import import (
 #  1. _norm_key
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNormKey(unittest.TestCase):
     """_norm_key 表头键规范化。"""
 
@@ -128,6 +129,7 @@ class TestNormKey(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _map_columns
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestMapColumns(unittest.TestCase):
     """_map_columns 表头 → 标准字段位置。"""
@@ -190,6 +192,7 @@ class TestMapColumns(unittest.TestCase):
 #  3. contract_to_symbol
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestContractToSymbol(unittest.TestCase):
     """contract_to_symbol 合约代码 → 品种主键。"""
 
@@ -239,6 +242,7 @@ class TestContractToSymbol(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _parse_side
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestParseSide(unittest.TestCase):
     """_parse_side 买卖方向解析。"""
@@ -297,6 +301,7 @@ class TestParseSide(unittest.TestCase):
 #  5. _parse_offset
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseOffset(unittest.TestCase):
     """_parse_offset 开平标志解析。"""
 
@@ -347,6 +352,7 @@ class TestParseOffset(unittest.TestCase):
 #  6. _to_num
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestToNum(unittest.TestCase):
     """_to_num 数值解析。"""
 
@@ -395,6 +401,7 @@ class TestToNum(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. _to_ts
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestToTs(unittest.TestCase):
     """_to_ts 时间字符串 → 时间戳。"""

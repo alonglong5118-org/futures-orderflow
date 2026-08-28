@@ -57,22 +57,23 @@ def _build_synth(seed=20260816):
     返回 (synth_df_dict, symbols)。固定 seed 保证可复现。"""
     import numpy as np
     import pandas as pd
+
     rng = np.random.default_rng(seed)
     days = 320
     syms = ["FG", "SA", "JM"]
-    market = rng.standard_normal(days)                 # 共同市场因子 → 品种相关性
-    scales = {"FG": 0.012, "SA": 0.014, "JM": 0.016}   # 个别波动尺度
+    market = rng.standard_normal(days)  # 共同市场因子 → 品种相关性
+    scales = {"FG": 0.012, "SA": 0.014, "JM": 0.016}  # 个别波动尺度
     synth = {}
     for s in syms:
         z = rng.standard_normal(days)
-        tail = rng.standard_normal(days) * 3.2          # 重尾成分
-        mask = rng.random(days) < 0.10                  # 10% 概率厚尾
+        tail = rng.standard_normal(days) * 3.2  # 重尾成分
+        mask = rng.random(days) < 0.10  # 10% 概率厚尾
         noise = np.where(mask, tail, z)
         r = 0.35 * market + scales[s] * noise
         price = 1000.0
         series = []
         for rr in r:
-            price *= (1.0 + rr)
+            price *= 1.0 + rr
             series.append(price)
         idx = pd.date_range(end=pd.Timestamp.today().normalize(), periods=days, freq="B")
         synth[s] = pd.DataFrame({"close": series}, index=idx)
@@ -83,6 +84,7 @@ def _offline_setup():
     """返回 (monkey-patched module, positions 注入字典)。"""
     import four_dim_live_runner as R
     import four_dim_live_runner as R2  # noqa
+
     synth, _ = _build_synth()
     R.load_daily_refreshed = lambda sym, ttl=1800: synth.get(sym)
     POS = {
@@ -119,6 +121,7 @@ def main():
     except Exception as e:
         print("SMOKE_FAIL:", repr(e))
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -142,8 +145,17 @@ def main():
     print("n_positions  =", v.get("n_positions"))
     print("evt          =", v.get("evt"))
     print("contrib_var95 keys =", list((v.get("contrib_var95") or {}).keys()))
-    needed = ["var_95", "var_99", "cvar_95", "cvar_99",
-              "var_95_pct", "var_99_pct", "cvar_95_pct", "cvar_99_pct", "contrib_var95"]
+    needed = [
+        "var_95",
+        "var_99",
+        "cvar_95",
+        "cvar_99",
+        "var_95_pct",
+        "var_99_pct",
+        "cvar_95_pct",
+        "cvar_99_pct",
+        "contrib_var95",
+    ]
     missing = [k for k in needed if k not in v]
     print("结构完整性:", "OK" if not missing else f"缺键 {missing}")
 
@@ -186,7 +198,7 @@ def main():
     t2 = time.time()
     first = t1 - t0
     cached = (t2 - t1) / 2.0
-    print(f"首次(含载数) {first*1000:.1f}ms   后续(应命中缓存) 均 {cached*1000:.1f}ms")
+    print(f"首次(含载数) {first * 1000:.1f}ms   后续(应命中缓存) 均 {cached * 1000:.1f}ms")
     if cached < first:
         print("✅ 缓存生效（命中后明显更快）。")
     else:

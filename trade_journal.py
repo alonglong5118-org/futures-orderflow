@@ -19,6 +19,7 @@ Web API（已集成到 four_dim_live_runner.py）:
   POST /api/journal  {"action":"exit","symbol":"FG","direction":"空","lots":2,"price":895.0,"reason":"止盈"}
   GET  /api/journal  → 返回 summary + compare 报告
 """
+
 from __future__ import annotations
 
 import json
@@ -42,30 +43,81 @@ _REQUEST_DEDUP_WINDOW = 3  # 秒，同一请求在此时间窗口内会被拒绝
 # 合约乘数（与 four_dim_strategy DEFAULT_CONFIG.contract_specs 对齐）
 _MULTIPLIERS = {
     # 上期所 SHFE
-    "cu": 5, "al": 5, "zn": 5, "ni": 1, "sn": 1, "ao": 20,
-    "au": 1000, "ag": 15, "rb": 10, "hc": 10, "ss": 5,
-    "bu": 10, "fu": 10, "ru": 10, "sp": 10,
+    "cu": 5,
+    "al": 5,
+    "zn": 5,
+    "ni": 1,
+    "sn": 1,
+    "ao": 20,
+    "au": 1000,
+    "ag": 15,
+    "rb": 10,
+    "hc": 10,
+    "ss": 5,
+    "bu": 10,
+    "fu": 10,
+    "ru": 10,
+    "sp": 10,
     # 上期能源 INE
-    "sc": 1000, "ec": 50,
+    "sc": 1000,
+    "ec": 50,
     # 大商所 DCE
-    "i": 100, "J": 100, "JM": 60, "eb": 5, "eg": 10,
-    "l": 5, "pp": 5, "v": 5, "pg": 20,
-    "m": 10, "y": 10, "a": 10, "b": 10, "p": 10,
-    "c": 10, "cs": 10, "jd": 10, "lh": 16, "rr": 10,
+    "i": 100,
+    "J": 100,
+    "JM": 60,
+    "eb": 5,
+    "eg": 10,
+    "l": 5,
+    "pp": 5,
+    "v": 5,
+    "pg": 20,
+    "m": 10,
+    "y": 10,
+    "a": 10,
+    "b": 10,
+    "p": 10,
+    "c": 10,
+    "cs": 10,
+    "jd": 10,
+    "lh": 16,
+    "rr": 10,
     # 郑商所 CZCE
-    "FG": 20, "SA": 20, "SA01": 20, "MA": 10, "TA": 5, "PF": 5,
-    "PX": 5, "SH": 30, "UR": 20, "PR": 5,
-    "SR": 10, "CF": 5, "RM": 10, "OI": 10, "PK": 5, "AP": 10,
+    "FG": 20,
+    "SA": 20,
+    "SA01": 20,
+    "MA": 10,
+    "TA": 5,
+    "PF": 5,
+    "PX": 5,
+    "SH": 30,
+    "UR": 20,
+    "PR": 5,
+    "SR": 10,
+    "CF": 5,
+    "RM": 10,
+    "OI": 10,
+    "PK": 5,
+    "AP": 10,
     # 广期所 GFEX
-    "si": 5, "lc": 1,
+    "si": 5,
+    "lc": 1,
 }
 
 # 交易所手续费（占名义金额比例，近似；用于把毛利变成净盈亏）。
 # 仅作为「未纳入 _FEE_SCHEDULE 的品种」的兜底回退（避免其它品种/新上市合约突然算不出费）。
 _FEE_RATE = {
-    "jd": 0.00015, "lh": 0.0002, "FG": 0.0001, "SA": 0.0001,
-    "JM": 0.0001, "J": 0.0001, "rb": 0.0001, "i": 0.0001,
-    "m": 0.00015, "y": 0.00025, "a": 0.0002, "c": 0.00012,
+    "jd": 0.00015,
+    "lh": 0.0002,
+    "FG": 0.0001,
+    "SA": 0.0001,
+    "JM": 0.0001,
+    "J": 0.0001,
+    "rb": 0.0001,
+    "i": 0.0001,
+    "m": 0.00015,
+    "y": 0.00025,
+    "a": 0.0002,
+    "c": 0.00012,
 }
 _FEE_DEFAULT = 0.0001
 
@@ -91,20 +143,20 @@ _FEE_DEFAULT = 0.0001
 #   此前为迁就「验收数字」曾用 pct 0.0006(OI)/默认0.0001(CF)，现按用户「真实交易所费率」硬指令改回真实值。
 _FEE_SCHEDULE = {
     # 大商所
-    "jd": {"mode": "pct", "open": 0.00045, "close": 0.00045},                 # 鸡蛋 万分之4.5，开平今均收
+    "jd": {"mode": "pct", "open": 0.00045, "close": 0.00045},  # 鸡蛋 万分之4.5，开平今均收
     "lh": {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.0006},  # 生猪 开万3 / 平今万6
-    "c":  {"mode": "fixed", "open": 3.6, "close": 3.6},                       # 玉米 3.6 元/手，开平今均收
+    "c": {"mode": "fixed", "open": 3.6, "close": 3.6},  # 玉米 3.6 元/手，开平今均收
     # 郑商所
-    "FG": {"mode": "fixed", "open": 18.0, "close": 18.0},                    # 玻璃 18 元/手（交易所基础）
-    "SA": {"mode": "pct", "open": 0.0006, "close": 0.0006},                  # 纯碱 万分之6
-    "SA01": {"mode": "pct", "open": 0.0006, "close": 0.0006},                # P1-6 fix: 纯碱连续合约(SA01) 万分之6
-    "OI": {"mode": "fixed", "open": 6.0, "close": 6.0},                     # 菜油 6 元/手（固定，开平今均收）
-    "CF": {"mode": "fixed", "open": 12.9, "close": 12.9, "close_today": 0.0}, # 棉花 12.9 元/手（固定，平今免收）
+    "FG": {"mode": "fixed", "open": 18.0, "close": 18.0},  # 玻璃 18 元/手（交易所基础）
+    "SA": {"mode": "pct", "open": 0.0006, "close": 0.0006},  # 纯碱 万分之6
+    "SA01": {"mode": "pct", "open": 0.0006, "close": 0.0006},  # P1-6 fix: 纯碱连续合约(SA01) 万分之6
+    "OI": {"mode": "fixed", "open": 6.0, "close": 6.0},  # 菜油 6 元/手（固定，开平今均收）
+    "CF": {"mode": "fixed", "open": 12.9, "close": 12.9, "close_today": 0.0},  # 棉花 12.9 元/手（固定，平今免收）
     "AP": {"mode": "fixed", "open": 15.0, "close": 15.0, "close_today": 60.0},  # 苹果 开平15 / 平今60
     # 上期所
-    "JM": {"mode": "pct", "open": 0.0003, "close": 0.0003},                  # 焦煤 万分之3
-    "J":  {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.00042},  # 焦炭 开万3 / 平今万4.2
-    "rb": {"mode": "pct", "open": 0.0001, "close": 0.0001},                  # 螺纹钢 万分之1
+    "JM": {"mode": "pct", "open": 0.0003, "close": 0.0003},  # 焦煤 万分之3
+    "J": {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.00042},  # 焦炭 开万3 / 平今万4.2
+    "rb": {"mode": "pct", "open": 0.0001, "close": 0.0001},  # 螺纹钢 万分之1
 }
 
 
@@ -122,7 +174,8 @@ def _leg_fee(symbol, price, lots, side="open", same_day=False):
     """
     mult = _MULTIPLIERS.get(symbol, 10)
     try:
-        price = float(price); lots = int(lots)
+        price = float(price)
+        lots = int(lots)
     except (TypeError, ValueError):
         return 0.0
     sp = _FEE_SCHEDULE.get(symbol)
@@ -170,6 +223,7 @@ def _load():
                 # 恢复成功：把 .bak 复制回主文件（下次直接读主文件）
                 try:
                     import shutil as _su
+
                     _su.copy2(_bak, JOURNAL_FILE)
                     print(f"[trade_journal] 已从 .bak 恢复主文件")
                 except Exception:
@@ -182,6 +236,7 @@ def _load():
             _bad = JOURNAL_FILE + ".corrupt"
             if os.path.exists(JOURNAL_FILE):
                 import shutil as _su
+
                 _su.copy2(JOURNAL_FILE, _bad)
                 print(f"[trade_journal] 损坏副本已另存为 {_bad}")
         except Exception:
@@ -208,6 +263,7 @@ def _save(data):
                 pass
         # 原子写：先写临时文件再 os.replace
         import tempfile as _tmp
+
         _fd, _tmp_path = _tmp.mkstemp(dir=os.path.dirname(JOURNAL_FILE), suffix=".tmp")
         try:
             with os.fdopen(_fd, "w", encoding="utf-8") as _f:
@@ -221,7 +277,6 @@ def _save(data):
             except Exception:
                 pass
             raise
-
 
 
 def _safe_read_json(path, default):
@@ -254,7 +309,8 @@ def _validate_entry_stop(direction, entry_price, stop):
     if ds == 0:
         return stop, ""
     try:
-        ep = float(entry_price); sv = float(stop)
+        ep = float(entry_price)
+        sv = float(stop)
     except Exception:
         return stop, ""
     ok = (sv < ep) if ds > 0 else (sv > ep)
@@ -279,10 +335,10 @@ def _normalize_sym(sym):
     return sym  # 原样返回，让下游报错
 
 
-
 def _check_duplicate_request(fingerprint: str) -> bool:
     """检查是否为重复请求。返回 True 表示是重复请求，应拒绝。"""
     import time
+
     now = time.time()
     # 清理过期记录
     expired = [k for k, v in _RECENT_REQUESTS.items() if now - v > _REQUEST_DEDUP_WINDOW]
@@ -295,8 +351,10 @@ def _check_duplicate_request(fingerprint: str) -> bool:
     _RECENT_REQUESTS[fingerprint] = now
     return False
 
-def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_dist=None,
-                  strategy="", account="主账户"):
+
+def record_entry(
+    symbol, direction, lots, price, signal_id="", stop=None, stop_dist=None, strategy="", account="主账户"
+):
     """记录一笔按信号开仓。返回 (ok, msg, trade_id)。
     stop_dist: 该笔计划止损距离（点），用于后续 R 倍数追踪；缺则回退 risk_pct 风险预算推算。
     strategy: F1 多策略视图标签（如 趋势/波段/日内/套利/手动…），缺省空串→归入『未分类』。
@@ -325,7 +383,7 @@ def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_d
         "lots": int(lots),
         "entry_price": _original_price,  # ★ 使用验证后的价格，防止篡改
         "signal_id": str(signal_id),
-        "strategy": (str(strategy).strip() or ""),   # F1：策略标签
+        "strategy": (str(strategy).strip() or ""),  # F1：策略标签
         "account": (str(account).strip() or "主账户"),  # F1：账户标签
         "stop": (float(stop) if stop is not None else None),
         "stop_dist": _sd,
@@ -336,7 +394,7 @@ def record_entry(symbol, direction, lots, price, signal_id="", stop=None, stop_d
         "exit_time": None,
         "exit_reason": None,
         "pnl": None,
-        "note": "",            # G2：成交备注（默认空，可经 update_trade 补）
+        "note": "",  # G2：成交备注（默认空，可经 update_trade 补）
     }
     data["trades"].append(trade)
     _save(data)
@@ -361,8 +419,11 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
         return False, "请求过于频繁，请稍候再试", 0.0
     data = _load()
     # 找该品种同方向、未平仓的最近一条
-    candidates = [t for t in data["trades"]
-                  if t["symbol"] == symbol and t["direction"] == direction and t.get("exit_price") is None]
+    candidates = [
+        t
+        for t in data["trades"]
+        if t["symbol"] == symbol and t["direction"] == direction and t.get("exit_price") is None
+    ]
     if not candidates:
         return False, f"{symbol} {direction} 无未平仓记录", 0.0
     trade = candidates[-1]  # 最近一条
@@ -398,7 +459,11 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
         trade["gross_pnl"] = gross
         trade["pnl"] = pnl
         _save(data)
-        return True, f"{symbol} {direction} {reason}平仓 @{price}，净盈亏 {pnl:+.0f} 元（含手续费 {fee_total:.0f}）", pnl
+        return (
+            True,
+            f"{symbol} {direction} {reason}平仓 @{price}，净盈亏 {pnl:+.0f} 元（含手续费 {fee_total:.0f}）",
+            pnl,
+        )
     else:
         # 部分平：拆分法——原 trade 保持未平、仅减手数；新生成一条已平记录
         trade_lots = close_lots
@@ -424,7 +489,11 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
         # 原 trade 保持未平（不设 exit_price / pnl），仅减手数
         trade["lots"] -= trade_lots
         _save(data)
-        return True, f"{symbol} {direction} 平 {trade_lots}手 @{price}（余 {trade['lots']}手），本次净盈亏 {partial_pnl:+.0f} 元", partial_pnl
+        return (
+            True,
+            f"{symbol} {direction} 平 {trade_lots}手 @{price}（余 {trade['lots']}手），本次净盈亏 {partial_pnl:+.0f} 元",
+            partial_pnl,
+        )
 
 
 def heal_fees():
@@ -489,7 +558,7 @@ def heal_fees():
             detail = "；".join(f"{k}: {t.get(k)}→{v}" for k, v in need.items())
             changes.append(
                 f"{sym} {t.get('direction')} {lots}手 @{entry}→{exit_px}："
-                f"毛利{gross}，开费{round(open_fee,2)}，平费{close_fee}，"
+                f"毛利{gross}，开费{round(open_fee, 2)}，平费{close_fee}，"
                 f"费合计{fee_total}，净盈亏{pnl:+.2f}（{detail}）"
             )
             t.update(need)
@@ -540,21 +609,23 @@ def _compute_summary(data):
     cur_win = cur_loss = 0
     for t in sorted(closed, key=lambda t: t.get("time", "")):
         if t["pnl"] > 0:
-            cur_win += 1; cur_loss = 0
+            cur_win += 1
+            cur_loss = 0
             max_streak["win"] = max(max_streak["win"], cur_win)
         else:
-            cur_loss += 1; cur_win = 0
+            cur_loss += 1
+            cur_win = 0
             max_streak["loss"] = max(max_streak["loss"], cur_loss)
 
     # 按品种统计
     by_symbol = {}
     for t in closed:
-        s = t.get('symbol','')
+        s = t.get("symbol", "")
         if s not in by_symbol:
             by_symbol[s] = {"count": 0, "wins": 0, "pnl": 0.0, "fee": 0.0}
         by_symbol[s]["count"] += 1
         by_symbol[s]["pnl"] += t["pnl"]
-        by_symbol[s]["fee"] += (t.get("fee_total") or 0)
+        by_symbol[s]["fee"] += t.get("fee_total") or 0
         if t["pnl"] > 0:
             by_symbol[s]["wins"] += 1
     for s in by_symbol:
@@ -599,21 +670,23 @@ def summary():
     cur_win = cur_loss = 0
     for t in sorted(closed, key=lambda t: t.get("time", "")):
         if t["pnl"] > 0:
-            cur_win += 1; cur_loss = 0
+            cur_win += 1
+            cur_loss = 0
             max_streak["win"] = max(max_streak["win"], cur_win)
         else:
-            cur_loss += 1; cur_win = 0
+            cur_loss += 1
+            cur_win = 0
             max_streak["loss"] = max(max_streak["loss"], cur_loss)
 
     # 按品种统计
     by_symbol = {}
     for t in closed:
-        s = t.get('symbol','')
+        s = t.get("symbol", "")
         if s not in by_symbol:
             by_symbol[s] = {"count": 0, "wins": 0, "pnl": 0.0, "fee": 0.0}
         by_symbol[s]["count"] += 1
         by_symbol[s]["pnl"] += t["pnl"]
-        by_symbol[s]["fee"] += (t.get("fee_total") or 0)
+        by_symbol[s]["fee"] += t.get("fee_total") or 0
         if t["pnl"] > 0:
             by_symbol[s]["wins"] += 1
     for s in by_symbol:
@@ -630,7 +703,7 @@ def summary():
         cum += t["pnl"]
         sd = t.get("stop_dist")
         if sd and sd > 0:
-            actual_risk = sd * _MULTIPLIERS.get(t.get("symbol",""), 1) * t.get("lots", 1)
+            actual_risk = sd * _MULTIPLIERS.get(t.get("symbol", ""), 1) * t.get("lots", 1)
             R = t["pnl"] / actual_risk if actual_risk > 0 else 0.0
         else:
             planned_risk = max(1.0, equity_before * risk_pct / 100)
@@ -650,9 +723,11 @@ def summary():
 
     # ★ 今日统计（按开仓日期 OR 平仓日期过滤），供总览驾驶舱「交易执行」板块联动
     today = datetime.now().strftime("%Y-%m-%d")
-    today_trades_list = [t for t in data.get("trades", [])
-                         if (t.get("time") or "")[:10] == today
-                         or (t.get("exit_time") or "")[:10] == today]
+    today_trades_list = [
+        t
+        for t in data.get("trades", [])
+        if (t.get("time") or "")[:10] == today or (t.get("exit_time") or "")[:10] == today
+    ]
     today_closed = [t for t in today_trades_list if t.get("pnl") is not None]
     today_pnl = sum(t["pnl"] for t in today_closed)
     today_fee = sum((t.get("fee_total") or 0) for t in today_closed)
@@ -668,18 +743,18 @@ def summary():
                 _positions = _acct.get("positions", {})
         except Exception:
             pass
-    
+
     # 计算持仓最大风险（基于止损价）
     _total_risk = 0.0
     _floating_details = []
     for _t in open_trades:
         _sym = _t["symbol"]
-        _dir = _t.get('direction','?')
-        _lots = _t.get('lots', 0)
-        _entry = _t.get('entry_price', 0)
+        _dir = _t.get("direction", "?")
+        _lots = _t.get("lots", 0)
+        _entry = _t.get("entry_price", 0)
         _stop = _t.get("stop")
         _mult = _MULTIPLIERS.get(_sym, 10)
-        
+
         # 计算单笔风险
         if _stop and _dir == "多":
             _risk = (_entry - _stop) * _lots * _mult
@@ -687,17 +762,19 @@ def summary():
             _risk = (_stop - _entry) * _lots * _mult
         else:
             _risk = 0
-        
+
         _total_risk += _risk
-        _floating_details.append({
-            "symbol": _sym,
-            "direction": _dir,
-            "lots": _lots,
-            "entry": _entry,
-            "stop": _stop,
-            "risk": round(_risk, 2),
-        })
-    
+        _floating_details.append(
+            {
+                "symbol": _sym,
+                "direction": _dir,
+                "lots": _lots,
+                "entry": _entry,
+                "stop": _stop,
+                "risk": round(_risk, 2),
+            }
+        )
+
     return {
         "total_trades": len(data.get("trades", [])),
         "open_trades": len(open_trades),
@@ -754,17 +831,19 @@ def by_strategy(group_by="strategy"):
         wins = [t for t in closed if t["pnl"] > 0]
         pnl = sum(t["pnl"] for t in closed)
         fee = sum((t.get("fee_total") or 0) for t in closed)
-        out.append({
-            "group": name,
-            "total": len(ts),
-            "closed": len(closed),
-            "open": len(ts) - len(closed),
-            "wins": len(wins),
-            "win_rate": round(len(wins) / len(closed) * 100, 1) if closed else 0.0,
-            "pnl": round(pnl, 2),
-            "fee": round(fee, 2),
-            "net_pnl": round(pnl, 2),
-        })
+        out.append(
+            {
+                "group": name,
+                "total": len(ts),
+                "closed": len(closed),
+                "open": len(ts) - len(closed),
+                "wins": len(wins),
+                "win_rate": round(len(wins) / len(closed) * 100, 1) if closed else 0.0,
+                "pnl": round(pnl, 2),
+                "fee": round(fee, 2),
+                "net_pnl": round(pnl, 2),
+            }
+        )
     out.sort(key=lambda x: x["pnl"], reverse=True)
     return {
         "ok": True,
@@ -779,9 +858,22 @@ def by_strategy(group_by="strategy"):
 # F2 交易记录导入：将导出的 CSV（或手工整理的同结构 CSV）合并回 trade_journal.json。
 #   按 id 去重——已存在的 id 更新字段，缺 id 的行生成新 id 追加。返回合并统计。
 # ---------------------------------------------------------------------------
-_IMPORT_FIELDS = ["time", "symbol", "direction", "lots", "entry_price", "exit_price",
-                  "exit_time", "exit_reason", "pnl", "signal_id", "stop_dist",
-                  "strategy", "account", "note"]
+_IMPORT_FIELDS = [
+    "time",
+    "symbol",
+    "direction",
+    "lots",
+    "entry_price",
+    "exit_price",
+    "exit_time",
+    "exit_reason",
+    "pnl",
+    "signal_id",
+    "stop_dist",
+    "strategy",
+    "account",
+    "note",
+]
 
 
 def import_trades(rows):
@@ -791,20 +883,26 @@ def import_trades(rows):
     data = _load()
     trades = data.setdefault("trades", [])
     by_id = {t.get("id"): t for t in trades if t.get("id")}
-    added = 0; updated = 0; skipped = 0
+    added = 0
+    updated = 0
+    skipped = 0
     for raw in rows:
         if not isinstance(raw, dict):
-            skipped += 1; continue
+            skipped += 1
+            continue
         sym = (raw.get("symbol") or "").strip()
         if not sym:
-            skipped += 1; continue
+            skipped += 1
+            continue
         try:
             # 规范化：缺失项置 None（不填默认值），便于下方「选择性合并」识别 CSV 实际提供了哪些列
             norm = {
                 "symbol": sym,
                 "direction": (raw.get("direction") or "").strip() or None,
                 "lots": int(float(raw.get("lots"))) if raw.get("lots") not in (None, "", "None") else None,
-                "entry_price": float(raw.get("entry_price")) if raw.get("entry_price") not in (None, "", "None") else None,
+                "entry_price": float(raw.get("entry_price"))
+                if raw.get("entry_price") not in (None, "", "None")
+                else None,
                 "exit_price": (None if raw.get("exit_price") in (None, "", "None") else float(raw.get("exit_price"))),
                 "exit_time": (raw.get("exit_time") or None),
                 "exit_reason": (raw.get("exit_reason") or None),
@@ -817,7 +915,8 @@ def import_trades(rows):
                 "note": (raw.get("note") or None),
             }
         except Exception:
-            skipped += 1; continue
+            skipped += 1
+            continue
         rid = (raw.get("id") or "").strip()
         if rid and rid in by_id:
             ex = by_id[rid]
@@ -844,8 +943,11 @@ def import_trades(rows):
             added += 1
     data["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _save(data)
-    return True, f"新增 {added} · 更新 {updated} · 跳过 {skipped}", {
-        "added": added, "updated": updated, "skipped": skipped, "total": len(trades)}
+    return (
+        True,
+        f"新增 {added} · 更新 {updated} · 跳过 {skipped}",
+        {"added": added, "updated": updated, "skipped": skipped, "total": len(trades)},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -858,7 +960,8 @@ def _session_of(ts):
     if not ts or len(ts) < 16:
         return "其他"
     try:
-        hh = int(ts[11:13]); mm = int(ts[14:16])
+        hh = int(ts[11:13])
+        mm = int(ts[14:16])
     except ValueError:
         return "其他"
     t = hh * 60 + mm
@@ -884,15 +987,21 @@ def session_split():
     rows = []
     for k in ("日盘", "夜盘", "其他"):
         b = buckets[k]
-        rows.append({
-            "session": k, "count": b["count"],
-            "win_rate": round(b["wins"] / b["count"] * 100, 1) if b["count"] else 0.0,
-            "pnl": round(b["pnl"], 2),
-            "avg": round(b["pnl"] / b["count"], 2) if b["count"] else 0.0,
-        })
+        rows.append(
+            {
+                "session": k,
+                "count": b["count"],
+                "win_rate": round(b["wins"] / b["count"] * 100, 1) if b["count"] else 0.0,
+                "pnl": round(b["pnl"], 2),
+                "avg": round(b["pnl"] / b["count"], 2) if b["count"] else 0.0,
+            }
+        )
     best = max([r for r in rows if r["count"]], key=lambda r: r["pnl"], default=None)
-    return {"rows": rows, "best": (best["session"] if best else None),
-            "note": "净盈亏已扣双边手续费；夜盘含次日 00:00-02:30"}
+    return {
+        "rows": rows,
+        "best": (best["session"] if best else None),
+        "note": "净盈亏已扣双边手续费；夜盘含次日 00:00-02:30",
+    }
 
 
 def session_performance():
@@ -955,16 +1064,18 @@ def _attrib_match_signal(t, signals=None, sig_by_time=None, window_min=180):
         signals = _safe_read_json(SIGNAL_LOG, [])
     if sig_by_time is None:
         sig_by_time = {s.get("time", ""): s for s in signals}
-    sid = (t.get("signal_id") or "")
+    sid = t.get("signal_id") or ""
     sig = sig_by_time.get(sid) if sid and sid not in ("账户同步", "manual", "") else None
     if sig:
         return sig, "id"
+
     # 模糊匹配：品种+方向相同、时间差≤窗口，取最近信号
     def _tt(s):
         try:
             return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
         except Exception:
             return None
+
     ttime = _tt(t.get("time", ""))
     best, best_dt = None, None
     for s in signals:
@@ -988,13 +1099,15 @@ def pnl_attribution(strong_thresh=20):
     signals = _safe_read_json(SIGNAL_LOG, [])
     sig_by_time = {s.get("time", ""): s for s in signals}
 
-    buckets = {k: {"label": L, "count": 0, "wins": 0, "pnl": 0.0}
-               for k, L in (("F", "基本面主导"), ("T", "触发主导"),
-                            ("C", "资金确认主导"), ("none", "无信号驱动"))}
+    buckets = {
+        k: {"label": L, "count": 0, "wins": 0, "pnl": 0.0}
+        for k, L in (("F", "基本面主导"), ("T", "触发主导"), ("C", "资金确认主导"), ("none", "无信号驱动"))
+    }
     prop = {"F": 0.0, "T": 0.0, "C": 0.0}
-    strong = {k: {"label": L, "count": 0, "wins": 0, "pnl": 0.0}
-              for k, L in (("F", "基本面强信号"), ("T", "触发强信号"),
-                           ("C", "资金确认强信号"))}
+    strong = {
+        k: {"label": L, "count": 0, "wins": 0, "pnl": 0.0}
+        for k, L in (("F", "基本面强信号"), ("T", "触发强信号"), ("C", "资金确认强信号"))
+    }
     detail = []
     matched_n = 0
 
@@ -1016,9 +1129,18 @@ def pnl_attribution(strong_thresh=20):
             buckets["none"]["pnl"] += pnl
             if pnl > 0:
                 buckets["none"]["wins"] += 1
-            detail.append({"symbol": t["symbol"], "direction": t["direction"],
-                           "pnl": pnl, "matched": False, "dom": "无信号驱动",
-                           "method": method, "scores": None, "aligned": None})
+            detail.append(
+                {
+                    "symbol": t["symbol"],
+                    "direction": t["direction"],
+                    "pnl": pnl,
+                    "matched": False,
+                    "dom": "无信号驱动",
+                    "method": method,
+                    "scores": None,
+                    "aligned": None,
+                }
+            )
             continue
         # 与交易方向对齐后的强度（正数=支持该笔交易，负数=反向）
         aligned = {k: scores[k] * dir_sign for k in ("F", "T", "C")}
@@ -1046,10 +1168,18 @@ def pnl_attribution(strong_thresh=20):
                 strong[k]["pnl"] += pnl
                 if pnl > 0:
                     strong[k]["wins"] += 1
-        detail.append({"symbol": t["symbol"], "direction": t["direction"],
-                       "pnl": pnl, "matched": True, "method": method,
-                       "dom": dom, "scores": scores,
-                       "aligned": {k: round(aligned[k], 2) for k in aligned}})
+        detail.append(
+            {
+                "symbol": t["symbol"],
+                "direction": t["direction"],
+                "pnl": pnl,
+                "matched": True,
+                "method": method,
+                "dom": dom,
+                "scores": scores,
+                "aligned": {k: round(aligned[k], 2) for k in aligned},
+            }
+        )
 
     total_pnl = sum(t["pnl"] for t in closed)
     none_pnl = buckets["none"]["pnl"]
@@ -1081,17 +1211,18 @@ def pnl_attribution(strong_thresh=20):
         "total_pnl": round(total_pnl, 2),
         "attributable_pnl": attributable,
         "none_pnl": round(none_pnl, 2),
-        "buckets": buckets,                       # 主导维度分桶
-        "proportional": prop,                     # 比例贡献（元，信号驱动部分）
-        "proportional_share": prop_share,         # 比例贡献占比（% 总盈亏）
-        "none_share": none_share,                 # 无信号占比（% 总盈亏）
-        "strong": strong,                         # 各维度强信号时表现
-        "detail": detail,                         # 逐笔归因
-        "note": ("实盘净盈亏按信号 F(基本面)/T(触发)/C(资金确认) 三维拆解："
-                 "主导维度=与交易方向对齐后强度最大者；比例贡献=按三维度对齐强度归一化拆分"
-                 "(三者之和=信号驱动盈亏)。强信号阈值 |score|≥%d。"
-                 "无信号成交(账户同步/手动)计入『无信号驱动』，不参与 F/T/C 拆分（非投资建议）。"
-                 % strong_thresh),
+        "buckets": buckets,  # 主导维度分桶
+        "proportional": prop,  # 比例贡献（元，信号驱动部分）
+        "proportional_share": prop_share,  # 比例贡献占比（% 总盈亏）
+        "none_share": none_share,  # 无信号占比（% 总盈亏）
+        "strong": strong,  # 各维度强信号时表现
+        "detail": detail,  # 逐笔归因
+        "note": (
+            "实盘净盈亏按信号 F(基本面)/T(触发)/C(资金确认) 三维拆解："
+            "主导维度=与交易方向对齐后强度最大者；比例贡献=按三维度对齐强度归一化拆分"
+            "(三者之和=信号驱动盈亏)。强信号阈值 |score|≥%d。"
+            "无信号成交(账户同步/手动)计入『无信号驱动』，不参与 F/T/C 拆分（非投资建议）。" % strong_thresh
+        ),
     }
 
 
@@ -1099,6 +1230,7 @@ def _base_equity():
     """用于 R/净值曲线的基准权益：优先取已同步权益，否则回退常量。"""
     try:
         import account_tracker as at
+
         st = at.load_state()
         eq = st.get("equity")
         if eq:
@@ -1111,6 +1243,7 @@ def _base_equity():
 def _risk_pct():
     try:
         import account_tracker as at
+
         cfg = at.load_config()
         return float(cfg.get("account", {}).get("risk_pct", 1.5))
     except Exception:
@@ -1122,8 +1255,9 @@ def equity_curve(prices=None):
     返回 {points:[{t,equity}], max_dd_pct, base_equity,
           peak_equity, current_dd_pct, dd_days, is_new_high}。"""
     data = _load()
-    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None],
-                    key=lambda t: t.get("exit_time") or t["time"])
+    closed = sorted(
+        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t.get("exit_time") or t["time"]
+    )
     base = _base_equity()
     total_pnl = sum(t["pnl"] for t in closed)
     start_equity = base - total_pnl if closed else base
@@ -1151,6 +1285,7 @@ def equity_curve(prices=None):
     live_eq = None
     try:
         import account_tracker as at
+
         snap = at.snapshot(prices or {})
         live_eq = snap.get("equity")
         if live_eq:
@@ -1173,8 +1308,9 @@ def equity_curve(prices=None):
             current_dd_pct = round((peak_equity - live_eq) / peak_equity * 100, 2)
             try:
                 if peak_date:
-                    dd_days = max(0, (datetime.strptime(today, "%Y-%m-%d")
-                                      - datetime.strptime(peak_date, "%Y-%m-%d")).days)
+                    dd_days = max(
+                        0, (datetime.strptime(today, "%Y-%m-%d") - datetime.strptime(peak_date, "%Y-%m-%d")).days
+                    )
                 else:
                     dd_days = 0
             except Exception:
@@ -1185,9 +1321,13 @@ def equity_curve(prices=None):
         dd_days = 0
         is_new_high = False
     return {
-        "points": pts, "max_dd_pct": round(max_dd, 2), "base_equity": round(base, 2),
-        "peak_equity": round(peak_equity, 2), "current_dd_pct": current_dd_pct,
-        "dd_days": dd_days, "is_new_high": is_new_high,
+        "points": pts,
+        "max_dd_pct": round(max_dd, 2),
+        "base_equity": round(base, 2),
+        "peak_equity": round(peak_equity, 2),
+        "current_dd_pct": current_dd_pct,
+        "dd_days": dd_days,
+        "is_new_high": is_new_high,
     }
 
 
@@ -1217,6 +1357,7 @@ def sample_equity(prices=None):
     返回当前采样点 {t, equity, floating} 或 None。"""
     try:
         import account_tracker as at
+
         snap = at.snapshot(prices or {})
         live_eq = snap.get("equity")
         if live_eq is None:
@@ -1234,11 +1375,9 @@ def sample_equity(prices=None):
         day_data = data.get(date_str, [])
         # 同一分钟内只保留最后一条（覆盖）
         if day_data and day_data[-1]["t"] == time_str:
-            day_data[-1] = {"t": time_str, "equity": round(live_eq, 2),
-                            "floating": round(floating, 2)}
+            day_data[-1] = {"t": time_str, "equity": round(live_eq, 2), "floating": round(floating, 2)}
         else:
-            day_data.append({"t": time_str, "equity": round(live_eq, 2),
-                             "floating": round(floating, 2)})
+            day_data.append({"t": time_str, "equity": round(live_eq, 2), "floating": round(floating, 2)})
         data[date_str] = day_data
         # 只保留最近 7 天
         if len(data) > 7:
@@ -1247,8 +1386,7 @@ def sample_equity(prices=None):
                 del data[d]
         _save_intraday(data)
 
-    return {"t": time_str, "equity": round(live_eq, 2),
-            "floating": round(floating, 2)}
+    return {"t": time_str, "equity": round(live_eq, 2), "floating": round(floating, 2)}
 
 
 def intraday_equity(date=None):
@@ -1291,13 +1429,22 @@ def intraday_equity(date=None):
 def performance_metrics(prices=None):
     """估算绩效指标（基于成交记录，非严格日频）。标注为估算。"""
     data = _load()
-    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None],
-                    key=lambda t: t.get("exit_time") or t["time"])
+    closed = sorted(
+        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t.get("exit_time") or t["time"]
+    )
     s = summary()
     if not closed:
-        return {"note": "暂无平仓记录", "total_return_pct": 0, "max_dd_pct": 0,
-                "sharpe_est": 0, "calmar": 0, "profit_factor": 0,
-                "avg_R": s.get("avg_R", 0), "win_rate": 0, "trades": 0}
+        return {
+            "note": "暂无平仓记录",
+            "total_return_pct": 0,
+            "max_dd_pct": 0,
+            "sharpe_est": 0,
+            "calmar": 0,
+            "profit_factor": 0,
+            "avg_R": s.get("avg_R", 0),
+            "win_rate": 0,
+            "trades": 0,
+        }
     base = _base_equity()
     total_pnl = sum(t["pnl"] for t in closed)
     total_return_pct = round(total_pnl / base * 100, 2) if base else 0
@@ -1321,13 +1468,23 @@ def performance_metrics(prices=None):
     gross_w = sum(wins)
     gross_l = abs(sum(losses))
     profit_factor = round(gross_w / gross_l, 2) if gross_l > 0 else (99.0 if gross_w > 0 else 0.0)
-    calmar = round(total_return_pct / max(max_dd_pct, 0.01), 2) if max_dd_pct > 0 else (total_return_pct if total_return_pct > 0 else 0.0)
+    calmar = (
+        round(total_return_pct / max(max_dd_pct, 0.01), 2)
+        if max_dd_pct > 0
+        else (total_return_pct if total_return_pct > 0 else 0.0)
+    )
     return {
-        "trades": n, "total_return_pct": total_return_pct, "max_dd_pct": max_dd_pct,
-        "sharpe_est": sharpe_est, "calmar": calmar, "profit_factor": profit_factor,
-        "avg_R": s.get("avg_R", 0), "win_rate": s.get("win_rate", 0),
+        "trades": n,
+        "total_return_pct": total_return_pct,
+        "max_dd_pct": max_dd_pct,
+        "sharpe_est": sharpe_est,
+        "calmar": calmar,
+        "profit_factor": profit_factor,
+        "avg_R": s.get("avg_R", 0),
+        "win_rate": s.get("win_rate", 0),
         "expect_pnl": s.get("expect_pnl", 0),
-        "total_fee": s.get("total_fee", 0), "total_pnl": s.get("total_pnl", 0),
+        "total_fee": s.get("total_fee", 0),
+        "total_pnl": s.get("total_pnl", 0),
         "r_dist": s.get("r_dist", {}),
     }
 
@@ -1358,20 +1515,29 @@ def compare_to_papertrack(window_min=120):
         """流动性敏感滑点（懒导入 four_dim_strategy，避免模块加载耦合）。"""
         try:
             from four_dim_strategy import get_slip_pts
+
             return get_slip_pts(sym)
         except Exception:
             return 1.0
 
     def _fill_quality(t, sig):
         """执行层成交质量（P2）：参考入场价 vs 实际成交 / 时机 / 手数 / 出场质量。"""
-        out = {"adverse_slip_pts": None, "expected_slip_pts": None,
-               "excess_slip_pts": None, "slip_in_R": None, "timing_min": None,
-               "size_ratio": None, "exit_quality": None, "exec_flag": "缺参考价"}
+        out = {
+            "adverse_slip_pts": None,
+            "expected_slip_pts": None,
+            "excess_slip_pts": None,
+            "slip_in_R": None,
+            "timing_min": None,
+            "size_ratio": None,
+            "exit_quality": None,
+            "exec_flag": "缺参考价",
+        }
         ref = sig.get("entry_ref")
         if ref is None or t.get("entry_price") is None:
             return out
         try:
-            ref = float(ref); fill = float(t.get("entry_price", ref))
+            ref = float(ref)
+            fill = float(t.get("entry_price", ref))
         except Exception:
             return out
         dir_sign = 1 if t["direction"] == "多" else -1
@@ -1379,7 +1545,7 @@ def compare_to_papertrack(window_min=120):
         slippage_signed = (fill - ref) * dir_sign
         adverse = abs(slippage_signed)
         sd = sig.get("stop_dist") or t.get("stop_dist")
-        expected = _get_slip(t.get("symbol",""))
+        expected = _get_slip(t.get("symbol", ""))
         out["adverse_slip_pts"] = round(adverse, 2)
         out["expected_slip_pts"] = round(expected, 2)
         out["excess_slip_pts"] = round(adverse - expected, 2)
@@ -1388,7 +1554,8 @@ def compare_to_papertrack(window_min=120):
                 out["slip_in_R"] = round(slippage_signed / float(sd), 3)
             except Exception:
                 pass
-        st = _tt(sig.get("time", "")); ft = _tt(t.get("time", ""))
+        st = _tt(sig.get("time", ""))
+        ft = _tt(t.get("time", ""))
         if st and ft:
             out["timing_min"] = round(abs((ft - st).total_seconds()) / 60.0, 1)
         sl = sig.get("lots")
@@ -1399,13 +1566,20 @@ def compare_to_papertrack(window_min=120):
                 pass
         pnl = t.get("pnl")
         if pnl is not None:
-            tgt = sig.get("target"); stp = sig.get("stop")
+            tgt = sig.get("target")
+            stp = sig.get("stop")
             if pnl > 0 and tgt and sd:
-                out["exit_quality"] = ("达标止盈" if abs(float(t.get("exit_price", 0)) - float(tgt)) / float(sd) <= 0.25
-                                       else "盈利出场(偏离目标)")
+                out["exit_quality"] = (
+                    "达标止盈"
+                    if abs(float(t.get("exit_price", 0)) - float(tgt)) / float(sd) <= 0.25
+                    else "盈利出场(偏离目标)"
+                )
             elif pnl <= 0 and stp and sd:
-                out["exit_quality"] = ("触止损" if abs(float(t.get("exit_price", 0)) - float(stp)) / float(sd) <= 0.25
-                                       else "亏损出场(偏离止损)")
+                out["exit_quality"] = (
+                    "触止损"
+                    if abs(float(t.get("exit_price", 0)) - float(stp)) / float(sd) <= 0.25
+                    else "亏损出场(偏离止损)"
+                )
         # 判定：超流动预期滑点 >1.5倍，或占止损距 >5%，或严重偏离计划手数 → 执行偏差
         bad = []
         if out["excess_slip_pts"] is not None and out["excess_slip_pts"] > expected * 0.5:
@@ -1418,21 +1592,28 @@ def compare_to_papertrack(window_min=120):
         return out
 
     def _mk(t, sig, method):
-        _safe_id = t.get("id") or f"legacy_{t.get('symbol','?')}_{t.get('time','')}"
+        _safe_id = t.get("id") or f"legacy_{t.get('symbol', '?')}_{t.get('time', '')}"
         rec = {
-            "trade_id": _safe_id, "symbol": t.get("symbol","?"), "direction": t.get("direction","?"),
-            "entry": t.get("entry_price"), "exit": t.get("exit_price"), "pnl": t.get("pnl"),
+            "trade_id": _safe_id,
+            "symbol": t.get("symbol", "?"),
+            "direction": t.get("direction", "?"),
+            "entry": t.get("entry_price"),
+            "exit": t.get("exit_price"),
+            "pnl": t.get("pnl"),
             "exit_reason": t.get("exit_reason"),
-            "signal_time": sig.get("time"), "match_method": method,
-            "signal_stop": sig.get("stop"), "signal_target": sig.get("target"),
-            "signal_lots": sig.get("lots"), "signal_type": sig.get("signal_type"),
+            "signal_time": sig.get("time"),
+            "match_method": method,
+            "signal_stop": sig.get("stop"),
+            "signal_target": sig.get("target"),
+            "signal_lots": sig.get("lots"),
+            "signal_type": sig.get("signal_type"),
             "signal_entry_ref": sig.get("entry_ref"),
         }
         rec.update(_fill_quality(t, sig))
         return rec
 
     matched = []
-    remain = []          # 精确未匹配的成交，进入模糊匹配
+    remain = []  # 精确未匹配的成交，进入模糊匹配
     for t in closed:
         sid = t.get("signal_id", "")
         sig = sig_by_time.get(sid) if sid and sid not in ("账户同步", "manual", "") else None
@@ -1467,12 +1648,18 @@ def compare_to_papertrack(window_min=120):
         _tid2 = t.get("id") or ""
         if any(m["trade_id"] == _tid2 for m in matched):
             continue
-        unmatched.append({
-            "trade_id": t.get("id") or "", "symbol": t.get("symbol","?"), "direction": t.get("direction","?"),
-            "entry": t.get("entry_price"), "exit": t.get("exit_price"), "pnl": t.get("pnl"),
-            "exit_reason": t.get("exit_reason"),
-            "note": "无匹配信号（可能为冲动/手动交易）",
-        })
+        unmatched.append(
+            {
+                "trade_id": t.get("id") or "",
+                "symbol": t.get("symbol", "?"),
+                "direction": t.get("direction", "?"),
+                "entry": t.get("entry_price"),
+                "exit": t.get("exit_price"),
+                "pnl": t.get("pnl"),
+                "exit_reason": t.get("exit_reason"),
+                "note": "无匹配信号（可能为冲动/手动交易）",
+            }
+        )
 
     total_signals = len(signals)
     acted_on = len(matched)
@@ -1490,15 +1677,33 @@ def compare_to_papertrack(window_min=120):
         "avg_adverse_slip_pts": round(sum(m["adverse_slip_pts"] for m in fq) / len(fq), 2) if fq else None,
         "avg_excess_slip_pts": round(sum(m["excess_slip_pts"] for m in fq) / len(fq), 2) if fq else None,
         "max_excess_slip_pts": round(max((m["excess_slip_pts"] for m in fq), default=0), 2),
-        "avg_timing_min": round(sum(m["timing_min"] for m in fq if m["timing_min"] is not None)
-                                / max(1, sum(1 for m in fq if m["timing_min"] is not None)), 1) if fq else None,
-        "avg_size_ratio": round(sum(m["size_ratio"] for m in fq if m["size_ratio"] is not None)
-                                / max(1, sum(1 for m in fq if m["size_ratio"] is not None)), 2) if fq else None,
+        "avg_timing_min": round(
+            sum(m["timing_min"] for m in fq if m["timing_min"] is not None)
+            / max(1, sum(1 for m in fq if m["timing_min"] is not None)),
+            1,
+        )
+        if fq
+        else None,
+        "avg_size_ratio": round(
+            sum(m["size_ratio"] for m in fq if m["size_ratio"] is not None)
+            / max(1, sum(1 for m in fq if m["size_ratio"] is not None)),
+            2,
+        )
+        if fq
+        else None,
         "poor_execution": sum(1 for m in fq if m.get("exec_flag") not in (None, "执行良好")),
-        "poor_list": [{"symbol": m["symbol"], "trade_id": m["trade_id"],
-                       "excess_slip_pts": m["excess_slip_pts"], "slip_in_R": m["slip_in_R"],
-                       "size_ratio": m["size_ratio"], "flag": m["exec_flag"]}
-                      for m in fq if m.get("exec_flag") not in (None, "执行良好")],
+        "poor_list": [
+            {
+                "symbol": m["symbol"],
+                "trade_id": m["trade_id"],
+                "excess_slip_pts": m["excess_slip_pts"],
+                "slip_in_R": m["slip_in_R"],
+                "size_ratio": m["size_ratio"],
+                "flag": m["exec_flag"],
+            }
+            for m in fq
+            if m.get("exec_flag") not in (None, "执行良好")
+        ],
     }
 
     return {
@@ -1520,8 +1725,7 @@ def today_pnl(sym=None):
     sym 省略→全品种合计；传入 sym→仅该品种当日已实现盈亏（供 focus_board 使用）。"""
     data = _load()
     today = datetime.now().strftime("%Y-%m-%d")
-    closed = [t for t in data["trades"]
-              if t["pnl"] is not None and (t.get("exit_time") or "")[:10] == today]
+    closed = [t for t in data["trades"] if t["pnl"] is not None and (t.get("exit_time") or "")[:10] == today]
     if sym is not None:
         closed = [t for t in closed if t.get("symbol") == sym]
     return sum(t["pnl"] for t in closed)
@@ -1536,28 +1740,25 @@ def current_loss_streak():
     """
     import json as _json
     import os
+
     data = _load()
     # 查找最近的熔断解除时间戳
-    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'killswitch_state.json')
+    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "killswitch_state.json")
     reset_time = None
     try:
         if os.path.exists(ks_path):
-            with open(ks_path, 'r', encoding='utf-8') as _f:
+            with open(ks_path, "r", encoding="utf-8") as _f:
                 _ks = _json.load(_f)
-            reset_time = _ks.get('reset_at')
+            reset_time = _ks.get("reset_at")
     except Exception:
         pass
     # 过滤：只统计 reset_at 之后的交易（如果存在）
-    closed = sorted(
-        [t for t in data['trades']
-         if t.get('pnl') is not None],
-        key=lambda t: t['time']
-    )
+    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t["time"])
     if reset_time:
-        closed = [t for t in closed if (t.get('time') or '') >= reset_time]
+        closed = [t for t in closed if (t.get("time") or "") >= reset_time]
     streak = 0
     for t in reversed(closed):
-        if t['pnl'] < 0:
+        if t["pnl"] < 0:
             streak += 1
         else:
             break
@@ -1589,8 +1790,10 @@ if __name__ == "__main__":
     if cmp["matched_trades"]:
         print(f"\n  逐笔对比（成交 vs 信号建议）:")
         for m in cmp["matched_trades"]:
-            print(f"    {m['symbol']} {m['direction']}: 入{m['entry']}→出{m['exit']} "
-                  f"盈亏{m['pnl']:+.0f} | 信号止损{m['signal_stop']}/目标{m['signal_target']} "
-                  f"({m['exit_reason']})")
+            print(
+                f"    {m['symbol']} {m['direction']}: 入{m['entry']}→出{m['exit']} "
+                f"盈亏{m['pnl']:+.0f} | 信号止损{m['signal_stop']}/目标{m['signal_target']} "
+                f"({m['exit_reason']})"
+            )
 
     print(f"\n---\n*非投资建议，模拟盘验证数据。*")

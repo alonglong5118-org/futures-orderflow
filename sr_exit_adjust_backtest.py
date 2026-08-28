@@ -3,6 +3,7 @@
 对比：启用 SR 位调整出场 vs 纯 ATR 出场
 验证维度：expR、胜率、盈亏比、最大回撤
 """
+
 import json
 import math
 import os
@@ -29,9 +30,9 @@ from four_dim_strategy import (
 )
 
 
-def walk_forward_with_sr(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300,
-                         tail=None, cooldown_bars=5, sr_enabled=True,
-                         df_in=None):
+def walk_forward_with_sr(
+    symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300, tail=None, cooldown_bars=5, sr_enabled=True, df_in=None
+):
     """带 SR 出场微调的 walk-forward 回测。"""
     df = df_in if df_in is not None else load_daily(symbol)
     if df is None:
@@ -50,7 +51,7 @@ def walk_forward_with_sr(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300,
     last_trade_i = -999
 
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         current_price = float(df["close"].iloc[i])
 
         # 计算 SR 位
@@ -80,8 +81,7 @@ def walk_forward_with_sr(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300,
             dir_T = pipe["dir_T"]
 
             # 关键：传入 sr_result 调整出场位
-            ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], cfg,
-                           sr_result=sr_result)
+            ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], cfg, sr_result=sr_result)
             sd = ep["stop_dist"]
 
             # 出场模拟
@@ -98,27 +98,35 @@ def walk_forward_with_sr(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300,
                 if tail_active:
                     if dir_T > 0:
                         if lo <= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
                     else:
                         if hi >= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
                     continue
                 if dir_T > 0:
                     if lo <= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if hi >= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
                 else:
                     if hi >= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if lo <= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
             if exit_price is None:
                 exit_price, reason = float(df["close"].iloc[-1]), "期末平"
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
@@ -131,16 +139,23 @@ def walk_forward_with_sr(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300,
             sr_stop_used = "sr_stop" in sr_adj_note or "止损调至" in sr_adj_note
             sr_t1_used = "sr_t1" in sr_adj_note or "T1调至" in sr_adj_note
 
-            trades.append({
-                "dir": dir_T, "R": round(R, 3), "R_adj": round(R_adj, 3),
-                "reason": reason, "regime": pipe["regime"],
-                "entry_date": df.index[i + 1],
-                "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"],
-                "sr_stop_used": sr_stop_used,
-                "sr_t1_used": sr_t1_used,
-                "sr_adjusted": sr_stop_used or sr_t1_used,
-                "stop_dist": round(sd, 2),
-            })
+            trades.append(
+                {
+                    "dir": dir_T,
+                    "R": round(R, 3),
+                    "R_adj": round(R_adj, 3),
+                    "reason": reason,
+                    "regime": pipe["regime"],
+                    "entry_date": df.index[i + 1],
+                    "F": pipe["F"],
+                    "T_D": pipe["T_D"],
+                    "C": pipe["C"],
+                    "sr_stop_used": sr_stop_used,
+                    "sr_t1_used": sr_t1_used,
+                    "sr_adjusted": sr_stop_used or sr_t1_used,
+                    "stop_dist": round(sd, 2),
+                }
+            )
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1
             continue
@@ -168,8 +183,10 @@ def walk_forward_with_sr(symbol, cfg=DEFAULT_CONFIG, min_bars=60, window=300,
         return round(float(np.mean([t["R_adj"] for t in lst])), 4) if lst else 0
 
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
-        "trades": len(trades), "expR": round(float(np.mean(Rs)), 4),
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
+        "trades": len(trades),
+        "expR": round(float(np.mean(Rs)), 4),
         "win_rate": round(len(wins) / len(Rs), 3),
         "trades_detail": trades,
         "by_regime": {k: round(float(np.mean(v)), 4) for k, v in by_regime.items()},
@@ -198,7 +215,7 @@ def compare_symbol(symbol, tail=400):
     base_expR = base["expR"]
     sr_expR = sr["expR"]
     delta = sr_expR - base_expR
-    delta_pct = (delta / abs(base_expR) * 100) if base_expR != 0 else float('inf')
+    delta_pct = (delta / abs(base_expR) * 100) if base_expR != 0 else float("inf")
 
     return {
         "symbol": symbol,
@@ -219,10 +236,10 @@ def compare_symbol(symbol, tail=400):
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--tail", type=int, default=400)
-    parser.add_argument("--symbols", type=str, default=None,
-                        help="逗号分隔的品种列表，默认全市场")
+    parser.add_argument("--symbols", type=str, default=None, help="逗号分隔的品种列表，默认全市场")
     args = parser.parse_args()
 
     if args.symbols:
@@ -264,7 +281,9 @@ def main():
     print(f"  基准平均 expR: {avg_base:+.4f}")
     print(f"  SR调整 expR:   {avg_sr:+.4f}")
     print(f"  变化: {delta:+.4f} ({delta_pct:+.1f}%)")
-    print(f"  SR调整交易占比: {total_adj}/{total_trades} ({total_adj/total_trades*100:.1f}%)" if total_trades else "")
+    print(
+        f"  SR调整交易占比: {total_adj}/{total_trades} ({total_adj / total_trades * 100:.1f}%)" if total_trades else ""
+    )
 
     print()
     print("【提升 Top 10】")
@@ -272,10 +291,12 @@ def main():
     for r in improved_sorted[:10]:
         if r["improved"]:
             adj = r["sr_stats"]
-            print(f"  {r['symbol']:>5} {r['name']:>6}  "
-                  f"基准 {r['base_expR']:+.4f} → SR {r['sr_expR']:+.4f}  "
-                  f"({r['delta_pct']:+.1f}%)  "
-                  f"调整占比 {adj['adjusted_pct']}%")
+            print(
+                f"  {r['symbol']:>5} {r['name']:>6}  "
+                f"基准 {r['base_expR']:+.4f} → SR {r['sr_expR']:+.4f}  "
+                f"({r['delta_pct']:+.1f}%)  "
+                f"调整占比 {adj['adjusted_pct']}%"
+            )
 
     print()
     print("【下降 Top 10】")
@@ -283,10 +304,12 @@ def main():
     for r in worsened_sorted[:10]:
         if r["worsened"]:
             adj = r["sr_stats"]
-            print(f"  {r['symbol']:>5} {r['name']:>6}  "
-                  f"基准 {r['base_expR']:+.4f} → SR {r['sr_expR']:+.4f}  "
-                  f"({r['delta_pct']:+.1f}%)  "
-                  f"调整占比 {adj['adjusted_pct']}%")
+            print(
+                f"  {r['symbol']:>5} {r['name']:>6}  "
+                f"基准 {r['base_expR']:+.4f} → SR {r['sr_expR']:+.4f}  "
+                f"({r['delta_pct']:+.1f}%)  "
+                f"调整占比 {adj['adjusted_pct']}%"
+            )
 
     # 保存
     out = {

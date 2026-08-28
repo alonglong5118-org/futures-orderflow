@@ -45,6 +45,7 @@ from risk_gate_utils import (
 #  1. 风险预算手数
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcRiskLots(unittest.TestCase):
     """风险预算手数计算。"""
 
@@ -100,6 +101,7 @@ class TestCalcRiskLots(unittest.TestCase):
 #  2. 最小 1 手兜底
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMinLotFloor(unittest.TestCase):
     """最小 1 手兜底（超风险标注）。"""
 
@@ -137,6 +139,7 @@ class TestMinLotFloor(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. Kelly 缩放
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestKellyScaling(unittest.TestCase):
     """Kelly 因子缩放。"""
@@ -192,6 +195,7 @@ class TestKellyScaling(unittest.TestCase):
 #  4. 保证金约束
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCalcMarginLots(unittest.TestCase):
     """保证金约束手数计算。"""
 
@@ -200,8 +204,7 @@ class TestCalcMarginLots(unittest.TestCase):
         # 每手保证金 = 1000 * 10 * 0.12 = 1200 元
         # 保证金预算 = 100000 * 30% = 30000 元
         # 手数 = 30000 // 1200 = 25 手
-        N = calc_margin_lots(equity=100000, margin_cap_pct=30,
-                             price=1000, multiplier=10, margin_rate=0.12)
+        N = calc_margin_lots(equity=100000, margin_cap_pct=30, price=1000, multiplier=10, margin_rate=0.12)
         self.assertEqual(N, 25)
 
     def test_rounds_down(self):
@@ -209,54 +212,46 @@ class TestCalcMarginLots(unittest.TestCase):
         # 每手保证金 = 1000 * 10 * 0.12 = 1200
         # 预算 = 100000 * 30.5% = 30500
         # 30500 // 1200 = 25.416 → 25
-        N = calc_margin_lots(equity=100000, margin_cap_pct=30.5,
-                             price=1000, multiplier=10, margin_rate=0.12)
+        N = calc_margin_lots(equity=100000, margin_cap_pct=30.5, price=1000, multiplier=10, margin_rate=0.12)
         self.assertEqual(N, 25)
 
     def test_zero_price(self):
         """价格为 0 → 0 手"""
-        N = calc_margin_lots(equity=100000, margin_cap_pct=30,
-                             price=0, multiplier=10, margin_rate=0.12)
+        N = calc_margin_lots(equity=100000, margin_cap_pct=30, price=0, multiplier=10, margin_rate=0.12)
         self.assertEqual(N, 0)
 
     def test_zero_margin_rate(self):
         """保证金率为 0 → 0 手"""
-        N = calc_margin_lots(equity=100000, margin_cap_pct=30,
-                             price=1000, multiplier=10, margin_rate=0)
+        N = calc_margin_lots(equity=100000, margin_cap_pct=30, price=1000, multiplier=10, margin_rate=0)
         self.assertEqual(N, 0)
 
     def test_zero_multiplier(self):
         """乘数为 0 → 0 手"""
-        N = calc_margin_lots(equity=100000, margin_cap_pct=30,
-                             price=1000, multiplier=0, margin_rate=0.12)
+        N = calc_margin_lots(equity=100000, margin_cap_pct=30, price=1000, multiplier=0, margin_rate=0.12)
         self.assertEqual(N, 0)
 
     def test_tight_margin_cap_fewer_lots(self):
         """更紧的保证金上限 → 手数更少"""
         # 30% → 25 手；15% → 12 手（减半）
-        N_tight = calc_margin_lots(equity=100000, margin_cap_pct=15,
-                                   price=1000, multiplier=10, margin_rate=0.12)
-        N_normal = calc_margin_lots(equity=100000, margin_cap_pct=30,
-                                    price=1000, multiplier=10, margin_rate=0.12)
+        N_tight = calc_margin_lots(equity=100000, margin_cap_pct=15, price=1000, multiplier=10, margin_rate=0.12)
+        N_normal = calc_margin_lots(equity=100000, margin_cap_pct=30, price=1000, multiplier=10, margin_rate=0.12)
         self.assertLess(N_tight, N_normal)
         self.assertEqual(N_tight, 12)
 
     def test_per_symbol_margin_cap_jm(self):
         """回归：JM 焦煤低胜率品种保证金收紧到 18% → 手数更少"""
         # 默认 30% vs 收紧 18%
-        N_default = calc_margin_lots(equity=100000, margin_cap_pct=30,
-                                     price=2000, multiplier=60, margin_rate=0.12)
-        N_tight = calc_margin_lots(equity=100000, margin_cap_pct=18,
-                                   price=2000, multiplier=60, margin_rate=0.12)
-        self.assertLess(N_tight, N_default,
-                        "低胜率品种保证金收紧后，手数应该更少")
+        N_default = calc_margin_lots(equity=100000, margin_cap_pct=30, price=2000, multiplier=60, margin_rate=0.12)
+        N_tight = calc_margin_lots(equity=100000, margin_cap_pct=18, price=2000, multiplier=60, margin_rate=0.12)
+        self.assertLess(N_tight, N_default, "低胜率品种保证金收紧后，手数应该更少")
         # 比例应该大约是 18/30 = 0.6（向下取整后近似）
-        self.assertAlmostEqual(N_tight / N_default, 18/30, places=0)
+        self.assertAlmostEqual(N_tight / N_default, 18 / 30, places=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. T 强度缩放
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTStrengthScale(unittest.TestCase):
     """T 强度缩放系数（弱过阈降仓）。"""
@@ -327,6 +322,7 @@ class TestTStrengthScale(unittest.TestCase):
 #  6. 持仓扣减
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDeductHeldLots(unittest.TestCase):
     """已有持仓扣减（加仓不超配）。"""
 
@@ -377,14 +373,14 @@ class TestDeductHeldLots(unittest.TestCase):
         plan = 5  # 想加 5 手
         result = deduct_held_lots(plan, held, max_lots)
         # 总持仓不能超过 5，已有 3 → 最多加 2
-        self.assertLessEqual(result + held, max_lots,
-            "P2b 回归 bug：加仓后总持仓超过了 max_lots")
+        self.assertLessEqual(result + held, max_lots, "P2b 回归 bug：加仓后总持仓超过了 max_lots")
         self.assertEqual(result, 2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. 涨跌停闸门
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestLimitGate(unittest.TestCase):
     """涨跌停闸门（第三道防线）。"""
@@ -441,6 +437,7 @@ class TestLimitGate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  8. 完整仓位计划（集成）
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPositionPlan(unittest.TestCase):
     """完整仓位计划计算（集成测试）。"""
@@ -574,7 +571,7 @@ class TestPositionPlan(unittest.TestCase):
         """超风险预算（最小 1 手兜底）→ over_risk=True"""
         params = self._default_params()
         params["equity"] = 5000  # 小账户
-        params["stop_pts"] = 50   # 大止损
+        params["stop_pts"] = 50  # 大止损
         params["max_lots"] = 10
         # 每手风险 = 50*10 = 500
         # 风险预算 = 5000 * 1.5% = 75

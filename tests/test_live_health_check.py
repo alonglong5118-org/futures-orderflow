@@ -41,6 +41,7 @@ from live_health_check import _market_open_now, ym_of
 #  1. _market_open_now
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMarketOpenNow(unittest.TestCase):
     """_market_open_now 是否处于交易时段。"""
 
@@ -118,13 +119,13 @@ class TestMarketOpenNow(unittest.TestCase):
         """交易日内，周几不影响（只要是工作日就开）"""
         # 周一到周五同一时间都应该开
         for wd in range(5):
-            self.assertTrue(_market_open_now(self._make_dt(wd, 10, 0)),
-                            f"周{wd+1} 10:00 应该开盘")
+            self.assertTrue(_market_open_now(self._make_dt(wd, 10, 0)), f"周{wd + 1} 10:00 应该开盘")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. ym_of
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestYmOf(unittest.TestCase):
     """ym_of 合约码解析年月。"""

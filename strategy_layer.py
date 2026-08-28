@@ -14,6 +14,7 @@
   3. 常量集中管理：阈值和配置分组清晰
   4. 简化路由逻辑：用映射表替代 if-elif 链
 """
+
 from __future__ import annotations
 
 import json
@@ -188,9 +189,14 @@ def s_seasonal(df, min_samples=12):
 
 # 策略注册
 STRATS = {
-    "ma_break": s_ma_break, "dma": s_dma, "turtle": s_turtle,
-    "donchian": s_donchian, "pullback": s_pullback, "boll": s_boll,
-    "rsi": s_rsi, "seasonal": s_seasonal,
+    "ma_break": s_ma_break,
+    "dma": s_dma,
+    "turtle": s_turtle,
+    "donchian": s_donchian,
+    "pullback": s_pullback,
+    "boll": s_boll,
+    "rsi": s_rsi,
+    "seasonal": s_seasonal,
 }
 TREND_STRATS = ["ma_break", "dma", "turtle", "donchian", "pullback"]
 MEAN_STRATS = ["boll", "rsi"]
@@ -209,10 +215,10 @@ ROBUST_POOL = {
     "RM": {"stability": 0.70, "oos_expR": 0.15},
     "FG": {"stability": 0.70, "oos_expR": 0.15},
     "CF": {"stability": 0.70, "oos_expR": 0.15},
-    "V":  {"stability": 0.70, "oos_expR": 0.15},
+    "V": {"stability": 0.70, "oos_expR": 0.15},
     "RB": {"stability": 0.70, "oos_expR": 0.15},
     "UR": {"stability": 0.70, "oos_expR": 0.15},
-    "P":  {"stability": 0.70, "oos_expR": 0.15},
+    "P": {"stability": 0.70, "oos_expR": 0.15},
     "PF": {"stability": 0.70, "oos_expR": 0.15},
     "HC": {"stability": 0.70, "oos_expR": 0.15},
 }
@@ -236,17 +242,30 @@ _ROBUST_GATE_CFG = {
 }
 
 
-def configure_robust_gate(enabled=None, auto_adapt=None, relax_pp=None,
-                          max_relax=None, floor_oos=None,
-                          default_stability=None, default_oos_expR=None):
+def configure_robust_gate(
+    enabled=None,
+    auto_adapt=None,
+    relax_pp=None,
+    max_relax=None,
+    floor_oos=None,
+    default_stability=None,
+    default_oos_expR=None,
+):
     """配置稳健池门控参数。"""
-    if enabled is not None: _ROBUST_GATE_CFG["enabled"] = bool(enabled)
-    if auto_adapt is not None: _ROBUST_GATE_CFG["auto_adapt"] = bool(auto_adapt)
-    if relax_pp is not None: _ROBUST_GATE_CFG["relax_pp"] = float(relax_pp)
-    if max_relax is not None: _ROBUST_GATE_CFG["max_relax"] = float(max_relax)
-    if floor_oos is not None: _ROBUST_GATE_CFG["floor_oos"] = float(floor_oos)
-    if default_stability is not None: _ROBUST_GATE_CFG["default_stability"] = float(default_stability)
-    if default_oos_expR is not None: _ROBUST_GATE_CFG["default_oos_expR"] = float(default_oos_expR)
+    if enabled is not None:
+        _ROBUST_GATE_CFG["enabled"] = bool(enabled)
+    if auto_adapt is not None:
+        _ROBUST_GATE_CFG["auto_adapt"] = bool(auto_adapt)
+    if relax_pp is not None:
+        _ROBUST_GATE_CFG["relax_pp"] = float(relax_pp)
+    if max_relax is not None:
+        _ROBUST_GATE_CFG["max_relax"] = float(max_relax)
+    if floor_oos is not None:
+        _ROBUST_GATE_CFG["floor_oos"] = float(floor_oos)
+    if default_stability is not None:
+        _ROBUST_GATE_CFG["default_stability"] = float(default_stability)
+    if default_oos_expR is not None:
+        _ROBUST_GATE_CFG["default_oos_expR"] = float(default_oos_expR)
 
 
 def _robust_gate_enabled():
@@ -254,7 +273,7 @@ def _robust_gate_enabled():
     try:
         mgr = _fmg.get_manager()
         if mgr is not None:
-            return mgr.is_enabled('robust_pool_gate')
+            return mgr.is_enabled("robust_pool_gate")
     except Exception:
         pass
     return bool(_ROBUST_GATE_CFG.get("enabled", True))
@@ -269,8 +288,10 @@ def get_robust_gate():
 
 def set_robust_gate(stability=None, oos_expR=None):
     """内存注入当前门槛。"""
-    if stability is not None: _ROBUST_GATE["stability"] = float(stability)
-    if oos_expR is not None: _ROBUST_GATE["oos_expR"] = float(oos_expR)
+    if stability is not None:
+        _ROBUST_GATE["stability"] = float(stability)
+    if oos_expR is not None:
+        _ROBUST_GATE["oos_expR"] = float(oos_expR)
 
 
 def load_robust_gate_file(path=None):
@@ -284,8 +305,7 @@ def load_robust_gate_file(path=None):
         set_robust_gate(stability=d.get("stability"), oos_expR=d.get("oos_expR"))
         return True
     except Exception:
-        set_robust_gate(stability=_ROBUST_GATE_CFG["default_stability"],
-                        oos_expR=_ROBUST_GATE_CFG["default_oos_expR"])
+        set_robust_gate(stability=_ROBUST_GATE_CFG["default_stability"], oos_expR=_ROBUST_GATE_CFG["default_oos_expR"])
         return False
 
 
@@ -324,40 +344,61 @@ def backfill_robust_pool_gate(drift_json=None, out_path=None, auto_adapt=None, c
     if aa:
         try:
             with open(out_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "source": "calibration_drift.json",
-                    "ensemble_recent_expR": ensemble_recent,
-                    "auto_adapt": True,
-                    "stability": stab,
-                    "oos_expR": oos,
-                    "relaxed": relaxed,
-                }, f, ensure_ascii=False, indent=2)
+                json.dump(
+                    {
+                        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "source": "calibration_drift.json",
+                        "ensemble_recent_expR": ensemble_recent,
+                        "auto_adapt": True,
+                        "stability": stab,
+                        "oos_expR": oos,
+                        "relaxed": relaxed,
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
         except Exception:
             pass
         set_robust_gate(stability=stab, oos_expR=oos)
-    return {"written": bool(aa), "stability": stab, "oos_expR": oos,
-            "ensemble_recent_expR": ensemble_recent, "relaxed": relaxed}
+    return {
+        "written": bool(aa),
+        "stability": stab,
+        "oos_expR": oos,
+        "ensemble_recent_expR": ensemble_recent,
+        "relaxed": relaxed,
+    }
 
 
 def walk_forward_gate(symbol):
     """稳健池准入判定。"""
     m = ROBUST_POOL.get((symbol or "").upper())
     if m is None:
-        return {"passed": False, "status": "观察池", "stability": None,
-                "oos_expR": None,
-                "reason": "未纳入 walk-forward 稳健池（观察池持续更新，不出实盘战略信号）"}
+        return {
+            "passed": False,
+            "status": "观察池",
+            "stability": None,
+            "oos_expR": None,
+            "reason": "未纳入 walk-forward 稳健池（观察池持续更新，不出实盘战略信号）",
+        }
     stability, oos = m["stability"], m["oos_expR"]
     stab_th, oos_th = get_robust_gate()
     if oos <= -0.10 and stability < 0.50:
-        return {"passed": False, "status": "稳健池·紧急出池", "stability": stability,
-                "oos_expR": oos,
-                "reason": "极端证伪：OOS_expR≤-0.10 且 stability<0.50，当周紧急出池"}
-    passed = (stability >= stab_th and oos >= oos_th and oos > 0)
-    return {"passed": passed, "status": "稳健池" if passed else "观察池",
-            "stability": stability, "oos_expR": oos,
-            "reason": (f"已过门槛(stability≥{stab_th:.2f} & OOS_expR≥{oos_th:.2f})" if passed
-                       else "未达稳健池门槛")}
+        return {
+            "passed": False,
+            "status": "稳健池·紧急出池",
+            "stability": stability,
+            "oos_expR": oos,
+            "reason": "极端证伪：OOS_expR≤-0.10 且 stability<0.50，当周紧急出池",
+        }
+    passed = stability >= stab_th and oos >= oos_th and oos > 0
+    return {
+        "passed": passed,
+        "status": "稳健池" if passed else "观察池",
+        "stability": stability,
+        "oos_expR": oos,
+        "reason": (f"已过门槛(stability≥{stab_th:.2f} & OOS_expR≥{oos_th:.2f})" if passed else "未达稳健池门槛"),
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -379,21 +420,21 @@ def classify_regime(df, params=None):
     close = df["close"]
     if len(close) < 25:
         return "未知", "数据不足"
-    
+
     ma20_now = sma(close, 20).iloc[-1]
     ma20_prev = sma(close, 20).iloc[-5]
     c = close.iloc[-1]
     dev = abs(c - ma20_now) / ma20_now
     atr_r = atr(df).iloc[-1] / c
     slope = (ma20_now - ma20_prev) / ma20_prev
-    
+
     if atr_r > p["atr_thresh"]:
-        return "波动", f"ATR占比{atr_r*100:.1f}%偏高"
+        return "波动", f"ATR占比{atr_r * 100:.1f}%偏高"
     if dev < p["flat_dev"] and atr_r < p["flat_atr"]:
-        return "震荡", f"MA偏离{dev*100:.2f}%收敛"
+        return "震荡", f"MA偏离{dev * 100:.2f}%收敛"
     if abs(slope) > p["trend_slope"] and dev > p["trend_dev"]:
-        return "趋势", f"MA斜率{slope*100:.2f}%偏离{dev*100:.1f}%"
-    return "过渡", f"斜率{slope*100:.2f}%偏离{dev*100:.1f}%"
+        return "趋势", f"MA斜率{slope * 100:.2f}%偏离{dev * 100:.1f}%"
+    return "过渡", f"斜率{slope * 100:.2f}%偏离{dev * 100:.1f}%"
 
 
 # Regime → 策略权重映射
@@ -415,9 +456,22 @@ REGIME_WEIGHTS = {
 # 仓位预算走自己的 risk_gate（见 four_dim_strategy.risk_gate）。
 # 勿在此修改仓位/风控逻辑——改了实时系统也读不到，且易与 risk_gate 产生歧义。
 # 仅用于本文件 __main__ 离线自测。
-def compute_strategy(df, equity, price, mult, point_value, margin_rate=0.10,
-                     fee_per_hand=3.0, used_margin=0.0, red_line=0.45, risk_pct=0.03,
-                     regime_params=None, strategy_weights=None, symbol=None, wf_gate=True):
+def compute_strategy(
+    df,
+    equity,
+    price,
+    mult,
+    point_value,
+    margin_rate=0.10,
+    fee_per_hand=3.0,
+    used_margin=0.0,
+    red_line=0.45,
+    risk_pct=0.03,
+    regime_params=None,
+    strategy_weights=None,
+    symbol=None,
+    wf_gate=True,
+):
     """返回战略信号 dict。"""
     regime, rdesc = classify_regime(df, regime_params)
     res = {}
@@ -430,7 +484,7 @@ def compute_strategy(df, equity, price, mult, point_value, margin_rate=0.10,
 
     # 获取 regime 对应的基础权重
     weights = REGIME_WEIGHTS.get(regime, REGIME_WEIGHTS["过渡"]).copy()
-    
+
     # 分商品差异化
     sw = strategy_weights or {}
     if sw:
@@ -458,8 +512,11 @@ def compute_strategy(df, equity, price, mult, point_value, margin_rate=0.10,
     N = min(N_risk, N_margin)
 
     # walk-forward 稳健池准入
-    gate = walk_forward_gate(symbol) if (wf_gate and symbol) else         {"passed": True, "status": "—", "stability": None, "oos_expR": None,
-         "reason": "未启用稳健池门槛"}
+    gate = (
+        walk_forward_gate(symbol)
+        if (wf_gate and symbol)
+        else {"passed": True, "status": "—", "stability": None, "oos_expR": None, "reason": "未启用稳健池门槛"}
+    )
     gated = not gate["passed"]
     direction_text = {1: "偏多", -1: "偏空", 0: "中性"}[direction]
     if gated:
@@ -494,12 +551,20 @@ if __name__ == "__main__":
     n = 120
     px = 1000 + np.cumsum(np.random.randn(n) * 5)
     idx = pd.date_range("2026-01-01", periods=n, freq="D")
-    df = pd.DataFrame({
-        "open": px, "high": px + 3, "low": px - 3, "close": px, "volume": 1000
-    }, index=idx)
+    df = pd.DataFrame({"open": px, "high": px + 3, "low": px - 3, "close": px, "volume": 1000}, index=idx)
     # 仅离线自测用，实时不调用
-    out = compute_strategy(df, equity=69522, price=px[-1], mult=20, point_value=20,
-                           margin_rate=0.10, fee_per_hand=3.0)
-    print("regime:", out["regime"], "| direction:", out["direction_text"],
-          "| conf:", out["confidence"], "| main:", out["main_strategy"],
-          "| stop:", out["stop_pts"], "| size:", out["size"])
+    out = compute_strategy(df, equity=69522, price=px[-1], mult=20, point_value=20, margin_rate=0.10, fee_per_hand=3.0)
+    print(
+        "regime:",
+        out["regime"],
+        "| direction:",
+        out["direction_text"],
+        "| conf:",
+        out["confidence"],
+        "| main:",
+        out["main_strategy"],
+        "| stop:",
+        out["stop_pts"],
+        "| size:",
+        out["size"],
+    )

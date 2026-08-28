@@ -6,6 +6,7 @@
 3. 对比默认权重 vs GA 6 因子权重
 4. 计算过拟合系数
 """
+
 import copy
 import json
 import os
@@ -32,8 +33,8 @@ from ga_group_six_factor import (
 
 GROUPS = ["化工", "农产品", "有色", "黑系", "能源", "贵金属", "航运"]
 
-TRAIN_BARS = 300   # 训练集 N 根
-TEST_BARS = 200    # 验证集 M 根
+TRAIN_BARS = 300  # 训练集 N 根
+TEST_BARS = 200  # 验证集 M 根
 POP = 20
 GEN = 10
 MIN_TRADES = MIN_TRADES_PER_SYMBOL
@@ -41,11 +42,12 @@ OUTFILE = os.path.join(HERE, "logs", "ga_group_six_factor_oos.json")
 
 results = {}
 
+
 def run_oos_for_group(group_name):
     """对单个板块做 OOS 验证，返回结果字典。"""
-    print(f"\n{'='*60}", flush=True)
+    print(f"\n{'=' * 60}", flush=True)
     print(f"[OOS] 板块: {group_name}", flush=True)
-    print(f"{'='*60}", flush=True)
+    print(f"{'=' * 60}", flush=True)
 
     # 加载全量数据
     group_data = load_group_data(group_name, min_bars=TRAIN_BARS + TEST_BARS, tail=0)
@@ -61,7 +63,7 @@ def run_oos_for_group(group_name):
     for sym, df in sorted(group_data.items()):
         total = len(df)
         train_end = total - TEST_BARS
-        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS):train_end]
+        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS) : train_end]
         test_data[sym] = df.iloc[train_end:]
 
     print(f"  数据切分: train={TRAIN_BARS} 根, test={TEST_BARS} 根", flush=True)
@@ -80,8 +82,7 @@ def run_oos_for_group(group_name):
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.IndividualGroup,
-                     toolbox.attr_float, n=len(SF_NAMES))
+    toolbox.register("individual", tools.initRepeat, creator.IndividualGroup, toolbox.attr_float, n=len(SF_NAMES))
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _eval_ind(ind):
@@ -109,8 +110,8 @@ def run_oos_for_group(group_name):
         hof.update(offspring)
         pop = toolbox.select(offspring, k=len(pop))
         record = stats.compile(pop)
-        history.append({"gen": gen+1, "avg": record["avg"], "max": record["max"]})
-        print(f"    Gen {gen+1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}", flush=True)
+        history.append({"gen": gen + 1, "avg": record["avg"], "max": record["max"]})
+        print(f"    Gen {gen + 1:2d}: best={record['max']:+.4f}  avg={record['avg']:+.4f}", flush=True)
         if record["max"] > best_max + 0.001:
             best_max = record["max"]
             stall = 0
@@ -136,9 +137,7 @@ def run_oos_for_group(group_name):
                 cfg.update(cfg_override)
             r = walk_forward_backtest(sym, cfg=cfg, window=200, min_bars=40, df_in=df)
             nt = int(r.get("trades", 0))
-            per_symbol[sym] = {"expR": float(r.get("expR", 0)),
-                               "win_rate": float(r.get("win_rate", 0)),
-                               "trades": nt}
+            per_symbol[sym] = {"expR": float(r.get("expR", 0)), "win_rate": float(r.get("win_rate", 0)), "trades": nt}
             if nt >= MIN_TRADES:
                 expRs.append(float(r.get("expR", 0)))
                 total_trades += nt
@@ -149,9 +148,9 @@ def run_oos_for_group(group_name):
     print("  [结果对比]", flush=True)
 
     train_base, train_base_per, train_base_trades, train_base_valid = eval_data(train_data)
-    train_sf, train_sf_per, train_sf_trades, train_sf_valid = eval_data(train_data, {'subfactor_weights': best_w})
+    train_sf, train_sf_per, train_sf_trades, train_sf_valid = eval_data(train_data, {"subfactor_weights": best_w})
     test_base, test_base_per, test_base_trades, test_base_valid = eval_data(test_data)
-    test_sf, test_sf_per, test_sf_trades, test_sf_valid = eval_data(test_data, {'subfactor_weights': best_w})
+    test_sf, test_sf_per, test_sf_trades, test_sf_valid = eval_data(test_data, {"subfactor_weights": best_w})
 
     print(f"  {'':12s} {'基准':>10s} {'6因子':>10s} {'变化':>10s}", flush=True)
     print("  " + "-" * 46, flush=True)
@@ -211,14 +210,20 @@ for group in GROUPS:
 with open(OUTFILE, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
-print(f"\n{'='*60}", flush=True)
+print(f"\n{'=' * 60}", flush=True)
 print("全部完成，结果汇总", flush=True)
-print(f"{'='*60}", flush=True)
-print(f"{'板块':<8s} {'训练基准':>10s} {'训练6因子':>10s} {'验证基准':>10s} {'验证6因子':>10s} {'过拟合系数':>10s}", flush=True)
+print(f"{'=' * 60}", flush=True)
+print(
+    f"{'板块':<8s} {'训练基准':>10s} {'训练6因子':>10s} {'验证基准':>10s} {'验证6因子':>10s} {'过拟合系数':>10s}",
+    flush=True,
+)
 print("-" * 64, flush=True)
 for group, r in results.items():
-    print(f"{group:<8s} {r['train']['base_expR']:+.4f}    {r['train']['sf_expR']:+.4f}    "
-          f"{r['test']['base_expR']:+.4f}    {r['test']['sf_expR']:+.4f}    "
-          f"{r['overfit_coef']:+.2f}", flush=True)
+    print(
+        f"{group:<8s} {r['train']['base_expR']:+.4f}    {r['train']['sf_expR']:+.4f}    "
+        f"{r['test']['base_expR']:+.4f}    {r['test']['sf_expR']:+.4f}    "
+        f"{r['overfit_coef']:+.2f}",
+        flush=True,
+    )
 
 print(f"\n结果已保存到: {OUTFILE}", flush=True)

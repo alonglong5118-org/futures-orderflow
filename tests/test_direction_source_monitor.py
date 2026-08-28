@@ -39,6 +39,7 @@ from direction_source_monitor import DivergenceTracker, divergence
 #  1. divergence
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDivergence(unittest.TestCase):
     """divergence 单笔方向一致性。"""
 
@@ -88,6 +89,7 @@ class TestDivergence(unittest.TestCase):
 #  2. DivergenceTracker
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDivergenceTracker(unittest.TestCase):
     """DivergenceTracker 滚动分歧率追踪。"""
 
@@ -123,7 +125,7 @@ class TestDivergenceTracker(unittest.TestCase):
         t = DivergenceTracker(window=10)
         # 7 次一致，3 次分歧 → 分歧率 = 0.3
         for _ in range(7):
-            t.update("rb", 50, 30)   # 一致
+            t.update("rb", 50, 30)  # 一致
         for _ in range(3):
             t.update("rb", 50, -30)  # 分歧
         s = t.summary()
@@ -168,7 +170,7 @@ class TestDivergenceTracker(unittest.TestCase):
         # 全 False（全分歧）→ 分歧率 = 1
         self.assertEqual(DivergenceTracker._rate([False, False]), 1.0)
         # 部分分歧
-        self.assertAlmostEqual(DivergenceTracker._rate([True, True, False]), 1/3, places=10)
+        self.assertAlmostEqual(DivergenceTracker._rate([True, True, False]), 1 / 3, places=10)
 
     def test_summary_fields_complete(self):
         """summary 字段齐全"""
@@ -195,8 +197,8 @@ class TestDivergenceTracker(unittest.TestCase):
     def test_zero_size_directionless_samples_ignored(self):
         """无方向的样本（divergence 返回 None）不计数"""
         t = DivergenceTracker(window=10)
-        t.update("rb", 0, 50)   # T_D=0 → None，不计入
-        t.update("rb", 50, 0)   # T_5m=0 → None，不计入
+        t.update("rb", 0, 50)  # T_D=0 → None，不计入
+        t.update("rb", 50, 0)  # T_5m=0 → None，不计入
         s = t.summary()
         self.assertEqual(s["n"], 0)
         self.assertIsNone(s["divergence_rate"])

@@ -25,6 +25,7 @@ R 口径与 perf_breakdown 一致：单笔 R = 净盈亏 / 计划风险额。
   3. 预生成所有随机索引，减少随机数生成开销
   4. 批量计算最大回撤，避免逐路径计算
 """
+
 from __future__ import annotations
 
 import json
@@ -34,10 +35,10 @@ import numpy as np
 
 import trade_journal as tj
 
-N_PATHS = 2000          # 模拟路径数
-DEFAULT_F = 0.02        # 单笔计划风险占权益比（2%）
-MIN_TRADES = 8          # 样本少于此数不做蒙特卡洛
-HORIZON_FLOOR = 25      # 至少向前模拟 25 笔
+N_PATHS = 2000  # 模拟路径数
+DEFAULT_F = 0.02  # 单笔计划风险占权益比（2%）
+MIN_TRADES = 8  # 样本少于此数不做蒙特卡洛
+HORIZON_FLOOR = 25  # 至少向前模拟 25 笔
 
 
 def _equity():
@@ -108,8 +109,7 @@ def _papertrack_r():
         return []
 
 
-def simulate(r_series=None, n_paths=N_PATHS, f=DEFAULT_F, horizon=None,
-             start_eq=100.0, seed=None):
+def simulate(r_series=None, n_paths=N_PATHS, f=DEFAULT_F, horizon=None, start_eq=100.0, seed=None):
     """对 R 序列做 bootstrap 重抽样，返回权益曲线分位带 + 终值/回撤分布。
 
     向量化版本：使用 numpy 矩阵运算同时生成所有路径。
@@ -123,49 +123,56 @@ def simulate(r_series=None, n_paths=N_PATHS, f=DEFAULT_F, horizon=None,
                 r_series = _pt
                 source = "papertrack"
     if len(r_series) < MIN_TRADES:
-        return {"ok": False,
-                "reason": f"已平仓样本仅 {len(r_series)} 笔（需≥{MIN_TRADES}）"
-                          f"，蒙特卡洛暂无意义，先多积几笔真实交易。",
-                "n_trades": len(r_series), "source": source, "bands": [], "terminal": {},
-                "maxdd": {}, "real_curve": r_series}
+        return {
+            "ok": False,
+            "reason": f"已平仓样本仅 {len(r_series)} 笔（需≥{MIN_TRADES}），蒙特卡洛暂无意义，先多积几笔真实交易。",
+            "n_trades": len(r_series),
+            "source": source,
+            "bands": [],
+            "terminal": {},
+            "maxdd": {},
+            "real_curve": r_series,
+        }
 
     rng = np.random.default_rng(seed)
     H = int(horizon) if horizon else max(HORIZON_FLOOR, len(r_series))
-    
+
     # 向量化 bootstrap：预生成所有路径的索引
     r_arr = np.array(r_series)
     n_r = len(r_arr)
     indices = rng.integers(0, n_r, size=(n_paths, H))
-    
+
     # 批量生成所有路径的 R 值
     path_R = r_arr[indices]  # shape: (n_paths, H)
-    
+
     # 向量化权益演化：eq_{t+1} = eq_t * (1 + R_t * f)
     growth = 1.0 + path_R * f  # shape: (n_paths, H)
     # 累积乘积得到权益路径
     paths_eq = np.empty((n_paths, H + 1))
     paths_eq[:, 0] = start_eq
     paths_eq[:, 1:] = start_eq * np.cumprod(growth, axis=1)
-    
+
     # 向量化计算每条路径的最大回撤
     peaks = np.maximum.accumulate(paths_eq, axis=1)
     drawdowns = (peaks - paths_eq) / np.maximum(peaks, 1e-10)
     maxdds = np.max(drawdowns, axis=1)
-    
+
     # 计算分位带：每一步在路径间取分位
     bands = []
     for step in range(H + 1):
         col = paths_eq[:, step]
         p5, p25, p50, p75, p95 = np.percentile(col, [5, 25, 50, 75, 95])
-        bands.append({
-            "step": step,
-            "p5": round(float(p5), 3),
-            "p25": round(float(p25), 3),
-            "p50": round(float(p50), 3),
-            "p75": round(float(p75), 3),
-            "p95": round(float(p95), 3),
-        })
-    
+        bands.append(
+            {
+                "step": step,
+                "p5": round(float(p5), 3),
+                "p25": round(float(p25), 3),
+                "p50": round(float(p50), 3),
+                "p75": round(float(p75), 3),
+                "p95": round(float(p95), 3),
+            }
+        )
+
     # 终值统计
     terminal_vals = paths_eq[:, -1]
     terminal = {
@@ -176,24 +183,24 @@ def simulate(r_series=None, n_paths=N_PATHS, f=DEFAULT_F, horizon=None,
         "prob_profit": round(float(np.mean(terminal_vals > start_eq)), 3),
         "prob_ruin": round(float(np.mean(terminal_vals < start_eq * 0.5)), 3),
     }
-    
+
     # 最大回撤统计
     maxdd = {
         "p50": round(float(np.percentile(maxdds, 50)) * 100, 2),
         "p95": round(float(np.percentile(maxdds, 95)) * 100, 2),
         "mean": round(float(np.mean(maxdds)) * 100, 2),
     }
-    
+
     # 历史真实累计 R 曲线
     real = []
     acc = 0.0
     for R in r_series:
         acc += R
         real.append(round(acc * f * start_eq + start_eq, 3))
-    
+
     win_rate = float(np.mean(r_arr > 0))
     avg_R = float(np.mean(r_arr))
-    
+
     return {
         "ok": True,
         "reason": "",
@@ -218,12 +225,14 @@ def print_report(rep):
     t = rep["terminal"]
     m = rep["maxdd"]
     print("=" * 64)
-    print(f"蒙特卡洛 · 来源 {rep.get('source','journal')} · 样本 {rep['n_trades']} 笔 · "
-          f"模拟 {rep['horizon']} 笔窗口 · 单笔风险 {rep['f']*100:.1f}%")
-    print(f"  胜率 {rep['win_rate']*100:.1f}% · 平均 R {rep['avg_R']:+.3f}")
+    print(
+        f"蒙特卡洛 · 来源 {rep.get('source', 'journal')} · 样本 {rep['n_trades']} 笔 · "
+        f"模拟 {rep['horizon']} 笔窗口 · 单笔风险 {rep['f'] * 100:.1f}%"
+    )
+    print(f"  胜率 {rep['win_rate'] * 100:.1f}% · 平均 R {rep['avg_R']:+.3f}")
     print("-" * 64)
     print(f"  终值(基准100)：p5={t['p5']}  p50={t['p50']}  p95={t['p95']}  均值={t['mean']}")
-    print(f"  盈利概率 {t['prob_profit']*100:.1f}% · 破产概率(腰斩) {t['prob_ruin']*100:.1f}%")
+    print(f"  盈利概率 {t['prob_profit'] * 100:.1f}% · 破产概率(腰斩) {t['prob_ruin'] * 100:.1f}%")
     print(f"  最大回撤：中位 {m['p50']:.1f}% · 95分位 {m['p95']:.1f}%")
     print("=" * 64)
 

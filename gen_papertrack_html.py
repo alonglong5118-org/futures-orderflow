@@ -10,6 +10,7 @@
     cd /Users/ken/WorkBuddy/futures-orderflow
     python3 gen_papertrack_html.py
 """
+
 import json
 import os
 
@@ -311,13 +312,17 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(html_doc)
     print("已生成面板:", OUT)
-    print("  KPI: 胜率 %.1f%%  期望R %+.3f  累计R %+.2f(等权)/%+.2f(加权)  已判定 %d / 待定 %d"
-          % (s.get("headline", {}).get("win_rate", 0) * 100,
-             s.get("headline", {}).get("expected_R", 0),
-             s.get("headline", {}).get("final_cum_R", 0),
-             s.get("headline", {}).get("final_cum_R_lotweighted", 0),
-             s.get("cumulative_done", 0),
-             s.get("pending_count", 0)))
+    print(
+        "  KPI: 胜率 %.1f%%  期望R %+.3f  累计R %+.2f(等权)/%+.2f(加权)  已判定 %d / 待定 %d"
+        % (
+            s.get("headline", {}).get("win_rate", 0) * 100,
+            s.get("headline", {}).get("expected_R", 0),
+            s.get("headline", {}).get("final_cum_R", 0),
+            s.get("headline", {}).get("final_cum_R_lotweighted", 0),
+            s.get("cumulative_done", 0),
+            s.get("pending_count", 0),
+        )
+    )
 
 
 if __name__ == "__main__":

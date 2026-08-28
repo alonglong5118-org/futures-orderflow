@@ -14,6 +14,7 @@ four_dim_papertrack.py · 四维策略模拟盘「真实回测」复盘器
 
 输出：papertrack_report.json
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -31,8 +32,7 @@ SIGNALS_JSON = os.path.join(HERE, "four_dim_signals.json")
 REPORT_JSON = os.path.join(HERE, "papertrack_report.json")
 
 SIGNAL_TYPE = "建仓"
-DIRECTION_MAP = {"多": "long", "long": "long", "buy": "long",
-                 "空": "short", "short": "short", "sell": "short"}
+DIRECTION_MAP = {"多": "long", "long": "long", "buy": "long", "空": "short", "short": "short", "sell": "short"}
 
 # ── 换月/跳空 跳空识别（P0-2）────────────────────────────────────────────
 # 主连日线在合约换月处会出现巨大"展期缺口"（旧合约收盘→新合约开盘的跳变），
@@ -58,13 +58,15 @@ def bars_to_records(df: "pd.DataFrame") -> list:
         return []
     recs = []
     for ts, row in df.iterrows():
-        recs.append([
-            pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S"),
-            round(float(row["open"]), 4),
-            round(float(row["high"]), 4),
-            round(float(row["low"]), 4),
-            round(float(row["close"]), 4),
-        ])
+        recs.append(
+            [
+                pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S"),
+                round(float(row["open"]), 4),
+                round(float(row["high"]), 4),
+                round(float(row["low"]), 4),
+                round(float(row["close"]), 4),
+            ]
+        )
     return recs[:BARS_SNAPSHOT_MAX]
 
 
@@ -76,19 +78,27 @@ def records_to_bars(recs: list) -> "pd.DataFrame | None":
     for r in recs:
         try:
             idx.append(pd.Timestamp(r[0]))
-            o.append(float(r[1])); h.append(float(r[2]))
-            l.append(float(r[3])); c.append(float(r[4]))
+            o.append(float(r[1]))
+            h.append(float(r[2]))
+            l.append(float(r[3]))
+            c.append(float(r[4]))
         except Exception:
             continue
     if not idx:
         return None
-    return pd.DataFrame({"open": o, "high": h, "low": l, "close": c},
-                        index=pd.DatetimeIndex(idx))
+    return pd.DataFrame({"open": o, "high": h, "low": l, "close": c}, index=pd.DatetimeIndex(idx))
 
 
 def sig_id(s: dict) -> str:
-    key = (s.get("symbol"), s.get("time"), s.get("price"),
-           s.get("direction"), s.get("stop"), s.get("target"), s.get("lots"))
+    key = (
+        s.get("symbol"),
+        s.get("time"),
+        s.get("price"),
+        s.get("direction"),
+        s.get("stop"),
+        s.get("target"),
+        s.get("lots"),
+    )
     raw = json.dumps(key, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -159,16 +169,25 @@ def _load_live_bars(symbol):
                 dt = pd.to_datetime(b["date"])
             except Exception:
                 continue
-            rows.append((dt, float(b["open"]), float(b["high"]),
-                         float(b["low"]), float(b["close"]),
-                         float(b.get("volume", 0)), float(b.get("oi", 0))))
+            rows.append(
+                (
+                    dt,
+                    float(b["open"]),
+                    float(b["high"]),
+                    float(b["low"]),
+                    float(b["close"]),
+                    float(b.get("volume", 0)),
+                    float(b.get("oi", 0)),
+                )
+            )
         if not rows:
             return None
         idx = pd.DatetimeIndex([r[0] for r in rows])
         df = pd.DataFrame(
             [[r[1], r[2], r[3], r[4], r[5], r[6]] for r in rows],
             columns=["open", "high", "low", "close", "volume", "oi"],
-            index=idx).sort_index()
+            index=idx,
+        ).sort_index()
         return df
     except Exception:
         return None
@@ -188,6 +207,7 @@ def _load_backtest_bars(symbol, signal_dt):
     except Exception:
         pass
     import four_dim_strategy as fd
+
     # 1) 本地 5m 缓存（code 用基础符号，load_min5 自动补 0 → _FG0_min5.csv）
     try:
         code = symbol.upper()
@@ -225,7 +245,13 @@ def backtest_signal(p: dict, bars=None, gran=None) -> dict:
     if bars is None:
         bars, gran = _load_backtest_bars(symbol, sdt)
     if bars is None or len(bars) < 1:
-        return {"outcome": None, "R": 0.0, "holding_bars": 0, "gran": gran if gran is not None else None, "status": "pending"}
+        return {
+            "outcome": None,
+            "R": 0.0,
+            "holding_bars": 0,
+            "gran": gran if gran is not None else None,
+            "status": "pending",
+        }
     direction = p["direction"]
     target, stop = p["target"], p["stop"]
     stop_dist = abs(stop - p["entry"]) or 1e-9
@@ -237,8 +263,7 @@ def backtest_signal(p: dict, bars=None, gran=None) -> dict:
     prev_close = float(bars.iloc[0]["close"]) if len(bars) > 0 else None
     roll_skipped = 0
     for i, (_, row) in enumerate(seq.iterrows()):
-        o, hi, lo, c = (float(row["open"]), float(row["high"]),
-                        float(row["low"]), float(row["close"]))
+        o, hi, lo, c = (float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"]))
         # ── 换月跳空识别（P0-2）──
         # 首根(seq[0])即入场根，其开盘跳变是真实入場缺口，不跳過；
         # 后续根若开盘相对前收出现超阈值跳变，视为展期/涨跌停缺口，跳过本根判定。
@@ -255,27 +280,58 @@ def backtest_signal(p: dict, bars=None, gran=None) -> dict:
             hit_t, hit_s = lo <= target, hi >= stop
         if hit_t and hit_s:
             # 同根双触：保守判止损（止损更近者先触发）
-            return {"outcome": "loss", "R": -1.0, "holding_bars": i + 1,
-                    "gran": gran, "status": "done", "roll_skipped": roll_skipped}
+            return {
+                "outcome": "loss",
+                "R": -1.0,
+                "holding_bars": i + 1,
+                "gran": gran,
+                "status": "done",
+                "roll_skipped": roll_skipped,
+            }
         if hit_t:
-            return {"outcome": "win", "R": p["target_R"], "holding_bars": i + 1,
-                    "gran": gran, "status": "done", "roll_skipped": roll_skipped}
+            return {
+                "outcome": "win",
+                "R": p["target_R"],
+                "holding_bars": i + 1,
+                "gran": gran,
+                "status": "done",
+                "roll_skipped": roll_skipped,
+            }
         if hit_s:
-            return {"outcome": "loss", "R": -1.0, "holding_bars": i + 1,
-                    "gran": gran, "status": "done", "roll_skipped": roll_skipped}
+            return {
+                "outcome": "loss",
+                "R": -1.0,
+                "holding_bars": i + 1,
+                "gran": gran,
+                "status": "done",
+                "roll_skipped": roll_skipped,
+            }
         prev_close = c
     # 遍历完仍未触达：仍持仓或数据不足
-    return {"outcome": None, "R": 0.0, "holding_bars": len(seq), "gran": gran,
-            "status": "pending", "roll_skipped": roll_skipped}
+    return {
+        "outcome": None,
+        "R": 0.0,
+        "holding_bars": len(seq),
+        "gran": gran,
+        "status": "pending",
+        "roll_skipped": roll_skipped,
+    }
 
 
 def aggregate(trades, key_R, key_outcome) -> dict:
     total = len(trades)
     if total == 0:
-        return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
-                "expected_R": 0.0, "max_consecutive_losses": 0,
-                "consecutive_loss_warning": False,
-                "final_cum_R": 0.0, "final_cum_R_lotweighted": 0.0}
+        return {
+            "total": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "expected_R": 0.0,
+            "max_consecutive_losses": 0,
+            "consecutive_loss_warning": False,
+            "final_cum_R": 0.0,
+            "final_cum_R_lotweighted": 0.0,
+        }
     wins = [t for t in trades if t[key_outcome] == "win"]
     losses = [t for t in trades if t[key_outcome] == "loss"]
     win_rate = len(wins) / total
@@ -283,14 +339,18 @@ def aggregate(trades, key_R, key_outcome) -> dict:
     max_run = cur = 0
     for t in trades:
         if t[key_outcome] == "loss":
-            cur += 1; max_run = max(max_run, cur)
+            cur += 1
+            max_run = max(max_run, cur)
         else:
             cur = 0
     cum_R = sum(t[key_R] for t in trades)
     cum_R_lw = sum(t[key_R] * (t["lots"] or 1) for t in trades)
     return {
-        "total": total, "wins": len(wins), "losses": len(losses),
-        "win_rate": round(win_rate, 4), "expected_R": round(expected_R, 4),
+        "total": total,
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": round(win_rate, 4),
+        "expected_R": round(expected_R, 4),
         "max_consecutive_losses": max_run,
         "consecutive_loss_warning": max_run >= 3,
         "final_cum_R": round(cum_R, 4),
@@ -305,8 +365,7 @@ def _by_symbol(trades):
     return {s: aggregate(v, "R", "outcome") for s, v in out.items()}
 
 
-def compute_symbol_gates(window_n: int = 10, min_trades: int = 5,
-                         breakeven_wr: float = 1/3):
+def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: float = 1 / 3):
     """基于 papertrack_report.json 中已判定交易，算每个品种的「近期表现门槛」。
     取每个品种最近 window_n 笔已判定交易：
       · 笔数 < min_trades            → 样本不足，不门控（保守，允许发信号）
@@ -329,8 +388,14 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5,
         recent = ts[-window_n:]
         n = len(recent)
         if n < min_trades:
-            gates[sym] = {"gated": False, "n": n, "win_rate": None,
-                          "cum_R": None, "reason": "样本不足", "last_time": ts[-1].get("time")}
+            gates[sym] = {
+                "gated": False,
+                "n": n,
+                "win_rate": None,
+                "cum_R": None,
+                "reason": "样本不足",
+                "last_time": ts[-1].get("time"),
+            }
             continue
         wins = sum(1 for t in recent if t.get("outcome") == "win")
         wr = wins / n
@@ -338,11 +403,13 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5,
         gated = (wr < breakeven_wr) or (cum_R < 0)
         reason = []
         if wr < breakeven_wr:
-            reason.append(f"胜率{wr*100:.0f}%<{breakeven_wr*100:.0f}%")
+            reason.append(f"胜率{wr * 100:.0f}%<{breakeven_wr * 100:.0f}%")
         if cum_R < 0:
             reason.append(f"累计R{cum_R:+.2f}<0")
         gates[sym] = {
-            "gated": gated, "n": n, "win_rate": round(wr, 3),
+            "gated": gated,
+            "n": n,
+            "win_rate": round(wr, 3),
             "cum_R": round(cum_R, 3),
             "reason": "；".join(reason) if reason else "正常",
             "last_time": ts[-1].get("time"),
@@ -357,9 +424,12 @@ def backfill_snapshots(trades: list) -> int:
     仅附快照、绝不改动已固化 outcome/R（历史成绩神圣不可变）。
     返回成功补拍的交易数。"""
     # 需要补拍：缺快照 / 快照不足(<3根) / 之前退化为近似(approx)
-    need = [t for t in trades if t.get("status") == "done"
-            and (not t.get("backtest_bars") or len(t.get("backtest_bars", [])) < 3
-                 or t.get("snapshot_approx"))]
+    need = [
+        t
+        for t in trades
+        if t.get("status") == "done"
+        and (not t.get("backtest_bars") or len(t.get("backtest_bars", [])) < 3 or t.get("snapshot_approx"))
+    ]
     if not need:
         return 0
     done = 0
@@ -395,10 +465,11 @@ def backfill_snapshots(trades: list) -> int:
 #   · F(基本面)/C(资金面) 用当前快照重建（信号时刻基本面/龙虎榜已不可得）→ 近似, 标注 reconstructed
 # 仅附维度分、绝不改动 outcome/R；无维度分的交易自然排除在归因之外。
 def backfill_subscores(trades: list) -> int:
-    need = [t for t in trades
-            if t.get("status") == "done"
-            and (t.get("F_bias") is None or t.get("T_5m") is None
-                 or t.get("C_score") is None)]
+    need = [
+        t
+        for t in trades
+        if t.get("status") == "done" and (t.get("F_bias") is None or t.get("T_5m") is None or t.get("C_score") is None)
+    ]
     if not need:
         return 0
     daily_cache = {}
@@ -419,13 +490,12 @@ def backfill_subscores(trades: list) -> int:
         # 关键：用向后日线窗口(≤信号日)重建 T_D；不传5m → pipeline 退化为 T_D，忠实还原信号时刻技术偏置
         try:
             date_str = sdt.strftime("%Y%m%d")
-            pipe = _fds.pipeline(sym, dfd, None, _fds.DEFAULT_CONFIG,
-                                 date=date_str, c_override=None)
+            pipe = _fds.pipeline(sym, dfd, None, _fds.DEFAULT_CONFIG, date=date_str, c_override=None)
         except Exception:
             continue
         t["F_bias"] = pipe.get("F")
         t["T_D"] = pipe.get("T_D")
-        t["T_5m"] = pipe.get("T_5m")   # 重建下 == T_D（向后日线窗口）
+        t["T_5m"] = pipe.get("T_5m")  # 重建下 == T_D（向后日线窗口）
         t["C_score"] = pipe.get("C")
         t["subscores_reconstructed"] = True
         done += 1
@@ -491,12 +561,15 @@ def compute_attribution(trades: list) -> dict:
         denom_ag = aw + al
         denom_op = wo + wlo
         stats[key] = {
-            "label": DIM_LABELS[key], "weight": w, "n_voted": n_voted,
+            "label": DIM_LABELS[key],
+            "weight": w,
+            "n_voted": n_voted,
             "agreement_rate": round(n_agree / n_voted, 4) if n_voted else None,
             "win_if_agree": round(aw / denom_ag, 4) if denom_ag else None,
             "win_if_oppose": round(wo / denom_op, 4) if denom_op else None,
             "attr_R": round(attr_R, 3),
-            "attr_wins": aw, "attr_losses": al,
+            "attr_wins": aw,
+            "attr_losses": al,
             "attr_R_per_trade": round(attr_R / n_voted, 4) if n_voted else None,
         }
     # G 合成偏置（参考维）
@@ -518,14 +591,16 @@ def compute_attribution(trades: list) -> dict:
                 g_al += 1
     g_denom = g_aw + g_al
     gstat = {
-        "label": "合成偏置(G)", "weight": 1.0, "n_voted": g_voted,
+        "label": "合成偏置(G)",
+        "weight": 1.0,
+        "n_voted": g_voted,
         "agreement_rate": round(g_agree / g_voted, 4) if g_voted else None,
         "win_if_agree": round(g_aw / g_denom, 4) if g_denom else None,
         "attr_R": None,  # G 不计入R归因和
     }
     return {
         "overall_win_rate": overall_wr,
-        "dims": stats,   # F / T / C
+        "dims": stats,  # F / T / C
         "G": gstat,
     }
 
@@ -555,7 +630,7 @@ def main():
     else:
         report = {"trades": [], "scored_ids": []}
 
-    already = set(report.get("scored_ids", []))   # 仅记录已判定(done)的信号 id
+    already = set(report.get("scored_ids", []))  # 仅记录已判定(done)的信号 id
     trades = list(report.get("trades", []))
 
     with open(SIGNALS_JSON, "r", encoding="utf-8") as f:
@@ -575,11 +650,11 @@ def main():
         bars, gran = _load_backtest_bars(p["symbol"], pd.to_datetime(p["time"]))
         if bars is None or len(bars) < 1:
             pending_count += 1
-            continue   # 数据不足，下次自动重评
+            continue  # 数据不足，下次自动重评
         bt = backtest_signal(p, bars=bars, gran=gran)
         if bt["status"] == "pending":
             pending_count += 1
-            continue   # 不计入，下次数据更充足后自动重评
+            continue  # 不计入，下次数据更充足后自动重评
         p["outcome"] = bt["outcome"]
         p["R"] = bt["R"]
         p["holding_bars"] = bt["holding_bars"]
@@ -592,7 +667,7 @@ def main():
         already.add(p["id"])
 
     trades.extend(new_trades)
-    trades.sort(key=lambda t: (t["time"] or ""))
+    trades.sort(key=lambda t: t["time"] or "")
 
     # 确定性：为历史缺快照的交易补拍(仅附快照,不改 outcome) → 全报告可复现
     n_backfill = backfill_snapshots(trades)
@@ -628,14 +703,21 @@ def main():
     for i, t in enumerate(trades, 1):
         cum_R += t["R"]
         cum_R_lw += t["R"] * (t["lots"] or 1)
-        equity_curve.append({
-            "idx": i, "time": t["time"], "symbol": t["symbol"],
-            "outcome": t["outcome"], "R": t["R"], "lots": t["lots"],
-            "target_R": t["target_R"], "holding_bars": t["holding_bars"],
-            "gran": t.get("gran"),
-            "cum_R": round(cum_R, 4),
-            "cum_R_lotweighted": round(cum_R_lw, 4),
-        })
+        equity_curve.append(
+            {
+                "idx": i,
+                "time": t["time"],
+                "symbol": t["symbol"],
+                "outcome": t["outcome"],
+                "R": t["R"],
+                "lots": t["lots"],
+                "target_R": t["target_R"],
+                "holding_bars": t["holding_bars"],
+                "gran": t.get("gran"),
+                "cum_R": round(cum_R, 4),
+                "cum_R_lotweighted": round(cum_R_lw, 4),
+            }
+        )
 
     report = {
         "meta": {
@@ -656,7 +738,8 @@ def main():
             "headline": {
                 "expected_R": agg["expected_R"],
                 "win_rate": agg["win_rate"],
-                "wins": agg["wins"], "losses": agg["losses"],
+                "wins": agg["wins"],
+                "losses": agg["losses"],
                 "max_consecutive_losses": agg["max_consecutive_losses"],
                 "consecutive_loss_warning": agg["consecutive_loss_warning"],
                 "final_cum_R": agg["final_cum_R"],
@@ -685,14 +768,16 @@ def main():
     print(f"换月跳空跳过   : {s['roll_skipped_total']} 根 (P0-2 修复后剔除的展期伪触发)")
     print(f"累计已判定     : {s['cumulative_done']}")
     print(f"真实期望R      : {h['expected_R']:+.4f}")
-    print(f"真实胜率       : {h['win_rate']*100:.1f}%")
-    print(f"盈亏平衡胜率   : {s['breakeven_required_winrate']*100:.1f}%")
+    print(f"真实胜率       : {h['win_rate'] * 100:.1f}%")
+    print(f"盈亏平衡胜率   : {s['breakeven_required_winrate'] * 100:.1f}%")
     print(f"连续亏损(最长) : {h['max_consecutive_losses']} -> 预警={h['consecutive_loss_warning']}")
     print(f"累计R(等权)    : {h['final_cum_R']:+.2f}")
     print(f"累计R(手数加权): {h['final_cum_R_lotweighted']:+.2f}")
     print("按品种:")
     for sym, b in sorted(by_sym.items()):
-        print(f"  {sym:>4s}: n={b['total']:>3d} 胜率{b['win_rate']*100:5.1f}% 期望R{b['expected_R']:+.3f} 连亏{b['max_consecutive_losses']}")
+        print(
+            f"  {sym:>4s}: n={b['total']:>3d} 胜率{b['win_rate'] * 100:5.1f}% 期望R{b['expected_R']:+.3f} 连亏{b['max_consecutive_losses']}"
+        )
     # P1-3 四维盈亏归因
     att = s.get("attribution") or {}
     if att:
@@ -704,12 +789,16 @@ def main():
             d = dims.get(key, {})
             if not d:
                 continue
-            print(f"{d['label']:<14s}{d['n_voted']:>7d}{(d['agreement_rate'] or 0):>8.1%}"
-                  f"{(d['win_if_agree'] or 0):>11.1%}{d['attr_R']:>+9.2f}")
+            print(
+                f"{d['label']:<14s}{d['n_voted']:>7d}{(d['agreement_rate'] or 0):>8.1%}"
+                f"{(d['win_if_agree'] or 0):>11.1%}{d['attr_R']:>+9.2f}"
+            )
         g = att.get("G", {})
         if g:
-            print(f"{g['label']:<14s}{g['n_voted']:>7d}{(g['agreement_rate'] or 0):>8.1%}"
-                  f"{(g['win_if_agree'] or 0):>11.1%}{'—':>9s}(参考维)")
+            print(
+                f"{g['label']:<14s}{g['n_voted']:>7d}{(g['agreement_rate'] or 0):>8.1%}"
+                f"{(g['win_if_agree'] or 0):>11.1%}{'—':>9s}(参考维)"
+            )
         print(f"维度分重建     : {s.get('subscore_backfill', 0)} 笔历史交易 (T可复现, F/C近似)")
     print(f"报告已写入     : {REPORT_JSON}")
 

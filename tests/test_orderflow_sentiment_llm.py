@@ -52,6 +52,7 @@ from tick_orderflow import _side_from_tick
 #  1. _side_from_tick
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSideFromTick(unittest.TestCase):
     """_side_from_tick 主动买卖方向判定。"""
 
@@ -119,6 +120,7 @@ class TestSideFromTick(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. build_sentiment_daily
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBuildSentimentDaily(unittest.TestCase):
     """build_sentiment_daily 每日情绪快照。"""
@@ -238,6 +240,7 @@ class TestBuildSentimentDaily(unittest.TestCase):
 #  3. _build_llm_prompt
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBuildLLMPrompt(unittest.TestCase):
     """_build_llm_prompt LLM 提示词构造。"""
 
@@ -282,11 +285,7 @@ class TestBuildLLMPrompt(unittest.TestCase):
 
     def test_returns_nonempty_string(self):
         """返回非空字符串"""
-        result = _build_llm_prompt(
-            {"reason": "测试"},
-            {"T_5m": 30, "regime": "趋势"},
-            ["技术面做多", "基本面偏多"]
-        )
+        result = _build_llm_prompt({"reason": "测试"}, {"T_5m": 30, "regime": "趋势"}, ["技术面做多", "基本面偏多"])
         self.assertIsInstance(result, str)
         self.assertGreater(len(result), 50)
 

@@ -6,6 +6,7 @@
 3. 两者都调（当前方案）
 4. 基准（纯 ATR）
 """
+
 import json
 import math
 import os
@@ -55,7 +56,7 @@ def walk_forward_sr_mode(symbol, mode="both", tail=400, min_bars=60, cooldown_ba
     last_trade_i = -999
 
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         current_price = float(df["close"].iloc[i])
 
         sr_result = None
@@ -84,8 +85,7 @@ def walk_forward_sr_mode(symbol, mode="both", tail=400, min_bars=60, cooldown_ba
             dir_T = pipe["dir_T"]
 
             # 先算基础出场
-            ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], DEFAULT_CONFIG,
-                           sr_result=None)
+            ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], DEFAULT_CONFIG, sr_result=None)
 
             # 根据模式选择性调整
             if mode != "none" and sr_result and sr_result.get("levels"):
@@ -123,27 +123,35 @@ def walk_forward_sr_mode(symbol, mode="both", tail=400, min_bars=60, cooldown_ba
                 if tail_active:
                     if dir_T > 0:
                         if lo <= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
                     else:
                         if hi >= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
                     continue
                 if dir_T > 0:
                     if lo <= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if hi >= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
                 else:
                     if hi >= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if lo <= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
             if exit_price is None:
                 exit_price, reason = float(df["close"].iloc[-1]), "期末平"
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
@@ -151,11 +159,15 @@ def walk_forward_sr_mode(symbol, mode="both", tail=400, min_bars=60, cooldown_ba
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
 
-            trades.append({
-                "dir": dir_T, "R_adj": round(R_adj, 3),
-                "reason": reason, "regime": pipe["regime"],
-                "stop_dist": round(sd, 2),
-            })
+            trades.append(
+                {
+                    "dir": dir_T,
+                    "R_adj": round(R_adj, 3),
+                    "reason": reason,
+                    "regime": pipe["regime"],
+                    "stop_dist": round(sd, 2),
+                }
+            )
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1
             continue
@@ -168,7 +180,8 @@ def walk_forward_sr_mode(symbol, mode="both", tail=400, min_bars=60, cooldown_ba
     wins = [r for r in Rs if r > 0]
 
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
         "trades": len(trades),
         "expR": round(float(np.mean(Rs)), 4),
         "win_rate": round(len(wins) / len(Rs), 3),
@@ -177,6 +190,7 @@ def walk_forward_sr_mode(symbol, mode="both", tail=400, min_bars=60, cooldown_ba
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--tail", type=int, default=400)
     args = parser.parse_args()
@@ -236,8 +250,9 @@ def main():
         delta_pct = (delta / abs(base_avg) * 100) if base_avg != 0 else 0
 
         label = mode_labels[mode]
-        print(f"{label:<16} {len(valid):>4} {improved:>4} {worsened:>4} {unchanged:>4} "
-              f"{avg:>+10.4f} {delta_pct:>+9.1f}%")
+        print(
+            f"{label:<16} {len(valid):>4} {improved:>4} {worsened:>4} {unchanged:>4} {avg:>+10.4f} {delta_pct:>+9.1f}%"
+        )
 
         summary[mode] = {
             "count": len(valid),

@@ -66,6 +66,7 @@ from discipline_review import _is_manual_record, _is_signal_backed, _parse_time,
 #  1. _parse_time
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseTime(unittest.TestCase):
     """_parse_time 时间字符串解析。"""
 
@@ -106,6 +107,7 @@ class TestParseTime(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. _period_bounds
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPeriodBounds(unittest.TestCase):
     """_period_bounds 周期边界计算。"""
@@ -177,6 +179,7 @@ class TestPeriodBounds(unittest.TestCase):
 #  3. _is_signal_backed
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsSignalBacked(unittest.TestCase):
     """_is_signal_backed 信号关联校验。"""
 
@@ -236,6 +239,7 @@ class TestIsSignalBacked(unittest.TestCase):
 #  4. _is_manual_record
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsManualRecord(unittest.TestCase):
     """_is_manual_record 手动记录判断。"""
 
@@ -281,6 +285,7 @@ class TestIsManualRecord(unittest.TestCase):
 #  5. sym_from_cache
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSymFromCache(unittest.TestCase):
     """sym_from_cache 缓存文件名提取品种。"""
 
@@ -309,6 +314,7 @@ class TestSymFromCache(unittest.TestCase):
 #  6. sym_from_std
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSymFromStd(unittest.TestCase):
     """sym_from_std 标准文件名提取品种。"""
 
@@ -334,6 +340,7 @@ class TestSymFromStd(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  7. to_key
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestToKey(unittest.TestCase):
     """to_key 品种名标准化。"""
@@ -365,6 +372,7 @@ class TestToKey(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  8. _risk_amount
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskAmount(unittest.TestCase):
     """_risk_amount 风险金额计算。"""

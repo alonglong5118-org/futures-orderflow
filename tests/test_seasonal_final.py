@@ -46,6 +46,7 @@ from self_check import _safe_load
 #  1. seasonal_f
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSeasonalF(unittest.TestCase):
     """seasonal_f 品种季节性打分。"""
 
@@ -138,6 +139,7 @@ class TestSeasonalF(unittest.TestCase):
 #  2. _today_str
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestTodayStr(unittest.TestCase):
     """_today_str 今日日期字符串。"""
 
@@ -160,6 +162,7 @@ class TestTodayStr(unittest.TestCase):
 #  3. _safe_load
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSafeLoad(unittest.TestCase):
     """_safe_load 安全加载 JSON。"""
 
@@ -171,9 +174,7 @@ class TestSafeLoad(unittest.TestCase):
 
     def test_valid_json(self):
         """正常 JSON → (dict, None)"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
             json.dump({"key": "value", "num": 42}, f)
             path = f.name
         try:
@@ -187,9 +188,7 @@ class TestSafeLoad(unittest.TestCase):
 
     def test_corrupted_json(self):
         """损坏 JSON → (None, 错误信息)"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
             f.write("{not valid json}")
             path = f.name
         try:

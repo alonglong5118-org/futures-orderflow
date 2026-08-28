@@ -83,6 +83,7 @@ N_RANDOM = 200
 #  一、Kelly 因子属性测试
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestKellyProperty(unittest.TestCase):
     """Kelly 因子属性测试。"""
 
@@ -100,10 +101,10 @@ class TestKellyProperty(unittest.TestCase):
 
             result = compute_kelly_factor(edge, k_min, k_max, target, near)
             # 结果应该在 [0, max(k_min, k_max)+0.1] 范围内
-            self.assertGreaterEqual(result, 0.0,
-                                    f"edge={edge}, result={result}")
-            self.assertLessEqual(result, max(k_min, k_max) + 0.01,
-                                 f"edge={edge}, result={result}, k_max={max(k_min,k_max)}")
+            self.assertGreaterEqual(result, 0.0, f"edge={edge}, result={result}")
+            self.assertLessEqual(
+                result, max(k_min, k_max) + 0.01, f"edge={edge}, result={result}, k_max={max(k_min, k_max)}"
+            )
 
     def test_monotonic_increasing(self):
         """属性：edge 越大，结果越大（单调非递减）"""
@@ -119,8 +120,7 @@ class TestKellyProperty(unittest.TestCase):
             r1 = compute_kelly_factor(e1, k_min, k_max, target, near)
             r2 = compute_kelly_factor(e2, k_min, k_max, target, near)
 
-            self.assertGreaterEqual(r2, r1 - 1e-9,
-                                    f"e1={e1}→{r1}, e2={e2}→{r2} (should be non-decreasing)")
+            self.assertGreaterEqual(r2, r1 - 1e-9, f"e1={e1}→{r1}, e2={e2}→{r2} (should be non-decreasing)")
 
     def test_negative_near_caps_at_1(self):
         """属性：近景负时，结果 ≤ 1.0"""
@@ -129,8 +129,7 @@ class TestKellyProperty(unittest.TestCase):
             near = random.uniform(-5, -0.01)
 
             result = compute_kelly_factor(edge, cur_full_expR=near)
-            self.assertLessEqual(result, 1.0 + 1e-9,
-                                 f"edge={edge}, near={near}, result={result}")
+            self.assertLessEqual(result, 1.0 + 1e-9, f"edge={edge}, near={near}, result={result}")
 
     def test_positive_near_allows_above_1(self):
         """属性：近景正 + edge 足够大 → 结果可以 > 1.0"""
@@ -146,8 +145,7 @@ class TestKellyProperty(unittest.TestCase):
 
             result = compute_kelly_factor(0.0, k_min, k_max)
             expected = min(k_min, 1.0)
-            self.assertAlmostEqual(result, expected, places=10,
-                                   msg=f"k_min={k_min}")
+            self.assertAlmostEqual(result, expected, places=10, msg=f"k_min={k_min}")
 
     def test_negative_edge_same_as_zero(self):
         """属性：负 edge 和 edge=0 结果相同"""
@@ -155,8 +153,7 @@ class TestKellyProperty(unittest.TestCase):
             neg_edge = random.uniform(-5, -0.001)
             r_neg = compute_kelly_factor(neg_edge)
             r_zero = compute_kelly_factor(0.0)
-            self.assertAlmostEqual(r_neg, r_zero, places=10,
-                                   msg=f"neg_edge={neg_edge}")
+            self.assertAlmostEqual(r_neg, r_zero, places=10, msg=f"neg_edge={neg_edge}")
 
     def test_param_swap_symmetry(self):
         """属性：k_min 和 k_max 交换后结果相同"""
@@ -167,8 +164,7 @@ class TestKellyProperty(unittest.TestCase):
 
             r_normal = compute_kelly_factor(edge, a, b)
             r_swapped = compute_kelly_factor(edge, b, a)
-            self.assertAlmostEqual(r_normal, r_swapped, places=10,
-                                   msg=f"a={a}, b={b}")
+            self.assertAlmostEqual(r_normal, r_swapped, places=10, msg=f"a={a}, b={b}")
 
     def test_none_edge_returns_one(self):
         """属性：edge=None → 1.0（各种参数组合下）"""
@@ -182,6 +178,7 @@ class TestKellyProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  二、tanh 归一化属性测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTanhProperty(unittest.TestCase):
     """tanh 归一化属性测试。"""
@@ -197,8 +194,7 @@ class TestTanhProperty(unittest.TestCase):
 
             result_pos = _norm_tanh(x, scale)
             result_neg = _norm_tanh(-x, scale)
-            self.assertAlmostEqual(result_neg, -result_pos, places=10,
-                                   msg=f"x={x}, scale={scale}")
+            self.assertAlmostEqual(result_neg, -result_pos, places=10, msg=f"x={x}, scale={scale}")
 
     def test_bounded_by_1(self):
         """属性：|f(x)| ≤ 1"""
@@ -207,8 +203,7 @@ class TestTanhProperty(unittest.TestCase):
             scale = random.uniform(0.01, 100)
 
             result = _norm_tanh(x, scale)
-            self.assertLessEqual(abs(result), 1.0 + 1e-12,
-                                 f"x={x}, scale={scale}, result={result}")
+            self.assertLessEqual(abs(result), 1.0 + 1e-12, f"x={x}, scale={scale}, result={result}")
 
     def test_monotonic_non_decreasing(self):
         """属性：x 越大，f(x) 越大或相等（非递减）"""
@@ -219,8 +214,7 @@ class TestTanhProperty(unittest.TestCase):
 
             r1 = _norm_tanh(x1, scale)
             r2 = _norm_tanh(x2, scale)
-            self.assertGreaterEqual(r2, r1,
-                                    f"x1={x1}→{r1}, x2={x2}→{r2}, scale={scale}")
+            self.assertGreaterEqual(r2, r1, f"x1={x1}→{r1}, x2={x2}→{r2}, scale={scale}")
 
     def test_zero_input_zero_output(self):
         """属性：x=0 → 0"""
@@ -256,13 +250,13 @@ class TestTanhProperty(unittest.TestCase):
 
             r1 = _norm_tanh(x, s1)
             r2 = _norm_tanh(x, s2)
-            self.assertGreater(r1, r2,
-                               f"x={x}, s1={s1}→{r1}, s2={s2}→{r2}")
+            self.assertGreater(r1, r2, f"x={x}, s1={s1}→{r1}, s2={s2}→{r2}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  三、月份运算属性测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestMonthArithmeticProperty(unittest.TestCase):
     """月份运算属性测试。"""
@@ -314,8 +308,7 @@ class TestMonthArithmeticProperty(unittest.TestCase):
 
             result1 = _add_months(_add_months(ym, m1), m2)
             result2 = _add_months(ym, m1 + m2)
-            self.assertEqual(result1, result2,
-                             f"ym={ym}, m1={m1}, m2={m2}")
+            self.assertEqual(result1, result2, f"ym={ym}, m1={m1}, m2={m2}")
 
     def test_zero_months_identity(self):
         """属性：加 0 个月 = 不变"""
@@ -343,6 +336,7 @@ class TestMonthArithmeticProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  四、解析函数属性测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestParseProperty(unittest.TestCase):
     """解析函数属性测试。"""
@@ -382,8 +376,7 @@ class TestParseProperty(unittest.TestCase):
 
             v1 = _to_num(s_normal)
             v2 = _to_num(with_comma)
-            self.assertAlmostEqual(v1, v2, places=2,
-                                   msg=f"normal={s_normal}, comma={with_comma}")
+            self.assertAlmostEqual(v1, v2, places=2, msg=f"normal={s_normal}, comma={with_comma}")
 
     def test_to_num_whitespace_invariant(self):
         """属性：前后空格不改变数值"""
@@ -417,6 +410,7 @@ class TestParseProperty(unittest.TestCase):
 #  五、季节性属性测试
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSeasonalProperty(unittest.TestCase):
     """季节性属性测试。"""
 
@@ -444,8 +438,7 @@ class TestSeasonalProperty(unittest.TestCase):
     def test_invalid_date_returns_zero(self):
         """属性：非法日期 → 0.0"""
         for _ in range(50):
-            s = "".join(random.choice(string.ascii_letters + string.digits)
-                         for _ in range(random.randint(0, 20)))
+            s = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(0, 20)))
             result = seasonal_f("jd", s)
             # 可能是 0.0 或 0（int）
             self.assertEqual(result, 0)
@@ -454,6 +447,7 @@ class TestSeasonalProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  六、风险闸门属性测试
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRiskGateProperty(unittest.TestCase):
     """风险闸门属性测试。"""
@@ -469,8 +463,7 @@ class TestRiskGateProperty(unittest.TestCase):
             atr = random.uniform(1, price * 0.1)
 
             result = risk_gate(self.symbol, price, atr, cfg=DEFAULT_CONFIG)
-            self.assertGreaterEqual(result["N_plan"], 0,
-                                    f"price={price}, atr={atr}")
+            self.assertGreaterEqual(result["N_plan"], 0, f"price={price}, atr={atr}")
 
     def test_n_plan_le_n_risk(self):
         """属性：N_plan <= N_risk（仓位约束）"""
@@ -479,8 +472,9 @@ class TestRiskGateProperty(unittest.TestCase):
             atr = random.uniform(1, price * 0.1)
 
             result = risk_gate(self.symbol, price, atr, cfg=DEFAULT_CONFIG)
-            self.assertLessEqual(result["N_plan"], result["N_risk"],
-                                 f"N_plan={result['N_plan']} > N_risk={result['N_risk']}")
+            self.assertLessEqual(
+                result["N_plan"], result["N_risk"], f"N_plan={result['N_plan']} > N_risk={result['N_risk']}"
+            )
 
     def test_n_plan_le_n_margin(self):
         """属性：N_plan <= N_margin（保证金约束）"""
@@ -489,8 +483,9 @@ class TestRiskGateProperty(unittest.TestCase):
             atr = random.uniform(1, price * 0.1)
 
             result = risk_gate(self.symbol, price, atr, cfg=DEFAULT_CONFIG)
-            self.assertLessEqual(result["N_plan"], result["N_margin"],
-                                 f"N_plan={result['N_plan']} > N_margin={result['N_margin']}")
+            self.assertLessEqual(
+                result["N_plan"], result["N_margin"], f"N_plan={result['N_plan']} > N_margin={result['N_margin']}"
+            )
 
     def test_stop_pts_positive(self):
         """属性：stop_pts > 0（正 ATR 下）"""
@@ -526,6 +521,7 @@ class TestRiskGateProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  七、模糊测试（鲁棒性）
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFuzzRobustness(unittest.TestCase):
     """模糊测试：验证函数在随机/极端输入下的鲁棒性。"""
@@ -630,8 +626,7 @@ class TestFuzzRobustness(unittest.TestCase):
                 "signal_id": self._random_string(10),
                 "symbol": self._random_string(5),
             }
-            sig_map = {self._random_string(8): {"symbol": self._random_string(5)}
-                       for _ in range(random.randint(0, 5))}
+            sig_map = {self._random_string(8): {"symbol": self._random_string(5)} for _ in range(random.randint(0, 5))}
             try:
                 result = _is_signal_backed(trade, sig_map)
                 self.assertIsInstance(result, bool)

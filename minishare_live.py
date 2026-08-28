@@ -25,6 +25,7 @@
   导致盯市价过时的问题）；contract_mode=fixed 时沿用 trade_config 写死的 contract
   （远月套保等固定场景）。未指定合约的品种（纯信号生成）才按中文名匹配到主连。
 """
+
 from __future__ import annotations
 
 import json
@@ -168,7 +169,8 @@ def _contract_ym(code):
     if not m:
         return None
     d = m.group(2)
-    yy = int(d[:2]); mm = int(d[2:])
+    yy = int(d[:2])
+    mm = int(d[2:])
     yy += 2000 if yy < 70 else 1900
     return yy * 100 + mm
 
@@ -212,6 +214,7 @@ def _authoritative_contracts():
             out[sym] = normalize_contract_code(ctr)
     return out
 
+
 _poll_interval = 60
 BARS_CACHE = os.path.join(HERE, "live_bars.json")
 
@@ -231,6 +234,7 @@ def _api():
         return None, 60
     try:
         import minishare as m
+
         m.set_token(token)
         _poll_interval = iv
         return m.pro_api(), iv
@@ -262,14 +266,14 @@ class MinishareLiveFeed:
 
     def __init__(self):
         self.pro, self.iv = _api()
-        self.sym2code = {}       # sym → minishare ts_code（动态）
-        self.code2sym = {}       # ts_code → sym（反向）
+        self.sym2code = {}  # sym → minishare ts_code（动态）
+        self.code2sym = {}  # ts_code → sym（反向）
         self.last_snap = {}
         self.bars = {}
         self.last_bar_minute = {}
         self.flow = {}
-        self._mapped = False     # 是否已从 rt_fut_k 自动发现映射
-        self._prefix_top2 = {}   # prefix -> [主力, 次主力] 合约代码（防抖用）
+        self._mapped = False  # 是否已从 rt_fut_k 自动发现映射
+        self._prefix_top2 = {}  # prefix -> [主力, 次主力] 合约代码（防抖用）
         self._init_from_cache()
         self._auth = _authoritative_contracts()  # 生效交割合约映射（动态：主力/次主力/固定），供 poll 安全阀使用
         # 若已有持久化的主力合约缓存，启动时即应用（避免首轮 poll 前的空窗）
@@ -302,9 +306,12 @@ class MinishareLiveFeed:
             for sym, pos in positions.items():
                 if not (pos and int(pos.get("lots", 0) or 0) > 0):
                     continue
-                contract = (pos.get("contract")
-                            or MAIN_OVERRIDE.get(sym.lower()) or MAIN_OVERRIDE.get(sym)
-                            or specs.get(sym, {}).get("contract"))
+                contract = (
+                    pos.get("contract")
+                    or MAIN_OVERRIDE.get(sym.lower())
+                    or MAIN_OVERRIDE.get(sym)
+                    or specs.get(sym, {}).get("contract")
+                )
                 if not contract:
                     continue
                 contract = normalize_contract_code(contract)
@@ -335,6 +342,7 @@ class MinishareLiveFeed:
         真实交割合约**强制覆盖**持仓品种映射（主连/缓存污染一律让位）。"""
         cached = _load_mapping_cache()
         from four_dim_strategy import SYMBOLS, FlowAggregator
+
         for sym, code in cached.items():
             if sym in SYMBOLS:
                 self.sym2code[sym] = code
@@ -376,7 +384,8 @@ class MinishareLiveFeed:
             for _, r in df.iterrows():
                 code = str(r["ts_code"]).upper()
                 if ctr_digits and ctr_digits in code:
-                    hit = str(r["ts_code"]); break
+                    hit = str(r["ts_code"])
+                    break
             if hit:
                 self._set_pin(sym, hit)
                 print(f"[minishare_live] 权威合约钉死: {sym} -> {hit} (trade_config.contract={ctr})")
@@ -392,7 +401,7 @@ class MinishareLiveFeed:
             base = name
             for suffix in ("主连", "连续", "连一", "连二"):
                 if base.endswith(suffix):
-                    base = base[:-len(suffix)]
+                    base = base[: -len(suffix)]
                     break
             if base and base not in name2code:
                 name2code[base] = code
@@ -414,6 +423,7 @@ class MinishareLiveFeed:
 
         # 第三步之b：具体交割合约按「合约代码」匹配（名称都叫"纯碱"，只能靠代码）
         import re as _re
+
         for sym, digits in _CONTRACTS.items():
             if sym in self.sym2code or sym not in SYMBOLS:
                 continue
@@ -421,7 +431,8 @@ class MinishareLiveFeed:
             for _, r in df.iterrows():
                 code = str(r["ts_code"]).upper()
                 if digits in _re.sub(r"[^A-Z0-9]", "", code):
-                    hit = str(r["ts_code"]); break
+                    hit = str(r["ts_code"])
+                    break
             if hit:
                 hit = normalize_contract_code(hit)
                 self.sym2code[sym] = hit
@@ -430,6 +441,7 @@ class MinishareLiveFeed:
 
         # 第四步：为新发现的品种初始化 bars/flow
         from four_dim_strategy import FlowAggregator
+
         for s in self.sym2code:
             if s not in self.bars:
                 self.bars[s] = []
@@ -548,8 +560,13 @@ class MinishareLiveFeed:
             forced = prev.get("forced", False)  # 保留外部强制锁定标记(refresh_main_contracts --apply)
             if forced:
                 # 外部强制锁定：保留锁定的主力/次主力，不被 OI 排名覆盖（换月期真实主力已前进）
-                HOT_CACHE[sym] = {"main": prev.get("main"), "secondary": prev.get("secondary"),
-                                  "ts": time.time(), "forced": True, "source": prev.get("source")}
+                HOT_CACHE[sym] = {
+                    "main": prev.get("main"),
+                    "secondary": prev.get("secondary"),
+                    "ts": time.time(),
+                    "forced": True,
+                    "source": prev.get("source"),
+                }
                 changed = True
                 continue
             if prev.get("main") != main or prev.get("secondary") != secondary:
@@ -557,8 +574,10 @@ class MinishareLiveFeed:
             HOT_CACHE[sym] = {"main": main, "secondary": secondary, "ts": time.time(), "forced": forced}
         if changed:
             _save_hot_cache()
-            print("[minishare_live] 主力合约解析: " + ", ".join(
-                f"{s}={HOT_CACHE[s]['main']}" for s in HOT_CACHE if s in SYMBOLS))
+            print(
+                "[minishare_live] 主力合约解析: "
+                + ", ".join(f"{s}={HOT_CACHE[s]['main']}" for s in HOT_CACHE if s in SYMBOLS)
+            )
 
     def _apply_hot_contracts(self):
         """将各品种 sym2code 钉到当前主力/次主力合约；仅在发生换月（当前合约跌出 OI 前二）时重钉，
@@ -599,7 +618,9 @@ class MinishareLiveFeed:
                     self._auth[sym] = desired
                     print(f"[minishare_live] 合约权威覆盖钉合: {sym} {cur} -> {desired}")
                 continue
-            desired = normalize_contract_code(hc["main"] if mode == "auto_main" else (hc.get("secondary") or hc["main"]))
+            desired = normalize_contract_code(
+                hc["main"] if mode == "auto_main" else (hc.get("secondary") or hc["main"])
+            )
             # 强制锁定分支（refresh_main_contracts --apply 写入 forced）：无条件尊重，跳过 OI 防抖
             if hc.get("forced"):
                 if cur != desired:
@@ -610,7 +631,8 @@ class MinishareLiveFeed:
             if cur == desired:
                 continue
             # 换月期豁免：旧主力已到/过交割月，忽略 OI 前二防抖直接切换（修复 2026-08-17 换月滞后）
-            cur_ym = _contract_ym(cur); now_ym = _now_ym()
+            cur_ym = _contract_ym(cur)
+            now_ym = _now_ym()
             if cur_ym and cur_ym <= now_ym:
                 self._set_pin(sym, desired)
                 self._auth[sym] = desired
@@ -669,7 +691,8 @@ class MinishareLiveFeed:
             # 否则会出现 RB2609 错挂 RBM(3016) 这类盯市/展示偏差。
             if not self._code_matches_auth(sym, code):
                 continue
-            close = float(r["close"]); oi = float(r.get("oi", r.get("hold", 0)) or 0)
+            close = float(r["close"])
+            oi = float(r.get("oi", r.get("hold", 0)) or 0)
             vol = float(r.get("vol", r.get("volume", 0)) or 0)
             ts = str(r.get("date", ""))
             # P2（2026-08-14）：把昨结算/pre_close 也存进快照，供「涨跌停锁死头寸」精确封板判定
@@ -678,24 +701,32 @@ class MinishareLiveFeed:
                 _pc = float(_pc) if _pc is not None else 0.0
             except Exception:
                 _pc = 0.0
-            self.last_snap[sym] = {"close": close, "open": float(r.get("open", close)),
-                                   "high": float(r.get("high", close)),
-                                   "low": float(r.get("low", close)),
-                                   "vol": vol, "oi": oi, "ts": ts,
-                                   "pre_close": _pc,
-                                   "name": str(r.get("name", sym))}
+            self.last_snap[sym] = {
+                "close": close,
+                "open": float(r.get("open", close)),
+                "high": float(r.get("high", close)),
+                "low": float(r.get("low", close)),
+                "vol": vol,
+                "oi": oi,
+                "ts": ts,
+                "pre_close": _pc,
+                "name": str(r.get("name", sym)),
+            }
             # 5m 桶聚合
             lbm = self.last_bar_minute.get(sym)
             if lbm != bucket:
                 self.last_bar_minute[sym] = bucket
                 self.bars.setdefault(sym, [])
-                self.bars[sym].append({"date": bucket, "open": close, "high": close,
-                                       "low": close, "close": close, "volume": 0, "oi": oi})
+                self.bars[sym].append(
+                    {"date": bucket, "open": close, "high": close, "low": close, "close": close, "volume": 0, "oi": oi}
+                )
             else:
                 if sym in self.bars and self.bars[sym]:
                     b = self.bars[sym][-1]
-                    b["high"] = max(b["high"], close); b["low"] = min(b["low"], close)
-                    b["close"] = close; b["oi"] = oi
+                    b["high"] = max(b["high"], close)
+                    b["low"] = min(b["low"], close)
+                    b["close"] = close
+                    b["oi"] = oi
             # C_flow 差分
             if sym in self.flow:
                 self.flow[sym].push_minishare(close, oi, vol, time.time())
@@ -735,6 +766,7 @@ class MinishareLiveFeed:
 
 # 模块级单例（盘中常驻，避免重复 set_token）
 _feed = None
+
 
 def feed():
     global _feed

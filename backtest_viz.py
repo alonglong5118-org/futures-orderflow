@@ -16,6 +16,7 @@
     import backtest_viz as bv
     rep = bv.data()
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,7 @@ import os
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 REPORT_JSON = os.path.join(_HERE, "papertrack_report.json")
-F = 0.02   # 单笔计划风险占权益比，用于把 R 折成权益曲线
+F = 0.02  # 单笔计划风险占权益比，用于把 R 折成权益曲线
 
 
 def _risk_amount(t, equity, risk_pct=2.0):
@@ -31,6 +32,7 @@ def _risk_amount(t, equity, risk_pct=2.0):
     if sd:
         try:
             import trade_journal as tj
+
             mult = tj._MULTIPLIERS.get(t["symbol"], 10)
             r = abs(float(sd)) * mult * int(t.get("lots") or 1)
             if r > 0:
@@ -41,6 +43,7 @@ def _risk_amount(t, equity, risk_pct=2.0):
     if stop and entry:
         try:
             import trade_journal as tj
+
             mult = tj._MULTIPLIERS.get(t["symbol"], 10)
             r = abs(float(entry) - float(stop)) * mult * int(t.get("lots") or 1)
             if r > 0:
@@ -54,6 +57,7 @@ def _journal_r_series():
     """实盘已平仓交易的 R 序列（回退源）。返回 [{symbol,time,R,win}, ...]"""
     try:
         import trade_journal as tj
+
         data = tj._load()
         closed = [t for t in data["trades"] if t.get("pnl") is not None]
         closed.sort(key=lambda t: t.get("time", ""))
@@ -72,8 +76,7 @@ def _journal_r_series():
                 R = float(t["pnl"]) / rAmt
             except Exception:
                 R = 0.0
-            out.append({"symbol": t.get("symbol", "?"), "time": t.get("time", ""),
-                        "R": round(R, 4), "win": R > 0})
+            out.append({"symbol": t.get("symbol", "?"), "time": t.get("time", ""), "R": round(R, 4), "win": R > 0})
         return out
     except Exception:
         return []
@@ -88,9 +91,15 @@ def _papertrack_series():
         trades = rep.get("trades", [])
         done = [t for t in trades if t.get("outcome") in ("win", "loss")]
         done.sort(key=lambda t: t.get("time", ""))
-        out = [{"symbol": t.get("symbol", "?"), "time": t.get("time", ""),
-                "R": round(float(t.get("R", 0.0)), 4), "win": t.get("outcome") == "win"}
-               for t in done]
+        out = [
+            {
+                "symbol": t.get("symbol", "?"),
+                "time": t.get("time", ""),
+                "R": round(float(t.get("R", 0.0)), 4),
+                "win": t.get("outcome") == "win",
+            }
+            for t in done
+        ]
         if not out:
             return None
         return out
@@ -113,8 +122,7 @@ def _build(series, source):
             peak = eq
         dd = (peak - eq) / peak * 100.0 if peak > 0 else 0.0
         equity.append({"step": i + 1, "eq": round(eq, 3), "dd_pct": round(dd, 2)})
-        scatter.append({"idx": i, "R": R, "symbol": s["symbol"], "win": s["win"],
-                        "time": s["time"]})
+        scatter.append({"idx": i, "R": R, "symbol": s["symbol"], "win": s["win"], "time": s["time"]})
     n = len(series)
     wins = sum(1 for s in series if s["win"])
     max_dd = max((e["dd_pct"] for e in equity), default=0.0)
@@ -140,16 +148,17 @@ def data():
     jr = _journal_r_series()
     out = _build(jr, "journal")
     out["ok"] = bool(jr)
-    out["note"] = ("暂无 papertrack 回测，已回退实盘成交" if not jr else
-                   "暂无 papertrack 回测，已用实盘成交序列")
+    out["note"] = "暂无 papertrack 回测，已回退实盘成交" if not jr else "暂无 papertrack 回测，已用实盘成交序列"
     return out
 
 
 def print_report(rep):
     print("=" * 56)
     print(f"回测可视化 · 来源 {rep['source']} · {rep['n']} 笔")
-    print(f"  胜率 {rep['win_rate']*100:.1f}% · 累计R {rep['cum_R']:+.3f} · "
-          f"期望R {rep['exp_R']:+.3f} · 最大回撤 {rep['max_dd_pct']:.1f}%")
+    print(
+        f"  胜率 {rep['win_rate'] * 100:.1f}% · 累计R {rep['cum_R']:+.3f} · "
+        f"期望R {rep['exp_R']:+.3f} · 最大回撤 {rep['max_dd_pct']:.1f}%"
+    )
     print("  权益曲线端点:", rep["equity"][-1]["eq"] if rep["equity"] else None)
     print("=" * 56)
 

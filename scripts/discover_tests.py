@@ -93,10 +93,10 @@ def update_run_tests(modules, integration, advanced, skip_default):
         content = f.read()
 
     # 生成新的 TEST_MODULES
-    lines = ['TEST_MODULES = {']
+    lines = ["TEST_MODULES = {"]
     for name in sorted(modules.keys()):
         lines.append(f'    "{name}": "{modules[name]}",')
-    lines.append('}')
+    lines.append("}")
     new_test_modules = "\n".join(lines)
 
     # 替换 TEST_MODULES 块

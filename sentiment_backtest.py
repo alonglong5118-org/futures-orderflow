@@ -35,6 +35,7 @@ from four_dim_strategy import (
 # 1. 预计算每日全市场情绪序列
 # ────────────────────────────────────────────────────────────
 
+
 def compute_daily_sentiment(symbols, tail=400, min_bars=60, window=None):
     """计算每日全市场情绪序列。
 
@@ -81,9 +82,7 @@ def compute_daily_sentiment(symbols, tail=400, min_bars=60, window=None):
 
             # 计算 T_D 和 regime
             try:
-                T_D, regime, _ = compute_T(hist, DEFAULT_CONFIG,
-                                           group=SYMBOLS.get(sym, {}).get("group"),
-                                           symbol=sym)
+                T_D, regime, _ = compute_T(hist, DEFAULT_CONFIG, group=SYMBOLS.get(sym, {}).get("group"), symbol=sym)
             except Exception:
                 T_D, regime = 0.0, "未知"
 
@@ -131,7 +130,7 @@ def compute_daily_sentiment(symbols, tail=400, min_bars=60, window=None):
             }
 
         if (i + 1) % 50 == 0:
-            print(f"    已处理 {i+1}/{len(base_dates)} 天...", end="\r", flush=True)
+            print(f"    已处理 {i + 1}/{len(base_dates)} 天...", end="\r", flush=True)
 
     print(f"    完成: {len(sentiment_daily)} 天有有效情绪")
     return sentiment_daily
@@ -141,9 +140,18 @@ def compute_daily_sentiment(symbols, tail=400, min_bars=60, window=None):
 # 2. 带情绪的 walk-forward 回测
 # ────────────────────────────────────────────────────────────
 
-def walk_forward_with_sentiment(symbol, sentiment_daily, cfg=DEFAULT_CONFIG,
-                                 min_bars=60, window=300, tail=None,
-                                 cooldown_bars=5, ablate=None, df_in=None):
+
+def walk_forward_with_sentiment(
+    symbol,
+    sentiment_daily,
+    cfg=DEFAULT_CONFIG,
+    min_bars=60,
+    window=300,
+    tail=None,
+    cooldown_bars=5,
+    ablate=None,
+    df_in=None,
+):
     """带情绪调制的 walk-forward 回测。
 
     sentiment_daily: {date_str: {band, score, ...}}  每日情绪
@@ -179,7 +187,7 @@ def walk_forward_with_sentiment(symbol, sentiment_daily, cfg=DEFAULT_CONFIG,
     last_trade_i = -999
 
     while i < n - 1:
-        hist = df.iloc[:i + 1]
+        hist = df.iloc[: i + 1]
         date_str = df.index[i].strftime("%Y%m%d")
 
         # 查当日情绪
@@ -188,8 +196,7 @@ def walk_forward_with_sentiment(symbol, sentiment_daily, cfg=DEFAULT_CONFIG,
             sent_band = sentiment_daily[date_str]["band"]
 
         try:
-            pipe = pipeline(symbol, hist, None, cfg, date=date_str,
-                            ablate=ablate, sentiment_label=sent_band)
+            pipe = pipeline(symbol, hist, None, cfg, date=date_str, ablate=ablate, sentiment_label=sent_band)
         except Exception:
             i += 1
             continue
@@ -221,41 +228,56 @@ def walk_forward_with_sentiment(symbol, sentiment_daily, cfg=DEFAULT_CONFIG,
                 if tail_active:
                     if dir_T > 0:
                         if lo <= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = max(tail_stop, hi - ep["tail_stop_dist"])
                     else:
                         if hi >= tail_stop:
-                            exit_price, reason = tail_stop, "尾仓离场"; break
+                            exit_price, reason = tail_stop, "尾仓离场"
+                            break
                         tail_stop = min(tail_stop, lo + ep["tail_stop_dist"])
                     continue
                 if dir_T > 0:
                     if lo <= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if hi >= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] - ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
                 else:
                     if hi >= ep["stop"]:
-                        exit_price, reason = ep["stop"], "止损"; break
+                        exit_price, reason = ep["stop"], "止损"
+                        break
                     if lo <= ep["t2"]:
                         if ep["tail_enabled"]:
-                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]; continue
-                        exit_price, reason = ep["t2"], "止盈2R"; break
+                            tail_active, tail_stop = True, ep["t2"] + ep["tail_stop_dist"]
+                            continue
+                        exit_price, reason = ep["t2"], "止盈2R"
+                        break
             if exit_price is None:
                 exit_price, reason = float(df["close"].iloc[-1]), "期末平"
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
             R_adj = R - slip_R - fee_R
-            trades.append({
-                "dir": dir_T, "R": round(R, 3), "R_adj": round(R_adj, 3),
-                "reason": reason, "regime": pipe["regime"],
-                "entry_date": df.index[i + 1],
-                "F": pipe["F"], "T_D": pipe["T_D"], "C": pipe["C"],
-                "sentiment": sent_band,  # 记录触发时的情绪
-                "T_thresh_eff": pipe["T_thresh_eff"],
-            })
+            trades.append(
+                {
+                    "dir": dir_T,
+                    "R": round(R, 3),
+                    "R_adj": round(R_adj, 3),
+                    "reason": reason,
+                    "regime": pipe["regime"],
+                    "entry_date": df.index[i + 1],
+                    "F": pipe["F"],
+                    "T_D": pipe["T_D"],
+                    "C": pipe["C"],
+                    "sentiment": sent_band,  # 记录触发时的情绪
+                    "T_thresh_eff": pipe["T_thresh_eff"],
+                }
+            )
             last_trade_i = i
             i = j + 1 if exit_price is not None else i + 1
             continue
@@ -280,13 +302,14 @@ def walk_forward_with_sentiment(symbol, sentiment_daily, cfg=DEFAULT_CONFIG,
         by_sentiment.setdefault(s, []).append(t["R_adj"])
 
     return {
-        "symbol": symbol, "name": SYMBOLS[symbol]["name"],
-        "trades": len(trades), "expR": round(float(np.mean(Rs)), 4),
+        "symbol": symbol,
+        "name": SYMBOLS[symbol]["name"],
+        "trades": len(trades),
+        "expR": round(float(np.mean(Rs)), 4),
         "win_rate": round(len(wins) / len(Rs), 3),
         "trades_detail": trades,
         "by_regime": {k: round(float(np.mean(v)), 4) for k, v in by_regime.items()},
-        "by_sentiment": {k: {"trades": len(v), "expR": round(float(np.mean(v)), 4)}
-                          for k, v in by_sentiment.items()},
+        "by_sentiment": {k: {"trades": len(v), "expR": round(float(np.mean(v)), 4)} for k, v in by_sentiment.items()},
         "exit_reasons": reasons,
         "roll_skipped": roll_skipped,
     }
@@ -296,14 +319,14 @@ def walk_forward_with_sentiment(symbol, sentiment_daily, cfg=DEFAULT_CONFIG,
 # 3. 对比验证
 # ────────────────────────────────────────────────────────────
 
+
 def compare_symbol(symbol, sentiment_daily, tail=400, min_bars=60, window=200):
     """对比单品种：带情绪 vs 不带情绪。"""
     # 基线（不带情绪）
     r_base = walk_forward_backtest(symbol, tail=tail, min_bars=min_bars, window=window)
 
     # 带情绪
-    r_sent = walk_forward_with_sentiment(symbol, sentiment_daily,
-                                          tail=tail, min_bars=min_bars, window=window)
+    r_sent = walk_forward_with_sentiment(symbol, sentiment_daily, tail=tail, min_bars=min_bars, window=window)
 
     base_expR = r_base.get("expR", 0)
     sent_expR = r_sent.get("expR", 0)
@@ -313,10 +336,8 @@ def compare_symbol(symbol, sentiment_daily, tail=400, min_bars=60, window=200):
     return {
         "symbol": symbol,
         "group": SYMBOLS.get(symbol, {}).get("group", "?"),
-        "base": {"expR": base_expR, "win_rate": r_base.get("win_rate", 0),
-                  "trades": r_base.get("trades", 0)},
-        "sentiment": {"expR": sent_expR, "win_rate": r_sent.get("win_rate", 0),
-                       "trades": r_sent.get("trades", 0)},
+        "base": {"expR": base_expR, "win_rate": r_base.get("win_rate", 0), "trades": r_base.get("trades", 0)},
+        "sentiment": {"expR": sent_expR, "win_rate": r_sent.get("win_rate", 0), "trades": r_sent.get("trades", 0)},
         "delta": round(delta, 4),
         "delta_pct": round(delta_pct, 2),
         "by_sentiment": r_sent.get("by_sentiment", {}),
@@ -331,10 +352,8 @@ def main():
     parser.add_argument("--tail", type=int, default=400, help="回测尾部N根日线")
     parser.add_argument("--min-bars", type=int, default=60, help="最少训练根数")
     parser.add_argument("--window", type=int, default=200, help="walk-forward窗口")
-    parser.add_argument("--cache", type=str, default="logs/sentiment_daily_cache.json",
-                        help="每日情绪缓存文件")
-    parser.add_argument("--output", type=str, default="logs/sentiment_backtest_result.json",
-                        help="结果输出")
+    parser.add_argument("--cache", type=str, default="logs/sentiment_daily_cache.json", help="每日情绪缓存文件")
+    parser.add_argument("--output", type=str, default="logs/sentiment_backtest_result.json", help="结果输出")
     args = parser.parse_args()
 
     print("=" * 70)
@@ -367,9 +386,9 @@ def main():
     if not sentiment_daily:
         print(f"\n计算每日情绪序列...")
         t0 = time.time()
-        sentiment_daily = compute_daily_sentiment(all_syms, tail=args.tail + 50,
-                                                   min_bars=args.min_bars,
-                                                   window=args.window)
+        sentiment_daily = compute_daily_sentiment(
+            all_syms, tail=args.tail + 50, min_bars=args.min_bars, window=args.window
+        )
         elapsed = time.time() - t0
         print(f"  耗时: {elapsed:.0f}s")
 
@@ -388,9 +407,11 @@ def main():
 
     # 逐个品种对比
     print(f"\n--- 逐品种对比 ({len(target_syms)} 个) ---")
-    print(f"{'品种':<6} {'板块':<5} "
-          f"{'基准expR':>9} {'情绪expR':>9} {'差值':>8} {'变化%':>8} "
-          f"{'基准笔数':>8} {'情绪笔数':>8} {'基准胜率':>8} {'情绪胜率':>8}")
+    print(
+        f"{'品种':<6} {'板块':<5} "
+        f"{'基准expR':>9} {'情绪expR':>9} {'差值':>8} {'变化%':>8} "
+        f"{'基准笔数':>8} {'情绪笔数':>8} {'基准胜率':>8} {'情绪胜率':>8}"
+    )
     print("-" * 85)
 
     results = []
@@ -399,15 +420,16 @@ def main():
             print(f"  {sym}: 未知品种，跳过")
             continue
         try:
-            r = compare_symbol(sym, sentiment_daily, tail=args.tail,
-                               min_bars=args.min_bars, window=args.window)
+            r = compare_symbol(sym, sentiment_daily, tail=args.tail, min_bars=args.min_bars, window=args.window)
             results.append(r)
             arrow = "↑" if r["delta"] > 0.01 else ("↓" if r["delta"] < -0.01 else "→")
-            print(f"{sym:<6} {r['group']:<5} "
-                  f"{r['base']['expR']:>+9.4f} {r['sentiment']['expR']:>+9.4f} "
-                  f"{r['delta']:>+8.4f} {r['delta_pct']:>+7.0f}% "
-                  f"{r['base']['trades']:>8} {r['sentiment']['trades']:>8} "
-                  f"{r['base']['win_rate']*100:>7.1f}% {r['sentiment']['win_rate']*100:>7.1f}%")
+            print(
+                f"{sym:<6} {r['group']:<5} "
+                f"{r['base']['expR']:>+9.4f} {r['sentiment']['expR']:>+9.4f} "
+                f"{r['delta']:>+8.4f} {r['delta_pct']:>+7.0f}% "
+                f"{r['base']['trades']:>8} {r['sentiment']['trades']:>8} "
+                f"{r['base']['win_rate'] * 100:>7.1f}% {r['sentiment']['win_rate'] * 100:>7.1f}%"
+            )
         except Exception as e:
             print(f"  {sym}: 失败 - {e}")
 
@@ -444,28 +466,38 @@ def main():
             if band in all_by_sent and all_by_sent[band]["trades"] > 0:
                 d = all_by_sent[band]
                 avg = d["total_expR"] / d["trades"]
-                label = {"extreme_greed": "极度贪婪", "greed": "贪婪",
-                         "neutral": "中性", "fear": "恐惧", "extreme_fear": "极度恐惧"}[band]
+                label = {
+                    "extreme_greed": "极度贪婪",
+                    "greed": "贪婪",
+                    "neutral": "中性",
+                    "fear": "恐惧",
+                    "extreme_fear": "极度恐惧",
+                }[band]
                 print(f"    {label:<6} ({band}): {d['trades']:>3} 笔, expR={avg:+.4f}")
 
         # 保存
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as f:
-            json.dump({
-                "config": {"tail": args.tail, "min_bars": args.min_bars, "window": args.window},
-                "sentiment_distribution": bands,
-                "results": results,
-                "summary": {
-                    "count": n,
-                    "avg_base_expR": round(avg_base, 4),
-                    "avg_sentiment_expR": round(avg_sent, 4),
-                    "delta": round(delta, 4),
-                    "delta_pct": round(delta_pct, 2),
-                    "improved": improved,
-                    "worsened": worsened,
-                    "unchanged": unchanged,
+            json.dump(
+                {
+                    "config": {"tail": args.tail, "min_bars": args.min_bars, "window": args.window},
+                    "sentiment_distribution": bands,
+                    "results": results,
+                    "summary": {
+                        "count": n,
+                        "avg_base_expR": round(avg_base, 4),
+                        "avg_sentiment_expR": round(avg_sent, 4),
+                        "delta": round(delta, 4),
+                        "delta_pct": round(delta_pct, 2),
+                        "improved": improved,
+                        "worsened": worsened,
+                        "unchanged": unchanged,
+                    },
                 },
-            }, f, ensure_ascii=False, indent=2)
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         print(f"\n详细结果已保存到: {args.output}")
 
 

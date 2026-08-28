@@ -46,6 +46,7 @@ from strategy_layer import (
 #  1. ema — 指数移动平均
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestEMA(unittest.TestCase):
     """ema — 指数移动平均。"""
 
@@ -84,8 +85,11 @@ class TestEMA(unittest.TestCase):
         # 后期（稳定后）EMA 应该 > SMA（因为在上升趋势中）
         # 取最后几个值比较
         for i in range(-5, 0):
-            self.assertGreater(ema_result.iloc[i], sma_result.iloc[i],
-                f"上升趋势中 EMA({ema_result.iloc[i]:.2f}) 应该 > SMA({sma_result.iloc[i]:.2f})")
+            self.assertGreater(
+                ema_result.iloc[i],
+                sma_result.iloc[i],
+                f"上升趋势中 EMA({ema_result.iloc[i]:.2f}) 应该 > SMA({sma_result.iloc[i]:.2f})",
+            )
 
     def test_ema_smoother_than_original(self):
         """EMA 比原始序列更平滑（波动更小）"""
@@ -98,8 +102,7 @@ class TestEMA(unittest.TestCase):
         valid = ema_result.dropna()
         orig_diff = s.loc[valid.index].diff().dropna().var()
         ema_diff = valid.diff().dropna().var()
-        self.assertLess(ema_diff, orig_diff,
-            "EMA 差分方差应该小于原始序列差分方差")
+        self.assertLess(ema_diff, orig_diff, "EMA 差分方差应该小于原始序列差分方差")
 
     def test_ema_first_value_equals_first(self):
         """第一个值 = 第一个原始值（adjust=False 初始条件）"""
@@ -119,6 +122,7 @@ class TestEMA(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. 稳健池闸门配置
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRobustGateConfig(unittest.TestCase):
     """稳健池闸门配置读写。"""

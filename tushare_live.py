@@ -20,23 +20,49 @@ import urllib.request
 
 # —— 主力合约映射（品种 → Tushare ts_code）——
 _TUSHARE_CONTRACTS = {
-    'zn': 'ZN2610.SHF',   'ss': 'SS2610.SHF',   'fu': 'FU2611.SHF',
-    'sp': 'SP2611.SHF',   'J':  'J2701.DCE',    'eb': 'EB2610.DCE',
-    'pg': 'PG2610.SHF',
-    'cu': 'CU2610.SHF',   'al': 'AL2610.SHF',   'ni': 'NI2610.SHF',
-    'sn': 'SN2610.SHF',   'pb': 'PB2610.SHF',   'au': 'AU2610.SHF',
-    'ag': 'AG2610.SHF',
-    'rb': 'RB2610.SHF',   'hc': 'HC2610.SHF',   'bu': 'BU2610.SHF',
-    'ru': 'RU2701.SHF',   'sc': 'SC2610.INE',
-    'eg': 'EG2610.DCE',   'l':  'L2701.DCE',    'pp': 'PP2701.DCE',
-    'v':  'V2701.DCE',    'm':  'M2701.DCE',    'y':  'Y2701.DCE',
-    'a':  'A2611.DCE',   'b':  'B2611.DCE',    'p':  'P2701.DCE',
-    'c':  'C2611.DCE',   'cs': 'CS2611.DCE',   'jd': 'JD2610.DCE',
-    'lh': 'LH2611.DCE',
-    'fg': 'FG2701.CZC',  'sa': 'SA2701.CZC',   'ma': 'MA2610.CZC',
-    'ta': 'TA2701.CZC',  'cf': 'CF2701.CZC',   'rm': 'RM2609.CZC',
-    'oi': 'OI2611.CZC',  'sr': 'SR2701.CZC',   'ur': 'UR2701.CZC',
-    'ap': 'AP2610.CZC',  'pk': 'PK2610.CZC',
+    "zn": "ZN2610.SHF",
+    "ss": "SS2610.SHF",
+    "fu": "FU2611.SHF",
+    "sp": "SP2611.SHF",
+    "J": "J2701.DCE",
+    "eb": "EB2610.DCE",
+    "pg": "PG2610.SHF",
+    "cu": "CU2610.SHF",
+    "al": "AL2610.SHF",
+    "ni": "NI2610.SHF",
+    "sn": "SN2610.SHF",
+    "pb": "PB2610.SHF",
+    "au": "AU2610.SHF",
+    "ag": "AG2610.SHF",
+    "rb": "RB2610.SHF",
+    "hc": "HC2610.SHF",
+    "bu": "BU2610.SHF",
+    "ru": "RU2701.SHF",
+    "sc": "SC2610.INE",
+    "eg": "EG2610.DCE",
+    "l": "L2701.DCE",
+    "pp": "PP2701.DCE",
+    "v": "V2701.DCE",
+    "m": "M2701.DCE",
+    "y": "Y2701.DCE",
+    "a": "A2611.DCE",
+    "b": "B2611.DCE",
+    "p": "P2701.DCE",
+    "c": "C2611.DCE",
+    "cs": "CS2611.DCE",
+    "jd": "JD2610.DCE",
+    "lh": "LH2611.DCE",
+    "fg": "FG2701.CZC",
+    "sa": "SA2701.CZC",
+    "ma": "MA2610.CZC",
+    "ta": "TA2701.CZC",
+    "cf": "CF2701.CZC",
+    "rm": "RM2609.CZC",
+    "oi": "OI2611.CZC",
+    "sr": "SR2701.CZC",
+    "ur": "UR2701.CZC",
+    "ap": "AP2610.CZC",
+    "pk": "PK2610.CZC",
 }
 
 
@@ -44,9 +70,7 @@ class TushareFeed:
     """Tushare Pro 实时行情源。"""
 
     TUSHARE_URL = "http://api.tushare.pro"
-    TOKEN_FILE = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "tushare_token.txt"
-    )
+    TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tushare_token.txt")
 
     def __init__(self, poll_interval=10):
         self._interval = poll_interval
@@ -153,6 +177,7 @@ class TushareFeed:
         """初始化 akshare 回退源。"""
         try:
             import akshare_live as _ak
+
             self._ak_feed = _ak.feed()
             self._ak_available = True
             print("[tushare_live]   🟢 akshare 回退源可用")
@@ -394,6 +419,7 @@ def feed():
 
 if __name__ == "__main__":
     import sys
+
     syms = sys.argv[1:] if len(sys.argv) > 1 else ["zn", "ss", "fu", "sp", "J", "eb", "pg"]
     print(f"=== tushare_live 测试 ({time.strftime('%H:%M:%S')}) ===")
     f = feed()

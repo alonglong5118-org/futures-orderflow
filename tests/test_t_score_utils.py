@@ -55,6 +55,7 @@ from t_score_utils import (
 #  1. cluster_vote_and_consensus
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestClusterVoteAndConsensus(unittest.TestCase):
     """cluster_vote_and_consensus 簇投票与一致度。"""
 
@@ -89,8 +90,8 @@ class TestClusterVoteAndConsensus(unittest.TestCase):
         sig = {"a": 1.0, "b": 1.0, "c": -1.0}
         clusters = {"trend": ["a", "b", "c"]}
         vote, consensus = cluster_vote_and_consensus(sig, clusters)
-        self.assertAlmostEqual(vote["trend"], 1/3, places=6)
-        self.assertAlmostEqual(consensus["trend"], 2/3, places=6)
+        self.assertAlmostEqual(vote["trend"], 1 / 3, places=6)
+        self.assertAlmostEqual(consensus["trend"], 2 / 3, places=6)
 
     def test_empty_cluster(self):
         """空簇：投票=0，一致度=0"""
@@ -124,9 +125,9 @@ class TestClusterVoteAndConsensus(unittest.TestCase):
         self.assertEqual(vote["mean"], -1.0)
         self.assertEqual(vote["momentum"], 0.5)
         # 精确等于 ±1 的策略才算完全同向
-        self.assertEqual(consensus["trend"], 1.0)       # 1.0 == +1 → 同向
-        self.assertEqual(consensus["mean"], 1.0)        # -1.0 == -1 → 同向
-        self.assertEqual(consensus["momentum"], 0.0)    # 0.5 != +1 → 不算完全同向
+        self.assertEqual(consensus["trend"], 1.0)  # 1.0 == +1 → 同向
+        self.assertEqual(consensus["mean"], 1.0)  # -1.0 == -1 → 同向
+        self.assertEqual(consensus["momentum"], 0.0)  # 0.5 != +1 → 不算完全同向
 
     def test_return_keys_aligned(self):
         """返回两个 dict，key 对齐"""
@@ -170,6 +171,7 @@ class TestClusterVoteAndConsensus(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. crowd_penalty_factor
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCrowdPenaltyFactor(unittest.TestCase):
     """crowd_penalty_factor 拥挤降权系数。"""
@@ -248,6 +250,7 @@ class TestCrowdPenaltyFactor(unittest.TestCase):
 #  3. contrarian_damping_factor
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestContrarianDampingFactor(unittest.TestCase):
     """contrarian_damping_factor 反向阻尼系数。"""
 
@@ -305,8 +308,12 @@ class TestContrarianDampingFactor(unittest.TestCase):
         damp = 0.25
         lo, hi = 1.0 - damp, 1.0
         test_cases = [
-            (0.5, 0.3), (0.5, -0.3), (0.1, -0.9),
-            (-0.5, 0.3), (-0.5, -0.3), (0.0, 0.0),
+            (0.5, 0.3),
+            (0.5, -0.3),
+            (0.1, -0.9),
+            (-0.5, 0.3),
+            (-0.5, -0.3),
+            (0.0, 0.0),
         ]
         for t, m in test_cases:
             f = contrarian_damping_factor(t, m, contr_damp=damp)

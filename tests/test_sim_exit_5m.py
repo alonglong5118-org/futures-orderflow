@@ -57,7 +57,9 @@ def _make_ep(stop=95, t1=105, t2=110, tail_enabled=False, tail_stop_dist=10):
     """构造 exit_plan 风格的 dict。"""
     stop_dist = 5.0  # entry(100) - stop(95) = 5
     return {
-        "stop": stop, "t1": t1, "t2": t2,
+        "stop": stop,
+        "t1": t1,
+        "t2": t2,
         "stop_dist": stop_dist,
         "trailing": tail_enabled,
         "tail_enabled": tail_enabled,
@@ -70,6 +72,7 @@ def _make_ep(stop=95, t1=105, t2=110, tail_enabled=False, tail_stop_dist=10):
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 止损出场
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSimExit5mStopLoss(unittest.TestCase):
     """止损出场。"""
@@ -98,9 +101,9 @@ class TestSimExit5mStopLoss(unittest.TestCase):
     def test_long_stop_loss_third_bar(self):
         """多单：第三根触止损"""
         bars = [
-            (100, 102, 98, 101),   # 正常
-            (101, 103, 99, 102),   # 正常
-            (102, 103, 94, 95),    # low=94 < stop=95 → 止损
+            (100, 102, 98, 101),  # 正常
+            (101, 103, 99, 102),  # 正常
+            (102, 103, 94, 95),  # low=94 < stop=95 → 止损
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110)
@@ -111,7 +114,7 @@ class TestSimExit5mStopLoss(unittest.TestCase):
     def test_long_no_stop_when_price_above_stop(self):
         """多单：价格一直在止损上方 → 不止损"""
         bars = [
-            (100, 102, 98, 101),   # low=98 > stop=95
+            (100, 102, 98, 101),  # low=98 > stop=95
             (101, 103, 99, 102),
             (102, 104, 100, 103),
         ]
@@ -127,13 +130,14 @@ class TestSimExit5mStopLoss(unittest.TestCase):
 #  2. 止盈出场（无尾仓）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSimExit5mTakeProfit(unittest.TestCase):
     """止盈出场（无尾仓）。"""
 
     def test_long_t2_take_profit(self):
         """多单：触 t2 → 止盈 2R"""
         bars = [
-            (100, 105, 99, 104),   # 接近但没到
+            (100, 105, 99, 104),  # 接近但没到
             (104, 112, 103, 111),  # high=112 >= t2=110 → 止盈
         ]
         df = _make_df5(bars)
@@ -146,8 +150,8 @@ class TestSimExit5mTakeProfit(unittest.TestCase):
     def test_short_t2_take_profit(self):
         """空单：触 t2 → 止盈 2R"""
         bars = [
-            (100, 102, 96, 97),    # 接近
-            (97, 98, 88, 89),      # low=88 <= t2=90 → 止盈
+            (100, 102, 96, 97),  # 接近
+            (97, 98, 88, 89),  # low=88 <= t2=90 → 止盈
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90, tail_enabled=False)
@@ -159,7 +163,7 @@ class TestSimExit5mTakeProfit(unittest.TestCase):
     def test_stop_before_t2(self):
         """止损比止盈先到 → 止损出场（不是止盈）"""
         bars = [
-            (100, 101, 90, 92),    # 先触止损（low=90 < stop=95）
+            (100, 101, 90, 92),  # 先触止损（low=90 < stop=95）
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=False)
@@ -172,6 +176,7 @@ class TestSimExit5mTakeProfit(unittest.TestCase):
 #  3. 尾仓出场
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSimExit5mTrailingTail(unittest.TestCase):
     """尾仓移动止损出场。"""
 
@@ -183,9 +188,9 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         - Bar 2 进入尾仓模式：low=98 <= 100 → 尾仓离场
         """
         bars = [
-            (100, 105, 99, 104),   # 正常
+            (100, 105, 99, 104),  # 正常
             (104, 115, 103, 114),  # 触 t2 → 激活尾仓，尾仓止损 = 100
-            (114, 116, 98, 105),   # 回撤，low=98 <= 尾仓止损100 → 尾仓离场
+            (114, 116, 98, 105),  # 回撤，low=98 <= 尾仓止损100 → 尾仓离场
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=True, tail_stop_dist=10)
@@ -200,10 +205,10 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         价格创新高 → 尾仓止损上移；价格回落 → 尾仓止损不下移。
         """
         bars = [
-            (100, 112, 99, 111),   # 触 t2，激活尾仓，尾仓止损 = 112-10=102
+            (100, 112, 99, 111),  # 触 t2，激活尾仓，尾仓止损 = 112-10=102
             (111, 120, 110, 119),  # 创新高，尾仓止损 = max(102, 120-10=110) = 110
             (119, 118, 112, 115),  # 回落，但 low=112 > 110 → 不触发
-                                   # 尾仓止损 = min? 不，多单是 max，所以保持 110
+            # 尾仓止损 = min? 不，多单是 max，所以保持 110
             (115, 116, 109, 110),  # low=109 <= 110 → 尾仓离场（110 价）
         ]
         df = _make_df5(bars)
@@ -221,9 +226,9 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         - Bar 2 进入尾仓模式：high=102 >= 100 → 尾仓离场
         """
         bars = [
-            (100, 102, 95, 96),    # 下跌
-            (96, 97, 85, 86),      # 触 t2=90，激活尾仓，尾仓止损 = 100
-            (86, 102, 84, 90),     # 反弹，high=102 >= 尾仓止损100 → 尾仓离场
+            (100, 102, 95, 96),  # 下跌
+            (96, 97, 85, 86),  # 触 t2=90，激活尾仓，尾仓止损 = 100
+            (86, 102, 84, 90),  # 反弹，high=102 >= 尾仓止损100 → 尾仓离场
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90, tail_enabled=True, tail_stop_dist=10)
@@ -244,10 +249,10 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         - Bar 3 反弹，high=89 >= 87 → 尾仓离场（价格 87）
         """
         bars = [
-            (100, 102, 88, 89),    # 触 t2=90，激活尾仓，尾仓止损 = 100
-            (89, 90, 78, 79),      # 创新低，尾仓止损 = 88
-            (79, 87, 77, 85),      # 继续创新低，尾仓止损 = 87
-            (85, 89, 84, 86),      # 反弹触尾仓止损 87 → 离场
+            (100, 102, 88, 89),  # 触 t2=90，激活尾仓，尾仓止损 = 100
+            (89, 90, 78, 79),  # 创新低，尾仓止损 = 88
+            (79, 87, 77, 85),  # 继续创新低，尾仓止损 = 87
+            (85, 89, 84, 86),  # 反弹触尾仓止损 87 → 离场
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90, tail_enabled=True, tail_stop_dist=10)
@@ -272,6 +277,7 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. 期末平仓
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSimExit5mEndOfPeriod(unittest.TestCase):
     """期末平仓。"""
@@ -304,6 +310,7 @@ class TestSimExit5mEndOfPeriod(unittest.TestCase):
 #  5. 优先级：止损 > 止盈（同一根 bar 内）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSimExit5mPriority(unittest.TestCase):
     """同一根 bar 内的触发优先级。"""
 
@@ -326,6 +333,7 @@ class TestSimExit5mPriority(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. 返回值
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSimExit5mReturnValue(unittest.TestCase):
     """返回值结构。"""
@@ -351,10 +359,10 @@ class TestSimExit5mReturnValue(unittest.TestCase):
     def test_exit_idx_matches_stop_bar(self):
         """exit_idx 正确指向触发止损的 bar"""
         bars = [
-            (100, 102, 98, 101),   # 0: 正常
-            (101, 103, 99, 102),   # 1: 正常
-            (102, 104, 94, 96),    # 2: 止损
-            (96, 97, 90, 92),      # 3: 不会走到这里
+            (100, 102, 98, 101),  # 0: 正常
+            (101, 103, 99, 102),  # 1: 正常
+            (102, 104, 94, 96),  # 2: 止损
+            (96, 97, 90, 92),  # 3: 不会走到这里
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110)

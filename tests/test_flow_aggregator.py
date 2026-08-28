@@ -38,6 +38,7 @@ from four_dim_strategy import FlowAggregator, compute_C_flow
 #  1. 基础累积与净流方向
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFlowAggregatorBasic(unittest.TestCase):
     """FlowAggregator 基础累积与净流方向。"""
 
@@ -126,6 +127,7 @@ class TestFlowAggregatorBasic(unittest.TestCase):
 #  2. dVol 回退（无 OI 数据时）
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFlowAggregatorVolFallback(unittest.TestCase):
     """无 OI 数据时回退到成交量。"""
 
@@ -159,6 +161,7 @@ class TestFlowAggregatorVolFallback(unittest.TestCase):
 #  3. tick 订单流叠加
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFlowAggregatorTick(unittest.TestCase):
     """tick 订单流叠加（70% 基础 + 30% tick）。"""
 
@@ -184,8 +187,7 @@ class TestFlowAggregatorTick(unittest.TestCase):
         # 正的基础 + 正的 tick → 更
         agg.push_tick(100)
         boosted = agg.c_flow_score()
-        self.assertGreater(boosted, base,
-            "同向 tick 应该增强（分数更极端）")
+        self.assertGreater(boosted, base, "同向 tick 应该增强（分数更极端）")
 
     def test_tick_opposite_direction_reduces(self):
         """反向 tick → 分数减弱"""
@@ -194,8 +196,7 @@ class TestFlowAggregatorTick(unittest.TestCase):
         # 正的基础 + 负的 tick → 减弱
         agg.push_tick(-100)
         reduced = agg.c_flow_score()
-        self.assertLess(reduced, base,
-            "反向 tick 应该减弱分数")
+        self.assertLess(reduced, base, "反向 tick 应该减弱分数")
 
     def test_tick_capped_at_100(self):
         """tick 叠加后仍不超过 100"""
@@ -237,6 +238,7 @@ class TestFlowAggregatorTick(unittest.TestCase):
 #  4. compute_C_flow 快捷函数
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeCFlow(unittest.TestCase):
     """compute_C_flow — 快捷计算函数。"""
 
@@ -269,6 +271,7 @@ class TestComputeCFlow(unittest.TestCase):
 #  5. 滑动窗口与边界
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFlowAggregatorWindow(unittest.TestCase):
     """滑动窗口行为与边界。"""
 
@@ -289,8 +292,7 @@ class TestFlowAggregatorWindow(unittest.TestCase):
 
         # 小窗口更容易被最后一根影响
         # 大窗口有更多正数据缓冲，分数应该更高（更正）
-        self.assertGreater(agg_large.c_flow_score(), agg_small.c_flow_score(),
-            "大窗口应该更平滑，受单根影响更小")
+        self.assertGreater(agg_large.c_flow_score(), agg_small.c_flow_score(), "大窗口应该更平滑，受单根影响更小")
 
     def test_default_window_30(self):
         """默认窗口 = 30"""
@@ -332,8 +334,7 @@ class TestFlowAggregatorWindow(unittest.TestCase):
             agg_uni.push_minishare(last=last, oi=oi, vol=500)
         uni_score = abs(agg_uni.c_flow_score())
 
-        self.assertLess(alt_score, uni_score,
-            "交替流的分数绝对值应该小于纯单向流（因为正负抵消）")
+        self.assertLess(alt_score, uni_score, "交替流的分数绝对值应该小于纯单向流（因为正负抵消）")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

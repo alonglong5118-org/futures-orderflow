@@ -47,6 +47,7 @@ from strategy_layer import walk_forward_gate
 #  1. _is_risk_locked — 风控锁定
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIsRiskLocked(unittest.TestCase):
     """_is_risk_locked — 风控锁定判断。"""
 
@@ -114,9 +115,7 @@ class TestIsRiskLocked(unittest.TestCase):
 
     def test_halted_with_scale_zero(self):
         """HALTED + scale=0 → 锁定（state 优先，reason 取 lock_reason）"""
-        locked, reason = _is_risk_locked({
-            "state": "HALTED", "scale": 0.0, "lock_reason": "大回撤"
-        })
+        locked, reason = _is_risk_locked({"state": "HALTED", "scale": 0.0, "lock_reason": "大回撤"})
         self.assertTrue(locked)
         self.assertIn("大回撤", reason)
         self.assertNotIn("scale=0", reason)  # state 已经命中了，不用 scale 判断
@@ -125,6 +124,7 @@ class TestIsRiskLocked(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. walk_forward_gate — 稳健池闸门
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestWalkForwardGate(unittest.TestCase):
     """walk_forward_gate — 稳健池准入闸门。"""
@@ -140,6 +140,7 @@ class TestWalkForwardGate(unittest.TestCase):
     def test_in_robust_pool_returns_stability_and_oos(self):
         """在稳健池 → 返回 stability 和 oos_expR"""
         from strategy_layer import ROBUST_POOL
+
         if not ROBUST_POOL:
             self.skipTest("ROBUST_POOL 为空")
         sym = list(ROBUST_POOL.keys())[0]
@@ -156,6 +157,7 @@ class TestWalkForwardGate(unittest.TestCase):
     def test_case_insensitive(self):
         """品种名大小写不敏感"""
         from strategy_layer import ROBUST_POOL
+
         if not ROBUST_POOL:
             self.skipTest("ROBUST_POOL 为空")
         sym_upper = list(ROBUST_POOL.keys())[0]
@@ -180,6 +182,7 @@ class TestWalkForwardGate(unittest.TestCase):
     def test_status_is_one_of_three(self):
         """status 是三种之一：观察池 / 稳健池 / 稳健池·紧急出池"""
         from strategy_layer import ROBUST_POOL
+
         valid_statuses = {"观察池", "稳健池", "稳健池·紧急出池"}
         # 测一个不在池的
         r1 = walk_forward_gate("xyz999")
@@ -194,6 +197,7 @@ class TestWalkForwardGate(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. compute_kelly_factor — 细节补充
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestKellyFactorDetails(unittest.TestCase):
     """compute_kelly_factor 细节补充测试。"""
@@ -220,8 +224,7 @@ class TestKellyFactorDetails(unittest.TestCase):
     def test_custom_cfg_kelly_range(self):
         """自定义 cfg 的 kelly_min/kelly_max 影响范围"""
         cfg1 = dict(DEFAULT_CONFIG)
-        cfg1["risk_gate"] = dict(DEFAULT_CONFIG["risk_gate"],
-                                  kelly_min=0.8, kelly_max=0.8)
+        cfg1["risk_gate"] = dict(DEFAULT_CONFIG["risk_gate"], kelly_min=0.8, kelly_max=0.8)
         # min = max = 0.8 → 如果有 edge 的话应该是 0.8
         # 但无校准数据时返回 1.0，所以这个测试验证函数不崩溃
         result = compute_kelly_factor("rb", cfg=cfg1)

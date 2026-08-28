@@ -8,6 +8,7 @@
 - 因子集中度（训练集上单因子最大权重）→ 高集中度板块用 aggressive
 - 因子多样性 → 高多样性板块用 conservative
 """
+
 import copy
 import json
 import os
@@ -27,9 +28,9 @@ from ga_group_six_factor import load_group_data
 # ===== 策略原型定义 =====
 ARCHETYPES = {
     "conservative": {"n_factor": 6, "max_w": 0.30, "entropy_lambda": 0.20, "label": "保守分散型"},
-    "balanced":     {"n_factor": 6, "max_w": 0.40, "entropy_lambda": 0.10, "label": "均衡稳健型"},
-    "aggressive":   {"n_factor": 6, "max_w": 0.60, "entropy_lambda": 0.03, "label": "集中进攻型"},
-    "focused":      {"n_factor": 5, "max_w": 0.45, "entropy_lambda": 0.08, "label": "精简聚焦型"},
+    "balanced": {"n_factor": 6, "max_w": 0.40, "entropy_lambda": 0.10, "label": "均衡稳健型"},
+    "aggressive": {"n_factor": 6, "max_w": 0.60, "entropy_lambda": 0.03, "label": "集中进攻型"},
+    "focused": {"n_factor": 5, "max_w": 0.45, "entropy_lambda": 0.08, "label": "精简聚焦型"},
 }
 
 # ===== GA 参数 =====
@@ -58,7 +59,7 @@ def ind_to_weights(ind, n_factor):
     names = get_factor_names(n_factor)
     s = sum(max(0, x) for x in ind)
     if s < 1e-6:
-        return {n: 1.0/len(names) for n in names}
+        return {n: 1.0 / len(names) for n in names}
     norm = [max(0, x) / s for x in ind]
     return {name: round(w, 4) for name, w in zip(names, norm)}
 
@@ -93,8 +94,7 @@ def eval_weights(data, weights=None):
     total_trades = 0
     for sym, df in sorted(data.items()):
         try:
-            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW,
-                                      min_bars=MIN_BARS, df_in=df)
+            r = walk_forward_backtest(sym, cfg=cfg, window=WINDOW, min_bars=MIN_BARS, df_in=df)
             nt = int(r.get("trades", 0))
             if nt >= MIN_TRADES:
                 expRs.append(float(r.get("expR", 0)))
@@ -125,8 +125,7 @@ def ga_optimize(train_data, archetype_name, archetype_cfg):
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0, 1)
-    toolbox.register("individual", tools.initRepeat, creator.FDiff2Ind,
-                     toolbox.attr_float, n=n_vars)
+    toolbox.register("individual", tools.initRepeat, creator.FDiff2Ind, toolbox.attr_float, n=n_vars)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     def _evaluate(ind):
@@ -209,9 +208,9 @@ def compute_sector_characteristics(train_data):
 
 
 def process_group(group_name):
-    print(f"\n{'='*65}", flush=True)
+    print(f"\n{'=' * 65}", flush=True)
     print(f"[板块] {group_name}", flush=True)
-    print(f"{'='*65}", flush=True)
+    print(f"{'=' * 65}", flush=True)
 
     group_data = load_group_data(group_name, min_bars=TRAIN_BARS + TEST_BARS, tail=0)
     if len(group_data) < 3:
@@ -226,7 +225,7 @@ def process_group(group_name):
     for sym, df in sorted(group_data.items()):
         total = len(df)
         train_end = total - TEST_BARS
-        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS):train_end]
+        train_data[sym] = df.iloc[max(0, train_end - TRAIN_BARS) : train_end]
         test_data[sym] = df.iloc[train_end:]
 
     # 基准
@@ -268,9 +267,10 @@ def process_group(group_name):
 
         train_gain = train_expR - base_train
         test_gain = test_expR - base_test
-        print(f"train={train_expR:+.3f}({train_gain:+.2f})  "
-              f"test={test_expR:+.3f}({test_gain:+.2f})  "
-              f"entropy={ent:.2f}", flush=True)
+        print(
+            f"train={train_expR:+.3f}({train_gain:+.2f})  test={test_expR:+.3f}({test_gain:+.2f})  entropy={ent:.2f}",
+            flush=True,
+        )
 
     # 最优 OOS 原型（事后诸葛亮，用于上限参考）
     best_oos = max(archetype_results, key=lambda k: archetype_results[k]["test_expR"])
@@ -295,8 +295,7 @@ def process_group(group_name):
     print(f"    基准 test:       {base_test:+.3f}", flush=True)
     for aname in ARCHETYPES:
         r = archetype_results[aname]
-        print(f"    {aname:14s} test: {r['test_expR']:+.3f}  "
-              f"(train: {r['train_expR']:+.3f})", flush=True)
+        print(f"    {aname:14s} test: {r['test_expR']:+.3f}  (train: {r['train_expR']:+.3f})", flush=True)
     print(f"    最优 OOS: {best_oos} ({best_oos_val:+.3f})", flush=True)
     print(f"    特征选择: {feature_selected} ({feature_selected_test:+.3f})", flush=True)
 
@@ -326,21 +325,26 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     elapsed = time.time() - t0
-    print(f"\n{'='*65}", flush=True)
-    print(f"全部完成，耗时 {elapsed/60:.1f} 分钟", flush=True)
-    print(f"{'='*65}", flush=True)
+    print(f"\n{'=' * 65}", flush=True)
+    print(f"全部完成，耗时 {elapsed / 60:.1f} 分钟", flush=True)
+    print(f"{'=' * 65}", flush=True)
 
     # 汇总表
-    print(f"\n{'板块':<8s} {'基准':>8s} {'保守':>8s} {'均衡':>8s} {'进攻':>8s} {'精简':>8s} {'最优OOS':>10s}", flush=True)
+    print(
+        f"\n{'板块':<8s} {'基准':>8s} {'保守':>8s} {'均衡':>8s} {'进攻':>8s} {'精简':>8s} {'最优OOS':>10s}", flush=True
+    )
     print("-" * 70, flush=True)
     for g, r in results.items():
         a = r["archetypes"]
-        print(f"{g:<8s} {r['base']['test']:+.3f}    "
-              f"{a['conservative']['test_expR']:+.3f}    "
-              f"{a['balanced']['test_expR']:+.3f}    "
-              f"{a['aggressive']['test_expR']:+.3f}    "
-              f"{a['focused']['test_expR']:+.3f}    "
-              f"{r['best_oos_archetype']:>10s}", flush=True)
+        print(
+            f"{g:<8s} {r['base']['test']:+.3f}    "
+            f"{a['conservative']['test_expR']:+.3f}    "
+            f"{a['balanced']['test_expR']:+.3f}    "
+            f"{a['aggressive']['test_expR']:+.3f}    "
+            f"{a['focused']['test_expR']:+.3f}    "
+            f"{r['best_oos_archetype']:>10s}",
+            flush=True,
+        )
 
     # 差异化 vs 统一策略对比
     print(f"\n差异化 vs 统一策略（测试集平均 expR）:", flush=True)

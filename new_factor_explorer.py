@@ -21,6 +21,7 @@ new_factor_explorer.py — 新因子挖掘与有效性检验
   python3 new_factor_explorer.py --sector 化工 --forward 5
   python3 new_factor_explorer.py --all --save
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,6 +52,7 @@ for _sym, _meta in SYMBOLS.items():
 # 新因子计算
 # ============================================================================
 
+
 def compute_V_vol(df, lookback=20):
     """波动率因子：滚动波动率分位 + 波动率变化
     返回 V_vol ∈ [-100, 100]
@@ -62,8 +64,7 @@ def compute_V_vol(df, lookback=20):
     ret = np.diff(np.log(close))
 
     # 滚动波动率（20日）
-    vols = np.array([float(np.std(ret[max(0, i-lookback):i+1])) * np.sqrt(252)
-                     for i in range(len(ret))])
+    vols = np.array([float(np.std(ret[max(0, i - lookback) : i + 1])) * np.sqrt(252) for i in range(len(ret))])
     if len(vols) < 10:
         return 0.0
 
@@ -102,8 +103,7 @@ def compute_Vol_vol(df, lookback=20):
     ret = np.diff(close) / (close[:-1] + 1e-8)
 
     # 成交量变化（相对 20 日均量）
-    vol_ma = np.array([float(np.mean(volume[max(0, i-lookback):i+1]))
-                       for i in range(len(volume))])
+    vol_ma = np.array([float(np.mean(volume[max(0, i - lookback) : i + 1])) for i in range(len(volume))])
     vol_ratio = volume / (vol_ma + 1e-8)
 
     # 最近 5 日的量价配合
@@ -194,7 +194,7 @@ def compute_SR_dist(symbol, df, lookback=100):
         return 0.0
     try:
         # 用最近 lookback 根 K 线找 SR 位
-        df_recent = df.iloc[-min(lookback, len(df)):].copy()
+        df_recent = df.iloc[-min(lookback, len(df)) :].copy()
         result = sra.find_sr_levels(df_recent, symbol=symbol)
         if not result or not result.get("levels"):
             return 0.0
@@ -275,7 +275,7 @@ def compute_all_new_factors(symbol, df_daily, date_idx=-1):
 
     # Inv_stock
     try:
-        if hasattr(df, 'index') and len(df) > 0:
+        if hasattr(df, "index") and len(df) > 0:
             date_str = str(df.index[date_idx].date()) if date_idx < 0 else str(df.index[date_idx].date())
         else:
             date_str = None
@@ -310,7 +310,7 @@ def single_factor_test(symbol, factor_fn, factor_name, forward_days=5, min_bars=
 
     for i in range(min_bars, n - forward_days, step):
         try:
-            df_slice = df.iloc[:i+1]
+            df_slice = df.iloc[: i + 1]
             fv = factor_fn(symbol, df_slice)
             # 未来 N 日收益率
             ret = (close[i + forward_days] - close[i + 1]) / (close[i + 1] + 1e-8) * 100
@@ -345,6 +345,7 @@ def single_factor_test(symbol, factor_fn, factor_name, forward_days=5, min_bars=
         z = 0.5 * np.log((1 + ic) / (1 - ic + 1e-8))
         se = 1.0 / np.sqrt(n - 3)
         from math import erfc
+
         p_val = erfc(abs(z) / (se * np.sqrt(2)))
     else:
         p_val = 1.0
@@ -404,6 +405,7 @@ def single_factor_test(symbol, factor_fn, factor_name, forward_days=5, min_bars=
 # 主程序
 # ============================================================================
 
+
 def test_sector(sector_name, forward=5, max_bars=600, step=3):
     """测试一个板块所有品种的所有新因子。"""
     syms = GROUPS.get(sector_name, [])
@@ -417,8 +419,7 @@ def test_sector(sector_name, forward=5, max_bars=600, step=3):
         sym_results = {}
         for fname in NEW_FACTOR_NAMES:
             fn = _make_factor_fn(fname)
-            r = single_factor_test(sym, fn, fname, forward_days=forward,
-                                   max_bars=max_bars, step=step)
+            r = single_factor_test(sym, fn, fname, forward_days=forward, max_bars=max_bars, step=step)
             if r:
                 sym_results[fname] = r
         if sym_results:
@@ -433,6 +434,7 @@ def test_sector(sector_name, forward=5, max_bars=600, step=3):
 
 def _make_factor_fn(factor_name):
     """构造单参数因子函数供 single_factor_test 使用。"""
+
     def fn(symbol, df):
         if factor_name == "V_vol":
             return compute_V_vol(df)
@@ -449,6 +451,7 @@ def _make_factor_fn(factor_name):
             except Exception:
                 return 0.0
         return 0.0
+
     return fn
 
 
@@ -516,8 +519,7 @@ def main():
     all_results = {}
     for sector in sectors:
         print(f"\n【{sector}】")
-        r = test_sector(sector, forward=args.forward,
-                        max_bars=args.max_bars, step=args.step)
+        r = test_sector(sector, forward=args.forward, max_bars=args.max_bars, step=args.step)
         all_results[sector] = r
 
     # 汇总
@@ -548,8 +550,12 @@ def main():
         out_file = os.path.join(HERE, "logs", f"new_factor_explore_f{args.forward}.json")
         os.makedirs(os.path.dirname(out_file), exist_ok=True)
         with open(out_file, "w", encoding="utf-8") as f:
-            json.dump({"summary": summary, "detail": all_results,
-                       "forward_days": args.forward}, f, ensure_ascii=False, indent=2)
+            json.dump(
+                {"summary": summary, "detail": all_results, "forward_days": args.forward},
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         print(f"\n结果已保存: {out_file}")
 
 

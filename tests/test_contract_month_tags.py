@@ -47,6 +47,7 @@ from refresh_main_contracts import _add_months, _next_month_code, ym_of
 #  1. ym_of
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestYmOf(unittest.TestCase):
     """ym_of 合约码 → 年月整数。"""
 
@@ -111,6 +112,7 @@ class TestYmOf(unittest.TestCase):
 #  2. _add_months
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAddMonths(unittest.TestCase):
     """_add_months 年月整数 + n 个月。"""
 
@@ -164,6 +166,7 @@ class TestAddMonths(unittest.TestCase):
 #  3. _next_month_code
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestNextMonthCode(unittest.TestCase):
     """_next_month_code 生成近月主力候选合约。"""
 
@@ -209,6 +212,7 @@ class TestNextMonthCode(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  4. _tag_to_symbols
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTagToSymbols(unittest.TestCase):
     """_tag_to_symbols 文本命中品种标签。"""

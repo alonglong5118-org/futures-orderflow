@@ -17,13 +17,14 @@ da龘 用 minishare rt_fut_k 全市场快照做「异动扫描」（按涨跌幅
   result = asc.compute(snaps)
   # result = {"ok", "updated", "total", "by_symbol": {...}, "top_up":[...], "top_down":[...]}
 """
+
 from __future__ import annotations
 
 import time
 
-W_PCT = 0.7     # 涨跌幅权重
-W_AMP = 0.3     # 振幅权重
-TOP_N = 12      # 涨跌榜各取前 N
+W_PCT = 0.7  # 涨跌幅权重
+W_AMP = 0.3  # 振幅权重
+TOP_N = 12  # 涨跌榜各取前 N
 
 
 def compute(snaps, pre_close_map=None, top_n=TOP_N):
@@ -65,8 +66,7 @@ def compute(snaps, pre_close_map=None, top_n=TOP_N):
         rows.append(rec)
 
     if not rows:
-        return {"ok": False, "updated": time.time(), "total": 0,
-                "by_symbol": {}, "top_up": [], "top_down": []}
+        return {"ok": False, "updated": time.time(), "total": 0, "by_symbol": {}, "top_up": [], "top_down": []}
 
     top_up = sorted(rows, key=lambda x: -x["pct"])[:top_n]
     top_down = sorted(rows, key=lambda x: x["pct"])[:top_n]

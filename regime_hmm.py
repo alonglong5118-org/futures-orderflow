@@ -13,25 +13,27 @@
 
 无 hmmlearn 时退化为规则分桶（同样输出上述 4 类标签），保证可用。
 """
+
 import numpy as np
 
 try:
     from hmmlearn.hmm import GaussianHMM
+
     _HAVE_HMML = True
 except Exception:
     _HAVE_HMML = False
 
 _N_STATES = 4
-_MODELS = {}        # sym -> (trained GaussianHMM | None, mu, sd)
-_LABELS = {}        # sym -> 最近一次 label 字符串
-_LAST_TRAIN = {}    # sym -> 训练时特征行数（用于判断是否需重训）
+_MODELS = {}  # sym -> (trained GaussianHMM | None, mu, sd)
+_LABELS = {}  # sym -> 最近一次 label 字符串
+_LAST_TRAIN = {}  # sym -> 训练时特征行数（用于判断是否需重训）
 
 # HMM 态 → 触发阈值乘数（注入 pipeline 的 T_thresh_eff）
 THR_MULT = {
-    "trend_up": 0.90,    # 趋势明确 → 阈值略降，顺势更易触发
+    "trend_up": 0.90,  # 趋势明确 → 阈值略降，顺势更易触发
     "trend_down": 0.90,
-    "choppy": 1.15,      # 震荡 → 阈值抬高，抑制假突破
-    "high_vol": 1.25,    # 高波动 → 阈值抬高，控风险少出手
+    "choppy": 1.15,  # 震荡 → 阈值抬高，抑制假突破
+    "high_vol": 1.25,  # 高波动 → 阈值抬高，控风险少出手
 }
 DEFAULT_THR_MULT = 1.0
 
@@ -48,7 +50,7 @@ def _features_raw(df):
     if len(ret) < 30:
         return None
     win = 20
-    vol = np.array([float(np.std(ret[max(0, i - win):i + 1])) for i in range(len(ret))])
+    vol = np.array([float(np.std(ret[max(0, i - win) : i + 1])) for i in range(len(ret))])
     X = np.column_stack([ret, vol])
     X = X[~np.isnan(X).any(axis=1)]
     if len(X) < 30:
@@ -113,8 +115,7 @@ def compute_label(sym, df, force=False):
             Xz = (Xraw - mu) / sd
             m = None
             if _HAVE_HMML:
-                m = GaussianHMM(n_components=_N_STATES, covariance_type="diag",
-                                n_iter=80, random_state=0, tol=1e-3)
+                m = GaussianHMM(n_components=_N_STATES, covariance_type="diag", n_iter=80, random_state=0, tol=1e-3)
                 m.fit(Xz)
             _MODELS[sym] = (m, mu, sd)
             _LAST_TRAIN[sym] = n
@@ -130,7 +131,9 @@ def compute_label(sym, df, force=False):
     except Exception:
         # 任何拟合异常 → 退化规则，保证可用
         try:
-            mu = Xraw.mean(0); sd = Xraw.std(0); sd[sd == 0] = 1.0
+            mu = Xraw.mean(0)
+            sd = Xraw.std(0)
+            sd[sd == 0] = 1.0
             return _rule_label((Xraw - mu) / sd)
         except Exception:
             return None

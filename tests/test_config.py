@@ -44,6 +44,7 @@ from strategy_layer import (
 #  1. 合约规格完整性
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestContractSpecsCompleteness(unittest.TestCase):
     """contract_specs 合约规格完整性验证。"""
 
@@ -58,8 +59,7 @@ class TestContractSpecsCompleteness(unittest.TestCase):
             # 大小写都查一下
             if sym not in self.specs and sym.upper() not in self.specs:
                 missing.append(sym)
-        self.assertEqual(len(missing), 0,
-            f"以下品种缺少合约规格: {missing[:10]}... (共 {len(missing)} 个)")
+        self.assertEqual(len(missing), 0, f"以下品种缺少合约规格: {missing[:10]}... (共 {len(missing)} 个)")
 
     def test_each_spec_has_all_fields(self):
         """每个合约规格包含所有必要字段"""
@@ -68,8 +68,7 @@ class TestContractSpecsCompleteness(unittest.TestCase):
             missing = [f for f in self.required_fields if f not in spec]
             if missing:
                 missing_fields[sym] = missing
-        self.assertEqual(len(missing_fields), 0,
-            f"以下品种缺少字段: {missing_fields}")
+        self.assertEqual(len(missing_fields), 0, f"以下品种缺少字段: {missing_fields}")
 
     def test_multiplier_positive(self):
         """所有合约乘数 > 0"""
@@ -78,8 +77,7 @@ class TestContractSpecsCompleteness(unittest.TestCase):
             m = spec.get("multiplier", 0)
             if m <= 0:
                 bad.append((sym, m))
-        self.assertEqual(len(bad), 0,
-            f"乘数非正的品种: {bad}")
+        self.assertEqual(len(bad), 0, f"乘数非正的品种: {bad}")
 
     def test_margin_rate_reasonable(self):
         """保证金率在合理范围（0.05 ~ 0.25）"""
@@ -88,8 +86,7 @@ class TestContractSpecsCompleteness(unittest.TestCase):
             mr = spec.get("margin_rate", 0)
             if mr < 0.05 or mr > 0.25:
                 bad.append((sym, mr))
-        self.assertEqual(len(bad), 0,
-            f"保证金率异常的品种: {bad}")
+        self.assertEqual(len(bad), 0, f"保证金率异常的品种: {bad}")
 
     def test_limit_pct_reasonable(self):
         """涨跌停幅度在合理范围（0.03 ~ 0.15）"""
@@ -98,8 +95,7 @@ class TestContractSpecsCompleteness(unittest.TestCase):
             lp = spec.get("limit_pct", 0)
             if lp < 0.03 or lp > 0.15:
                 bad.append((sym, lp))
-        self.assertEqual(len(bad), 0,
-            f"涨跌停幅度异常的品种: {bad}")
+        self.assertEqual(len(bad), 0, f"涨跌停幅度异常的品种: {bad}")
 
     def test_fee_non_negative(self):
         """手续费 ≥ 0"""
@@ -108,36 +104,40 @@ class TestContractSpecsCompleteness(unittest.TestCase):
             fee = spec.get("fee", -1)
             if fee < 0:
                 bad.append((sym, fee))
-        self.assertEqual(len(bad), 0,
-            f"手续费为负的品种: {bad}")
+        self.assertEqual(len(bad), 0, f"手续费为负的品种: {bad}")
 
     def test_agriculture_margin_lower_than_black(self):
         """农产品保证金率普遍低于黑系（常识校验）"""
         specs = self.specs
         # 黑系代表：rb / hc / i / J / JM
         black_syms = ["rb", "hc", "i", "J", "JM"]
-        black_margins = [specs[s.upper() if s.upper() in specs else s]["margin_rate"]
-                         for s in black_syms if s.upper() in specs or s in specs]
+        black_margins = [
+            specs[s.upper() if s.upper() in specs else s]["margin_rate"]
+            for s in black_syms
+            if s.upper() in specs or s in specs
+        ]
         # 农产品代表：m / y / a / c / SR / RM
         agri_syms = ["m", "y", "a", "c", "SR", "RM"]
-        agri_margins = [specs[s.upper() if s.upper() in specs else s]["margin_rate"]
-                        for s in agri_syms if s.upper() in specs or s in specs]
+        agri_margins = [
+            specs[s.upper() if s.upper() in specs else s]["margin_rate"]
+            for s in agri_syms
+            if s.upper() in specs or s in specs
+        ]
         # 农产品平均保证金率应该低于黑系
         if black_margins and agri_margins:
             avg_black = sum(black_margins) / len(black_margins)
             avg_agri = sum(agri_margins) / len(agri_margins)
-            self.assertLess(avg_agri, avg_black,
-                f"农产品平均保证金率({avg_agri:.3f})应该低于黑系({avg_black:.3f})")
+            self.assertLess(avg_agri, avg_black, f"农产品平均保证金率({avg_agri:.3f})应该低于黑系({avg_black:.3f})")
 
     def test_spec_count_reasonable(self):
         """合约规格数量合理（> 40 个）"""
-        self.assertGreater(len(self.specs), 40,
-            "合约规格数量太少，可能加载不完整")
+        self.assertGreater(len(self.specs), 40, "合约规格数量太少，可能加载不完整")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  2. 稳健池闸门逻辑
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestWalkForwardGate(unittest.TestCase):
     """walk_forward_gate — 稳健池准入判定。"""
@@ -186,8 +186,7 @@ class TestWalkForwardGate(unittest.TestCase):
         # ROBUST_POOL 里的品种都是 stability=0.70, oos_expR=0.15 → 刚好满足
         for sym in ["JM", "SA", "RB"]:
             result = walk_forward_gate(sym)
-            self.assertTrue(result["passed"],
-                f"{sym} 应该通过稳健池闸门")
+            self.assertTrue(result["passed"], f"{sym} 应该通过稳健池闸门")
             self.assertEqual(result["status"], "稳健池")
 
     def test_higher_threshold_filters_out(self):
@@ -236,6 +235,7 @@ class TestWalkForwardGate(unittest.TestCase):
 #  3. 配置交叉一致性
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestConfigCrossConsistency(unittest.TestCase):
     """配置交叉一致性验证。"""
 
@@ -245,30 +245,27 @@ class TestConfigCrossConsistency(unittest.TestCase):
         for sym in ROBUST_POOL:
             if sym.lower() not in SYMBOLS and sym.upper() not in SYMBOLS:
                 missing.append(sym)
-        self.assertEqual(len(missing), 0,
-            f"ROBUST_POOL 中不存在的品种: {missing}")
+        self.assertEqual(len(missing), 0, f"ROBUST_POOL 中不存在的品种: {missing}")
 
     def test_thresholds_covers_all_groups(self):
         """thresholds 配置覆盖所有 SYMBOLS 分组"""
         groups = set(info["group"] for info in SYMBOLS.values())
         thresh_groups = set(DEFAULT_CONFIG["thresholds"].keys())
         missing = groups - thresh_groups
-        self.assertEqual(len(missing), 0,
-            f"缺少 thresholds 配置的分组: {missing}")
+        self.assertEqual(len(missing), 0, f"缺少 thresholds 配置的分组: {missing}")
 
     def test_regime_params_covers_all_groups(self):
         """regime_params.by_group 覆盖所有 SYMBOLS 分组"""
         groups = set(info["group"] for info in SYMBOLS.values())
         regime_groups = set(DEFAULT_CONFIG["regime_params"]["by_group"].keys())
         missing = groups - regime_groups
-        self.assertEqual(len(missing), 0,
-            f"缺少 regime_params 配置的分组: {missing}")
+        self.assertEqual(len(missing), 0, f"缺少 regime_params 配置的分组: {missing}")
 
     def test_liquidity_slip_covers_symbols(self):
         """LIQUIDITY_SLIP 覆盖主要品种（至少 30 个）"""
         from four_dim_strategy import LIQUIDITY_SLIP
-        self.assertGreater(len(LIQUIDITY_SLIP), 30,
-            "LIQUIDITY_SLIP 覆盖的品种太少")
+
+        self.assertGreater(len(LIQUIDITY_SLIP), 30, "LIQUIDITY_SLIP 覆盖的品种太少")
         # 所有值都是正数
         for sym, slip in LIQUIDITY_SLIP.items():
             self.assertGreater(slip, 0, f"{sym} 滑点 <= 0")
@@ -281,9 +278,9 @@ class TestConfigCrossConsistency(unittest.TestCase):
     def test_all_strategy_names_are_lowercase(self):
         """策略名统一小写（避免大小写不一致导致的查找失败）"""
         from strategy_layer import ALL_STRATS, STRATS
+
         for name in ALL_STRATS:
-            self.assertEqual(name, name.lower(),
-                f"策略名 '{name}' 不是全小写")
+            self.assertEqual(name, name.lower(), f"策略名 '{name}' 不是全小写")
         for name in STRATS.keys():
             self.assertEqual(name, name.lower())
 
@@ -291,8 +288,7 @@ class TestConfigCrossConsistency(unittest.TestCase):
         """combine_weights 权重之和 = 1.0"""
         w = DEFAULT_CONFIG.get("combine_weights", {})
         total = sum(w.values())
-        self.assertAlmostEqual(total, 1.0, places=4,
-            msg="combine_weights 之和 = %s，应该 = 1.0" % total)
+        self.assertAlmostEqual(total, 1.0, places=4, msg="combine_weights 之和 = %s，应该 = 1.0" % total)
 
     def test_regime_coef_has_three_regimes(self):
         """regime_coef 包含趋势/震荡/波动三种 regime"""
@@ -306,8 +302,7 @@ class TestConfigCrossConsistency(unittest.TestCase):
         coef = DEFAULT_CONFIG.get("regime_coef", {})
         for regime, params in coef.items():
             for key in ["T", "conv", "stop", "cooldown"]:
-                self.assertGreater(params[key], 0,
-                    f"regime_coef[{regime}][{key}] = {params[key]}，应该 > 0")
+                self.assertGreater(params[key], 0, f"regime_coef[{regime}][{key}] = {params[key]}，应该 > 0")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

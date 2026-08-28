@@ -19,6 +19,7 @@
     plan = ep.plan_execution("lh", lots=8, price=14500, direction="多")
     print(plan["headline"])   # 一句话建议
 """
+
 from __future__ import annotations
 
 import math
@@ -26,7 +27,7 @@ import time
 
 try:
     import four_dim_strategy as fd
-except Exception:      # 允许脱离主工程单测
+except Exception:  # 允许脱离主工程单测
     fd = None
 
 # ── 参数 ──────────────────────────────────────────────────────────────────
@@ -36,11 +37,11 @@ except Exception:      # 允许脱离主工程单测
 # 没有绝对帽的话超流动品种算出 200+ 手单片，规则等于永不触发、形同虚设。
 PARTICIPATION_BY_TIER = {1.0: 0.03, 1.5: 0.02, 2.0: 0.01}
 SLICE_CAP_BY_TIER = {1.0: 40, 1.5: 15, 2.0: 6}
-MINUTES_PER_DAY = 225       # 日盘连续竞价分钟数（近似）
-MAX_SLICES = 6              # 最多拆 6 片（再多人工执行就烦了）
+MINUTES_PER_DAY = 225  # 日盘连续竞价分钟数（近似）
+MAX_SLICES = 6  # 最多拆 6 片（再多人工执行就烦了）
 MIN_SLICE_LOTS = 1
-ICEBERG_TRIGGER = 3         # 单片 ≥3 手且属低流动 → 建议冰山
-_VOL_CACHE: dict = {}       # {sym: (ts, avg_daily_volume)}
+ICEBERG_TRIGGER = 3  # 单片 ≥3 手且属低流动 → 建议冰山
+_VOL_CACHE: dict = {}  # {sym: (ts, avg_daily_volume)}
 _VOL_TTL = 3600
 
 
@@ -154,34 +155,44 @@ def plan_execution(symbol, lots, price=None, direction="多", urgency="normal"):
     raw_impact = tier * (1 + math.log(max(1, lots / max(1, max_slice)), 2))
     split_impact = tier * (1 + 0.25 * (slices - 1))
     saved_pts = max(0.0, raw_impact - split_impact)
-    impact_note = (f"一次性打约滑 {raw_impact:.1f} 跳，拆 {slices} 片约 {split_impact:.1f} 跳，"
-                   f"省约 {saved_pts:.1f} 跳（≈{saved_pts * tick:.1f} 点/手）")
+    impact_note = (
+        f"一次性打约滑 {raw_impact:.1f} 跳，拆 {slices} 片约 {split_impact:.1f} 跳，"
+        f"省约 {saved_pts:.1f} 跳（≈{saved_pts * tick:.1f} 点/手）"
+    )
 
     if slices == 1:
         headline = f"{lots} 手一次性{style}即可（盘口吃得下，不用拆）"
     else:
         seq = "+".join(str(s) for s in slice_lots)
-        headline = (f"{lots} 手别一把打 —— 拆 {slices} 片（{seq}），每片间隔 {interval}s，"
-                    f"{style}" + (f"，冰山只露 {iceberg_show} 手" if iceberg else ""))
+        headline = f"{lots} 手别一把打 —— 拆 {slices} 片（{seq}），每片间隔 {interval}s，{style}" + (
+            f"，冰山只露 {iceberg_show} 手" if iceberg else ""
+        )
 
     return {
-        "symbol": symbol, "lots": lots, "direction": direction,
-        "tier": tier, "tier_label": {1.0: "A超流动", 1.5: "B中流动"}.get(tier, "C薄盘口"),
+        "symbol": symbol,
+        "lots": lots,
+        "direction": direction,
+        "tier": tier,
+        "tier_label": {1.0: "A超流动", 1.5: "B中流动"}.get(tier, "C薄盘口"),
         "avg_daily_volume": round(adv) if adv else None,
         "per_min_vol": round(per_min, 1) if per_min else None,
-        "max_slice": max_slice, "slices": slices, "slice_lots": slice_lots,
-        "interval_sec": interval, "style": style,
-        "iceberg": iceberg, "iceberg_show": iceberg_show,
+        "max_slice": max_slice,
+        "slices": slices,
+        "slice_lots": slice_lots,
+        "interval_sec": interval,
+        "style": style,
+        "iceberg": iceberg,
+        "iceberg_show": iceberg_show,
         "limit_offset_tick": limit_offset,
-        "impact_note": impact_note, "headline": headline,
+        "impact_note": impact_note,
+        "headline": headline,
         "urgency": urgency,
     }
 
 
 def plan_exit(symbol, lots, price=None, direction="多", panic=False):
     """离场执行建议。止损离场默认 urgency=fast（保命优先，不为省滑点拖着不跑）。"""
-    p = plan_execution(symbol, lots, price, direction,
-                       urgency="fast" if panic else "normal")
+    p = plan_execution(symbol, lots, price, direction, urgency="fast" if panic else "normal")
     if panic:
         p["headline"] = "🚨 止损离场：" + p["headline"] + "（宁可多滑一跳也要走干净）"
     return p
@@ -190,8 +201,7 @@ def plan_exit(symbol, lots, price=None, direction="多", panic=False):
 if __name__ == "__main__":
     for sym, lots in [("rb", 5), ("rb", 60), ("lh", 8), ("AP", 6), ("jd", 3), ("FG", 30)]:
         p = plan_execution(sym, lots)
-        print(f"\n[{sym} {lots}手] 档位={p['tier_label']} 每分钟量={p['per_min_vol']} "
-              f"单片上限={p['max_slice']}")
+        print(f"\n[{sym} {lots}手] 档位={p['tier_label']} 每分钟量={p['per_min_vol']} 单片上限={p['max_slice']}")
         print("  →", p["headline"])
         print("  ", p["impact_note"])
     print("\n[止损离场 lh 8手]", plan_exit("lh", 8, panic=True)["headline"])

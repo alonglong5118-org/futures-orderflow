@@ -25,6 +25,7 @@
   import discipline_review as dr
   cards = dr.get_all()   # {"daily":{...}, "weekly":{...}, "monthly":{...}}
 """
+
 from __future__ import annotations
 
 import json
@@ -46,13 +47,13 @@ EVENTS_FILE = os.path.join(HERE, "discipline_events.json")
 _EVENT_LOCK = threading.Lock()
 
 # 评分权重
-W_MANUAL = 15          # 每笔冲动/手动开仓
-W_MANUAL_CAP = 40       # 冲动扣分封顶
-W_LOCK = 30             # 每笔锁死时开仓
-W_SINGLE = 15           # 单品超上限
-W_PORTFOLIO = 15        # 组合超上限
-W_LOSS = 25             # 破日亏线
-W_LOSSMANUAL = 8        # 每笔手动砍亏
+W_MANUAL = 15  # 每笔冲动/手动开仓
+W_MANUAL_CAP = 40  # 冲动扣分封顶
+W_LOCK = 30  # 每笔锁死时开仓
+W_SINGLE = 15  # 单品超上限
+W_PORTFOLIO = 15  # 组合超上限
+W_LOSS = 25  # 破日亏线
+W_LOSSMANUAL = 8  # 每笔手动砍亏
 W_LOSSMANUAL_CAP = 20
 
 _DAILY_LOSS_STOP = 0.05  # 与 risk_state_machine.DAILY_LOSS_STOP 对齐
@@ -194,19 +195,27 @@ def _position_metrics():
         pct = margin / equity * 100 if equity > 0 else 0
         max_single = max(max_single, pct)
         total_margin += margin
-        positions.append({
-            "symbol": sym, "name": sp.get("name", sym),
-            "contract": sp.get("contract", sym),
-            "direction": pos.get("direction"), "lots": lots,
-            "avg": avg, "margin_pct": round(pct, 2),
-            "open_time": pos.get("open_time"),
-            "source": open_source.get(sym, "账户同步"),
-        })
+        positions.append(
+            {
+                "symbol": sym,
+                "name": sp.get("name", sym),
+                "contract": sp.get("contract", sym),
+                "direction": pos.get("direction"),
+                "lots": lots,
+                "avg": avg,
+                "margin_pct": round(pct, 2),
+                "open_time": pos.get("open_time"),
+                "source": open_source.get(sym, "账户同步"),
+            }
+        )
     port_pct = total_margin / equity * 100 if equity > 0 else 0
     return {
-        "equity": equity, "single_cap": single_cap, "port_cap": port_cap,
+        "equity": equity,
+        "single_cap": single_cap,
+        "port_cap": port_cap,
         "max_single_leg_pct": round(max_single, 2),
-        "portfolio_pct": round(port_pct, 2), "positions": positions,
+        "portfolio_pct": round(port_pct, 2),
+        "positions": positions,
     }
 
 
@@ -234,36 +243,43 @@ def _card(kind, now=None):
     # 信号采纳（周期内）：只在“你实际做过的品种”范围内统计采纳率，
     # 避免被 53 个全市场信号稀释成恒为 0（你不可能跟全市场信号）。
     traded_symbols = set(t.get("symbol") for t in trades if t.get("symbol"))
-    signals_in_period = [s for s in sig_map.values()
-                         if (s.get("symbol") in traded_symbols if traded_symbols
-                             else True)
-                         and (lambda p: p and start <= p < end)(_parse_time(s.get("time", "")))]
+    signals_in_period = [
+        s
+        for s in sig_map.values()
+        if (s.get("symbol") in traded_symbols if traded_symbols else True)
+        and (lambda p: p and start <= p < end)(_parse_time(s.get("time", "")))
+    ]
 
     # 2026-08-21: 重构分类逻辑 — 区分冲动开仓 vs 手动记录
     # external_trades: 账户同步/历史持仓等非主动开仓 → 不扣分
     # 2026-08-21: 扩展外部交易识别 — 账户总览等手动记账来源也不应扣分
     _EXT_PREFIXES = ("账户同步", "历史持仓", "对账补录", "对账", "补录", "账户总览")
-    external_trades = [t for t in opened
-    if (t.get("signal_id") or "").startswith(_EXT_PREFIXES)]
+    external_trades = [t for t in opened if (t.get("signal_id") or "").startswith(_EXT_PREFIXES)]
     # manual_records: 用户手动记录（空 signal_id 或 manual 前缀）→ 不扣分，只是如实记账
-    manual_records = [t for t in opened
-                      if _is_manual_record(t) and t not in external_trades]
+    manual_records = [t for t in opened if _is_manual_record(t) and t not in external_trades]
     # impulse_trades: 有 signal_id 但不是引擎信号也不是外部/手动 → 冲动开仓，扣分
-    impulse_trades = [t for t in opened
-                      if not _is_signal_backed(t, sig_map) 
-                      and not _is_manual_record(t) 
-                      and t not in external_trades]
+    impulse_trades = [
+        t for t in opened if not _is_signal_backed(t, sig_map) and not _is_manual_record(t) and t not in external_trades
+    ]
     signal_trades = [t for t in opened if _is_signal_backed(t, sig_map)]
     acted_on = len(signal_trades)
     adoption = round(acted_on / len(signals_in_period) * 100, 1) if signals_in_period else (0.0 if opened else 0.0)
 
     # 锁死时开仓（来自事件）
-    lock_violations = [e for e in events
-                       if e.get("type") == "entry" and e.get("risk_state") == "LOCKED"
-                       and (lambda p: p and start <= p < end)(_parse_time(e.get("time", "")))]
-    warning_entries = [e for e in events
-                       if e.get("type") == "entry" and e.get("risk_state") == "WARNING"
-                       and (lambda p: p and start <= p < end)(_parse_time(e.get("time", "")))]
+    lock_violations = [
+        e
+        for e in events
+        if e.get("type") == "entry"
+        and e.get("risk_state") == "LOCKED"
+        and (lambda p: p and start <= p < end)(_parse_time(e.get("time", "")))
+    ]
+    warning_entries = [
+        e
+        for e in events
+        if e.get("type") == "entry"
+        and e.get("risk_state") == "WARNING"
+        and (lambda p: p and start <= p < end)(_parse_time(e.get("time", "")))
+    ]
 
     # 仓位纪律
     pm = _position_metrics()
@@ -272,8 +288,7 @@ def _card(kind, now=None):
 
     # 亏损 / 止损纪律（周期内平仓）
     closed_pnl = sum(t.get("pnl") or 0 for t in closed_in_period)
-    closed_loss_manual = [t for t in closed_in_period
-                          if (t.get("pnl") or 0) < 0 and t.get("exit_reason") == "手动"]
+    closed_loss_manual = [t for t in closed_in_period if (t.get("pnl") or 0) < 0 and t.get("exit_reason") == "手动"]
     # 周期内止损平仓（纪律好，正面计数）
     stopped_out = [t for t in closed_in_period if t.get("exit_reason") == "止损"]
     period_loss_pct = (max(0.0, -closed_pnl) / pm["equity"] * 100) if pm["equity"] > 0 else 0.0
@@ -289,48 +304,79 @@ def _card(kind, now=None):
     # C1
     m_pen = min(W_MANUAL * len(impulse_trades), W_MANUAL_CAP)
     penalty += m_pen
-    checks.append({
-        "key": "C1", "name": "无冲动开仓", "pass": len(impulse_trades) == 0,
-        "detail": (f"无冲动开仓（手动记录 {len(manual_records)} 笔已豁免）" if not impulse_trades
-                   else f"{len(impulse_trades)} 笔冲动开仓（非信号、非手动记录，扣 {m_pen}），手动记录 {len(manual_records)} 笔已豁免"),
-    })
+    checks.append(
+        {
+            "key": "C1",
+            "name": "无冲动开仓",
+            "pass": len(impulse_trades) == 0,
+            "detail": (
+                f"无冲动开仓（手动记录 {len(manual_records)} 笔已豁免）"
+                if not impulse_trades
+                else f"{len(impulse_trades)} 笔冲动开仓（非信号、非手动记录，扣 {m_pen}），手动记录 {len(manual_records)} 笔已豁免"
+            ),
+        }
+    )
     # C2
     l_pen = W_LOCK * len(lock_violations)
     penalty += l_pen
-    checks.append({
-        "key": "C2", "name": "锁死不开仓", "pass": len(lock_violations) == 0,
-        "detail": ("状态机锁死期间未开仓" if not lock_violations
-                   else f"锁死期间开仓 {len(lock_violations)} 笔（扣 {l_pen}）"),
-    })
+    checks.append(
+        {
+            "key": "C2",
+            "name": "锁死不开仓",
+            "pass": len(lock_violations) == 0,
+            "detail": (
+                "状态机锁死期间未开仓"
+                if not lock_violations
+                else f"锁死期间开仓 {len(lock_violations)} 笔（扣 {l_pen}）"
+            ),
+        }
+    )
     # C3
     penalty += W_SINGLE if single_breach else 0
-    checks.append({
-        "key": "C3", "name": "单品不超上限", "pass": not single_breach,
-        "detail": f"单品最大 {pm['max_single_leg_pct']}% / 上限 {pm['single_cap']}%"
-                  + (" ⚠️ 超上限" if single_breach else " ✓"),
-    })
+    checks.append(
+        {
+            "key": "C3",
+            "name": "单品不超上限",
+            "pass": not single_breach,
+            "detail": f"单品最大 {pm['max_single_leg_pct']}% / 上限 {pm['single_cap']}%"
+            + (" ⚠️ 超上限" if single_breach else " ✓"),
+        }
+    )
     # C4
     penalty += W_PORTFOLIO if port_breach else 0
-    checks.append({
-        "key": "C4", "name": "组合不超上限", "pass": not port_breach,
-        "detail": f"组合占用 {pm['portfolio_pct']}% / 上限 {pm['port_cap']}%"
-                  + (" ⚠️ 超上限" if port_breach else " ✓"),
-    })
+    checks.append(
+        {
+            "key": "C4",
+            "name": "组合不超上限",
+            "pass": not port_breach,
+            "detail": f"组合占用 {pm['portfolio_pct']}% / 上限 {pm['port_cap']}%"
+            + (" ⚠️ 超上限" if port_breach else " ✓"),
+        }
+    )
     # C5
     penalty += W_LOSS if loss_breach else 0
-    checks.append({
-        "key": "C5", "name": "未破日亏线", "pass": not loss_breach,
-        "detail": f"区间亏损 {period_loss_pct:.2f}% / 红线 {_DAILY_LOSS_STOP*100:.0f}%"
-                  + (" ⚠️ 破线" if loss_breach else " ✓"),
-    })
+    checks.append(
+        {
+            "key": "C5",
+            "name": "未破日亏线",
+            "pass": not loss_breach,
+            "detail": f"区间亏损 {period_loss_pct:.2f}% / 红线 {_DAILY_LOSS_STOP * 100:.0f}%"
+            + (" ⚠️ 破线" if loss_breach else " ✓"),
+        }
+    )
     # C6
     lm_pen = min(W_LOSSMANUAL * len(closed_loss_manual), W_LOSSMANUAL_CAP)
     penalty += lm_pen
-    checks.append({
-        "key": "C6", "name": "止损不扛单", "pass": len(closed_loss_manual) == 0,
-        "detail": ("无手动砍亏" if not closed_loss_manual
-                   else f"{len(closed_loss_manual)} 笔亏损手动平仓（扣 {lm_pen}）"),
-    })
+    checks.append(
+        {
+            "key": "C6",
+            "name": "止损不扛单",
+            "pass": len(closed_loss_manual) == 0,
+            "detail": (
+                "无手动砍亏" if not closed_loss_manual else f"{len(closed_loss_manual)} 笔亏损手动平仓（扣 {lm_pen}）"
+            ),
+        }
+    )
 
     score = max(0, 100 - penalty)
     grade = "A" if score >= 90 else ("B" if score >= 75 else ("C" if score >= 60 else "D"))
@@ -338,8 +384,9 @@ def _card(kind, now=None):
     # ---- 复盘要点（自动文案）----
     notes = []
     if not opened:
-        notes.append("本周期无新开仓，按兵不动（管住手 ✓）。" if kind != "daily"
-                     else "今日无新开仓，按兵不动（管住手 ✓）。")
+        notes.append(
+            "本周期无新开仓，按兵不动（管住手 ✓）。" if kind != "daily" else "今日无新开仓，按兵不动（管住手 ✓）。"
+        )
     else:
         period_word = "今日" if kind == "daily" else "本周期"
         parts = []
@@ -354,42 +401,39 @@ def _card(kind, now=None):
         if len(parts) == 1 and signal_trades:
             notes.append(f"{period_word} {len(signal_trades)} 笔全部按引擎信号开仓，纪律好。")
         elif len(parts) == 1 and impulse_trades:
-            notes.append(f"{period_word} {len(impulse_trades)} 笔冲动开仓，"
-                         f"未参考四维信号，属高风险冲动交易。")
+            notes.append(f"{period_word} {len(impulse_trades)} 笔冲动开仓，未参考四维信号，属高风险冲动交易。")
         elif len(parts) == 1 and external_trades:
-            notes.append(f"{period_word} {len(external_trades)} 笔均为账户同步/历史持仓，"
-                         f"无新增主动开仓。")
+            notes.append(f"{period_word} {len(external_trades)} 笔均为账户同步/历史持仓，无新增主动开仓。")
         else:
             notes.append(f"{period_word}开仓 {len(opened)} 笔：{'、'.join(parts)}。")
     if signals_in_period:
         if adoption >= 80:
             notes.append(f"引擎发出 {len(signals_in_period)} 个信号，采纳率 {adoption:.0f}%，跟单到位。")
         elif adoption == 0:
-            notes.append(f"引擎发出 {len(signals_in_period)} 个信号但你未采纳（仅手动交易），"
-                         f"确认是刻意空仓还是漏看信号。")
+            notes.append(
+                f"引擎发出 {len(signals_in_period)} 个信号但你未采纳（仅手动交易），确认是刻意空仓还是漏看信号。"
+            )
         else:
-            notes.append(f"引擎发出 {len(signals_in_period)} 个信号，采纳率 {adoption:.0f}%，"
-                         f"可复盘未跟单的信号是否该跟。")
+            notes.append(
+                f"引擎发出 {len(signals_in_period)} 个信号，采纳率 {adoption:.0f}%，可复盘未跟单的信号是否该跟。"
+            )
     if lock_violations:
-        notes.append(f"⚠️ 状态机 LOCKED 期间仍有 {len(lock_violations)} 笔开仓，"
-                     f"严重违规——锁死即应禁手。")
+        notes.append(f"⚠️ 状态机 LOCKED 期间仍有 {len(lock_violations)} 笔开仓，严重违规——锁死即应禁手。")
     if warning_entries:
-        notes.append(f"WARNING 期间开仓 {len(warning_entries)} 笔，已自动按 0.5× 缩手数，"
-                     f"仍在可控范围。")
+        notes.append(f"WARNING 期间开仓 {len(warning_entries)} 笔，已自动按 0.5× 缩手数，仍在可控范围。")
     if single_breach or port_breach:
         notes.append("⚠️ 仓位突破上限，回撤风险升高，下周期务必降仓。")
     if stopped_out:
         notes.append(f"区间 {len(stopped_out)} 笔按止损离场，止损执行到位（不扛单 ✓）。")
     if closed_loss_manual:
-        notes.append(f"区间 {len(closed_loss_manual)} 笔亏损手动平仓，"
-                     f"留意是否提前砍在止损前（情绪化操作）。")
+        notes.append(f"区间 {len(closed_loss_manual)} 笔亏损手动平仓，留意是否提前砍在止损前（情绪化操作）。")
     if not notes:
         notes.append("本周期数据较少，无法充分评估，继续积累。")
 
     label = {"daily": "今日", "weekly": "本周", "monthly": "本月"}[kind]
     period_text = start.strftime("%Y-%m-%d")
     if kind == "weekly":
-        period_text += f" 周{['一','二','三','四','五','六','日'][start.weekday()]}"
+        period_text += f" 周{['一', '二', '三', '四', '五', '六', '日'][start.weekday()]}"
     elif kind == "monthly":
         period_text += f" ({start.month}月)"
 
@@ -440,14 +484,16 @@ def get_all(now=None):
 # 冻结成一条持久记录，写进 discipline_records.json（按日期索引，幂等覆盖）。
 # ---------------------------------------------------------------------------
 RECORDS_FILE = os.path.join(HERE, "discipline_records.json")
-_CLOSE_SNAP_HOUR = 23      # 收盘快照时点：夜盘 23:00 结束后
+_CLOSE_SNAP_HOUR = 23  # 收盘快照时点：夜盘 23:00 结束后
 _CLOSE_SNAP_MIN = 20
-_BACKFILL_DAYS = 7         # 启动时最多补做近 N 天（已过收盘且未记录）
+_BACKFILL_DAYS = 7  # 启动时最多补做近 N 天（已过收盘且未记录）
+
 
 def _sym_name(sym):
     cfg = _load(CONFIG_FILE, {})
     sp = (cfg.get("contract_specs") or {}).get(sym)
     return sp.get("name", sym) if sp else (sym or "")
+
 
 def _source_label(sig):
     """根据 signal_id 判断操作来源。"""
@@ -458,7 +504,7 @@ def _source_label(sig):
     if sig == "手动" or sig.lower().startswith("manual_"):
         return "手动"
     # 时间格式如 2026-08-12 14:29:24 视为引擎信号
-    if len(sig) >= 19 and sig[4] == '-' and sig[10] == ' ' and sig[13] == ':':
+    if len(sig) >= 19 and sig[4] == "-" and sig[10] == " " and sig[13] == ":":
         return "信号"
     return "其他"
 
@@ -502,39 +548,44 @@ def _day_operations(date_str):
         et = _parse_time(t.get("time", ""))
         xt = _parse_time(t.get("exit_time", ""))
         if et and et.date() == d0:
-            ops.append({
-                "time": t.get("time", ""),
-                "action": "开仓",
-                "symbol": sym,
-                "contract": contract,
-                "name": _sym_name(sym),
-                "direction": t.get("direction"),
-                "lots": t.get("lots"),
-                "price": t.get("entry_price"),
-                "signal": (t.get("signal_id") or "手动"),
-                "source": _source_label(t.get("signal_id")),
-                "reason": "",
-                "pnl": None,
-            })
+            ops.append(
+                {
+                    "time": t.get("time", ""),
+                    "action": "开仓",
+                    "symbol": sym,
+                    "contract": contract,
+                    "name": _sym_name(sym),
+                    "direction": t.get("direction"),
+                    "lots": t.get("lots"),
+                    "price": t.get("entry_price"),
+                    "signal": (t.get("signal_id") or "手动"),
+                    "source": _source_label(t.get("signal_id")),
+                    "reason": "",
+                    "pnl": None,
+                }
+            )
         if xt and xt.date() == d0:
             dur = _duration(t.get("time", ""), t.get("exit_time", ""))
-            ops.append({
-                "time": t.get("exit_time", ""),
-                "action": "平仓",
-                "symbol": sym,
-                "contract": contract,
-                "name": _sym_name(sym),
-                "direction": t.get("direction"),
-                "lots": t.get("lots"),
-                "price": t.get("exit_price"),
-                "signal": "",
-                "source": _source_label(t.get("signal_id")),
-                "reason": (t.get("exit_reason") or ""),
-                "pnl": t.get("pnl"),
-                "duration": dur,
-            })
+            ops.append(
+                {
+                    "time": t.get("exit_time", ""),
+                    "action": "平仓",
+                    "symbol": sym,
+                    "contract": contract,
+                    "name": _sym_name(sym),
+                    "direction": t.get("direction"),
+                    "lots": t.get("lots"),
+                    "price": t.get("exit_price"),
+                    "signal": "",
+                    "source": _source_label(t.get("signal_id")),
+                    "reason": (t.get("exit_reason") or ""),
+                    "pnl": t.get("pnl"),
+                    "duration": dur,
+                }
+            )
     ops.sort(key=lambda o: o["time"] or "")
     return ops
+
 
 def snapshot_day(date_str):
     """计算并冻结某天的复盘记录（幂等，重复调用覆盖）。"""
@@ -560,9 +611,11 @@ def snapshot_day(date_str):
         print(f"[复盘快照] 写文件失败: {repr(e)[:80]}")
     return rec
 
+
 def get_record(date_str):
     records = _load(RECORDS_FILE, {})
     return records.get(date_str) if isinstance(records, dict) else None
+
 
 def _after_cutoff(date_str):
     """日期是否 >= _RECORD_CUTOFF_DATE（字符串比较即可，ISO 格式）。"""
@@ -582,20 +635,23 @@ def list_records():
     for dt, rec in records.items():
         if not _after_cutoff(dt):
             continue
-        out.append({
-            "date": dt,
-            "score": rec.get("score"),
-            "grade": rec.get("grade"),
-            "trades_opened": rec.get("trades_opened"),
-            "signal_trades": rec.get("signal_trades"),
-            "impulse_trades": rec.get("impulse_trades", rec.get("manual_trades", 0)),
-            "lock_violations": rec.get("lock_violations"),
-            "period_pnl": rec.get("period_pnl"),
-            "ops_count": rec.get("ops_count"),
-            "snapshot_at": rec.get("snapshot_at"),
-        })
+        out.append(
+            {
+                "date": dt,
+                "score": rec.get("score"),
+                "grade": rec.get("grade"),
+                "trades_opened": rec.get("trades_opened"),
+                "signal_trades": rec.get("signal_trades"),
+                "impulse_trades": rec.get("impulse_trades", rec.get("manual_trades", 0)),
+                "lock_violations": rec.get("lock_violations"),
+                "period_pnl": rec.get("period_pnl"),
+                "ops_count": rec.get("ops_count"),
+                "snapshot_at": rec.get("snapshot_at"),
+            }
+        )
     out.sort(key=lambda x: x["date"], reverse=True)
     return out
+
 
 def _has_activity(date_str):
     """该日期是否有真实交易活动（开/平仓 或 纪律事件），用于避免为无操作旧日造空记录。"""
@@ -617,6 +673,7 @@ def _has_activity(date_str):
                 return True
     return False
 
+
 def pending_close_dates(now=None):
     """返回需要补做收盘快照的日期：今天及近 _BACKFILL_DAYS 天中，
     已过收盘时点（23:20）、records 中尚无记录、且当日确有交易活动的。
@@ -634,6 +691,7 @@ def pending_close_dates(now=None):
             if ds not in records and _has_activity(ds):
                 pending.append(ds)
     return pending
+
 
 def run_close_snapshots(now=None, verbose=True):
     """对当前待记录日期逐一落账（供 runner 每轮调用）。返回本次新生成的日期列表。"""
@@ -655,16 +713,23 @@ def run_close_snapshots(now=None, verbose=True):
 WEEKLY_RECORDS_FILE = os.path.join(HERE, "discipline_weekly_records.json")
 MONTHLY_RECORDS_FILE = os.path.join(HERE, "discipline_monthly_records.json")
 
+
 # 周/月聚合时各检查项的汇总文案模板
 def _agg_detail(key, children):
     if key == "C1":
         tot = sum(c.get("impulse_trades", c.get("manual_trades", 0)) for c in children)
-        return ("全程无冲动开仓 ✓" if tot == 0
-                else f"{len(children)} 个子周期中 {sum(1 for c in children if c.get('impulse_trades', c.get('manual_trades', 0))>0)} 个有冲动开仓，共 {tot} 笔")
+        return (
+            "全程无冲动开仓 ✓"
+            if tot == 0
+            else f"{len(children)} 个子周期中 {sum(1 for c in children if c.get('impulse_trades', c.get('manual_trades', 0)) > 0)} 个有冲动开仓，共 {tot} 笔"
+        )
     if key == "C2":
         tot = sum(c.get("lock_violations", 0) for c in children)
-        return ("全程锁死期间未开仓 ✓" if tot == 0
-                else f"{sum(1 for c in children if c.get('lock_violations',0)>0)} 个周期锁死期间共 {tot} 笔开仓（严重）")
+        return (
+            "全程锁死期间未开仓 ✓"
+            if tot == 0
+            else f"{sum(1 for c in children if c.get('lock_violations', 0) > 0)} 个周期锁死期间共 {tot} 笔开仓（严重）"
+        )
     if key == "C3":
         worst = max((c.get("max_single_leg_pct", 0) for c in children), default=0)
         cap = children[0].get("single_leg_cap", 30)
@@ -676,13 +741,16 @@ def _agg_detail(key, children):
     if key == "C5":
         worst = max((c.get("period_loss_pct", 0) for c in children), default=0)
         red = _DAILY_LOSS_STOP * 100
-        return ("全程未破日亏线 ✓" if worst < red
-                else f"最差单周期亏损 {worst:.2f}% / 红线 {red:.0f}%（曾破线）")
+        return "全程未破日亏线 ✓" if worst < red else f"最差单周期亏损 {worst:.2f}% / 红线 {red:.0f}%（曾破线）"
     if key == "C6":
         tot = sum(c.get("closed_loss_manual", 0) for c in children)
-        return ("全程无情绪化砍亏 ✓" if tot == 0
-                else f"{sum(1 for c in children if c.get('closed_loss_manual',0)>0)} 个周期共 {tot} 笔亏损手动平仓")
+        return (
+            "全程无情绪化砍亏 ✓"
+            if tot == 0
+            else f"{sum(1 for c in children if c.get('closed_loss_manual', 0) > 0)} 个周期共 {tot} 笔亏损手动平仓"
+        )
     return ""
+
 
 def _aggregate_card(children, kind, meta):
     """把若干子周期复盘卡（日卡或周卡）聚合成一张周卡/月卡。"""
@@ -712,53 +780,64 @@ def _aggregate_card(children, kind, meta):
     checks = []
     first = children[0]
     for ch in first.get("checks", []):
-        key = ch["key"]; name = ch["name"]
+        key = ch["key"]
+        name = ch["name"]
         total = sum(1 for c in children if any(x["key"] == key for x in c.get("checks", [])))
-        ok = total > 0 and all(any(x["key"] == key and x["pass"] for x in c.get("checks", []))
-                                for c in children if any(x["key"] == key for x in c.get("checks", [])))
+        ok = total > 0 and all(
+            any(x["key"] == key and x["pass"] for x in c.get("checks", []))
+            for c in children
+            if any(x["key"] == key for x in c.get("checks", []))
+        )
         checks.append({"key": key, "name": name, "pass": ok, "detail": _agg_detail(key, children)})
     # 操作：展平全部子周期操作（保留各自 time/date）
     ops = []
     for c in children:
-        for o in (c.get("operations") or []):
+        for o in c.get("operations") or []:
             ops.append(o)
     ops.sort(key=lambda o: o.get("time", "") or "")
     # 要点：汇总去重（保留顺序，最多 12 条）
     notes = []
     for c in children:
-        for n in (c.get("notes") or []):
+        for n in c.get("notes") or []:
             if n not in notes:
                 notes.append(n)
     notes = notes[:12]
     rec = dict(meta)
-    rec.update({
-        "kind": kind,
-        "score": avg,
-        "grade": grade,
-        "trades_opened": trades_opened,
-        "signal_trades": signal_trades,
-        "impulse_trades": impulse_trades,
-        "external_trades": external_trades,
-        "lock_violations": lock_violations,
-        "warning_entries": warning_entries,
-        "adoption_rate": adoption,
-        "period_pnl": period_pnl,
-        "closed_count": closed,
-        "win_rate": win_rate,
-        "stopped_out": stopped_out,
-        "closed_loss_manual": closed_loss_manual,
-        "max_single_leg_pct": max_single,
-        "single_leg_cap": first.get("single_leg_cap", 30),
-        "portfolio_pct": port,
-        "portfolio_cap": first.get("portfolio_cap", 60),
-        "checks": checks,
-        "operations": ops,
-        "ops_count": len(ops),
-        "children_scores": [{"label": c.get("period_text") or c.get("date") or c.get("friday") or "",
-                              "score": c.get("score"), "grade": c.get("grade")}
-                             for c in children],
-        "children_count": len(children),
-    })
+    rec.update(
+        {
+            "kind": kind,
+            "score": avg,
+            "grade": grade,
+            "trades_opened": trades_opened,
+            "signal_trades": signal_trades,
+            "impulse_trades": impulse_trades,
+            "external_trades": external_trades,
+            "lock_violations": lock_violations,
+            "warning_entries": warning_entries,
+            "adoption_rate": adoption,
+            "period_pnl": period_pnl,
+            "closed_count": closed,
+            "win_rate": win_rate,
+            "stopped_out": stopped_out,
+            "closed_loss_manual": closed_loss_manual,
+            "max_single_leg_pct": max_single,
+            "single_leg_cap": first.get("single_leg_cap", 30),
+            "portfolio_pct": port,
+            "portfolio_cap": first.get("portfolio_cap", 60),
+            "checks": checks,
+            "operations": ops,
+            "ops_count": len(ops),
+            "children_scores": [
+                {
+                    "label": c.get("period_text") or c.get("date") or c.get("friday") or "",
+                    "score": c.get("score"),
+                    "grade": c.get("grade"),
+                }
+                for c in children
+            ],
+            "children_count": len(children),
+        }
+    )
     return rec
 
 
@@ -829,7 +908,8 @@ def snapshot_month(month_str):
     try:
         y, m = map(int, month_str.split("-"))
     except Exception:
-        now = datetime.now(); y, m = now.year, now.month
+        now = datetime.now()
+        y, m = now.year, now.month
         month_str = f"{y}-{m:02d}"
     # 收集该月所有周五
     if m == 12:
@@ -882,9 +962,11 @@ def get_weekly_record(friday_str):
     records = _load(WEEKLY_RECORDS_FILE, {})
     return records.get(friday_str) if isinstance(records, dict) else None
 
+
 def get_monthly_record(month_str):
     records = _load(MONTHLY_RECORDS_FILE, {})
     return records.get(month_str) if isinstance(records, dict) else None
+
 
 def list_weekly_records():
     records = _load(WEEKLY_RECORDS_FILE, {})
@@ -894,21 +976,24 @@ def list_weekly_records():
     for fr, rec in records.items():
         if not _after_cutoff(fr):
             continue
-        out.append({
-            "friday": fr,
-            "week_range": rec.get("week_range"),
-            "score": rec.get("score"),
-            "grade": rec.get("grade"),
-            "trades_opened": rec.get("trades_opened"),
-            "impulse_trades": rec.get("impulse_trades", rec.get("manual_trades", 0)),
-            "lock_violations": rec.get("lock_violations"),
-            "period_pnl": rec.get("period_pnl"),
-            "ops_count": rec.get("ops_count"),
-            "children_count": rec.get("children_count"),
-            "snapshot_at": rec.get("snapshot_at"),
-        })
+        out.append(
+            {
+                "friday": fr,
+                "week_range": rec.get("week_range"),
+                "score": rec.get("score"),
+                "grade": rec.get("grade"),
+                "trades_opened": rec.get("trades_opened"),
+                "impulse_trades": rec.get("impulse_trades", rec.get("manual_trades", 0)),
+                "lock_violations": rec.get("lock_violations"),
+                "period_pnl": rec.get("period_pnl"),
+                "ops_count": rec.get("ops_count"),
+                "children_count": rec.get("children_count"),
+                "snapshot_at": rec.get("snapshot_at"),
+            }
+        )
     out.sort(key=lambda x: x["friday"], reverse=True)
     return out
+
 
 def list_monthly_records():
     records = _load(MONTHLY_RECORDS_FILE, {})
@@ -918,21 +1003,24 @@ def list_monthly_records():
     for mo, rec in records.items():
         if not _after_cutoff(mo + "-01"):
             continue
-        out.append({
-            "month": mo,
-            "month_range": rec.get("month_range"),
-            "score": rec.get("score"),
-            "grade": rec.get("grade"),
-            "trades_opened": rec.get("trades_opened"),
-            "impulse_trades": rec.get("impulse_trades", rec.get("manual_trades", 0)),
-            "lock_violations": rec.get("lock_violations"),
-            "period_pnl": rec.get("period_pnl"),
-            "ops_count": rec.get("ops_count"),
-            "children_count": rec.get("children_count"),
-            "snapshot_at": rec.get("snapshot_at"),
-        })
+        out.append(
+            {
+                "month": mo,
+                "month_range": rec.get("month_range"),
+                "score": rec.get("score"),
+                "grade": rec.get("grade"),
+                "trades_opened": rec.get("trades_opened"),
+                "impulse_trades": rec.get("impulse_trades", rec.get("manual_trades", 0)),
+                "lock_violations": rec.get("lock_violations"),
+                "period_pnl": rec.get("period_pnl"),
+                "ops_count": rec.get("ops_count"),
+                "children_count": rec.get("children_count"),
+                "snapshot_at": rec.get("snapshot_at"),
+            }
+        )
     out.sort(key=lambda x: x["month"], reverse=True)
     return out
+
 
 def pending_weekly(now=None):
     """待生成的周复盘：最近 10 天内、周五、且 15:10 已过、records 尚无记录的。"""
@@ -950,6 +1038,7 @@ def pending_weekly(now=None):
             pending.append(d.strftime("%Y-%m-%d"))
     return pending
 
+
 def pending_monthly(now=None):
     """待生成的月复盘：最近 40 天内、最后交易日、且 15:10 已过、records 尚无记录的。"""
     now = now or datetime.now()
@@ -966,8 +1055,10 @@ def pending_monthly(now=None):
         if snap_at <= now:
             m = f"{d.year}-{d.month:02d}"
             if m not in recs and m not in seen:
-                seen.add(m); pending.append(m)
+                seen.add(m)
+                pending.append(m)
     return pending
+
 
 def run_weekly_snapshots(now=None, verbose=True):
     done = []
@@ -980,6 +1071,7 @@ def run_weekly_snapshots(now=None, verbose=True):
         except Exception as e:
             print(f"[周复盘] {fr} 失败: {repr(e)[:80]}")
     return done
+
 
 def run_monthly_snapshots(now=None, verbose=True):
     done = []
@@ -1004,13 +1096,19 @@ if __name__ == "__main__":
         print("=" * 60)
         print(f"【管住手 · {c['label']}复盘卡】 {c['period_text']}")
         print(f"  纪律评分 {c['score']} 分（{c['grade']}级）")
-        print(f"  开仓 {c['trades_opened']} 笔 | 跟信号 {c['signal_trades']} | 冲动 {c['impulse_trades']} | 手动记录 {c['manual_records']} "
-              f"| 锁违 {c['lock_violations']} | WARNING开仓 {c['warning_entries']}")
+        print(
+            f"  开仓 {c['trades_opened']} 笔 | 跟信号 {c['signal_trades']} | 冲动 {c['impulse_trades']} | 手动记录 {c['manual_records']} "
+            f"| 锁违 {c['lock_violations']} | WARNING开仓 {c['warning_entries']}"
+        )
         print(f"  信号采纳率 {c['adoption_rate']:.0f}%（周期信号 {c['signals_in_period']}）")
-        print(f"  单品 {c['max_single_leg_pct']}%/{c['single_leg_cap']}% · "
-              f"组合 {c['portfolio_pct']}%/{c['portfolio_cap']}% · 区间盈亏 {c['period_pnl']:+.0f}")
-        print(f"  区间平仓 {c['closed_count']} 笔 · 胜率 {c['win_rate']:.0f}% · "
-              f"止损离场 {c['stopped_out']} · 手动砍亏 {c['closed_loss_manual']}")
+        print(
+            f"  单品 {c['max_single_leg_pct']}%/{c['single_leg_cap']}% · "
+            f"组合 {c['portfolio_pct']}%/{c['portfolio_cap']}% · 区间盈亏 {c['period_pnl']:+.0f}"
+        )
+        print(
+            f"  区间平仓 {c['closed_count']} 笔 · 胜率 {c['win_rate']:.0f}% · "
+            f"止损离场 {c['stopped_out']} · 手动砍亏 {c['closed_loss_manual']}"
+        )
         print("  纪律检查：")
         for ch in c["checks"]:
             flag = "✓" if ch["pass"] else "✗"

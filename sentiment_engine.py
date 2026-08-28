@@ -24,6 +24,7 @@
   - sentiment_bias: -1~+1（正=贪婪，负=恐惧，供 pipeline T_thresh 调制）
   - sentiment_scale: 0.5~1.0（极端情绪→缩仓，供 risk_state_machine）
 """
+
 from __future__ import annotations
 
 import json
@@ -37,36 +38,36 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # ── 因子权重 ──
 # 五因子 + 两个增强因子，权重向广度和幅度倾斜（更灵敏）
 WEIGHTS = {
-    "breadth": 0.25,       # 市场广度（涨跌家数比）
-    "momentum": 0.15,      # 动量共识（T_D均值）
-    "activity": 0.15,      # 资金活跃度（量比）
-    "volatility": 0.10,    # 波动率状态
-    "divergence": 0.10,    # 板块分歧
-    "amplitude": 0.15,     # 涨跌幅度分布（新增：大涨/大跌比例）
-    "trend_conc": 0.10,    # 趋势集中度（新增：多少品种在趋势）
+    "breadth": 0.25,  # 市场广度（涨跌家数比）
+    "momentum": 0.15,  # 动量共识（T_D均值）
+    "activity": 0.15,  # 资金活跃度（量比）
+    "volatility": 0.10,  # 波动率状态
+    "divergence": 0.10,  # 板块分歧
+    "amplitude": 0.15,  # 涨跌幅度分布（新增：大涨/大跌比例）
+    "trend_conc": 0.10,  # 趋势集中度（新增：多少品种在趋势）
 }
 
 # ── 情绪分档（收紧：日频下极端情绪难得，降低阈值） ──
 BANDS = [
-    (70, "极度贪婪", "extreme_greed"),   # 原 80 → 70
-    (58, "贪婪", "greed"),               # 原 60 → 58
-    (42, "中性", "neutral"),             # 原 40 → 42（中性区间从20分缩到16分）
-    (30, "恐惧", "fear"),                # 原 20 → 30
+    (70, "极度贪婪", "extreme_greed"),  # 原 80 → 70
+    (58, "贪婪", "greed"),  # 原 60 → 58
+    (42, "中性", "neutral"),  # 原 40 → 42（中性区间从20分缩到16分）
+    (30, "恐惧", "fear"),  # 原 20 → 30
     (0, "极度恐惧", "extreme_fear"),
 ]
 
 # ── 极端事件触发（全市场一致性很强时，直接标为极端，不看加权分） ──
-EXTREME_BREADTH_RATIO = 0.70   # 70% 以上同涨或同跌 → 极端
-EXTREME_AMPLITUDE_RATIO = 0.30 # 30% 以上品种涨/跌超 2% → 极端
+EXTREME_BREADTH_RATIO = 0.70  # 70% 以上同涨或同跌 → 极端
+EXTREME_AMPLITUDE_RATIO = 0.30  # 30% 以上品种涨/跌超 2% → 极端
 
 # ── pipeline T_thresh 乘数（方向感知，极端才动） ──
 # 只有贪婪/恐惧才微调，极度贪婪/恐惧才明显调，中性完全不动
 SENTIMENT_THR_MULT = {
-    "extreme_greed": {"long": 1.20, "short": 0.85},   # 极度贪婪：严防追涨
-    "greed":        {"long": 1.08, "short": 0.95},   # 贪婪：轻微提高
-    "neutral":      {"long": 1.00, "short": 1.00},   # 中性：完全不动
-    "fear":         {"long": 0.95, "short": 1.08},   # 恐惧：轻微降低
-    "extreme_fear": {"long": 0.85, "short": 1.20},   # 极度恐惧：严防杀跌
+    "extreme_greed": {"long": 1.20, "short": 0.85},  # 极度贪婪：严防追涨
+    "greed": {"long": 1.08, "short": 0.95},  # 贪婪：轻微提高
+    "neutral": {"long": 1.00, "short": 1.00},  # 中性：完全不动
+    "fear": {"long": 0.95, "short": 1.08},  # 恐惧：轻微降低
+    "extreme_fear": {"long": 0.85, "short": 1.20},  # 极度恐惧：严防杀跌
 }
 
 # ── 硬过滤（hard filter）：极端情绪期直接禁止某个方向的交易 ──
@@ -74,10 +75,10 @@ SENTIMENT_THR_MULT = {
 # 直接禁掉比调阈值效果好得多。
 # True=禁止该方向交易, False=只调阈值不禁
 SENTIMENT_HARD_FILTER = {
-    "extreme_greed": {"long": True,  "short": False},  # 极度贪婪：禁做多（防追涨杀跌）
-    "greed":        {"long": False, "short": False},  # 贪婪：只调阈值不禁
-    "neutral":      {"long": False, "short": False},  # 中性：不禁
-    "fear":         {"long": False, "short": False},  # 恐惧：只调阈值不禁
+    "extreme_greed": {"long": True, "short": False},  # 极度贪婪：禁做多（防追涨杀跌）
+    "greed": {"long": False, "short": False},  # 贪婪：只调阈值不禁
+    "neutral": {"long": False, "short": False},  # 中性：不禁
+    "fear": {"long": False, "short": False},  # 恐惧：只调阈值不禁
     "extreme_fear": {"long": False, "short": False},  # 极度恐惧：不禁（数据显示反而赚钱）
 }
 
@@ -112,11 +113,11 @@ BAND_LABELS = {
 
 # ── 风控仓位缩放（极端情绪才缩仓，中性完全不动） ──
 SENTIMENT_RISK_SCALE = {
-    "extreme_greed": 0.75,    # 极度贪婪：缩仓 25%
-    "greed": 0.92,            # 贪婪：轻微缩仓 8%
-    "neutral": 1.00,          # 中性：完全不动
-    "fear": 0.92,             # 恐惧：轻微缩仓 8%
-    "extreme_fear": 0.75,     # 极度恐惧：缩仓 25%
+    "extreme_greed": 0.75,  # 极度贪婪：缩仓 25%
+    "greed": 0.92,  # 贪婪：轻微缩仓 8%
+    "neutral": 1.00,  # 中性：完全不动
+    "fear": 0.92,  # 恐惧：轻微缩仓 8%
+    "extreme_fear": 0.75,  # 极度恐惧：缩仓 25%
 }
 
 # 缓存：runner 每轮 evaluate 时更新
@@ -136,7 +137,7 @@ _CACHE = {
     },
     "updated": None,
     "snapshots": {},  # sym -> {price, chg_pct, T_D, volume_ratio, group}
-    "history": [],    # 最近 N 条情绪历史 [{ts, score, band, label}]
+    "history": [],  # 最近 N 条情绪历史 [{ts, score, band, label}]
 }
 
 MAX_HISTORY = 60  # 保留最近 60 个采样点（约 30-60 分钟）
@@ -176,6 +177,7 @@ def _risk_scale(band):
 
 
 # ── 单因子计算 ──
+
 
 def _factor_breadth(snapshots):
     """市场广度：涨跌家数比。
@@ -230,10 +232,10 @@ def _factor_amplitude(snapshots):
     if total == 0:
         return 50.0
 
-    big_rise = sum(1 for s in valid if s["chg_pct"] > 0.02)    # 涨超 2%
-    big_fall = sum(1 for s in valid if s["chg_pct"] < -0.02)   # 跌超 2%
-    mid_up = sum(1 for s in valid if 0 < s["chg_pct"] <= 0.02) # 小幅涨
-    mid_down = sum(1 for s in valid if -0.02 <= s["chg_pct"] < 0) # 小幅跌
+    big_rise = sum(1 for s in valid if s["chg_pct"] > 0.02)  # 涨超 2%
+    big_fall = sum(1 for s in valid if s["chg_pct"] < -0.02)  # 跌超 2%
+    mid_up = sum(1 for s in valid if 0 < s["chg_pct"] <= 0.02)  # 小幅涨
+    mid_down = sum(1 for s in valid if -0.02 <= s["chg_pct"] < 0)  # 小幅跌
 
     # 加权计分：大涨/大跌权重更高
     rise_score = big_rise * 2.0 + mid_up * 1.0
@@ -310,6 +312,7 @@ def _factor_divergence(snapshots):
     分歧大=混乱(中性偏恐惧)，分歧小=一致(强趋势,可贪婪或恐惧)。
     返回 0-100。"""
     from collections import defaultdict
+
     groups = defaultdict(list)
     for s in snapshots.values():
         g = s.get("group")
@@ -537,7 +540,7 @@ def build_snapshots_from_runner(state_symbols, feed, SYMBOLS):
         chg_pct = None
         if price and pipe.get("prev_close"):
             try:
-                chg_pct = (price / pipe["prev_close"] - 1.0)
+                chg_pct = price / pipe["prev_close"] - 1.0
             except Exception:
                 pass
 
