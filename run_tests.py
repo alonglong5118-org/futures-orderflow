@@ -374,22 +374,36 @@ def run_py_tests(module_name=None, verbose=False, module_set=None,
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
 
+    def _safe_load(name, mod_path):
+        """安全加载测试模块，失败时打印详细错误。"""
+        try:
+            sub = loader.loadTestsFromName(mod_path)
+            suite.addTests(sub)
+        except Exception as e:
+            print(color(f"  ❌ 加载失败: {name} ({mod_path})", C.RED))
+            print(color(f"     错误: {e}", C.RED))
+            import traceback
+            # 只打最内层的几帧，避免输出过长
+            tb_lines = traceback.format_exc().strip().split('\n')
+            for line in tb_lines[-8:]:
+                print(color(f"     {line}", C.DIM))
+
     if module_name:
         if module_name not in TEST_MODULES:
             return None  # 不是 Python 模块，返回 None 让调用者处理
         mod_path = TEST_MODULES[module_name]
-        suite.addTests(loader.loadTestsFromName(mod_path))
+        _safe_load(module_name, mod_path)
     elif module_set is not None:
         # 指定模块集合
         for name in sorted(module_set):
             if name in TEST_MODULES:
-                suite.addTests(loader.loadTestsFromName(TEST_MODULES[name]))
+                _safe_load(name, TEST_MODULES[name])
     else:
         # 默认全部（跳过 SKIP_BY_DEFAULT）
         for name, mod_path in TEST_MODULES.items():
             if name in SKIP_BY_DEFAULT:
                 continue
-            suite.addTests(loader.loadTestsFromName(mod_path))
+            _safe_load(name, mod_path)
 
     # 随机打乱测试顺序
     if random_order:
@@ -681,6 +695,19 @@ def run_tests(module_name=None, verbose=False, py_only=False, js_only=False,
             print(color(f"  {i}. [{mod}] {short_name}", C.RED))
         if len(failed_tests) > 20:
             print(color(f"  ... 还有 {len(failed_tests) - 20} 个失败", C.DIM))
+
+        # 打印第一个失败的详细错误（方便 CI 定位问题）
+        print()
+        print(color("  🔍 第一个失败详情:", C.BOLD, C.YELLOW))
+        print(color("  " + "-" * 40, C.DIM))
+        first_mod, first_name, first_trace = failed_tests[0]
+        print(color(f"  模块: {first_mod}", C.YELLOW))
+        print(color(f"  测试: {first_name.split(chr(10))[0]}", C.YELLOW))
+        print(color("  错误:", C.YELLOW))
+        # trace 可能很长，截取最后部分
+        trace_lines = first_trace.strip().split(chr(10))
+        for line in trace_lines[-12:]:
+            print(color(f"    {line}", C.DIM))
         print()
 
     # 总耗时
