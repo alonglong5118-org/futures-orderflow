@@ -128,7 +128,7 @@ def _read_rows(path):
             df = pd.read_excel(path, header=None, dtype=str)
             return df.fillna("").values.tolist()
         except Exception as e:
-            raise RuntimeError(f"Excel 读取失败({e})，可另存为 CSV 再导入")
+            raise RuntimeError(f"Excel 读取失败({e})，可另存为 CSV 再导入") from e
     for enc in ("utf-8-sig", "gbk", "gb18030", "utf-8"):
         try:
             with open(path, "r", encoding=enc, newline="") as f:

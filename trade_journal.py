@@ -663,7 +663,7 @@ def summary():
             with open(_acct_file, "r") as _f:
                 _acct = json.load(_f)
                 _positions = _acct.get("positions", {})
-        except:
+        except Exception:
             pass
     
     # 计算持仓最大风险（基于止损价）
