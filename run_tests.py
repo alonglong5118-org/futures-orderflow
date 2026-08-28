@@ -35,6 +35,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "tests"))  # 确保 tests/ 直接可导入
 
 # ── Python 测试模块清单（新增测试在这里注册） ─────────────────────────────
 TEST_MODULES = {
@@ -375,18 +376,34 @@ def run_py_tests(module_name=None, verbose=False, module_set=None,
     suite = unittest.TestSuite()
 
     def _safe_load(name, mod_path):
-        """安全加载测试模块，失败时打印详细错误。"""
-        try:
-            sub = loader.loadTestsFromName(mod_path)
-            suite.addTests(sub)
-        except Exception as e:
-            print(color(f"  ❌ 加载失败: {name} ({mod_path})", C.RED))
-            print(color(f"     错误: {e}", C.RED))
-            import traceback
-            # 只打最内层的几帧，避免输出过长
-            tb_lines = traceback.format_exc().strip().split('\n')
-            for line in tb_lines[-8:]:
-                print(color(f"     {line}", C.DIM))
+        """安全加载测试模块，失败时打印详细错误。
+
+        尝试两种导入路径：
+        1. mod_path（通常是 tests.test_xxx，包路径）
+        2. 去掉 tests. 前缀的短名（tests/ 目录在 sys.path 里时可用）
+        """
+        errors = []
+        # 尝试所有可能的路径
+        candidates = [mod_path]
+        if mod_path.startswith("tests."):
+            candidates.append(mod_path[6:])  # 去掉 "tests."
+
+        for candidate in candidates:
+            try:
+                sub = loader.loadTestsFromName(candidate)
+                suite.addTests(sub)
+                return  # 成功就返回
+            except Exception as e:
+                errors.append((candidate, e))
+
+        # 全部失败，打印第一个错误
+        first_path, first_err = errors[0]
+        print(color(f"  ❌ 加载失败: {name} (尝试路径: {[p for p, _ in errors]})", C.RED))
+        print(color(f"     错误: {first_err}", C.RED))
+        import traceback
+        tb_lines = traceback.format_exc().strip().split('\n')
+        for line in tb_lines[-8:]:
+            print(color(f"     {line}", C.DIM))
 
     if module_name:
         if module_name not in TEST_MODULES:
