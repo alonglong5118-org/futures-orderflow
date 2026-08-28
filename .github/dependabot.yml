@@ -1,0 +1,143 @@
+# ==============================================================================
+#  Dependabot 配置 —— 依赖自动更新
+# ==============================================================================
+#  策略：
+#    · 每周一检查（避免每天轰炸）
+#    · 按功能分组，同类依赖合并为一个 PR
+#    · 最多同时开 5 个 PR，避免堆积
+#    · 安全更新由 GitHub Security 单独处理（不受数量限制）
+# ==============================================================================
+
+version: 2
+
+updates:
+  # ── Python 依赖：requirements.txt ──────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+    # 分组策略：同类依赖合并 PR，减少噪音
+    groups:
+      # 核心数值计算依赖（一起升级，避免版本不兼容）
+      core-numerical:
+        patterns:
+          - "numpy"
+          - "pandas"
+          - "scipy"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 数据科学 / 机器学习
+      ml-packages:
+        patterns:
+          - "hmmlearn"
+          - "scikit-*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 可视化
+      visualization:
+        patterns:
+          - "plotly"
+          - "matplotlib"
+          - "seaborn"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 工具类（小版本/补丁自动合并）
+      utility-packages:
+        patterns:
+          - "tqdm"
+          - "deap"
+          - "pyyaml"
+          - "click"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # 忽略规则：某些依赖不自动升级
+    ignore:
+      # 主版本升级需人工评审
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "scipy"
+        update-types: ["version-update:semver-major"]
+
+  # ── Python 开发依赖：requirements-dev.txt ──────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    # 指向 dev 依赖文件
+    # 注意：dependabot 会自动检测 requirements-dev.txt（因为它 -r requirements.txt）
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "dev-tools"
+    commit-message:
+      prefix: "deps-dev"
+      include: "scope"
+
+    groups:
+      # 代码质量工具
+      code-quality:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "bandit"
+          - "pip-audit"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 测试工具
+      testing-tools:
+        patterns:
+          - "coverage"
+          - "pytest*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── GitHub Actions 更新 ────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "deps-gha"
+      include: "scope"
+
+    groups:
+      # 官方 actions 一起升级
+      official-actions:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "minor"
+          - "patch"
