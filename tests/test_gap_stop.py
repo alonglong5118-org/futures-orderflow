@@ -16,8 +16,8 @@ gap_stop 缺口击穿告警 — 单元测试
   - 本测试确保此 bug 不再复发
 """
 
-import sys
 import os
+import sys
 import unittest
 
 # ── 路径 ──────────────────────────────────────────────────────────────────
@@ -27,7 +27,6 @@ sys.path.insert(0, ROOT)
 
 # 从独立工具模块导入纯函数，避免加载整个 runner（导入时有全局副作用）
 from gap_stop_utils import check_gap_stop_triggered as _check_gap_stop_triggered
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  多单场景

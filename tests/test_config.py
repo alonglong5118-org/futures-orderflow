@@ -23,8 +23,8 @@
    - regime_params.by_group 覆盖所有 SYMBOLS 分组
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -33,16 +33,12 @@ sys.path.insert(0, ROOT)
 
 from four_dim_strategy import DEFAULT_CONFIG, SYMBOLS
 from strategy_layer import (
-    walk_forward_gate,
-    ROBUST_POOL,
-    STABILITY_THRESHOLD,
-    OOS_EXPR_THRESHOLD,
-    get_robust_gate,
-    set_robust_gate,
     _ROBUST_GATE,
     _ROBUST_GATE_CFG,
+    ROBUST_POOL,
+    set_robust_gate,
+    walk_forward_gate,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 合约规格完整性
@@ -284,7 +280,7 @@ class TestConfigCrossConsistency(unittest.TestCase):
 
     def test_all_strategy_names_are_lowercase(self):
         """策略名统一小写（避免大小写不一致导致的查找失败）"""
-        from strategy_layer import STRATS, ALL_STRATS
+        from strategy_layer import ALL_STRATS, STRATS
         for name in ALL_STRATS:
             self.assertEqual(name, name.lower(),
                 f"策略名 '{name}' 不是全小写")

@@ -11,7 +11,8 @@ import minishare as m
 
 TOKEN = None
 try:
-    import json, os
+    import json
+    import os
     cfg = json.load(open(os.path.join(os.path.dirname(__file__), "minishare.json")))
     TOKEN = cfg.get("token")
 except Exception:

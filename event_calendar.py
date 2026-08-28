@@ -21,6 +21,7 @@
     ec.print_gate(g)
 """
 from __future__ import annotations
+
 from datetime import datetime, timedelta
 
 # 事件表：wd=None 表示每日；wd=0..6（周一=0）表示每周几；imp: 高/中/低

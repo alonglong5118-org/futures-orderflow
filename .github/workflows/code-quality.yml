@@ -124,11 +124,13 @@ jobs:
           echo "   python scripts/discover_tests.py --update"
 
   # ── Ruff 关键 lint（阻塞级） ────────────────────────────────────────────
-  #  抓确定性 bug（会导致运行时报错或调试困难的硬错误）：
+  #  抓确定性 bug + 代码质量硬约束（会导致问题或明确是坏味道的）：
+  #    F401  — 未使用的导入（代码异味，增加误导性）
   #    F601  — 字典重复 key（后面的值覆盖前面的，几乎一定是 bug）
   #    F701  — break/continue 在循环外（语法错误）
   #    F821  — 未定义的名字（NameError）
   #    F823  — 赋值前引用局部变量（UnboundLocalError）
+  #    I001  — 导入排序不规范（可读性 + 减少合并冲突）
   #    B023  — 闭包/函数引用循环变量（晚绑定导致所有调用都用最后一个值）
   #    B904  — except 内 raise 不带 from（丢失异常链，调试困难）
   #    E722  — 裸 except（会吞掉 KeyboardInterrupt/SystemExit 等）
@@ -159,11 +161,11 @@ jobs:
       - name: Run critical lint
         run: |
           echo "=== Ruff 关键检查（阻塞级）==="
-          echo "检查会导致运行时报错或调试困难的代码问题..."
+          echo "检查会导致运行时报错或代码质量硬约束..."
           ruff check . \
-            --select F601,F701,F821,F823,B023,B904,E722,E712 \
+            --select F401,F601,F701,F821,F823,I001,B023,B904,E722,E712 \
             --output-format=github
-          echo "✅ 关键检查通过，未发现严重问题"
+          echo "✅ 关键检查通过"
 
   # ── Ruff 风格 lint（建议级 · 不阻塞） ──────────────────────────────────
   ruff-style:

@@ -30,17 +30,16 @@ SR 止损放宽与过滤模拟 — 单元测试
    - name 字段正确传递
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from sr_widen_sweep import widen_stop_with_sr
 from sr_filter_simulate import simulate_filter
-
+from sr_widen_sweep import widen_stop_with_sr
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. widen_stop_with_sr

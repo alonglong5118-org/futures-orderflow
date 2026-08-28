@@ -22,8 +22,8 @@
    - 混合持仓 → 分别处理
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,14 +31,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from risk_state_machine import (
-    risk_guard,
-    build_flatten_plan,
-    RED_LINE,
     DAILY_LOSS_STOP,
+    RED_LINE,
     SINGLE_LEG,
     WARN_LINE,
+    build_flatten_plan,
+    risk_guard,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. risk_guard — 正常状态

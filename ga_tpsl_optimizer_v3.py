@@ -17,23 +17,29 @@ Phase 3 升级内容（相对 Phase 2.5）：
     python3 ga_tpsl_optimizer_v3.py --symbol jd --pop 80 --gen 30 --train-bars 400 --valid-bars 120 --step-bars 60 --full
 """
 from __future__ import annotations
-import os
-import sys
-import json
-import copy
-import time
+
 import argparse
-import random
+import copy
+import json
 import math
+import os
+import random
+import sys
+import time
+
+# 防止 numpy/pandas 内部多线程与 multiprocessing 争抢 CPU
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import four_dim_strategy as fd
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG, load_daily
+from deap import base, creator, tools
 
-from deap import base, creator, tools, algorithms
+from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 # ============================================================================
 # 配置
@@ -67,15 +73,18 @@ PARAM_NAMES = [
 N_PARAMS = len(PARAM_BOUNDS)
 
 # GA 参数
-DEFAULT_POP_SIZE = 120
+DEFAULT_POP_SIZE = 150  # 增大种群防止坍缩
 DEFAULT_GEN_COUNT = 30
 CXPB = 0.9
-MUTPB = 0.3  # 每个基因的变异概率（提高以增强多样性）
-SBX_ETA = 15  # 降低，交叉更离散
-PM_ETA = 15  # 降低，变异更离散
+MUTPB = 0.4  # 提高变异率以增强多样性，防止坍缩
+SBX_ETA = 10  # 降低，交叉更离散
+PM_ETA = 10  # 降低，变异更离散
 CALMAR_CAP = 10.0  # Calmar 上限，防止极端值主导进化
-IMMIGRANT_RATE = 0.10  # 每 5 代注入的随机移民比例
-IMMIGRANT_INTERVAL = 5  # 移民注入间隔（代）
+IMMIGRANT_RATE = 0.15  # 移民比例提高到 15%
+IMMIGRANT_INTERVAL = 3  # 移民注入间隔缩短到 3 代
+EARLY_STOP_PATIENCE = 8  # 早停：连续多少代 best_expR 提升不足则终止
+EARLY_STOP_MIN_IMPROVE = 0.001  # 早停：最小提升阈值
+DEFAULT_N_JOBS = 8  # 并行评估进程数
 
 # 约束
 MIN_TRADES = 10          # 最低交易笔数
@@ -94,8 +103,53 @@ OOS_RATIO = 0.20        # 最后 20% 作为纯 OOS
 ROBUST_PERTURB = 0.20   # ±20% 扰动
 ROBUST_POINTS = 11      # 每个参数的扰动点数
 
+# L1 正则化（防止过拟合：参数偏离基线越远，惩罚越大）
+REG_L1_ENABLED = True   # 是否启用 L1 正则
+REG_L1_WEIGHT = 0.5     # L1 正则权重（越大越保守）
+REG_L1_TARGETS = [0, 1] # 惩罚哪些目标：0=expR, 1=calmar
+
+# 参数范围收缩模式（在基线附近 ±SHRINK_PCT 范围内搜索）
+SHRINK_PCT = 0.40       # 基线 ±40%
+
 # 结果缓存
 _eval_cache = {}
+
+# Worker 进程全局数据（用于并行评估，避免重复序列化大对象）
+_worker_data = {}
+
+
+def _init_worker(symbol, df_is, train_bars, valid_bars, step_bars, data_slice_id,
+                 baseline_ind=None, bounds=None, use_l1=False):
+    """Pool initializer：在每个 worker 进程中设置全局数据。"""
+    global _worker_data
+    _worker_data = {
+        "symbol": symbol,
+        "df_is": df_is,
+        "train_bars": train_bars,
+        "valid_bars": valid_bars,
+        "step_bars": step_bars,
+        "data_slice_id": data_slice_id,
+        "baseline_ind": baseline_ind,
+        "bounds": bounds,
+        "use_l1": use_l1,
+    }
+
+
+def _worker_evaluate(individual):
+    """Worker 进程中的评估函数（使用全局数据，避免重复 pickle）。"""
+    global _worker_data
+    return wf_evaluate(
+        individual,
+        _worker_data["symbol"],
+        _worker_data["df_is"],
+        _worker_data["train_bars"],
+        _worker_data["valid_bars"],
+        _worker_data["step_bars"],
+        _worker_data["data_slice_id"],
+        baseline_ind=_worker_data.get("baseline_ind"),
+        bounds=_worker_data.get("bounds"),
+        use_l1=_worker_data.get("use_l1", False),
+    )
 
 
 def _cache_key(params_tuple, symbol, data_slice_id):
@@ -166,6 +220,43 @@ def _baseline_to_individual(baseline):
         baseline["tail_trail_R"],
         baseline["min_profit_R"],
     ]
+
+
+def _calc_l1_penalty(individual, baseline_ind, bounds):
+    """计算 L1 正则惩罚：参数偏离基线越远，惩罚越大。
+
+    每个参数的偏离用 |param - baseline| / param_range 归一化，
+    然后求和得到总偏离度（0~1 之间，0=完全等于基线，1=全部走到边界）。
+    返回惩罚值（正数，越大表示偏离越远）。
+    """
+    total_dev = 0.0
+    for i in range(len(individual)):
+        lo, hi = bounds[i]
+        base = baseline_ind[i]
+        range_size = hi - lo
+        if range_size > 0:
+            dev = abs(individual[i] - base) / range_size
+            total_dev += dev
+    avg_dev = total_dev / len(individual)  # 平均偏离度 0~1
+    return avg_dev * REG_L1_WEIGHT
+
+
+def _get_shrunk_bounds(baseline_ind, shrink_pct=SHRINK_PCT):
+    """计算收缩后的参数范围：基线 ± shrink_pct，但不超出原始范围。"""
+    shrunk = []
+    for i in range(len(PARAM_BOUNDS)):
+        lo, hi = PARAM_BOUNDS[i]
+        base = baseline_ind[i]
+        range_size = hi - lo
+        half = range_size * shrink_pct
+        new_lo = max(lo, base - half)
+        new_hi = min(hi, base + half)
+        # 确保范围有意义
+        if new_hi - new_lo < range_size * 0.1:
+            new_lo = max(lo, base - range_size * 0.05)
+            new_hi = min(hi, base + range_size * 0.05)
+        shrunk.append((new_lo, new_hi))
+    return shrunk
 
 
 # ============================================================================
@@ -277,7 +368,7 @@ def _slice_data(df, start_i, end_i):
 
 def wf_evaluate(individual, symbol, df, train_bars=DEFAULT_TRAIN_BARS,
                 valid_bars=DEFAULT_VALID_BARS, step_bars=DEFAULT_STEP_BARS,
-                data_slice_id="full"):
+                data_slice_id="full", baseline_ind=None, bounds=None, use_l1=False):
     """Walk-Forward 评估：在多个训练-验证窗口上评估，返回验证窗口的聚合指标。
 
     返回 (expR_median, calmar_median, winrate_stability) —— 三个目标，全部最大化。
@@ -370,6 +461,14 @@ def wf_evaluate(individual, symbol, df, train_bars=DEFAULT_TRAIN_BARS,
         f1 -= penalty
         f2 -= penalty
 
+    # L1 正则惩罚：参数偏离基线越远，惩罚越大（防止过拟合）
+    if use_l1 and baseline_ind is not None and bounds is not None and REG_L1_ENABLED:
+        l1_penalty = _calc_l1_penalty(individual, baseline_ind, bounds)
+        if 0 in REG_L1_TARGETS:
+            f1 -= l1_penalty
+        if 1 in REG_L1_TARGETS:
+            f2 -= l1_penalty
+
     result = (f1, f2, f3)
     _eval_cache[key] = result
     return result
@@ -393,8 +492,14 @@ def single_evaluate(individual, symbol, df):
 # DEAP 初始化（多目标 NSGA-II）
 # ============================================================================
 
-def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size):
-    """初始化 NSGA-II 多目标优化。"""
+def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size,
+                     use_shrink=False, use_l1=False):
+    """初始化 NSGA-II 多目标优化。
+
+    Args:
+        use_shrink: 是否使用收缩后的参数范围（基线 ±SHRINK_PCT）
+        use_l1: 是否启用 L1 正则惩罚
+    """
     # 清除之前的 creator（避免重复创建报错）
     for name in ["FitnessMulti", "Individual"]:
         if name in creator.__dict__:
@@ -403,13 +508,21 @@ def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size)
     creator.create("FitnessMulti", base.Fitness, weights=(1.0, 1.0, 1.0))
     creator.create("Individual", list, fitness=creator.FitnessMulti)
 
+    # 计算基线参数和实际使用的 bounds
+    baseline_dict = _get_baseline_params(symbol)
+    baseline_ind = _baseline_to_individual(baseline_dict)
+    if use_shrink:
+        actual_bounds = _get_shrunk_bounds(baseline_ind, SHRINK_PCT)
+    else:
+        actual_bounds = list(PARAM_BOUNDS)
+
     toolbox = base.Toolbox()
 
     # 属性生成
     for i in range(N_PARAMS):
         def _attr_factory(idx):
             def _f():
-                low, high = PARAM_BOUNDS[idx]
+                low, high = actual_bounds[idx]
                 return random.uniform(low, high)
             return _f
         toolbox.register(f"attr_float_{i}", _attr_factory(i))
@@ -424,22 +537,30 @@ def setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size)
     # 评估
     toolbox.register("evaluate", wf_evaluate, symbol=symbol, df=df_is,
                      train_bars=train_bars, valid_bars=valid_bars,
-                     step_bars=step_bars, data_slice_id="IS_WF")
+                     step_bars=step_bars, data_slice_id="IS_WF",
+                     baseline_ind=baseline_ind, bounds=actual_bounds,
+                     use_l1=use_l1)
 
     # 遗传算子
     toolbox.register("mate", tools.cxSimulatedBinaryBounded,
-                     low=[b[0] for b in PARAM_BOUNDS],
-                     up=[b[1] for b in PARAM_BOUNDS],
+                     low=[b[0] for b in actual_bounds],
+                     up=[b[1] for b in actual_bounds],
                      eta=SBX_ETA)
 
     toolbox.register("mutate", tools.mutPolynomialBounded,
-                     low=[b[0] for b in PARAM_BOUNDS],
-                     up=[b[1] for b in PARAM_BOUNDS],
+                     low=[b[0] for b in actual_bounds],
+                     up=[b[1] for b in actual_bounds],
                      eta=PM_ETA,
                      indpb=MUTPB)
 
     # NSGA-II 选择
     toolbox.register("select", tools.selNSGA2)
+
+    # 保存额外信息
+    toolbox.baseline_ind = baseline_ind
+    toolbox.actual_bounds = actual_bounds
+    toolbox.use_l1 = use_l1
+    toolbox.use_shrink = use_shrink
 
     return toolbox
 
@@ -557,8 +678,14 @@ def robustness_test(individual, symbol, df, perturb=ROBUST_PERTURB, n_points=ROB
 
 def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_COUNT,
                      train_bars=DEFAULT_TRAIN_BARS, valid_bars=DEFAULT_VALID_BARS,
-                     step_bars=DEFAULT_STEP_BARS, full_data=False, seed=42):
+                     step_bars=DEFAULT_STEP_BARS, full_data=False, seed=42,
+                     n_jobs=DEFAULT_N_JOBS, early_stop_patience=EARLY_STOP_PATIENCE,
+                     use_shrink=False, use_l1=False):
     """运行完整的 Phase 3 GA 优化（入场+出场联合优化）。
+
+    Args:
+        use_shrink: 是否使用收缩参数范围（基线 ±40%）
+        use_l1: 是否启用 L1 正则惩罚
 
     返回完整的结果字典。
     """
@@ -616,7 +743,30 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         print(f"   (调整种群到 {pop_size}，确保为4的倍数)")
 
     # 初始化 DEAP
-    toolbox = setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size)
+    toolbox = setup_deap_nsga2(symbol, df_is, train_bars, valid_bars, step_bars, pop_size,
+                               use_shrink=use_shrink, use_l1=use_l1)
+
+    # 打印收缩后的范围信息
+    if use_shrink:
+        print(f"\n📐 收缩模式（基线 ±{SHRINK_PCT:.0%}）:")
+        for i, name in enumerate(PARAM_NAMES):
+            lo, hi = toolbox.actual_bounds[i]
+            base = toolbox.baseline_ind[i]
+            print(f"   {name}: [{lo:.4f}, {hi:.4f}]  (基线={base:.4f})")
+    if use_l1:
+        print(f"\n🎯 L1 正则已启用 (权重={REG_L1_WEIGHT})")
+
+    # 并行评估（multiprocessing + initializer，避免重复序列化 DataFrame）
+    from multiprocessing import Pool
+    pool = Pool(
+        processes=n_jobs,
+        initializer=_init_worker,
+        initargs=(symbol, df_is, train_bars, valid_bars, step_bars, "IS_WF",
+                  toolbox.baseline_ind, toolbox.actual_bounds, use_l1),
+    )
+    # 用 worker 版本的 evaluate（从全局读数据，更快）
+    toolbox.register("evaluate", _worker_evaluate)
+    toolbox.register("map", pool.map)
 
     # 创建种群
     pop = toolbox.population(n=pop_size)
@@ -663,6 +813,10 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         "avg_calmar": float(np.mean(f2_vals)),
         "pareto_size": pareto_size_0,
     })
+
+    # 早停机制初始化
+    best_expR_so_far = max(f1_vals)
+    early_stop_counter = 0
 
     # 进化主循环
     for gen in range(1, gen_count + 1):
@@ -726,6 +880,18 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
             "avg_calmar": float(np.mean(f2_vals)),
             "pareto_size": len(pareto_front),
         })
+
+        # 早停检查
+        current_best_expR = max(f1_vals)
+        if current_best_expR - best_expR_so_far >= EARLY_STOP_MIN_IMPROVE:
+            best_expR_so_far = current_best_expR
+            early_stop_counter = 0
+        else:
+            early_stop_counter += 1
+            if early_stop_counter >= early_stop_patience:
+                print(f"\n⏹️  早停触发：连续 {early_stop_patience} 代 best_expR 提升不足 {EARLY_STOP_MIN_IMPROVE}")
+                print(f"   当前 best_expR = {current_best_expR:.4f}")
+                break
 
     runtime = time.time() - start_time
     print(f"\n✅ 优化完成，用时 {runtime:.1f} 秒 ({runtime/60:.1f} 分钟)")
@@ -838,6 +1004,10 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
         "param_names": PARAM_NAMES,
     }
 
+    # 关闭进程池
+    pool.close()
+    pool.join()
+
     return result
 
 
@@ -876,7 +1046,18 @@ def main():
     parser.add_argument("--full", action="store_true", help="使用全量IS数据（否则限制800根加速）")
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--output", type=str, default=None, help="输出目录")
+    parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="并行评估进程数")
+    parser.add_argument("--early-stop-patience", type=int, default=EARLY_STOP_PATIENCE,
+                        help="早停耐心值（连续多少代无提升则终止）")
+    parser.add_argument("--fast", action="store_true", help="快速模式：步长翻倍，窗口减半，适合快速探索")
+    parser.add_argument("--shrink", action="store_true", help="参数范围收缩模式（基线 ±40%）")
+    parser.add_argument("--l1", action="store_true", help="启用 L1 正则惩罚（防止过拟合）")
     args = parser.parse_args()
+
+    # 快速模式：步长翻倍 → 窗口减半 → 速度翻倍
+    if args.fast:
+        args.step_bars *= 2
+        print("⚡ 快速模式已启用（step_bars 翻倍）")
 
     print("=" * 60)
     print("🧬 入场+出场参数 GA 联合优化器（Phase 3 · NSGA-II 多目标）")
@@ -891,6 +1072,10 @@ def main():
         step_bars=args.step_bars,
         full_data=args.full,
         seed=args.seed,
+        n_jobs=args.n_jobs,
+        early_stop_patience=args.early_stop_patience,
+        use_shrink=args.shrink,
+        use_l1=args.l1,
     )
 
     if "error" in result:

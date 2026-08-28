@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#0c0c0e">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>四维策略 · 实盘信号</title>
+<title>四维策略 · 实盘信号 [BUILD-1310]</title>
 <style>
   :root{
     /* 黑金工业玻璃 · 高端暗色 */
@@ -72,6 +72,92 @@
     border-radius:8px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;transition:.2s}
   .nb:hover{color:var(--txt);border-color:var(--gold);box-shadow:0 0 14px rgba(212,175,55,.22)}
   .nb.on{color:var(--gold-light);border-color:rgba(212,175,55,.65);background:rgba(212,175,55,.10);box-shadow:0 0 16px rgba(212,175,55,.28)}
+
+  /* ===== #8 市场情绪仪表盘 ===== */
+  .sent-chip{padding:5px 14px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.5px;
+    border:1px solid transparent;transition:.25s;box-shadow:0 0 12px rgba(212,175,55,.06)}
+  .sent-extreme_greed{background:rgba(255,71,87,.15);color:#ff4757;border-color:rgba(255,71,87,.50);box-shadow:0 0 18px rgba(255,71,87,.18)}
+  .sent-greed{background:rgba(255,165,2,.12);color:#ffa502;border-color:rgba(255,165,2,.50);box-shadow:0 0 16px rgba(255,165,2,.15)}
+  .sent-neutral{background:rgba(127,127,127,.10);color:#aaa;border-color:rgba(127,127,127,.40)}
+  .sent-fear{background:rgba(30,144,255,.12);color:#1e90ff;border-color:rgba(30,144,255,.50);box-shadow:0 0 16px rgba(30,144,255,.15)}
+  .sent-extreme_fear{background:rgba(72,61,139,.18);color:#7bed9f;border-color:rgba(72,61,139,.60);box-shadow:0 0 18px rgba(72,61,139,.20)}
+  .sent-gauge-wrap{margin-top:12px;padding:16px;border-radius:12px;background:rgba(255,255,255,.02);border:1px solid var(--line)}
+  .sent-gauge-bar{height:8px;border-radius:4px;background:linear-gradient(90deg,#483d8b 0%,#1e90ff 25%,#7f7f7f 50%,#ffa502 75%,#ff4757 100%);position:relative;overflow:hidden}
+  .sent-gauge-marker{position:absolute;top:-4px;width:4px;height:16px;background:#fff;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.5);transition:left .5s ease}
+  .sent-factors{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+  .sent-factor{text-align:center;padding:7px 3px;border-radius:7px;background:rgba(255,255,255,.02)}
+  .sent-factor b{display:block;font-size:14px;font-weight:700}
+  .sent-factor i{font-size:9.5px;color:var(--mut);font-style:normal;letter-spacing:.2px}
+  .sent-gauge-bar{height:8px;border-radius:4px;background:linear-gradient(90deg,var(--red),var(--amber),#7a7568,var(--amber),var(--green));position:relative;overflow:visible}
+  .sent-gauge-marker{position:absolute;top:-3px;width:4px;height:14px;background:#fff;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.6);transform:translateX(-50%);transition:left .4s ease}
+  .extreme-banner{margin-top:10px;padding:9px 12px;border-radius:8px;background:rgba(255,159,67,.1);border:1px solid var(--amber);font-size:12px;color:var(--amber);font-weight:600;letter-spacing:.2px;animation:pulse 2s ease-in-out infinite}
+  .hard-filter-bar{margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(127,127,127,.06);border:1px solid rgba(127,127,127,.25);
+    display:flex;align-items:center;gap:10px;transition:.3s}
+  .hard-filter-bar .hf-icon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(127,127,127,.15);color:#aaa;font-size:12px;font-weight:700;flex-shrink:0;transition:.3s}
+  .hard-filter-bar .hf-text{display:flex;flex-direction:column;line-height:1.3}
+  .hard-filter-bar .hf-text b{font-size:12px;font-weight:700;color:var(--txt);transition:.3s}
+  .hard-filter-bar .hf-text span{font-size:10.5px;color:var(--mut2);margin-top:2px;transition:.3s}
+  .hard-filter-bar.active-ban{background:rgba(255,71,87,.08);border-color:rgba(255,71,87,.45);animation:pulse 2s ease-in-out infinite}
+  .hard-filter-bar.active-ban .hf-icon{background:rgba(255,71,87,.2);color:#ff4757}
+  .hard-filter-bar.active-ban .hf-text b{color:#ff4757}
+  .hard-filter-bar.active-short{background:rgba(72,61,139,.1);border-color:rgba(123,237,159,.4);animation:pulse 2s ease-in-out infinite}
+  .hard-filter-bar.active-short .hf-icon{background:rgba(123,237,159,.2);color:#7bed9f}
+  .hard-filter-bar.active-short .hf-text b{color:#7bed9f}
+  .hard-filter-bar.active-both{background:rgba(255,71,87,.12);border-color:rgba(255,71,87,.6);animation:pulse 1.5s ease-in-out infinite}
+  .hard-filter-bar.active-both .hf-icon{background:rgba(255,71,87,.25);color:#ff4757}
+  .hard-filter-bar.active-both .hf-text b{color:#ff4757}
+  .sent-hist-wrap{border-radius:8px;overflow:hidden;background:rgba(0,0,0,.2);border:1px solid var(--line2)}
+  .sent-hist-wrap canvas{display:block;width:100%;height:70px}
+  .sr-dist-wrap{margin-bottom:10px}
+  .sr-dist-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:rgba(255,255,255,.04);border:1px solid var(--line2)}
+  .sd-seg{height:100%;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .sd-seg.sd-near{background:linear-gradient(90deg,rgba(123,237,159,.85),rgba(123,237,159,.55))}
+  .sd-seg.sd-grey{background:linear-gradient(90deg,rgba(255,165,2,.7),rgba(255,165,2,.45))}
+  .sd-seg.sd-far{background:linear-gradient(90deg,rgba(127,127,127,.25),rgba(127,127,127,.1))}
+  .sr-dist-labels{display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--mut3);letter-spacing:.2px}
+  .sector-summary{display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .sector-summary b{color:var(--txt);font-weight:700;margin-left:2px}
+  .sector-heatmap{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:8px}
+  .sector-tile{padding:8px 10px;border-radius:8px;font-size:12px;cursor:default;transition:.3s;border:1px solid transparent;position:relative;overflow:hidden}
+  .sector-tile:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+  .sector-tile .st-name{font-weight:700;font-size:12.5px;line-height:1.2;margin-bottom:3px}
+  .sector-tile .st-rs{font-size:10.5px;opacity:.85;margin-bottom:2px}
+  .sector-tile .st-ret{font-size:10px;opacity:.7}
+  .sector-tile .st-badge{position:absolute;top:5px;right:6px;font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.25);font-weight:600}
+  .sector-legend{display:flex;justify-content:space-between;font-size:9.5px;color:var(--mut3);letter-spacing:.2px;padding-top:6px;border-top:1px solid var(--line2)}
+  .sector-legend .sl-weak{color:#ff4757}
+  .sector-legend .sl-mid{color:#70a1ff}
+  .sector-legend .sl-mid2{color:#ffa502}
+  .sector-legend .sl-strong{color:#7bed9f}
+  .sr-list{display:flex;flex-direction:column;gap:5px;margin-top:4px}
+  .sr-item{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:rgba(255,255,255,.02);font-size:12px}
+  .sr-item .sym{font-weight:700;color:var(--gold-light);min-width:34px}
+  .sr-item .zone{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;letter-spacing:.3px}
+  .sr-item .zone.near{background:rgba(46,213,115,.12);color:var(--green)}
+  .sr-item .zone.grey{background:rgba(255,159,67,.12);color:var(--amber)}
+  .sr-item .zone.far{background:rgba(255,255,255,.04);color:var(--mut)}
+  .sr-item .role{font-size:10.5px;color:var(--mut)}
+  .sr-item .price{font-weight:600;color:var(--txt)}
+  .scan-list{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+  .scan-item{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.02);font-size:12px}
+  .scan-item .sym{font-weight:700;min-width:34px}
+  .scan-item .bar{height:5px;border-radius:3px;background:rgba(255,255,255,.06);position:relative;overflow:hidden}
+  .scan-item .bar-fill{position:absolute;top:0;bottom:0;border-radius:3px;transition:width .3s ease}
+  .scan-item .bar-fill.long{background:linear-gradient(90deg,var(--green),rgba(46,213,115,.3));right:50%}
+  .scan-item .bar-fill.short{background:linear-gradient(90deg,rgba(255,71,87,.3),var(--red));left:50%}
+  .scan-item .td{font-weight:700;min-width:44px;text-align:right}
+  .scan-summary{display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .scan-summary b{color:var(--txt);font-weight:600}
+  .screener-list{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+  .screener-item{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.02);font-size:12px}
+  .screener-item .sym{font-weight:700;color:var(--green);min-width:34px}
+  .screener-item .reasons{font-size:10.5px;color:var(--mut)}
+  .screener-item .score{font-weight:700;color:var(--green);min-width:38px;text-align:right}
+  .screener-summary{display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .screener-summary b{color:var(--green);font-weight:600}
+  .muted-empty{text-align:center;padding:14px 8px;color:var(--mut2);font-size:12px;letter-spacing:.3px}
+  .muted-empty .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);margin-right:6px;animation:pulse 1.5s ease-in-out infinite}
 
   /* ===== 布局：顶栏 + 分类侧边导航 + 内容 ===== */
   .topbar{height:56px}
@@ -190,6 +276,8 @@
   .gh-red .gh-num{color:var(--red);background:rgba(255,71,87,.14)}
   .gh-amber{background:linear-gradient(90deg,rgba(255,165,2,.12),rgba(255,165,2,.015));border-color:rgba(255,165,2,.24);border-left-color:var(--amber)}
   .gh-amber .gh-num{color:var(--amber);background:rgba(255,165,2,.14)}
+  .gh-purple{background:linear-gradient(90deg,rgba(159,122,234,.12),rgba(159,122,234,.015));border-color:rgba(159,122,234,.24);border-left-color:#9f7aea}
+  .gh-purple .gh-num{color:#9f7aea;background:rgba(159,122,234,.14)}
   .gh-green{background:linear-gradient(90deg,rgba(46,213,115,.12),rgba(46,213,115,.015));border-color:rgba(46,213,115,.24);border-left-color:var(--green)}
   .gh-green .gh-num{color:var(--green);background:rgba(46,213,115,.14)}
   .gh-violet{background:linear-gradient(90deg,rgba(162,155,254,.12),rgba(162,155,254,.015));border-color:rgba(162,155,254,.26);border-left-color:var(--violet)}
@@ -642,6 +730,12 @@
   .chat-date-count{font-size:12px;color:var(--gold-light);font-weight:600}
   .chat-hint{font-size:11px;color:var(--mut)}
   #chat-feed{flex:1;overflow-y:auto;padding:6px 16px;display:flex;flex-direction:column;gap:14px}
+  /* ★ 2026-08-27: 触发历史 ↔ 消息推送 联动样式 */
+  .sig-hist-item{transition:background 0.2s;padding:4px 6px;border-radius:4px}
+  .sig-hist-item:hover{background:rgba(255,200,50,0.12)}
+  .chat-msg.chat-highlight{animation:chatPulse 0.5s ease-out}
+  @keyframes chatPulse{0%{background:rgba(255,200,50,0.3)}100%{background:transparent}}
+
   .chat-empty{color:var(--mut);font-size:13px;text-align:center;padding:40px 20px;line-height:1.9}
   .chat-msg{display:flex;gap:10px;align-items:flex-start}
   .chat-av{width:34px;height:34px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(212,175,55,.12);border:1px solid rgba(212,175,55,.3)}
@@ -860,11 +954,16 @@
     '/api/drawdown': 2000, '/api/killswitch': 2000, '/api/anomaly': 2000,
     '/api/state': 5000, '/api/signals': 5000, '/api/journal': 5000,
     '/api/focus': 5000, '/api/crosscheck': 5000, '/api/health': 5000,
-    '/api/notify': 5000, '/api/journal_list': 5000, '/api/journal_session': 5000,
+    '/api/notify': 5000, '/api/journal_list': 500, '/api/journal_session': 5000,
     '/api/fund_metrics': 5000, '/api/symbols_meta': 15000, '/api/chat': 15000,
     '/api/chat_days': 15000, '/api/strategy': 15000, '/api/discipline': 30000,
     '/api/discipline?list=1': 30000, '/api/discipline?date=': 30000, '/api/discipline?week=': 30000,
     '/api/discipline?month=': 30000, '/api/playback': 30000, '/api/premarket': 30000,
+    '/api/sentiment': 5000,
+    '/api/sr': 5000,
+    '/api/scan': 10000,
+    '/api/screener': 30000,
+    '/api/backtest_viz': 30000,
     '/api/dataq': 30000, '/api/calendar?hours=24': 30000, '/api/blunder': 30000,
     '/api/tools': 30000, '/api/push': 30000, '/api/batch': 30000, '/api/broker': 30000,
     '/api/paper': 30000, '/api/sensitivity': 30000, '/api/calibration': 30000,
@@ -1222,6 +1321,7 @@
   .feat-modal-btn.danger:hover{background:rgba(255,71,87,0.2);box-shadow:0 0 16px rgba(255,71,87,0.25)}
 
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes feedIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
   @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 
 
@@ -1239,6 +1339,7 @@
       <span class="sub">实盘信号面板</span>
     </div>
     <div class="top-status">
+      <span id="sentiment-chip" class="sent-chip sent-neutral">情绪 —</span>
       <span id="risk-state" class="risk-chip rs-NORMAL">风控 NORMAL</span>
       <button id="notify-btn" class="nb" onclick="toggleNotify()">🔔 通知：关</button>
     </div>
@@ -1284,7 +1385,7 @@
       <button class="tab" data-tab="features"><span class="ic">🎛</span><span class="lbl">特性开关</span></button>
     </div>
     <div class="nav-foot">
-      <div class="nf-line"><span>四维策略模型</span><b id="navver">v3.2.4 (添加持仓风险统计和浮动盈亏显示)</b></div>
+      <div class="nf-line"><span>四维策略模型</span><b id="navver">v3.4.0 (智能仓位推荐+跨方向信号锁定)</b></div>
       <div class="nf-sub">端口 8741 · 14 书签 · 55 品种</div>
     </div>
   </aside>
@@ -1405,6 +1506,117 @@
         <div class="row"><span>当前档位</span><span id="ddw-tier">—</span></div>
         <div class="row"><span>新开仓降险系数</span><span id="ddw-scale">—</span></div>
         <div id="ddw-ladder" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+      <div class="group-head gh-amber"><span class="gh-num">⑧</span><span class="gh-title">市场情绪指数</span><span class="gh-sub">7因子加权 · 极端事件模式</span></div>
+      <div class="card" id="sent-card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span id="sent-score-big" style="font-size:28px;font-weight:800;color:var(--txt);line-height:1">—</span>
+          <span id="sent-label-big" class="sent-chip sent-neutral">中性</span>
+        </div>
+        <div class="sent-gauge-bar" style="margin-top:12px">
+          <div id="sent-marker" class="sent-gauge-marker" style="left:50%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--mut2);letter-spacing:.2px">
+          <span>极度恐惧</span><span>恐惧</span><span>中性</span><span>贪婪</span><span>极度贪婪</span>
+        </div>
+        <div class="sent-factors">
+          <div class="sent-factor"><b id="sent-f-breadth">—</b><i>市场广度</i></div>
+          <div class="sent-factor"><b id="sent-f-momentum">—</b><i>动量共识</i></div>
+          <div class="sent-factor"><b id="sent-f-activity">—</b><i>资金活跃</i></div>
+          <div class="sent-factor"><b id="sent-f-volatility">—</b><i>波动率</i></div>
+          <div class="sent-factor"><b id="sent-f-divergence">—</b><i>板块分歧</i></div>
+          <div class="sent-factor"><b id="sent-f-amplitude">—</b><i>涨跌幅度</i></div>
+          <div class="sent-factor"><b id="sent-f-trend_conc">—</b><i>趋势集中</i></div>
+        </div>
+        <div id="sent-extreme-banner" class="extreme-banner" style="display:none"></div>
+        <div id="sent-hard-filter" class="hard-filter-bar">
+          <div class="hf-icon">○</div>
+          <div class="hf-text">
+            <b>硬过滤：无限制</b>
+            <span>情绪正常，多空均可开仓</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--mut2);letter-spacing:.2px">情绪走势 · 近30周期</span>
+            <span id="sent-hist-range" style="font-size:10px;color:var(--mut3)">—</span>
+          </div>
+          <div class="sent-hist-wrap">
+            <canvas id="sentHistoryChart" width="280" height="70"></canvas>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px"><span>仓位缩放系数</span><span id="sent-scale">—</span></div>
+        <div class="row"><span>T阈值乘数(多/空)</span><span id="sent-thr-mult">—</span></div>
+      </div>
+
+      <div class="group-head gh-gold"><span class="gh-num">⑨</span><span class="gh-title">支撑压力位</span><span class="gh-sub">三重验证 · 灰色地带过滤</span></div>
+      <div class="card" id="sr-card">
+        <div class="sr-summary" style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
+          <span>近位 <b id="sr-near-count" style="color:var(--green)">—</b></span>
+          <span>灰色 <b id="sr-grey-count" style="color:var(--amber)">—</b></span>
+          <span>远位 <b id="sr-far-count" style="color:var(--mut)">—</b></span>
+          <span>总计 <b id="sr-total-count" style="color:var(--txt)">—</b></span>
+        </div>
+        <div class="sr-dist-wrap">
+          <div class="sr-dist-bar" id="srDistBar">
+            <div class="sd-seg sd-near" style="width:0%" title="近位区 (<0.8%)"></div>
+            <div class="sd-seg sd-grey" style="width:0%" title="灰色地带 (0.8~1.5%)"></div>
+            <div class="sd-seg sd-far" style="width:100%" title="远位区 (>1.5%)"></div>
+          </div>
+          <div class="sr-dist-labels">
+            <span>0%</span><span>0.8%</span><span>1.5%</span><span>5%+</span>
+          </div>
+        </div>
+        <div id="sr-box" class="sr-list"><div class="muted-empty"><span class="dot"></span>等待 SR 数据...</div></div>
+      </div>
+
+      <div class="group-head gh-purple"><span class="gh-num">⑩</span><span class="gh-title">板块热力图</span><span class="gh-sub">风险调整强度 · 轮动象限</span></div>
+      <div class="card" id="sector-card">
+        <div class="sector-summary">
+          <span>上涨 <b id="sec-breadth">—</b></span>
+          <span>领涨 <b id="sec-leading">—</b></span>
+          <span>领跌 <b id="sec-lagging">—</b></span>
+          <span>板块 <b id="sec-count">—</b></span>
+        </div>
+        <div id="sector-heatmap" class="sector-heatmap">
+          <div class="muted-empty"><span class="dot"></span>加载中...</div>
+        </div>
+        <div class="sector-legend">
+          <span class="sl-weak">领跌</span>
+          <span class="sl-mid">筑底</span>
+          <span class="sl-mid2">钝化</span>
+          <span class="sl-strong">领涨</span>
+        </div>
+      </div>
+
+      <div class="group-head gh-blue"><span class="gh-num">⑪</span><span class="gh-title">全市场扫描</span><span class="gh-sub">并行扫描 · 信号强度排序</span></div>
+      <div class="card" id="scan-card">
+        <div class="scan-summary">
+          <span>上涨 <b id="scan-up">—</b></span>
+          <span>下跌 <b id="scan-down">—</b></span>
+          <span>中性 <b id="scan-mid">—</b></span>
+          <span>耗时 <b id="scan-time">—</b></span>
+        </div>
+        <div id="scan-box" class="scan-list"><div class="muted-empty"><span class="dot"></span>扫描中...</div></div>
+      </div>
+
+      <div class="group-head gh-green"><span class="gh-num">⑫</span><span class="gh-title">品种筛选</span><span class="gh-sub">5维条件 · 加权评分</span></div>
+      <div class="card" id="screener-card">
+        <div class="screener-summary">
+          <span>通过 <b id="scr-pass">—</b> / <span id="scr-total">—</span></span>
+          <span>通过率 <b id="scr-rate">—</b></span>
+        </div>
+        <div id="screener-box" class="screener-list"><div class="muted-empty"><span class="dot"></span>等待筛选...</div></div>
+      </div>
+      <div class="group-head gh-amber"><span class="gh-num">⑬</span><span class="gh-title">信号瀑布流</span><span class="gh-sub">实时信号时间线 · 增量刷新</span></div>
+      <div class="card" id="feed-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span class="stamp" id="feed-count">加载中…</span>
+          <span class="stamp" id="feed-time">—</span>
+        </div>
+        <div id="feed-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+          <div class="muted-empty"><span class="dot"></span>等待信号…</div>
+        </div>
       </div>
       <div class="group-head gh-gold"><span class="gh-num">②</span><span class="gh-title">持仓 · 下单 · 批量指令</span><span class="gh-sub">实时推算权益 · 一键全平/反手</span></div>
       <div class="card" id="account">
@@ -1540,7 +1752,7 @@
           <input type="hidden" id="j-sym" value="">
           <select id="j-dir" onchange="refreshSignalOptions()" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
           <input id="j-lots" type="number" min="1" value="1" style="width:110px" title="手数">
-          <input id="j-price" type="number" step="0.1" placeholder="价格" style="width:110px">
+          <input id="j-price" type="number" step="any" placeholder="价格" style="width:110px">
           <select id="j-sig" style="width:100px"><option value="manual">📝 手动记录（非冲动开仓）</option></select>
           <select id="j-strat" title="策略标签">
             <option value="">策略(未分类)</option>
@@ -1556,7 +1768,7 @@
             <option value="子账户A">子账户A</option>
             <option value="子账户B">子账户B</option>
           </select>
-          <button class="amber" onclick="doJournalEntry()">开仓</button>
+          <button type="button" class="amber" onclick="doJournalEntry()">开仓</button>
         </div>
         <div class="trade">
           <span style="font-size:11px;color:var(--green)">平仓：</span>
@@ -1567,11 +1779,11 @@
           <input type="hidden" id="j2-sym" value="">
           <select id="j2-dir" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
           <input id="j2-lots" type="number" min="1" value="1" style="width:110px" title="手数">
-          <input id="j2-price" type="number" step="0.1" placeholder="价格" style="width:110px">
+          <input id="j2-price" type="number" step="any" placeholder="价格" style="width:110px">
           <select id="j2-reason" style="width:100px">
             <option value="止盈">止盈</option><option value="止损">止损</option><option value="手动">手动</option>
           </select>
-          <button class="green" onclick="doJournalExit()">平仓</button>
+          <button type="button" class="green" onclick="doJournalExit()">平仓</button>
         </div>
         <div style="margin-top:10px;font-size:11.5px;color:var(--mut)" id="j-summary">加载中…</div>
         <div id="j-compare" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;font-size:11.5px">
@@ -1673,6 +1885,26 @@
           <div style="background:var(--card);border:0.5px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:12px;color:var(--mut)">累计手续费</div><div class="mv" id="m-fee" style="font-size:20px;font-weight:500">—</div></div>
         </div>
         <div style="position:relative;width:100%;height:300px"><canvas id="equityChart" role="img" aria-label="净值曲线"></canvas></div>
+        <!-- 今日盈亏进度条（日内实时） -->
+        <div id="day-pnl-bar" style="margin-top:10px;display:none">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="color:var(--mut)">今日盈亏</span>
+            <span id="day-pnl-val" style="font-weight:500">—</span>
+          </div>
+          <div style="position:relative;height:18px;background:var(--border);border-radius:9px;overflow:hidden">
+            <!-- 零线（中间） -->
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3);z-index:2"></div>
+            <!-- 盈利条（右半部分，从中间向右延伸） -->
+            <div id="day-pnl-gain" style="position:absolute;left:50%;top:0;bottom:0;width:0%;background:linear-gradient(90deg,rgba(34,197,94,0.3),var(--green));border-radius:0 9px 9px 0;transition:width .6s ease"></div>
+            <!-- 亏损条（左半部分，从中间向左延伸） -->
+            <div id="day-pnl-loss" style="position:absolute;right:50%;top:0;bottom:0;width:0%;background:linear-gradient(270deg,rgba(239,68,68,0.3),var(--red));border-radius:9px 0 0 9px;transition:width .6s ease"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:3px">
+            <span id="day-pnl-scale-l">-1%</span>
+            <span>0</span>
+            <span id="day-pnl-scale-r">+1%</span>
+          </div>
+        </div>
         <div class="stamp" id="perf-note"></div>
       </div>
 
@@ -2755,6 +2987,335 @@ async function refreshGbm(){
     });
     box.innerHTML=html;
   }catch(e){console.error(e);}
+}
+// #8 市场情绪系统
+async function refreshSentiment(){
+  try{
+    const r=await _smartFetch('/api/sentiment');const s=await r.json();
+    const score=s.score||50; const label=s.label||'中性'; const band=s.band||'neutral';
+    // 顶栏 chip
+    const chip=document.getElementById('sentiment-chip');
+    if(chip){chip.className='sent-chip sent-'+band;chip.textContent='情绪 '+label+' '+score.toFixed(0);}
+    // 仪表盘大数字
+    const big=document.getElementById('sent-score-big');
+    if(big){big.textContent=score.toFixed(1);}
+    const labelBig=document.getElementById('sent-label-big');
+    if(labelBig){labelBig.className='sent-chip sent-'+band;labelBig.textContent=label;}
+    // 仪表盘指针
+    const marker=document.getElementById('sent-marker');
+    if(marker){marker.style.left=Math.max(0,Math.min(100,score))+'%';}
+    // 七因子
+    const f=s.factors||{};
+    const fk=['breadth','momentum','activity','volatility','divergence','amplitude','trend_conc'];
+    fk.forEach(k=>{const el=document.getElementById('sent-f-'+k);if(el&&f[k]!=null)el.textContent=f[k].toFixed(0);});
+    // 极端事件横幅
+    const er=document.getElementById('sent-extreme-banner');
+    if(er){
+      if(s.extreme_reason){er.textContent='⚠ 极端事件 · '+s.extreme_reason;er.style.display='block';}
+      else{er.style.display='none';}
+    }
+    // 硬过滤状态
+    const hf=document.getElementById('sent-hard-filter');
+    if(hf){
+      const hfd=s.hard_filter||{ban_long:false,ban_short:false,label:'无限制',desc:'情绪正常，多空均可开仓'};
+      hf.className='hard-filter-bar';
+      const icon=hf.querySelector('.hf-icon');
+      const title=hf.querySelector('.hf-text b');
+      const desc=hf.querySelector('.hf-text span');
+      if(hfd.ban_long&&hfd.ban_short){
+        hf.classList.add('active-both');
+        icon.textContent='✕';
+      }else if(hfd.ban_long){
+        hf.classList.add('active-ban');
+        icon.textContent='▲';
+      }else if(hfd.ban_short){
+        hf.classList.add('active-short');
+        icon.textContent='▼';
+      }else{
+        icon.textContent='○';
+      }
+      title.textContent='硬过滤：'+hfd.label;
+      desc.textContent=hfd.desc;
+    }
+    // 缩放 & 阈值乘数
+    const sc=document.getElementById('sent-scale');
+    if(sc){const v=s.scale||1.0;sc.textContent='×'+v.toFixed(2);sc.style.color=v<1.0?'var(--amber)':'var(--green)';}
+    const tm=document.getElementById('sent-thr-mult');
+    if(tm){
+      const mults={extreme_greed:'1.20 / 0.85',greed:'1.08 / 0.95',neutral:'1.00 / 1.00',fear:'0.95 / 1.08',extreme_fear:'0.85 / 1.20'};
+      tm.textContent=mults[band]||'1.00 / 1.00';
+    }
+    // 情绪历史曲线
+    if(s.history&&s.history.length>1&&typeof Chart!=='undefined'){
+      const hist=s.history.slice(-30);
+      const labels=hist.map(h=>{
+        if(!h.ts)return '';
+        const t=h.ts.split(' ')[1]||h.ts;
+        return t.substring(0,5);
+      });
+      const scores=hist.map(h=>h.score);
+      const cv=document.getElementById('sentHistoryChart');
+      if(cv){
+        const bandColor=({
+          extreme_greed:'#ff4757',greed:'#ffa502',neutral:'#7bed9f',
+          fear:'#70a1ff',extreme_fear:'#5352ed'
+        })[band]||'#7bed9f';
+        if(!window._sentHistChart){
+          const ctx=cv.getContext('2d');
+          const grad=ctx.createLinearGradient(0,0,0,70);
+          grad.addColorStop(0,bandColor+'55');
+          grad.addColorStop(1,bandColor+'05');
+          window._sentHistChart=new Chart(ctx,{
+            type:'line',
+            data:{labels,datasets:[{
+              data:scores,borderColor:bandColor,borderWidth:1.5,
+              backgroundColor:grad,fill:true,
+              tension:.35,pointRadius:0,pointHoverRadius:3,
+            }]},
+            options:{
+              responsive:true,maintainAspectRatio:false,
+              plugins:{legend:{display:false},tooltip:{
+                backgroundColor:'rgba(0,0,0,.85)',titleColor:'#fff',bodyColor:'#ccc',
+                borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+                padding:8,cornerRadius:6,displayColors:false,
+                callbacks:{label:c=>'情绪 '+c.parsed.y.toFixed(1)}
+              }},
+              scales:{
+                x:{display:false},
+                y:{min:0,max:100,display:false},
+              },
+              animation:{duration:400},
+            }
+          });
+        }else{
+          const ch=window._sentHistChart;
+          ch.data.labels=labels;
+          ch.data.datasets[0].data=scores;
+          ch.data.datasets[0].borderColor=bandColor;
+          const ctx=cv.getContext('2d');
+          const grad=ctx.createLinearGradient(0,0,0,70);
+          grad.addColorStop(0,bandColor+'55');
+          grad.addColorStop(1,bandColor+'05');
+          ch.data.datasets[0].backgroundColor=grad;
+          ch.update('none');
+        }
+        // 范围标注
+        const rng=document.getElementById('sent-hist-range');
+        if(rng){
+          const mn=Math.min(...scores).toFixed(0);
+          const mx=Math.max(...scores).toFixed(0);
+          rng.textContent='区间 '+mn+'~'+mx;
+        }
+      }
+    }
+  }catch(e){console.error('refreshSentiment:',e);}
+}
+// #9 支撑压力位
+async function refreshSR(){
+  try{
+    const r=await _smartFetch('/api/sr');const d=await r.json();
+    const box=document.getElementById('sr-box'); if(!box) return;
+    const syms=Object.keys(d);
+    if(!syms.length){box.innerHTML='<div class="muted-empty"><span class="dot"></span>等待 SR 数据...</div>';return;}
+    // 统计各区间数量
+    let nearN=0,greyN=0,farN=0;
+    const items=Object.entries(d).map(([k,v])=>{
+      const z=v.zone||'far';
+      if(z==='near')nearN++;else if(z==='grey')greyN++;else farN++;
+      const nd=v.nearest_dist_pct!=null?v.nearest_dist_pct.toFixed(1):'—';
+      const ns=v.nearest_support;const nr=v.nearest_resistance;
+      const lv=nr&&ns?(nr.distance_pct<ns.distance_pct?nr:ns):(nr||ns||{});
+      const role=lv.role==='resistance'?'压力':'支撑';
+      const zoneLabel=v.zone_label||'远位区';
+      return {sym:k,zone:z,zoneLabel,nd,role,levelPrice:lv.price||'—'};
+    });
+    // 更新统计
+    const nc=document.getElementById('sr-near-count');if(nc)nc.textContent=nearN;
+    const gc=document.getElementById('sr-grey-count');if(gc)gc.textContent=greyN;
+    const fc=document.getElementById('sr-far-count');if(fc)fc.textContent=farN;
+    const tc=document.getElementById('sr-total-count');if(tc)tc.textContent=syms.length;
+    // 距离分布条
+    const distBar=document.getElementById('srDistBar');
+    if(distBar&&syms.length>0){
+      const segs=distBar.querySelectorAll('.sd-seg');
+      const pctNear=nearN/syms.length*100;
+      const pctGrey=greyN/syms.length*100;
+      const pctFar=farN/syms.length*100;
+      segs[0].style.width=pctNear.toFixed(1)+'%';
+      segs[0].title=`近位区 (<0.8%): ${nearN} 个 (${pctNear.toFixed(0)}%)`;
+      segs[1].style.width=pctGrey.toFixed(1)+'%';
+      segs[1].title=`灰色地带 (0.8~1.5%): ${greyN} 个 (${pctGrey.toFixed(0)}%)`;
+      segs[2].style.width=pctFar.toFixed(1)+'%';
+      segs[2].title=`远位区 (>1.5%): ${farN} 个 (${pctFar.toFixed(0)}%)`;
+    }
+    // 按距离排序，优先显示灰色地带（最需要关注）
+    items.sort((a,b)=>{
+      const zOrder={grey:0,near:1,far:2};
+      const zo=(zOrder[a.zone]??2)-(zOrder[b.zone]??2);
+      if(zo!==0)return zo;
+      return a.nd-b.nd;
+    });
+    box.innerHTML=items.slice(0,8).map(s=>`
+      <div class="sr-item">
+        <span class="sym">${s.sym}</span>
+        <span class="zone ${s.zone}">${s.zoneLabel}</span>
+        <span class="role">${s.role} ${s.levelPrice}</span>
+        <span class="price">${s.nd}%</span>
+      </div>`).join('');
+  }catch(e){console.error('refreshSR:',e);}
+}
+// #10 板块热力图（右侧面板简化版）
+async function refreshSectorHeatmap(){
+  try{
+    const r=await _smartFetch('/api/sector_rotation');const d=await r.json();
+    const box=document.getElementById('sector-heatmap');if(!box)return;
+    if(!d.ok||!d.sectors){box.innerHTML='<div class="muted-empty"><span class="dot"></span>加载失败</div>';return;}
+    // 顶部统计
+    const br=document.getElementById('sec-breadth');if(br)br.textContent=(d.breadth_pct||0)+'%';
+    const ld=document.getElementById('sec-leading');if(ld)ld.textContent=(d.leading||[]).length;
+    const lg=document.getElementById('sec-lagging');if(lg)lg.textContent=(d.lagging||[]).length;
+    const ct=document.getElementById('sec-count');if(ct)ct.textContent=d.n_groups||0;
+    // 热力图瓦片
+    const sectors=d.sectors||[];
+    if(!sectors.length){box.innerHTML='<div class="muted-empty"><span class="dot"></span>无数据</div>';return;}
+    // 归一化 rs 到颜色强度
+    const rsList=sectors.map(s=>s.mean_rs||0);
+    const maxAbs=Math.max(...rsList.map(Math.abs),0.5);
+    const quadColors={
+      '领涨加速':'#7bed9f',
+      '高位钝化':'#ffa502',
+      '筑底回升':'#70a1ff',
+      '领跌走弱':'#ff4757',
+    };
+    box.innerHTML=sectors.map(s=>{
+      const rs=s.mean_rs||0;
+      const intensity=Math.min(1,Math.abs(rs)/maxAbs);
+      const base=quadColors[s.quadrant]||'#888';
+      const bg=hexToRgba(base,0.12+intensity*0.35);
+      const border=hexToRgba(base,0.3+intensity*0.4);
+      const txt=base;
+      const retSign=s.mean_ret20>0?'+':'';
+      const badge=s.focus?'★':'';
+      return `<div class="sector-tile" style="background:${bg};border-color:${border};color:${txt}" title="${s.group} · ${s.quadrant} · RS=${rs.toFixed(2)} · 20日${retSign}${(s.mean_ret20*100).toFixed(1)}%">
+        <span class="st-badge" style="color:${txt}">${s.rank||''}${badge}</span>
+        <div class="st-name">${s.group}</div>
+        <div class="st-rs">RS ${rs.toFixed(2)} · ${s.quadrant}</div>
+        <div class="st-ret">20日 ${retSign}${(s.mean_ret20*100).toFixed(1)}% · ${s.up||0}/${s.n||0}涨</div>
+      </div>`;
+    }).join('');
+  }catch(e){console.error('refreshSector:',e);}
+}
+function hexToRgba(hex,alpha){
+  const h=hex.replace('#','');
+  const r=parseInt(h.substring(0,2),16);
+  const g=parseInt(h.substring(2,4),16);
+  const b=parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+// ---- 信号瀑布流 ----
+let _feedLastTime = null;
+let _feedItems = [];
+async function refreshSignalFeed(){
+  const box=document.getElementById('feed-list'); if(!box) return;
+  try{
+    const url = _feedLastTime
+      ? '/api/signal_feed?limit=20&since='+encodeURIComponent(_feedLastTime)
+      : '/api/signal_feed?limit=30';
+    const r=await _smartFetch(url); const d=await r.json();
+    if(!d.ok){ box.innerHTML='<div class="muted-empty">加载失败: '+d.error+'</div>'; return; }
+    const sigs=d.signals||[];
+    if(sigs.length && !_feedLastTime){
+      // 首次加载：全量
+      _feedItems = sigs;
+    }else if(sigs.length){
+      // 增量：新信号插到前面
+      _feedItems = [...sigs, ..._feedItems].slice(0, 100);
+    }
+    // 更新最新时间
+    if(_feedItems.length){
+      _feedLastTime = _feedItems[0].time;
+    }
+    // 更新计数
+    const cnt=document.getElementById('feed-count');
+    if(cnt) cnt.textContent='共 '+(d.total||_feedItems.length)+' 条信号';
+    const tm=document.getElementById('feed-time');
+    if(tm && _feedItems.length) tm.textContent='最新 '+_feedItems[0].time.slice(5,16);
+    // 渲染
+    if(!_feedItems.length){box.innerHTML='<div class="muted-empty"><span class="dot"></span>暂无信号</div>';return;}
+    box.innerHTML = _feedItems.slice(0, 30).map((s,i)=>{
+      const isLong = s.direction && s.direction.includes('多');
+      const dirCol = isLong ? 'var(--red)' : 'var(--green)';
+      const tShort = (s.time||'').slice(5,16); // MM-DD HH:MM
+      const tags = [];
+      if(s.sentiment_filter) tags.push('<span class="stamp" style="color:#ef4444">情绪过滤</span>');
+      if(s.sr_note) tags.push('<span class="stamp" style="color:#f59e0b">'+s.sr_note+'</span>');
+      if(s.regime) tags.push('<span class="stamp">'+s.regime+'</span>');
+      return `<div style="display:flex;gap:8px;padding:6px 8px;background:var(--card);border:0.5px solid var(--border);border-radius:6px;animation:feedIn .3s ease">
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:36px">
+          <span style="font-size:10px;color:var(--mut)">${tShort.slice(0,5)}</span>
+          <span style="font-size:11px;font-weight:500">${tShort.slice(6)}</span>
+          <div style="width:2px;flex:1;background:${dirCol};border-radius:1px;margin-top:2px;opacity:.6"></div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <b style="font-size:13px">${s.name||s.symbol} <span class="ccode">${s.symbol}</span></b>
+            <span style="color:${dirCol};font-size:12px;font-weight:500">${s.direction}</span>
+          </div>
+          <div style="font-size:11px;color:var(--mut);margin-top:2px">
+            价 ${s.price||'—'} · 损 ${s.stop||'—'} · T1 ${s.t1||'—'} · T2 ${s.t2||'—'}
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${tags.join('')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){box.innerHTML='<div class="muted-empty">加载失败: '+e+'</div>';}
+}
+// #11 全市场扫描 + 品种筛选
+async function refreshScan(){
+  try{
+    const r=await _smartFetch('/api/scan');const d=await r.json();
+    const box=document.getElementById('scan-box'); if(!box) return;
+    const res=d.results||[]; const sm=d.summary||{};
+    // 更新统计
+    const up=document.getElementById('scan-up');if(up)up.textContent=sm.n_up||0;
+    const down=document.getElementById('scan-down');if(down)down.textContent=sm.n_down||0;
+    const mid=document.getElementById('scan-mid');if(mid)mid.textContent=sm.n_neutral||0;
+    const tm=document.getElementById('scan-time');if(tm)tm.textContent=(d.elapsed||0).toFixed(1)+'s';
+    if(!res.length){box.innerHTML='<div class="muted-empty"><span class="dot"></span>扫描中...</div>';return;}
+    box.innerHTML=res.slice(0,6).map(s=>{
+      const absT=Math.abs(s.T_D||0);
+      const barW=Math.min(50,absT/2); // 0-100 T_D 映射到 0-50% 宽度
+      const side=s.T_D>0?'long':'short';
+      const c=s.T_D>0?'var(--green)':'var(--red)';
+      return `<div class="scan-item">
+        <span class="sym" style="color:${c}">${s.symbol}</span>
+        <div class="bar">
+          <div class="bar-fill ${side}" style="width:${barW}%"></div>
+        </div>
+        <span class="td" style="color:${c}">${(s.T_D||0).toFixed(0)}</span>
+      </div>`;
+    }).join('');
+  }catch(e){console.error('refreshScan:',e);}
+}
+async function refreshScreener(){
+  try{
+    const r=await _smartFetch('/api/screener');const d=await r.json();
+    const box=document.getElementById('screener-box'); if(!box) return;
+    const passed=d.passed||[]; const sm=d.summary||{};
+    // 更新统计
+    const ps=document.getElementById('scr-pass');if(ps)ps.textContent=sm.n_passed||0;
+    const tt=document.getElementById('scr-total');if(tt)tt.textContent=sm.n_total||0;
+    const rt=document.getElementById('scr-rate');if(rt)rt.textContent=(sm.n_total?Math.round(sm.n_passed/sm.n_total*100):0)+'%';
+    if(!passed.length){box.innerHTML='<div class="muted-empty"><span class="dot"></span>无品种通过筛选</div>';return;}
+    box.innerHTML=passed.slice(0,5).map(p=>{
+      const reasons=p.conditions?Object.entries(p.conditions).filter(([k,v])=>v).map(([k,v])=>k).slice(0,3).join('·'):'';
+      return `<div class="screener-item">
+        <span class="sym">${p.symbol}</span>
+        <span class="reasons">${reasons||'综合通过'}</span>
+        <span class="score">${(p.screen_score||0).toFixed(1)}</span>
+      </div>`;
+    }).join('');
+  }catch(e){console.error('refreshScreener:',e);}
 }
 async function refreshCorrStress(){
   try{
@@ -3894,7 +4455,13 @@ async function refreshGatedNotices(){
 
 
 // 交易记录相关函数（从Script2移到Script1，确保可用）
+// 防重复提交锁
+let _journalEntryBusy = false;
 async function doJournalEntry(){
+  if(_journalEntryBusy){
+    console.warn('[doJournalEntry] 请求进行中，忽略重复提交');
+    return;
+  }
   const sym=document.getElementById('j-sym').value;
   const dir=document.getElementById('j-dir').value;
   const lots=parseInt(document.getElementById('j-lots').value)||1;
@@ -3903,6 +4470,9 @@ async function doJournalEntry(){
   const strat=document.getElementById('j-strat').value;
   const acct=document.getElementById('j-acct').value;
   if(!price){document.getElementById('j-msg').textContent='请填入价格';return;}
+  _journalEntryBusy = true;
+  _startUserAction();
+  _freezeDom();
   try{
     const body={action:'entry',symbol:sym,direction:dir,lots:lots,price:price,signal_id:sigId,strategy:strat,account:acct};
     console.log('[doJournalEntry] 提交: sym='+sym+' dir='+dir+' price='+price);
@@ -3910,8 +4480,13 @@ async function doJournalEntry(){
     const j=await r.json();
     console.log('[doJournalEntry] 响应:', j);
     document.getElementById('j-msg').textContent=(j.ok?'✅ ':'❌ ')+j.msg;
-    await refreshAllAfterTrade();
+    await refreshAllAfterTrade(true);
   }catch(e){document.getElementById('j-msg').textContent='错误: '+e;console.error('[doJournalEntry] 异常:',e);}
+  finally{
+    _endUserAction();
+    _unfreezeDom();
+    _journalEntryBusy = false;
+  }
 }
 
 async function doJournalImport(){
@@ -3991,7 +4566,19 @@ function trailCell(s){
 
 function tpProgressBar(p){
   const level=p.tp_level||'tp_none';
-  const targets=p.tp_targets||{};
+  // 兼容两种格式：数组 [{level:'t1',price:xxx}, ...] 或 对象 {t1_price:xxx, ...}
+  const rawTargets=p.tp_targets;
+  let targets={};
+  if(Array.isArray(rawTargets)){
+    rawTargets.forEach(t=>{
+      if(t.level==='t1') targets.t1_price=t.price;
+      if(t.level==='t2') targets.t2_price=t.price;
+      if(t.level==='t3') targets.t3_price=t.price;
+    });
+    targets.skip_t3 = !rawTargets.some(t=>t.level==='t3');
+  } else if(rawTargets && typeof rawTargets==='object'){
+    targets=rawTargets;
+  }
   const skipT3=targets.skip_t3===true;
   const initQty=p.init_qty||p.lots||0;
   const curQty=p.lots||0;
@@ -4054,13 +4641,100 @@ function cposNote(sym){
   return '';
 }
 
-// ★★ 2026-08-26: 全局用户交互锁 + DOM冻结机制 + 事件委托 - 彻底解决选择信号时崩溃问题
+// ★★ 2026-08-26: 全局用户交互锁 + DOM冻结机制 - 彻底解决选择信号时崩溃问题
+// ★★ 2026-08-26 v2: 引用计数 + 防抖释放 + 改进看门狗 - 防止竞态条件
 let _userActionInProgress = false;
+let _userActionRefCount = 0;  // 引用计数：支持多次调用嵌套
+let _userActionLockTime = 0;  // 最近一次操作的时间戳
+let _userActionReleaseTimer = null;  // 防抖释放定时器
 let _domFrozen = false;
-function _startUserAction(){ _userActionInProgress = true; }
-function _endUserAction(){ _userActionInProgress = false; }
-function _freezeDom(){ _domFrozen = true; }
-function _unfreezeDom(){ _domFrozen = false; }
+let _domFrozenRefCount = 0;  // DOM冻结引用计数
+
+function _freezeDom(){ 
+  _domFrozenRefCount++;
+  if (!_domFrozen) {
+    _domFrozen = true;
+    console.log(`[DOM冻结] 启动 (refCount=1)`);
+  } else {
+    console.log(`[DOM冻结] 重入 (refCount=${_domFrozenRefCount})`);
+  }
+}
+
+function _unfreezeDom(){ 
+  _domFrozenRefCount = Math.max(0, _domFrozenRefCount - 1);
+  console.log(`[DOM冻结] 引用-1 (refCount=${_domFrozenRefCount})`);
+  if (_domFrozenRefCount <= 0) {
+    _domFrozen = false;
+    console.log(`[DOM冻结] 完全解冻`);
+  }
+}
+
+function _startUserAction(){
+  _userActionRefCount++;
+  _userActionLockTime = Date.now();
+  if (!_userActionInProgress) {
+    _userActionInProgress = true;
+    console.log(`[交互锁] 启动 (refCount=1)`);
+  } else {
+    console.log(`[交互锁] 重入 (refCount=${_userActionRefCount})`);
+  }
+  // 清除之前的释放定时器（防抖）
+  if (_userActionReleaseTimer) {
+    clearTimeout(_userActionReleaseTimer);
+    _userActionReleaseTimer = null;
+  }
+}
+
+function _endUserAction(){
+  _userActionRefCount = Math.max(0, _userActionRefCount - 1);
+  console.log(`[交互锁] 引用-1 (refCount=${_userActionRefCount})`);
+  if (_userActionRefCount <= 0) {
+    _userActionInProgress = false;
+    _userActionLockTime = 0;
+    console.log(`[交互锁] 完全释放`);
+  }
+}
+
+// 防抖释放：最后一次操作后5秒才真正释放锁
+function _scheduleRelease(delayMs) {
+  if (_userActionReleaseTimer) {
+    clearTimeout(_userActionReleaseTimer);
+  }
+  _userActionReleaseTimer = setTimeout(() => {
+    if (_userActionRefCount <= 0) {
+      _userActionInProgress = false;
+      _userActionLockTime = 0;
+      console.log(`[交互锁] 防抖释放触发 - 完全释放`);
+    } else {
+      console.log(`[交互锁] 防抖释放触发 - refCount=${_userActionRefCount}，保持锁定`);
+      _scheduleRelease(delayMs);  // 继续等待
+    }
+    _userActionReleaseTimer = null;
+  }, delayMs);
+}
+
+
+// 看门狗：每10秒检查一次，如果锁被持有超过15秒，强制释放
+// 15秒阈值 > 正常5秒释放时间，给用户足够缓冲
+setInterval(() => {
+  if (_userActionInProgress && _userActionLockTime > 0) {
+    const held = (Date.now() - _userActionLockTime) / 1000;
+    if (held > 15) {
+      console.warn(`[看门狗] 用户交互锁被持有${held.toFixed(1)}秒，强制释放！refCount=${_userActionRefCount}`);
+      // 强制重置所有状态
+      _userActionRefCount = 0;
+      _userActionInProgress = false;
+      _userActionLockTime = 0;
+      _domFrozenRefCount = 0;  // 重置DOM冻结计数
+      if (_userActionReleaseTimer) {
+        clearTimeout(_userActionReleaseTimer);
+        _userActionReleaseTimer = null;
+      }
+      _unfreezeDom();
+      console.warn(`[看门狗] 强制释放完成`);
+    }
+  }
+}, 10000);
 
 // 卡片事件委托系统 - 单一监听器处理所有卡片点击，防止DOM重建后事件丢失
 (function initCardDelegation(){
@@ -4109,20 +4783,31 @@ function switchTab(name){
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
   if(name==='trade'){ 
-    if(typeof refreshJournalList==='function') refreshJournalList(); 
+    if(typeof refreshJournalList==='function') refreshJournalList(true); 
     if(typeof refreshJournalSession==='function') refreshJournalSession();
     if(typeof refreshJournal==='function') refreshJournal();
   }
   if(name==='account'){ 
     if(typeof refreshAccount==='function') refreshAccount(); 
-    if(typeof refreshAccountSync==='function') refreshAccountSync(); 
+    if(typeof refreshAccountSync==='function') refreshAccountSync();
+    if(typeof refreshSentiment==='function') refreshSentiment();
   }
   if(name==='alerts'){ 
     if(typeof refreshAlerts==='function') refreshAlerts(); 
-    if(typeof refreshAlertHistory==='function') refreshAlertHistory(); 
+    if(typeof refreshAlertHistory==='function') refreshAlertHistory();
     if(typeof refreshRisk==='function') refreshRisk();
     if(typeof refreshDrawdown==='function') refreshDrawdown();
     if(typeof refreshKill==='function') refreshKill();
+    if(typeof refreshSentiment==='function') refreshSentiment();
+    if(typeof refreshSR==='function') refreshSR();
+    if(typeof refreshSectorHeatmap==='function') refreshSectorHeatmap();
+    if(typeof refreshScan==='function') refreshScan();
+    if(typeof refreshScreener==='function') refreshScreener();
+    if(typeof refreshSignalFeed==='function') refreshSignalFeed();
+  }
+  if(name==='chat'){
+    if(typeof loadChatDays==='function') loadChatDays();
+    if(typeof renderChatFeed==='function') renderChatFeed(LAST_CHAT);
   }
   if(name==='seat'){ if(typeof refreshCposRank==='function') refreshCposRank(); }
   if(name==='perf'){
@@ -4146,8 +4831,9 @@ document.addEventListener('visibilitychange',function(){
   if(_userActionInProgress) return;  // ★ 2026-08-26: 用户交互中不刷新
   if(typeof refresh==='function') refresh();
   if(typeof refreshFocus==='function') refreshFocus();
-  if(typeof refreshJournalList==='function') refreshJournalList();
+  if(typeof refreshJournalList==='function') refreshJournalList(true);
   if(typeof refreshSignalHistory==='function') refreshSignalHistory();
+  if(typeof loadChatDays==='function') loadChatDays();
 });
 
 /* ===== 总览驾驶舱（首页）：聚合各功能域实时指标到一屏 ===== */
@@ -4458,11 +5144,12 @@ async function runTool(name){
   }catch(e){ out.textContent='调用异常 '+e; }
 }
 
-async function refreshAccount(){
-  // ★★ 2026-08-26: 用户交互保护
-  if(_userActionInProgress){ return; }
+async function refreshAccount(force){
+  // ★★ 2026-08-26: 用户交互保护（force=true 时跳过）
+  if(!force && _userActionInProgress){ return; }
   try{
-    const r=await _smartFetch('/api/account');const a=await r.json();
+    const fetchUrl = force ? '/api/account?force=1' : '/api/account';
+    const r=await _smartFetch(fetchUrl);const a=await r.json();
     document.getElementById('a-equity').textContent=fmt(a.equity,0);
     document.getElementById('a-usage').textContent=fmt(a.usage_rate)+'%';
     document.getElementById('a-margin').textContent=fmt(a.total_margin,0);
@@ -4483,28 +5170,21 @@ async function refreshAccount(){
       : '初始化中...';
     _se.style.color = 'var(--green)';
     _se.style.fontWeight = '';
-    // 系统自检状态
-    // 自检异步执行，不阻塞账户数据刷新
-    setTimeout(() => {
-      try {
-        const sc = _smartFetch('/api/self_check').then(r=>r.json());
-        sc.then(sc => {
-          const scEl = document.getElementById('a-selfcheck');
-          if (scEl) {
-            const passed = sc.summary ? sc.summary.passed : 0;
-            const total = sc.summary ? sc.summary.total : 0;
-            const failed = sc.summary ? sc.summary.failed : total - passed;
-            if (failed === 0) {
-                scEl.textContent = `✅ 全部通过 (${passed}/${total})`;
-                scEl.style.color = 'var(--green)';
-            } else {
-                scEl.textContent = `⚠ ${failed}项异常 (${passed}/${total})`;
-                scEl.style.color = 'var(--amber)';
-            }
-          }
-        }).catch(()=>{});
-      } catch(e) {}
-    }, 100);
+    // 系统自检状态 - 使用API返回的自洽验证结果
+    const scEl = document.getElementById('a-selfcheck');
+    if (scEl && a.self_check) {
+      const sc = a.self_check;
+      if (sc.ok) {
+        scEl.textContent = `✅ 数据自洽 | 权益${fmt(sc.equity_verified,0)} | 已实现${fmt(sc.realized_computed)} | 浮动${fmt(sc.float_computed)}`;
+        scEl.style.color = 'var(--green)';
+      } else {
+        scEl.textContent = `❌ ${sc.msg || '数据异常'}`;
+        scEl.style.color = 'var(--red)';
+      }
+    } else if (scEl) {
+      scEl.textContent = '✅ 数据同步中';
+      scEl.style.color = 'var(--green)';
+    }
     // 数据源状态显示
     const dsEl = document.getElementById('a-datasource');
     if(dsEl){
@@ -4612,9 +5292,12 @@ async function refreshAccount(){
     refreshAccountSync();
   }catch(e){ console.error('refreshAccount failed:', e); }
 }
-async function refreshAccountSync(){
+async function refreshAccountSync(force){
   let d;
-  try{ d=await (await _smartFetch('/api/account_sync')).json(); }catch(e){console.error(e);return;}
+  try{
+    const fetchUrl = force ? '/api/account_sync?force=1' : '/api/account_sync';
+    d=await (await _smartFetch(fetchUrl)).json();
+  }catch(e){console.error(e);return;}
   if(!d) return;
   const age=document.getElementById('sync-age');
   if(d.feed_status){
@@ -4672,6 +5355,27 @@ async function doTrade(){
   const sigId=document.getElementById('t-sig')?.value||'manual';
   const strat=document.getElementById('t-strat')?.value||'手动';
   const acct=document.getElementById('t-acct')?.value||'主账户';
+  
+  // ★★ 2026-08-26: 前端风控检查 - 开仓前检查熔断/锁定状态
+  if(act==='open' || act==='add'){
+    try{
+      const riskR=await _smartFetch('/api/risk');
+      const riskData=await riskR.json();
+      const isHalted=riskData.halted || (riskData.killswitch && riskData.killswitch.halted);
+      const isLocked=riskData.state==='LOCKED';
+      if(isHalted){
+        document.getElementById('t-msg').textContent='🚫 系统硬熔断中，禁止开仓！请先人工解除熔断。';
+        console.warn('[doTrade] 开仓被前端风控拦截: 硬熔断');
+        return;
+      }
+      if(isLocked){
+        document.getElementById('t-msg').textContent='⚠️ 风控锁定中，开仓受限。请等待风控解除。';
+        console.warn('[doTrade] 开仓被前端风控拦截: 状态机LOCKED');
+        return;
+      }
+    }catch(_){/* 风控API异常时放行，由后端兜底检查 */}
+  }
+  
   try{
     const body={action:act,symbol:sym,direction:dir,lots:lots,price:price,signal_id:sigId,strategy:strat,account:acct};
     console.log('[doTrade] 提交交易: sym='+sym+' act='+act+' price='+price);
@@ -4679,7 +5383,7 @@ async function doTrade(){
     const j=await r.json();
     console.log('[doTrade] 后端响应:', j);
     document.getElementById('t-msg').textContent=(j.ok?'✅ ':'❌ ')+j.msg+' · '+new Date().toLocaleTimeString();
-    await refreshAllAfterTrade();
+    await refreshAllAfterTrade(true);
   }catch(e){document.getElementById('t-msg').textContent='错误: '+e;console.error('[doTrade] 异常:',e);}
 }
 async function quickOpen(sym, dirT, price, signalId){
@@ -4726,17 +5430,11 @@ async function quickOpen(sym, dirT, price, signalId){
     if(msgEl) msgEl.textContent = '预填失败: ' + e;
     console.error('[quickOpen] 异常:', e);
   }finally{
-    // 4. 释放DOM冻结和交互锁（延长到15秒确保用户有足够时间操作）
-    // 先在100ms后立即释放DOM冻结（允许价格等小更新）
-    setTimeout(()=>{ 
-      _unfreezeDom(); 
-      console.log('[quickOpen] DOM冻结释放'); 
-    }, 100);
-    // 用户交互锁保持15秒
-    setTimeout(()=>{ 
-      _endUserAction(); 
-      console.log('[quickOpen] 交互锁释放'); 
-    }, 15000);
+    // 4. 释放DOM冻结和交互锁（同步管理，避免竞态）
+    // DOM冻结与交互锁使用相同的防抖机制
+    _endUserAction();  // 交互锁：减少引用计数
+    _unfreezeDom();    // DOM冻结：减少引用计数
+    _scheduleRelease(5000);  // 5秒后检查交互锁是否真正释放
   }
 }
 async function syncEquity(){
@@ -4797,43 +5495,57 @@ async function initSyms(){
   }catch(e){console.error(e);}
 }
 // ★ 任何书签发生成交（开仓/平仓/回灌）后，串行刷新所有相关视图，保证全面板数据联动
-async function refreshAllAfterTrade(){
-  // ★★ 2026-08-26: 用户交互保护 - 用户操作期间不执行
-  if(_userActionInProgress){
+async function refreshAllAfterTrade(force){
+  // ★★ 2026-08-27: 优化版 - 减少平仓/开仓后的请求数量
+  //   只刷新核心交易关联面板，其余延迟到后台执行
+  //   force=true 时跳过交互锁检查（用于开仓/平仓操作后强制刷新）
+  if(!force && _userActionInProgress){
     console.log('[refreshAllAfterTrade] 用户交互中，跳过刷新');
     return;
   }
-  // ★ 2026-08-26：清除关键 API 缓存，确保开仓后所有面板获取最新数据
-  if(window._clearCache){
-    ['/api/account','/api/account_sync','/api/journal','/api/risk','/api/signals','/api/focus','/api/anomaly','/api/drawdown','/api/killswitch','/api/health','/api/risk_rules'].forEach(u=>window._clearCache(u));
+  if(force){
+    console.log('[refreshAllAfterTrade] 强制刷新模式（交易后）');
   }
-  // ★ 分批刷新：使用字符串名称动态查找函数，避免引用未定义函数时报错
-  const _safe = async (name) => {
+  // ★ 清除核心 API 缓存
+  if(window._clearCache){
+    ['/api/account','/api/journal','/api/risk','/api/account_sync','/api/journal_list'].forEach(u=>window._clearCache(u));
+  }
+  const _safe = async (name, ...args) => {
     try{
       const fn = typeof window[name] === 'function' ? window[name] : (typeof eval === 'function' ? eval(name) : null);
-      if(typeof fn !== "function"){ console.warn(`[refreshAll] ${name} 未定义，跳过`); return; }
-      await fn();
+      if(typeof fn !== "function"){ return; }
+      await fn(...args);
     }catch(e){ console.error(`[refreshAll] ${name} failed:`, e); }
   };
-  const _batch = async (names, label) => {
-    const chunkSize = 4;
-    for(let i = 0; i < names.length; i += chunkSize){
-      const chunk = names.slice(i, i + chunkSize);
-      await Promise.all(chunk.map(n => _safe(n)));
+  // 第 0 阶段：账户权益/持仓（阻塞后续）
+  await _safe('refreshAccount', true);
+  // 第 1 阶段：核心交易关联面板（使用 force=1 绕过缓存）
+  const _batchForce = async (names) => {
+    for(let i = 0; i < names.length; i += 3){
+      await Promise.all(names.slice(i, i + 3).map(n => _safe(n, true)));
     }
   };
-  // 第 0 阶段：账户权益/持仓必须先到位（阻塞后续所有）
-  await _safe('refreshAccount');
-  // 第 1 阶段：核心书签（交易直接关联的面板）
-  await _batch(['refreshJournal','refreshJournalList','refreshRisk','refreshDrawdown','refreshKill','refreshJournalSession','refreshAccountSync'], 'core');
-  // 第 2 阶段：次级书签（统计/风控）
-  await _batch(['refreshPerformance','refreshDiscipline','refreshRules','refreshAttribution','refreshFocus'], 'secondary');
-  // 第 3 阶段：分析面板（驾驶舱已预清缓存，确保数据联动）
-  await _batch(['refreshVar','refreshStress','renderCockpit','refreshAdv','refreshMetrics'], 'analytics');
-  // 第 4 阶段：重型计算（可延迟，不影响开仓体验）
+  // _batch: 后台批量刷新（不传 force，使用正常缓存策略）
+  const _batch = async (names) => {
+    for(let i = 0; i < names.length; i += 3){
+      await Promise.all(names.slice(i, i + 3).map(n => _safe(n)));
+    }
+  };
+  await _safe('refreshJournal', true);
+  await _safe('refreshJournalList', true);
+  await _batchForce(['refreshRisk','refreshAccountSync']);
+  // 第 2 阶段：后台延迟刷新（不阻塞用户操作）
   setTimeout(async () => {
-    await _batch(['refreshPlayback','refreshCorrelation','refreshSpread','refreshCorrStress','refreshGbm'], 'heavy');
-  }, 500);
+    if(force || !_userActionInProgress){
+      await _batch(['refreshDrawdown','refreshKill','refreshJournalSession','refreshSentiment','refreshSR','refreshSignalFeed','refreshPerformance','refreshDiscipline','renderCockpit']);
+    }
+  }, 300);
+  // 第 3 阶段：重型计算（更长延迟）
+  setTimeout(async () => {
+    if(force || !_userActionInProgress){
+      await _batch(['refreshVar','refreshStress','refreshAdv','refreshMetrics','refreshPlayback','refreshCorrelation']);
+    }
+  }, 2000);
 }
 /* ===== 信号卡片：按商品大类分组（黑色系/建材化工/农产品/有色贵金属/能源） ===== */
 const SECTOR_ORDER = ["黑色系","建材化工","农产品","有色贵金属","能源","其他"];
@@ -4933,9 +5645,16 @@ function renderSectorHeatmap(){
   }).join('');
   box.innerHTML=html||'<div class="logitem stamp">暂无信号数据，热力图待刷新…</div>';
   box.querySelectorAll('.heat-tile').forEach(function(t){
-    t.addEventListener('click',function(){
-      const target=document.querySelector('#cards .sector-sec[data-sector="'+t.getAttribute('data-sec')+'"]');
-      if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
+    t.addEventListener('click',function(e){
+      const sec = t.getAttribute('data-sec');
+      if(e.shiftKey){
+        // Shift+点击：跳转到消息面板中该板块相关的消息
+        jumpToChatMessage('', '', sec);
+      }else{
+        // 主行为：滚动到信号卡片分组
+        const target=document.querySelector('#cards .sector-sec[data-sector="'+sec+'"]');
+        if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
+      }
     });
   });
 }
@@ -4969,13 +5688,92 @@ async function refreshSignalHistory(){
         ttl='<span class="exp">⏱ 已过期</span>';
       }
       const hhmmss=String(g.time).length>=19?String(g.time).slice(11,19):String(g.time);
-      return '<div class="logitem'+faded+'"><span class="sh-chip '+((SECTOR_CLS[gsec])||'sec-other')+'">'+gsec+'</span>'+
+      return '<div class="logitem'+faded+' sig-hist-item" data-sym="'+(g.symbol||'')+'" data-dir="'+(g.direction||'')+'" data-sector="'+gsec+'" data-time="'+(g.time||'')+'" style="cursor:pointer" title="点击跳转到消息推送">'+
+        '<span class="sh-chip '+((SECTOR_CLS[gsec])||'sec-other')+'">'+gsec+'</span>'+
         '<span class="'+c+'">'+hhmmss+' '+g.name+'<span class="ccode">'+cc(g.symbol)+'</span> '+g.direction+'</span>'+
         ' · 价 '+fmt(g.price)+' '+ttl+'</div>';
     }).join('');
+    // ★ 2026-08-27: 绑定点击事件，联动到消息推送面板（在 try 块内，innerHTML 设置后立即绑定）
+    box.querySelectorAll('.sig-hist-item').forEach(function(item){
+      item.addEventListener('click', function(){
+        const sym = item.getAttribute('data-sym');
+        const dir = item.getAttribute('data-dir');
+        jumpToChatMessage(sym, dir);
+      });
+    });
   }catch(e){
     box.innerHTML='<div class="logitem stamp">触发历史加载失败：'+e+'</div>';
   }finally{ SIG_HIST_LOADING=false; }
+}
+// ★ 2026-08-27: 联动函数 - 从触发历史/板块热力图跳转到消息推送
+function jumpToChatMessage(sym, dir, sector){
+  // 切换到消息面板
+  switchTab('chat');
+  // 等待渲染完成
+  setTimeout(function(){
+    const feed = document.getElementById('chat-feed');
+    if(!feed) return;
+    // 清除之前的高亮
+    feed.querySelectorAll('.chat-msg.chat-highlight').forEach(function(el){
+      el.classList.remove('chat-highlight');
+      el.style.boxShadow = '';
+    });
+    // 查找匹配消息：先精确匹配(sym+dir)，再模糊匹配(name+dir)
+    const allMsgs = feed.querySelectorAll('.chat-msg');
+    let matched = null;
+    // 如果有 sector，先过滤该板块相关消息
+    let filteredMsgs = allMsgs;
+    if(sector){
+      filteredMsgs = [];
+      allMsgs.forEach(function(m){
+        const ms = (m.getAttribute('data-sym') || '').toLowerCase();
+        // 用 sector 关键字过滤（如"有色贵金属"包含"沪锌"、"沪镍"等）
+        if(sector === '有色贵金属' && /zn|ni|sn|pb|cu|al|au|ag/.test(ms)) filteredMsgs.push(m);
+        else if(sector === '黑色系' && /j|jm|rb|hc|ss|bu|fu|ru/i.test(ms)) filteredMsgs.push(m);
+        else if(sector === '建材化工' && /fg|sa|ta|ma|py|ur|sh|cf|rm|oi|pk|ap/i.test(ms)) filteredMsgs.push(m);
+        else if(sector === '农产品' && /m|y|a|b|c|cs|jd|lh|p|rr|sr/i.test(ms)) filteredMsgs.push(m);
+        else if(sector === '能源' && /fu|ru|sc|lu|nr|bc|ec|pg/i.test(ms)) filteredMsgs.push(m);
+        else if(sector === '其他' && /si|lc|ps/i.test(ms)) filteredMsgs.push(m);
+      });
+      // 如果没找到匹配的，用全部消息兜底
+      if(filteredMsgs.length === 0) filteredMsgs = allMsgs;
+    }
+    // 精确匹配：symbol + direction（在过滤后的集合中查找）
+    if(sym){
+      for(var i = 0; i < filteredMsgs.length; i++){
+        var s = filteredMsgs[i].getAttribute('data-sym') || '';
+        var d = filteredMsgs[i].getAttribute('data-dir') || '';
+        if(s && s.indexOf(sym) >= 0 && d === dir){
+          matched = filteredMsgs[i];
+          break;
+        }
+      }
+    }
+    // 兜底：只按 direction 匹配
+    if(!matched && dir){
+      for(var j = 0; j < filteredMsgs.length; j++){
+        var d2 = filteredMsgs[j].getAttribute('data-dir') || '';
+        if(d2 === dir){
+          matched = filteredMsgs[j];
+          break;
+        }
+      }
+    }
+    // 最终兜底：过滤后的第一条
+    if(!matched && filteredMsgs.length > 0){
+      matched = filteredMsgs[0];
+    }
+    if(matched){
+      matched.classList.add('chat-highlight');
+      matched.style.boxShadow = '0 0 0 2px var(--gold), 0 0 16px rgba(255,200,50,0.4)';
+      matched.scrollIntoView({behavior:'smooth', block:'center'});
+      // 3秒后移除高亮
+      setTimeout(function(){
+        matched.classList.remove('chat-highlight');
+        matched.style.boxShadow = '';
+      }, 3000);
+    }
+  }, 300);
 }
 // ★ 2026-08-26: 重入保护 + 交互检查 + 差异更新
 let _refreshBusy = false;
@@ -5497,7 +6295,8 @@ function renderChatFeed(chat){
     const isSuppressed=!!m.push_suppressed;
     let suppReason='';
     if(isSuppressed){
-      if(hc.cooldown) suppReason='平仓冷却期';
+      if(hc.cross_dir_locked) suppReason='方向锁定';
+      else if(hc.cooldown) suppReason='平仓冷却期';
       else if(hc.whipsaw) suppReason='来回打脸(Whipsaw)';
       else if(hc.rate_limited) suppReason='频率限制';
       else if(hc.dedup) suppReason='同向重复';
@@ -5539,7 +6338,11 @@ if(!isAlert && m.action_advice){
       const ai=adviceIcons[adviceType]||'💡';
       adviceHtml=`<div class="chat-advice" style="border-left:3px solid ${ac};background:${ac}15;padding:8px 12px;margin:8px 0;border-radius:0 6px 6px 0;font-size:13px;line-height:1.6;"><b style="color:${ac}">${ai} 行动建议：</b><br>${m.action_advice}</div>`;
     }
-    return `<div class="chat-msg ${isAlert?'alert':'signal'}${isSuppressed?' suppressed':''}">
+    // ★ 2026-08-27: 添加 data-* 属性供触发历史/板块热力图联动定位
+    const chatSym = m.symbol || m.name || '';
+    const chatDir = m.direction || '';
+    const chatTime = m.time || '';
+    return `<div class="chat-msg ${isAlert?'alert':'signal'}${isSuppressed?' suppressed':''}" data-sym="${chatSym}" data-dir="${chatDir}" data-time="${chatTime}">
       <div class="chat-av">${isAlert?'⚠️':'📡'}</div>
       <div class="chat-bubble">
         <div class="chat-head"><b>${head}</b><span class="chat-time">${m.time}</span></div>
@@ -5605,8 +6408,8 @@ setTimeout(() => { if(!_userActionInProgress) refresh(); }, 1000);
 setInterval(() => { if(!_userActionInProgress && !_refreshBusy) refresh(); }, _T.signals);
 
 // 3. 成交列表（15秒）
-setTimeout(() => { if(!_userActionInProgress) refreshJournalList(); }, 2000);
-setInterval(() => { if(!_userActionInProgress && !_refreshBusy) refreshJournalList(); }, _T.trades);
+setTimeout(() => { if(!_userActionInProgress) refreshJournalList(true); }, 2000);
+setInterval(() => { if(!_userActionInProgress && !_refreshBusy) refreshJournalList(true); }, _T.trades);
 
 // 4. 驾驶舱（30秒）
 setTimeout(() => { if(!_userActionInProgress) renderCockpit(); }, 500);
@@ -5624,7 +6427,25 @@ setTimeout(() => {
   if(typeof refreshFocus==='function') refreshFocus();
   if(typeof refreshPaperSyms==='function') refreshPaperSyms();
   if(typeof loadChatDays==='function') loadChatDays();
+  // 右侧面板（alerts）首屏加载
+  if(typeof refreshSentiment==='function') refreshSentiment();
+  if(typeof refreshSR==='function') refreshSR();
+  if(typeof refreshSectorHeatmap==='function') refreshSectorHeatmap();
+  if(typeof refreshScan==='function') refreshScan();
+  if(typeof refreshScreener==='function') refreshScreener();
 }, 2000);
+
+// 6. 右侧面板轮询（45秒：情绪/SR/热力图/扫描/筛选）
+setTimeout(() => {
+  setInterval(() => {
+    if(_userActionInProgress || _refreshBusy) return;
+    if(typeof refreshSentiment==='function') refreshSentiment();
+    if(typeof refreshSR==='function') refreshSR();
+    if(typeof refreshSectorHeatmap==='function') refreshSectorHeatmap();
+    if(typeof refreshScan==='function') refreshScan();
+    if(typeof refreshScreener==='function') refreshScreener();
+  }, 45000);
+}, 3000);
 
 initNotify();
 if('serviceWorker' in navigator){
@@ -5643,9 +6464,10 @@ if('serviceWorker' in navigator){
 //        refreshMetrics, refreshFocus, refreshChatToday
 
 // ---- 风控状态机 + 异动扫描 + 通知开关（从 da龘 合并） ----
-async function refreshRisk(){
+async function refreshRisk(force){
   try{
-    const r=await _smartFetch('/api/risk');const k=await r.json();
+    const fetchUrl = force ? '/api/risk?force=1' : '/api/risk';
+    const r=await _smartFetch(fetchUrl);const k=await r.json();
     const el=document.getElementById('risk-state');
     el.className='risk-chip rs-'+k.state;
     el.textContent='风控 '+k.state;
@@ -5801,9 +6623,11 @@ async function refreshMetrics(){
 }
 // Track last trade count to reduce log noise
 window._lastJournalTradeCount = -1;
-async function refreshJournalList(){
+async function refreshJournalList(force){
   try{
-    const d=await (await _smartFetch('/api/journal_list')).json();
+    // 2026-08-27: 使用 _forceFetch 确保获取最新成交明细
+    const fetchUrl = '/api/journal_list';
+    const d=await (force ? (await _forceFetch(fetchUrl)) : (await _smartFetch(fetchUrl))).json();
     const tradeCount = (d.trades||[]).length;
     if(window._lastJournalTradeCount !== tradeCount){
       console.log("[refreshJournalList] trades:", tradeCount);
@@ -5839,7 +6663,7 @@ async function editNote(id){
     const r=await _queueFetch('/api/journal',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'note',id:id,note:cur})});
     const d=await r.json();
-    if(d.ok){ refreshJournalList(); } else { alert('备注保存失败：'+(d.msg||'')); }
+    if(d.ok){ refreshJournalList(true); } else { alert('备注保存失败：'+(d.msg||'')); }
   }catch(e){ alert('备注保存异常：'+e); }
 }
 async function refreshFocus(){
@@ -5895,9 +6719,10 @@ async function refreshJournalSession(){
 }
 
 // ---- 成交记录器 ----
-async function refreshJournal(){
+async function refreshJournal(force){
   try{
-    const r=await _smartFetch('/api/journal');const j=await r.json();
+    const fetchUrl = force ? '/api/journal?force=1' : '/api/journal';
+    const r=await _smartFetch(fetchUrl);const j=await r.json();
     const s=j.summary||{};
     // ★ 2026-08-26: 增强统计显示 - 包含持仓风险信息
     const totalRisk = s.total_risk || 0;
@@ -6064,6 +6889,8 @@ function refreshSignalOptions(){
   if(sameDir.length===0 && otherDir.length===0){
     sigSel.insertAdjacentHTML('beforeend','<option value="manual" disabled>该品种近期无信号（可手动记录）</option>');
   }
+  }
+}
 }
 
 
@@ -6093,16 +6920,145 @@ async function refreshPaper(){
     box.innerHTML = keys.length ? keys.map(s=>{
       const p=pos[s]; const col=p.direction==='多'?'var(--red)':'var(--green)';
       const cur = (window.LAST_PRICES && LAST_PRICES[s]!=null)? LAST_PRICES[s] : null;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--border)">
-        <b>${SYM_META[s]?SYM_META[s].name:s} <span class="ccode">${cc(s)}</span></b>
-        <span style="color:${col}">${p.direction} ${p.lots}手</span>
-        <span style="opacity:.8">均价 ${p.avg}</span>
-        <button class="green" onclick="ppClose('${s}')">平</button></div>`;
+      const kid = 'ppk-'+s;
+      return `<div style="border-bottom:.5px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
+          <b>${SYM_META[s]?SYM_META[s].name:s} <span class="ccode">${cc(s)}</span></b>
+          <span style="color:${col}">${p.direction} ${p.lots}手</span>
+          <span style="opacity:.8">均价 ${p.avg}</span>
+          <div style="display:flex;gap:4px">
+            <button class="green" onclick="ppClose('${s}')">平</button>
+            <button class="amber" onclick="toggleKline('${s}')" id="btn-${kid}" style="padding:2px 8px;font-size:11px">📈</button>
+          </div>
+        </div>
+        <div id="${kid}" style="display:none;padding:6px 0 10px">
+          <div style="position:relative;height:140px"><canvas id="cv-${s}"></canvas></div>
+          <div class="stamp" id="note-${s}" style="margin-top:4px;font-size:11px">加载中…</div>
+        </div>
+      </div>`;
     }).join('') : '<div class="stamp">暂无模拟持仓</div>';
     const tr=(d.trades||[]).slice().reverse();
     tx.innerHTML = tr.length ? tr.map(t=>`<div style="padding:4px 0;border-bottom:.5px solid var(--border);font-size:12px">
       <span class="stamp">${t.time}</span> ${t.action} ${t.symbol} ${t.direction} ${t.lots}手 @${t.price}${t.reason?' ('+t.reason+')':''}</div>`).join('') : '<div class="stamp">暂无成交</div>';
   }catch(e){ box.innerHTML='<div class="stamp">加载失败: '+e+'</div>'; }
+}
+// 持仓K线展开/收起
+const _klineCharts={};
+async function toggleKline(sym){
+  const box=document.getElementById('ppk-'+sym);
+  if(!box) return;
+  if(box.style.display==='none'){
+    box.style.display='block';
+    await drawHoldingKline(sym);
+  }else{
+    box.style.display='none';
+    if(_klineCharts[sym]){ _klineCharts[sym].destroy(); delete _klineCharts[sym]; }
+  }
+}
+async function drawHoldingKline(sym){
+  const noteEl=document.getElementById('note-'+sym);
+  try{
+    const r=await _smartFetch('/api/holdings_kline?sym='+sym);
+    const d=await r.json();
+    if(!d.ok){ noteEl.textContent='加载失败: '+(d.error||'未知'); return; }
+    const klines=d.klines||[];
+    if(!klines.length){ noteEl.textContent='无K线数据'; return; }
+    const labels=klines.map(k=>k.date);
+    const closes=klines.map(k=>k.close);
+    // 计算蜡烛图颜色数据
+    const barColors=klines.map(k=>k.close>=k.open?'rgba(239,68,68,0.8)':'rgba(34,197,94,0.8)');
+    const ctx=document.getElementById('cv-'+sym).getContext('2d');
+    if(_klineCharts[sym]){ _klineCharts[sym].destroy(); }
+    // 用收盘价线 + 高低影线简化（Chart.js原生不支持蜡烛图，用柱状+折线模拟）
+    const datasets=[{
+      type:'bar', label:'K线', data: klines.map(k=>({x:k.date,y:[k.low,k.high]})),
+      backgroundColor: barColors, barPercentage: 0.3, categoryPercentage: 1.0,
+    },{
+      type:'line', label:'收盘', data: closes, borderColor: '#BA7517',
+      backgroundColor:'rgba(186,117,23,0.1)', fill:false, tension:0.1,
+      pointRadius:0, borderWidth:1.5,
+    }];
+    // SR支撑位（绿色虚线）
+    (d.supports||[]).forEach((p,i)=>{
+      if(p >= Math.min(...klines.map(k=>k.low)) && p <= Math.max(...klines.map(k=>k.high))){
+        datasets.push({
+          type:'line', label:'支撑'+(i+1), data: klines.map(()=>p),
+          borderColor: 'rgba(34,197,94,0.7)', borderDash:[4,3], borderWidth:1,
+          pointRadius:0, fill:false,
+        });
+      }
+    });
+    // SR压力位（红色虚线）
+    (d.resistances||[]).forEach((p,i)=>{
+      if(p >= Math.min(...klines.map(k=>k.low)) && p <= Math.max(...klines.map(k=>k.high))){
+        datasets.push({
+          type:'line', label:'压力'+(i+1), data: klines.map(()=>p),
+          borderColor: 'rgba(239,68,68,0.7)', borderDash:[4,3], borderWidth:1,
+          pointRadius:0, fill:false,
+        });
+      }
+    });
+    // 开仓价
+    if(d.entry_price){
+      datasets.push({
+        type:'line', label:'开仓', data: klines.map(()=>d.entry_price),
+        borderColor: '#f59e0b', borderWidth:1.5, pointRadius:0, fill:false,
+      });
+    }
+    // 止损线
+    if(d.stop_loss){
+      datasets.push({
+        type:'line', label:'止损', data: klines.map(()=>d.stop_loss),
+        borderColor: 'rgba(239,68,68,0.9)', borderWidth:1.5, pointRadius:0, fill:false,
+        borderDash:[6,3],
+      });
+    }
+    // 止盈1
+    if(d.take_profit_1){
+      datasets.push({
+        type:'line', label:'T1', data: klines.map(()=>d.take_profit_1),
+        borderColor: 'rgba(34,197,94,0.9)', borderWidth:1, pointRadius:0, fill:false,
+        borderDash:[6,3],
+      });
+    }
+    // 止盈2
+    if(d.take_profit_2){
+      datasets.push({
+        type:'line', label:'T2', data: klines.map(()=>d.take_profit_2),
+        borderColor: 'rgba(34,197,94,0.7)', borderWidth:1, pointRadius:0, fill:false,
+        borderDash:[2,3],
+      });
+    }
+    _klineCharts[sym]=new Chart(ctx,{
+      data:{labels:labels,datasets:datasets},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{
+          callbacks:{
+            label: function(ctx){
+              if(ctx.dataset.label==='K线'){
+                const k=klines[ctx.dataIndex];
+                return `开${k.open} 高${k.high} 低${k.low} 收${k.close}`;
+              }
+              return ctx.dataset.label+': '+ctx.parsed.y;
+            }
+          }
+        }},
+        scales:{
+          x:{ticks:{maxRotation:0,autoSkip:true,font:{size:9}}},
+          y:{ticks:{font:{size:9}}, position:'right'},
+        }
+      }
+    });
+    // 底部说明
+    let parts=[];
+    if(d.entry_price) parts.push(`开仓 ${d.entry_price}`);
+    if(d.stop_loss) parts.push(`止损 ${d.stop_loss}`);
+    if(d.take_profit_1) parts.push(`T1 ${d.take_profit_1}`);
+    if(d.take_profit_2) parts.push(`T2 ${d.take_profit_2}`);
+    parts.push(`ATR ${d.atr}`);
+    noteEl.textContent=parts.join(' · ');
+  }catch(e){ noteEl.textContent='加载失败: '+e; }
 }
 async function ppOpen(){
   const sym=document.getElementById('pp-sym').value;
@@ -6131,20 +7087,101 @@ async function ppClose(sym){
     refreshPaper();
   }catch(e){ document.getElementById('pp-msg').textContent='错误: '+e; }
 }
+// ★ 2026-08-27: 价格保护 - 防止用户输入的价格被任何代码覆盖
+// 采用 watchdog 方案：当用户设置价格后，定期检查并恢复被修改的值
+(function(){
+  const _userPrices = { 'j-price': null, 'j2-price': null };
+  const _lastUserInput = { 'j-price': 0, 'j2-price': 0 };
+  
+  function setupPriceProtection(inputId, symInputId){
+    const el = document.getElementById(inputId);
+    if(!el) return;
+    
+    // 记录用户输入的值
+    el.addEventListener('input', function(){
+      _userPrices[inputId] = el.value;
+      _lastUserInput[inputId] = Date.now();
+    });
+    
+    // 当用户聚焦时，清除保护（允许修改）
+    el.addEventListener('focus', function(){
+      _userPrices[inputId] = null;
+    });
+    
+    // 当用户失焦时，保存当前值
+    el.addEventListener('blur', function(){
+      if(el.value){
+        _userPrices[inputId] = el.value;
+      }
+    });
+    
+    // Watchdog: 每500ms检查一次，如果价格被修改且不是用户刚输入的，就恢复
+    setInterval(function(){
+      const savedValue = _userPrices[inputId];
+      if(savedValue !== null && savedValue !== '' && el.value !== savedValue){
+        // 检查是否是用户刚输入的（500ms内）
+        if(Date.now() - _lastUserInput[inputId] > 500){
+          console.warn('[价格保护] ' + inputId + ' 价格被修改! 恢复: ' + savedValue + ' (当前: ' + el.value + ')');
+          el.value = savedValue;
+        }
+      }
+    }, 500);
+    
+    // 当切换品种时，重置价格保护
+    const symEl = document.getElementById(symInputId);
+    if(symEl){
+      symEl.addEventListener('change', function(){
+        _userPrices[inputId] = null;
+        console.log('[价格保护] ' + inputId + ' 保护已重置（切换品种）');
+      });
+    }
+  }
+  
+  // 初始化保护
+  setupPriceProtection('j-price', 'j-sym');
+  setupPriceProtection('j2-price', 'j2-sym');
+})();
+
+// 防重复提交锁
+let _journalExitBusy = false;
 async function doJournalExit(){
-  const sym=document.getElementById('j2-sym').value;
+  if(_journalExitBusy){
+    console.warn('[doJournalExit] 请求进行中，忽略重复提交');
+    return;
+  }
+  const msgEl=document.getElementById('j-msg');
+  const sym=document.getElementById('j2-sym').value.trim();
   const dir=document.getElementById('j2-dir').value;
-  const lots=parseInt(document.getElementById('j2-lots').value)||1;
+  const lots=parseInt(document.getElementById('j2-lots').value)||0;
   const price=parseFloat(document.getElementById('j2-price').value)||0;
   const reason=document.getElementById('j2-reason').value;
-  if(!price){document.getElementById('j-msg').textContent='请填入价格';return;}
+  
+  // ★ 2026-08-27: 完善的输入验证
+  if(!sym){msgEl.textContent='⚠️ 请先选择品种（点击品种框搜索并选择）';return;}
+  if(!price||price<=0){msgEl.textContent='⚠️ 请填入有效的平仓价格';return;}
+  if(!lots||lots<=0){msgEl.textContent='⚠️ 请填入有效的手数';return;}
+  if(!dir){msgEl.textContent='⚠️ 请选择方向（多/空）';return;}
+  
+  _journalExitBusy = true;
+  msgEl.textContent='⏳ 正在平仓...';
+  _startUserAction();
+  _freezeDom();
   try{
     const r=await _queueFetch('/api/journal',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'exit',symbol:sym,direction:dir,lots:lots,price:price,reason:reason})});
+    if(!r.ok){msgEl.textContent='❌ 请求失败 (HTTP '+r.status+')';return;}
     const j=await r.json();
-    document.getElementById('j-msg').textContent=(j.ok?'✅ ':'❌ ')+j.msg;
-    await refreshAllAfterTrade();
-  }catch(e){document.getElementById('j-msg').textContent='错误: '+e;}
+    msgEl.textContent=(j.ok?'✅ ':'❌ ')+(j.msg||'已提交');
+    // 只刷新核心面板，避免请求洪泛
+    await refreshAllAfterTrade(true);
+  }catch(e){
+    console.error('[doJournalExit] Error:',e);
+    msgEl.textContent='❌ 网络错误：'+e.message;
+  }finally{
+    _endUserAction();
+    _unfreezeDom();
+    _journalExitBusy = false;
+  }
 }
 let equityChart=null;
 async function refreshCalibration(){
@@ -6203,17 +7240,68 @@ async function refreshPerformance(){
     document.getElementById('perf-note').textContent=
       p.note? p.note : `基于 ${p.trades||0} 笔平仓（估算，非严格日频）· 末点含当前浮动盈亏`;
     const pts=(c.points||[]);
+    // 合并日内分钟级数据：替换最后一个"当前(含浮动)"点为日内曲线
+    const intra=j.intraday||{};
+    const intraPts=intra.points||[];
+    let mergedPts=pts;
+    if(intraPts.length>1 && intra.day_start_equity){
+      // 找到历史曲线中"当前(含浮动)"点之前的最后一个点
+      const histPts=pts.filter(p=>p.t!=='当前(含浮动)');
+      // 日内数据的时间标签
+      const todayLabel=intra.date||'今日';
+      const intraMerged=intraPts.map((p,i)=>{
+        // 只显示时间，避免标签太长
+        return {t: i===0? todayLabel+' '+p.t : p.t, equity: p.equity};
+      });
+      mergedPts=[...histPts, ...intraMerged];
+    }
     const ctx=document.getElementById('equityChart').getContext('2d');
+    // 日内段用不同颜色（虚线/亮色）
+    const intraCount=intraPts.length>1?intraPts.length:0;
+    const histCount=mergedPts.length - intraCount;
     if(equityChart){
-      equityChart.data.labels=pts.map(x=>x.t);
-      equityChart.data.datasets[0].data=pts.map(x=>x.equity);
-      equityChart.update();
-    }else if(pts.length){
+      equityChart.data.labels=mergedPts.map(x=>x.t);
+      equityChart.data.datasets[0].data=mergedPts.map(x=>x.equity);
+      // 构建分段颜色：历史段金色，日内段亮绿/亮红
+      const bgColors=mergedPts.map((_,i)=> i<histCount? 'rgba(186,117,23,0.12)' : 'rgba(34,197,94,0.15)');
+      const borderColors=mergedPts.map((_,i)=> i<histCount? '#BA7517' : '#22c55e');
+      equityChart.data.datasets[0].pointBackgroundColor=borderColors;
+      equityChart.data.datasets[0].borderColor=borderColors;
+      equityChart.data.datasets[0].backgroundColor=bgColors;
+      equityChart.update('none');
+    }else if(mergedPts.length){
       equityChart=new Chart(ctx,{type:'line',
-        data:{labels:pts.map(x=>x.t),datasets:[{label:'净值',data:pts.map(x=>x.equity),
-          borderColor:'#BA7517',backgroundColor:'rgba(186,117,23,0.12)',fill:true,tension:0.25,pointRadius:2}]},
+        data:{labels:mergedPts.map(x=>x.t),datasets:[{label:'净值',data:mergedPts.map(x=>x.equity),
+          borderColor:'#BA7517',backgroundColor:'rgba(186,117,23,0.12)',fill:true,tension:0.25,pointRadius:2,
+          pointBackgroundColor:'#BA7517'}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
           scales:{x:{ticks:{maxRotation:45,autoSkip:true,font:{size:9}}},y:{ticks:{font:{size:10}}}}}});
+    }
+    // 更新今日盈亏进度条
+    const barBox=document.getElementById('day-pnl-bar');
+    if(intra && intra.day_start_equity && intra.day_start_equity>0){
+      barBox.style.display='block';
+      const pnlPct=intra.day_pnl_pct||0;
+      const pnlVal=document.getElementById('day-pnl-val');
+      pnlVal.textContent=(intra.day_pnl>=0?'+':'')+fmt(intra.day_pnl,0)+' ('+(pnlPct>=0?'+':'')+fmt(pnlPct,2)+'%)';
+      pnlVal.className=pnlPct>=0?'pos':'neg';
+      // 刻度范围：默认 ±1%，超过则自适应
+      const scale=Math.max(1, Math.ceil(Math.abs(pnlPct)*10)/10);
+      document.getElementById('day-pnl-scale-l').textContent='-'+scale.toFixed(1)+'%';
+      document.getElementById('day-pnl-scale-r').textContent='+'+scale.toFixed(1)+'%';
+      // 进度条宽度（占半条的比例）
+      const pct=Math.min(100, Math.abs(pnlPct)/scale*100);
+      const gainEl=document.getElementById('day-pnl-gain');
+      const lossEl=document.getElementById('day-pnl-loss');
+      if(pnlPct>=0){
+        gainEl.style.width=pct+'%';
+        lossEl.style.width='0%';
+      }else{
+        lossEl.style.width=pct+'%';
+        gainEl.style.width='0%';
+      }
+    }else{
+      barBox.style.display='none';
     }
   }catch(e){document.getElementById('perf-note').textContent='加载失败: '+e;}
 }
@@ -6324,7 +7412,7 @@ let _voiceRate = 1.08, _voicePitch = 1.0;
 // 已移至函数外部初始化
 
 
-    }}
+
 
 // ===== 预警系统初始化（只执行一次）=====
 initAlertSyms();

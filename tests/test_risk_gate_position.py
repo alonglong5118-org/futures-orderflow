@@ -75,8 +75,8 @@
    - 返回 8 字段
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,11 +84,15 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from risk_gate_utils import (
-    calc_risk_lots, calc_min_lot_floor, apply_kelly_scaling,
-    calc_margin_lots, calc_t_strength_scale, deduct_held_lots,
-    check_limit_gate, calc_position_plan,
+    apply_kelly_scaling,
+    calc_margin_lots,
+    calc_min_lot_floor,
+    calc_position_plan,
+    calc_risk_lots,
+    calc_t_strength_scale,
+    check_limit_gate,
+    deduct_held_lots,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. calc_risk_lots

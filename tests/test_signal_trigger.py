@@ -19,8 +19,8 @@
   - bias_G 中性时错误阻挡信号（bias_G≈0 应该放行）
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,14 +28,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from signal_trigger_utils import (
-    compute_bias_FC,
-    check_hard_veto,
     check_fc_confirmation,
-    compute_effective_threshold,
+    check_hard_veto,
     check_same_direction,
+    compute_bias_FC,
+    compute_effective_threshold,
     signal_trigger_decision,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. bias_FC 计算

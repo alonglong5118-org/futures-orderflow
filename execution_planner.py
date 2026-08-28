@@ -20,6 +20,7 @@
     print(plan["headline"])   # 一句话建议
 """
 from __future__ import annotations
+
 import math
 import time
 

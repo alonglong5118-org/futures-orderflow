@@ -23,17 +23,23 @@
   result = gfm.optimize_weights("jd", df_daily)
 """
 from __future__ import annotations
-import os, sys, json, copy, time, random, math, argparse
+
+import argparse
+import copy
+import json
+import os
+import random
+import sys
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import four_dim_strategy as fd
 from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 try:
-    from deap import base, creator, tools, algorithms
+    from deap import base, creator, tools
     _HAVE_DEAP = True
 except Exception:
     _HAVE_DEAP = False

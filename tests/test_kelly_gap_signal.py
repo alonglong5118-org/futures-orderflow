@@ -78,21 +78,23 @@ Kelly因子 + 缺口止损 + 信号触发 — 单元测试
    - 返回 6 字段
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from kelly_utils import compute_kelly_factor
 from gap_stop_utils import check_gap_stop_triggered
+from kelly_utils import compute_kelly_factor
 from signal_trigger_utils import (
-    check_hard_veto, check_fc_confirmation, compute_effective_threshold,
-    check_same_direction, signal_trigger_decision,
+    check_fc_confirmation,
+    check_hard_veto,
+    check_same_direction,
+    compute_effective_threshold,
+    signal_trigger_decision,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. compute_kelly_factor

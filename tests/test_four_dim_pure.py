@@ -37,8 +37,8 @@
    - cfg=None → 使用默认权重
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,10 +46,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    regime_weights, _is_risk_locked, combine_bias,
-    TREND_STRATS, MEAN_STRATS, STRATS,
+    MEAN_STRATS,
+    STRATS,
+    TREND_STRATS,
+    _is_risk_locked,
+    combine_bias,
+    regime_weights,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. regime_weights

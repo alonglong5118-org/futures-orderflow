@@ -22,11 +22,12 @@
     pn.push_alert(sig)                            # 推送一条信号（自动格式化）
 """
 from __future__ import annotations
-import os
+
 import json
 import logging
-import urllib.request
+import os
 import urllib.parse
+import urllib.request
 from datetime import datetime
 
 log = logging.getLogger("push_notify")

@@ -24,8 +24,8 @@ risk_gate + exit_plan 主入口 — 集成测试
    - SR 位放宽止损（需 sr_analyzer）
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -33,10 +33,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    risk_gate, exit_plan, DEFAULT_CONFIG, SYMBOLS,
     _FALLBACK_SPEC,
+    DEFAULT_CONFIG,
+    exit_plan,
+    risk_gate,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. risk_gate — 基本仓位计算

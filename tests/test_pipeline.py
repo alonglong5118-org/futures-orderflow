@@ -24,9 +24,10 @@ pipeline 四维总入口 — 集成测试
   - P1-2：corr_gate 真降权（不是只改文本）
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -34,8 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from four_dim_strategy import pipeline, DEFAULT_CONFIG
-
+from four_dim_strategy import pipeline
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  测试数据构造

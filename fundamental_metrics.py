@@ -11,11 +11,11 @@
 """
 from __future__ import annotations
 
-from four_dim_strategy import load_daily_refreshed, SYMBOLS
-import json
-import math
-import time
 import datetime
+import json
+import time
+
+from four_dim_strategy import load_daily_refreshed
 
 try:
     import pandas as pd

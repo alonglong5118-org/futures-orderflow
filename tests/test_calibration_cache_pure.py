@@ -41,8 +41,8 @@
    - win_rate 过滤阈值
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -50,9 +50,8 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from convert_min5_cache import sym_from_cache, sym_from_std
-from four_dim_recalibrate import papertrack_recent, _status_of
 from four_dim_calibrate import best_stop_rr
-
+from four_dim_recalibrate import _status_of, papertrack_recent
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. sym_from_cache

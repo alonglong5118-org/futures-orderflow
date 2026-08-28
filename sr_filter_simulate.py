@@ -7,19 +7,20 @@ SR 过滤效果模拟（基于已标注数据）
 看剩下的交易 expR 变化（偏乐观估计，因为实际是提高阈值不是全过滤）。
 """
 
+import argparse
 import os
 import sys
-import argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import numpy as np
 import pandas as pd
 
 import sr_analyzer as sra
 from four_dim_strategy import (
-    SYMBOLS, load_daily, walk_forward_backtest, DEFAULT_CONFIG,
+    DEFAULT_CONFIG,
+    load_daily,
+    walk_forward_backtest,
 )
 
 

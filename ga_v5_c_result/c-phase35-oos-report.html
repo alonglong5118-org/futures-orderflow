@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>GA 参数优化报告 - c (Phase 3.5 OOS-aware)</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: #f5f7fa;
+        color: #333;
+        padding: 30px;
+        line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 {
+        font-size: 28px;
+        margin-bottom: 8px;
+        color: #1a1a2e;
+    }
+    .subtitle {
+        color: #666;
+        margin-bottom: 24px;
+        font-size: 14px;
+    }
+    .tag {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        margin-right: 6px;
+        margin-bottom: 4px;
+    }
+    .tag-shrink { background: #e8f5e9; color: #2e7d32; }
+    .tag-l1 { background: #e3f2fd; color: #1565c0; }
+    .tag-fast { background: #fff3e0; color: #e65100; }
+    .tag-oos { background: #f3e5f5; color: #6a1b9a; }
+    .section {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .section h2 {
+        font-size: 20px;
+        margin-bottom: 16px;
+        color: #1a1a2e;
+        border-bottom: 2px solid #eef0f4;
+        padding-bottom: 10px;
+    }
+    .section h3 {
+        font-size: 16px;
+        margin: 16px 0 10px;
+        color: #333;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 14px;
+    }
+    th, td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    th {
+        background: #f8f9fb;
+        font-weight: 600;
+        color: #555;
+        font-size: 13px;
+    }
+    tr:hover { background: #fafbfc; }
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin: 16px 0;
+    }
+    .metric-card {
+        background: #f8f9fb;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+    }
+    .metric-card .value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #1a1a2e;
+    }
+    .metric-card .label {
+        font-size: 13px;
+        color: #666;
+        margin-top: 4px;
+    }
+    .metric-card.good .value { color: #2e7d32; }
+    .metric-card.bad .value { color: #c62828; }
+    .svg-container {
+        background: #fafbfc;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 12px 0;
+        overflow-x: auto;
+    }
+    .note {
+        background: #fff8e1;
+        border-left: 4px solid #ffc107;
+        padding: 12px 16px;
+        margin: 12px 0;
+        border-radius: 0 8px 8px 0;
+        font-size: 14px;
+    }
+    .footer {
+        text-align: center;
+        color: #999;
+        font-size: 12px;
+        margin-top: 30px;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🔬 GA 参数优化报告 — c</h1>
+    <div class="subtitle">
+        Phase 3.5 · OOS 感知适应度 · 3 参数联合优化 ·
+        总耗时 1541.3s (25.7min) ·
+        <span class="tag tag-shrink">收缩范围 ±40%</span> <span class="tag tag-l1">L1 正则 w=0.5</span> <span class="tag tag-fast">Fast 模式</span> <span class="tag tag-oos">OOS感知 w=0.4</span>
+    </div>
+
+    <div class="section">
+        <h2>📊 进化总览</h2>
+        <div class="metric-grid">
+            <div class="metric-card good">
+                <div class="value">0.6499</div>
+                <div class="label">最优 WF expR</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">5.79</div>
+                <div class="label">最优 Calmar</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">76</div>
+                <div class="label">Pareto 前沿大小</div>
+            </div>
+            <div class="metric-card">
+                <div class="value">31</div>
+                <div class="label">实际进化代数</div>
+            </div>
+        </div>
+
+        <h3>进化曲线</h3>
+        <div class="svg-container">
+            <svg viewBox="0 0 700 300" width="100%" style="max-width:700px">
+        <line x1="55" y1="25.0" x2="645" y2="25.0" stroke="#f0f0f0" stroke-width="1"/><line x1="55" y1="83.8" x2="645" y2="83.8" stroke="#f0f0f0" stroke-width="1"/><line x1="55" y1="142.5" x2="645" y2="142.5" stroke="#f0f0f0" stroke-width="1"/><line x1="55" y1="201.2" x2="645" y2="201.2" stroke="#f0f0f0" stroke-width="1"/><line x1="55" y1="260.0" x2="645" y2="260.0" stroke="#f0f0f0" stroke-width="1"/>
+    <line x1="55" y1="25" x2="55" y2="260" stroke="#ccc" stroke-width="1"/>
+    <line x1="55" y1="260" x2="645" y2="260" stroke="#ccc" stroke-width="1"/>
+    <text x="350.0" y="290" text-anchor="middle" fill="#666" font-size="12">代数</text>
+    <text x="20" y="150.0" text-anchor="middle" fill="#1976d2" font-size="12" transform="rotate(-90 20 150.0)">expR</text>
+    <text x="685" y="150.0" text-anchor="middle" fill="#388e3c" font-size="12" transform="rotate(90 15 150.0)">Calmar</text>
+    <text x="55" y="272" text-anchor="start" fill="#999" font-size="10">0</text>
+    <text x="645" y="272" text-anchor="end" fill="#999" font-size="10">30</text>
+    
+        <path d="M55.0,164.8L74.7,164.8L94.3,164.8L114.0,164.8L133.7,164.8L153.3,164.8L173.0,156.5L192.7,156.5L212.3,156.5L232.0,156.5L251.7,156.5L271.3,156.5L291.0,156.2L310.7,151.9L330.3,151.9L350.0,151.9L369.7,144.0L389.3,139.4L409.0,139.4L428.7,133.8L448.3,133.8L468.0,130.7L487.7,130.7L507.3,130.4L527.0,128.6L546.7,128.6L566.3,127.9L586.0,127.2L605.7,124.3L625.3,124.3L645.0,124.3" fill="none" stroke="#1976d2" stroke-width="2"/>
+        <path d="M55.0,233.7L74.7,233.7L94.3,69.3L114.0,69.3L133.7,69.3L153.3,69.3L173.0,69.3L192.7,69.3L212.3,69.3L232.0,69.3L251.7,69.3L271.3,69.3L291.0,69.3L310.7,69.3L330.3,69.3L350.0,67.9L369.7,67.9L389.3,67.9L409.0,67.9L428.7,67.9L448.3,67.9L468.0,67.9L487.7,67.9L507.3,67.9L527.0,67.9L546.7,67.9L566.3,67.9L586.0,67.9L605.7,67.9L625.3,67.9L645.0,67.9" fill="none" stroke="#388e3c" stroke-width="2" stroke-dasharray="4,2"/>
+        
+    <rect x="65" y="8" width="12" height="3" fill="#1976d2"/>
+    <text x="83" y="13" fill="#1976d2" font-size="11">best expR</text>
+    <rect x="165" y="8" width="12" height="3" fill="#388e3c"/>
+    <text x="183" y="13" fill="#388e3c" font-size="11">best Calmar</text>
+    
+    </svg>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🎯 Pareto 前沿</h2>
+        <div class="svg-container">
+            <svg viewBox="0 0 700 350" width="100%" style="max-width:700px">
+    <line x1="60" y1="30" x2="60" y2="300" stroke="#ccc" stroke-width="1"/>
+    <line x1="60" y1="300" x2="670" y2="300" stroke="#ccc" stroke-width="1"/>
+    <text x="350.0" y="338" text-anchor="middle" fill="#666" font-size="12">expR</text>
+    <text x="15" y="175.0" text-anchor="middle" fill="#666" font-size="12" transform="rotate(-90 15 175.0)">Calmar</text>
+    <text x="60" y="315" text-anchor="start" fill="#999" font-size="10">0.287</text>
+    <text x="670" y="315" text-anchor="end" fill="#999" font-size="10">0.715</text>
+    <text x="55" y="35" text-anchor="end" fill="#999" font-size="10">6.4</text>
+    <text x="55" y="305" text-anchor="end" fill="#999" font-size="10">1.0</text>
+    <circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="442.7" cy="133.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.9" cy="216.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="501.7" cy="233.7" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="417.2" cy="215.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="105.5" cy="59.1" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="417.2" cy="215.4" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="142.1" cy="294.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="142.1" cy="294.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="417.1" cy="215.3" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="417.1" cy="215.3" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="416.5" cy="214.3" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="416.5" cy="214.3" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="416.5" cy="214.3" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="577.3" cy="223.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="577.3" cy="223.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="577.3" cy="223.5" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="460.6" cy="212.2" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="502.2" cy="233.9" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="502.2" cy="233.9" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="468.8" cy="216.6" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/><circle cx="501.7" cy="233.9" r="5" fill="#1976d2" opacity="0.7" stroke="#fff" stroke-width="1.5"/></svg>
+        </div>
+        <p style="font-size: 13px; color: #666;">横轴：expR（越大越好），纵轴：Calmar（越大越好），每个点代表一个非支配解。</p>
+    </div>
+
+    <div class="section">
+        <h2>🏆 候选方案（IS 内表现）</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>方案</th>
+                    <th>参数值</th>
+                    <th>expR</th>
+                    <th>Calmar</th>
+                    <th>稳定性</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td><strong>激进型（expR 最大）</strong></td>
+            <td>T_thresh_mult: 1.1339<br>stop_atr_mult: 1.7595<br>rr_ratio: 1.7578</td>
+            <td>0.6499</td>
+            <td>2.52</td>
+            <td>0.7692</td>
+        </tr>
+        <tr>
+            <td><strong>稳健型（卡玛比率最大）</strong></td>
+            <td>T_thresh_mult: 0.8677<br>stop_atr_mult: 2.6841<br>rr_ratio: 2.0349</td>
+            <td>0.3190</td>
+            <td>5.79</td>
+            <td>1.0000</td>
+        </tr>
+        <tr>
+            <td><strong>稳定型（正收益窗口最多）</strong></td>
+            <td>T_thresh_mult: 0.8677<br>stop_atr_mult: 2.6841<br>rr_ratio: 2.0349</td>
+            <td>0.3190</td>
+            <td>5.79</td>
+            <td>1.0000</td>
+        </tr>
+        <tr>
+            <td><strong>折中参考点（三目标综合最优）</strong></td>
+            <td>T_thresh_mult: 0.8677<br>stop_atr_mult: 2.6841<br>rr_ratio: 2.0349</td>
+            <td>0.3190</td>
+            <td>5.79</td>
+            <td>1.0000</td>
+        </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>🔬 纯 OOS 样本外验证</h2>
+        <div class="note">
+            <strong>基线对比：</strong>
+            IS expR = 0.4443 ·
+            OOS expR = 0.0046 ·
+            IS 交易数 = 90 ·
+            OOS 交易数 = 25
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>方案</th>
+                    <th>IS expR</th>
+                    <th>OOS expR</th>
+                    <th>expR 退化率</th>
+                    <th>IS 交易数</th>
+                    <th>OOS 交易数</th>
+                    <th>IS Calmar</th>
+                    <th>OOS Calmar</th>
+                    <th>结果</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td><strong>激进型（expR 最大）</strong></td>
+            <td>0.4570</td>
+            <td>0.1296</td>
+            <td>71.6%</td>
+            <td>88</td>
+            <td>25</td>
+            <td>5.76</td>
+            <td>0.69</td>
+            <td>❌ 失败</td>
+        </tr>
+        <tr>
+            <td><strong>稳健型（卡玛比率最大）</strong></td>
+            <td>0.3748</td>
+            <td>-0.1547</td>
+            <td>141.3%</td>
+            <td>66</td>
+            <td>18</td>
+            <td>3.92</td>
+            <td>-0.30</td>
+            <td>❌ 失败</td>
+        </tr>
+        <tr>
+            <td><strong>稳定型（正收益窗口最多）</strong></td>
+            <td>0.3748</td>
+            <td>-0.1547</td>
+            <td>141.3%</td>
+            <td>66</td>
+            <td>18</td>
+            <td>3.92</td>
+            <td>-0.30</td>
+            <td>❌ 失败</td>
+        </tr>
+        <tr>
+            <td><strong>折中参考点（三目标综合最优）</strong></td>
+            <td>0.3748</td>
+            <td>-0.1547</td>
+            <td>141.3%</td>
+            <td>66</td>
+            <td>18</td>
+            <td>3.92</td>
+            <td>-0.30</td>
+            <td>❌ 失败</td>
+        </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>🛡️ 参数稳健性检验（±20% 扰动）</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>方案</th>
+                    <th>综合稳健性</th>
+                    <th>各参数稳健性得分</th>
+                    <th>评价</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td><strong>激进型（expR 最大）</strong></td>
+            <td>0.373</td>
+            <td>T_thresh_mult: 0.07<br>stop_atr_mult: 0.46<br>rr_ratio: 0.59</td>
+            <td>⚠️ 敏感</td>
+        </tr>
+        <tr>
+            <td><strong>稳健型（卡玛比率最大）</strong></td>
+            <td>0.723</td>
+            <td>T_thresh_mult: 0.71<br>stop_atr_mult: 0.87<br>rr_ratio: 0.59</td>
+            <td>✅ 稳健</td>
+        </tr>
+        <tr>
+            <td><strong>稳定型（正收益窗口最多）</strong></td>
+            <td>0.723</td>
+            <td>T_thresh_mult: 0.71<br>stop_atr_mult: 0.87<br>rr_ratio: 0.59</td>
+            <td>✅ 稳健</td>
+        </tr>
+        <tr>
+            <td><strong>折中参考点（三目标综合最优）</strong></td>
+            <td>0.723</td>
+            <td>T_thresh_mult: 0.71<br>stop_atr_mult: 0.87<br>rr_ratio: 0.59</td>
+            <td>✅ 稳健</td>
+        </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>📝 实验配置</h2>
+        <table>
+            <tr><th>项目</th><th>值</th></tr>
+            <tr><td>品种</td><td>c</td></tr>
+            <tr><td>优化参数</td><td>T_thresh_mult, stop_atr_mult, rr_ratio</td></tr>
+            <tr><td>固定参数</td><td>fc_confirm, fc_hard, cooldown_bars, tail_pct, tail_trail_R, min_profit_R</td></tr>
+            <tr><td>算法</td><td>NSGA-II 多目标遗传算法</td></tr>
+            <tr><td>种群大小</td><td>100</td></tr>
+            <tr><td>进化代数</td><td>31</td></tr>
+            <tr><td>交叉概率</td><td>0.9</td></tr>
+            <tr><td>变异概率</td><td>0.3</td></tr>
+            <tr><td>训练窗口</td><td>400 根</td></tr>
+            <tr><td>验证窗口</td><td>120 根</td></tr>
+            <tr><td>滚动步长</td><td>240 根</td></tr>
+            <tr><td>参数范围收缩</td><td>是 (±40%)</td></tr>
+            <tr><td>L1 正则</td><td>是 (w=0.5)</td></tr>
+            <tr><td>IS 数据量</td><td>N/A 根</td></tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        Generated by ga_tpsl_optimizer_v5_oos.py · Phase 3.5 · OOS 感知适应度
+    </div>
+</div>
+</body>
+</html>

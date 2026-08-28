@@ -34,20 +34,19 @@
    - 返回非空字符串
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import pandas as pd
-import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from tick_orderflow import _side_from_tick
 from sentiment_sr_combined_bt import build_sentiment_daily
 from signal_explain import _build_llm_prompt
-
+from tick_orderflow import _side_from_tick
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _side_from_tick

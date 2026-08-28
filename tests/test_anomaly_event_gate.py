@@ -37,10 +37,10 @@
    - normal 自定义 → 正常时返回自定义值
 """
 
-import sys
 import os
+import sys
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -48,7 +48,6 @@ sys.path.insert(0, ROOT)
 
 import anomaly_scan as asc
 from event_calendar import _next_occurrence, scale_factor
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. anomaly_scan.compute

@@ -16,8 +16,8 @@
   - 修复：3 层防线（Handler 还原 + record_entry 校验 + record_trade 校验）
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,12 +25,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from price_protection import (
-    validate_price,
-    validate_entry_stop,
     protect_user_price,
+    validate_entry_stop,
+    validate_price,
     validate_take_profit,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  价格有效性校验

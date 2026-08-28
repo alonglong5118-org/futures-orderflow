@@ -46,9 +46,10 @@
    - 中性 → choppy
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -58,15 +59,14 @@ sys.path.insert(0, ROOT)
 
 from hidden_pivot import (
     find_swings,
+    hidden_pivot,
     latest_abc,
     round_tick,
-    hidden_pivot,
 )
 from regime_hmm import (
     _features_raw,
     _rule_label,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. round_tick

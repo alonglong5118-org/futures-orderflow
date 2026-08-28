@@ -78,8 +78,8 @@
     - 不足 2 组 → 50
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -87,23 +87,18 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from sentiment_engine import (
-    is_hard_filtered,
-    _label_for,
-    _thr_mult,
-    _risk_scale,
-    _factor_breadth,
-    _factor_momentum,
     _factor_activity,
     _factor_amplitude,
+    _factor_breadth,
+    _factor_divergence,
+    _factor_momentum,
     _factor_trend_conc,
     _factor_volatility,
-    _factor_divergence,
-    SENTIMENT_HARD_FILTER,
-    SENTIMENT_RISK_SCALE,
-    SENTIMENT_THR_MULT,
-    BANDS,
+    _label_for,
+    _risk_scale,
+    _thr_mult,
+    is_hard_filtered,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. is_hard_filtered

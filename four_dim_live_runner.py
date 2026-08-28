@@ -18,8 +18,21 @@ pipeline，触发即出信号（红横幅+语音+日志+Web 面板）。
 依赖：four_dim_strategy / minishare_live / fundamental_feed / strategy_layer
 """
 from __future__ import annotations
-import os, sys, json, time, argparse, subprocess, threading, csv, io, math
-from datetime import datetime, time as dtime, timedelta
+
+import argparse
+import csv
+import io
+import json
+import math
+import os
+import subprocess
+import sys
+import threading
+import time
+import traceback
+from datetime import datetime, timedelta
+from datetime import time as dtime
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -143,10 +156,19 @@ _harden_logging()
 sys.excepthook = _crash_excepthook
 
 import four_dim_strategy as fd
-from four_dim_strategy import (SYMBOLS, DISABLED_SYMBOLS, DEFAULT_CONFIG, pipeline, load_daily,
-                               load_daily_refreshed, variety_of,
-                               score_F, risk_gate, exit_plan, build_signal,
-                               AUTO_RECOVER_SYMBOLS, recovery_check)
+from four_dim_strategy import (
+    AUTO_RECOVER_SYMBOLS,
+    DEFAULT_CONFIG,
+    DISABLED_SYMBOLS,
+    SYMBOLS,
+    build_signal,
+    exit_plan,
+    load_daily_refreshed,
+    pipeline,
+    risk_gate,
+    score_F,
+    variety_of,
+)
 
 # P-B/P-C（2026-08-14）：合并 trade_config.json 的 bias_synthesis 覆盖，使策略合成参数可调参而不改码。
 # 缺省用 four_dim_strategy.DEFAULT_CONFIG["bias_synthesis"]；trade_config.json 同名字段覆盖（浅合并）。
@@ -180,58 +202,63 @@ for _blk in ("decorrelate", "seasonal_boost", "regime_params", "trailing_tail",
         _STRAT_CFG[_blk] = {**DEFAULT_CONFIG.get(_blk, {}), **_tc_blk}
 import strategy_layer
 from strategy_layer import atr as strat_atr
+
 # P-H (2026-08-14): 启动注入稳健池回灌配置 + 读回灌文件(enabled 时生效)
 try:
     strategy_layer.configure_robust_gate(**_STRAT_CFG.get("robust_pool_gate", {}))
     strategy_layer.load_robust_gate_file()
 except Exception:
     pass
-import minishare_live as ml
+import account_tracker as at
 import akshare_live as al
-import tushare_live as tl   # 保留兼容（降级用）
+import four_dim_papertrack as pt  # 真实 walk-forward 回测 + 动态表现门控
+
 # ★ 2026-08-28: 主数据源切换为 minishare rt_fut_k（不限次快照、实时性更好）
 import fundamental_feed as ff
-import account_tracker as at
-import trade_journal as tj
-import four_dim_papertrack as pt         # 真实 walk-forward 回测 + 动态表现门控
+import minishare_live as ml
+
 # —— 从 da龘 合并进来的四大能力 ——
-import risk_state_machine as rsm        # 仓位状态机（风控升级）
+import risk_state_machine as rsm  # 仓位状态机（风控升级）
+import trade_journal as tj
+import tushare_live as tl  # 保留兼容（降级用）
+
 try:
-    import direction_source_monitor as dsm   # 方向源偏差监控（红线①，2026-08-16）
+    import direction_source_monitor as dsm  # 方向源偏差监控（红线①，2026-08-16）
 except Exception:
     dsm = None
-import drawdown_guard as ddg             # #119 回撤水位线自动降险（渐变 + 持久化）
-import anomaly_scan as asc               # 异动扫描层（广度选品）
-import account_monitor as am             # 账户监控驱动 papertrack 自动化
+import account_monitor as am  # 账户监控驱动 papertrack 自动化
+import anomaly_scan as asc  # 异动扫描层（广度选品）
+import backtest_viz as bv  # #17 回测可视化(水下曲线/逐笔散点)
+import blunder_check as bc  # #12 纪律自动体检(blunder检测)
+import broker_import as bi  # #9 经纪商成交明细自动回灌
+import calibration as cal  # #120 概率校准 + 置信度分层命中率
+import consistency_watchdog as cw  # #5 训练/服务一致性看门狗(train/serve parity)
+import data_quality as dq  # #14 数据质量/陈旧监控
 import discipline_review as dr
+import drawdown_guard as ddg  # #119 回撤水位线自动降险（渐变 + 持久化）
+import event_calendar as ec  # #13 事件/数据日历闸门
+import execution_planner as exp  # #7 大单拆分/冰山/TWAP 执行建议
+import feature_manager as fmg  # 特性开关管理器（热加载/切换/日志）
+import four_dim_calibrate as fdc  # #121 已接入 CLI：真重校准扫描
+import four_dim_recalibrate as fdr  # #121 已接入 CLI：校准漂移检测
+import fundamental_metrics as fm  # G1 基本面指标（利润/比价/价差）
+import ga_factor_miner as gfm  # #10 GA 因子挖掘+权重优化(live 专属)
+import gbm_garch as gg  # #7 (续) GBM/GARCH 波动率动力学+前向情景(live 专属)
+import gen_papertrack_html as gph  # #121 已接入 CLI：回测报告→HTML
+import info_dimension as idim  # #1 信息维度(资讯/新闻/情绪/另类数据)F 覆盖层
+import macro_context as mctx  # #6 跨资产宏观语境(live 专属，回测 macro_label=None 不进)
+import market_scanner as mscan  # #11 全市场批量扫描(并行)
+import montecarlo as mc  # #11 蒙特卡洛权益曲线置信区间
+import push_notify as pn  # #15 手机推送(Telegram/Bark/企业微信)
+import regime_hmm as rhmm  # #7 HMM 市场状态识别(live 专属，回测不要调用)
+import sentiment_engine as senteng  # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
+import signal_explain as sexp  # #4 信号解释(确定性 driver 解释 + 可选 LLM 增强层)
+import sr_analyzer as sra  # #9 支撑压力位识别(live 专属，回测 sr_result=None 不进)
+import symbol_screener as sscreener  # #11 品种筛选引擎
+
 # —— #3 盘口级订单流：把真实 tick 的 Delta/吸收/失衡 接入 C_flow（push_tick） ——
 import tick_orderflow as tof
-import execution_planner as exp        # #7 大单拆分/冰山/TWAP 执行建议
-import broker_import as bi             # #9 经纪商成交明细自动回灌
-import montecarlo as mc                # #11 蒙特卡洛权益曲线置信区间
-import blunder_check as bc             # #12 纪律自动体检(blunder检测)
-import event_calendar as ec            # #13 事件/数据日历闸门
-import data_quality as dq              # #14 数据质量/陈旧监控
-import push_notify as pn               # #15 手机推送(Telegram/Bark/企业微信)
-import backtest_viz as bv              # #17 回测可视化(水下曲线/逐笔散点)
-import calibration as cal               # #120 概率校准 + 置信度分层命中率
-import four_dim_calibrate as fdc         # #121 已接入 CLI：真重校准扫描
-import four_dim_recalibrate as fdr       # #121 已接入 CLI：校准漂移检测
-import gen_papertrack_html as gph         # #121 已接入 CLI：回测报告→HTML
-import fundamental_metrics as fm            # G1 基本面指标（利润/比价/价差）
-import info_dimension as idim             # #1 信息维度(资讯/新闻/情绪/另类数据)F 覆盖层
-import signal_explain as sexp               # #4 信号解释(确定性 driver 解释 + 可选 LLM 增强层)
-import consistency_watchdog as cw             # #5 训练/服务一致性看门狗(train/serve parity)
-import regime_hmm as rhmm                       # #7 HMM 市场状态识别(live 专属，回测不要调用)
-import gbm_garch as gg                            # #7 (续) GBM/GARCH 波动率动力学+前向情景(live 专属)
-import macro_context as mctx                      # #6 跨资产宏观语境(live 专属，回测 macro_label=None 不进)
-import sentiment_engine as senteng                    # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
-import sr_analyzer as sra                                # #9 支撑压力位识别(live 专属，回测 sr_result=None 不进)
-import ga_factor_miner as gfm                            # #10 GA 因子挖掘+权重优化(live 专属)
-import viz_upgrade as viz                                 # #11 回测可视化增强(Plotly)
-import market_scanner as mscan                            # #11 全市场批量扫描(并行)
-import symbol_screener as sscreener                       # #11 品种筛选引擎
-import feature_manager as fmg            # 特性开关管理器（热加载/切换/日志）
+import viz_upgrade as viz  # #11 回测可视化增强(Plotly)
 
 # ---------------------------------------------------------------------------
 # #121 已接入 CLI 工具箱：把原本「纯命令行、面板无入口」的工具接到面板，
@@ -259,7 +286,9 @@ def _load_tools_state():
 
 
 def _run_tool_thread(name):
-    import io, contextlib, traceback
+    import contextlib
+    import io
+    import traceback
     spec = _TOOL_DEFS.get(name)
     if not spec:
         return
@@ -7693,7 +7722,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
         except Exception as e:
             # 单品种计算异常不应拖垮整块面板：记日志并跳过本轮该品种
             print(f"[evaluate] 跳过 {sym}: {type(e).__name__}: {e}")
-            import traceback; traceback.print_exc()
+            traceback.print_exc()
             continue
 
         # 交易时段门控：无夜盘品种（生猪/鸡蛋等）收盘后(尤其 21:00 起)不再推送信号
@@ -7968,7 +7997,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     "contract": sig.get("contract") or _get_main_contract(sym)}
             except Exception as e:
                 print(f"[evaluate] 信号生成异常 {sym}: {type(e).__name__}: {e}")
-                import traceback; traceback.print_exc()
+                traceback.print_exc()
                 continue
             fired.append(sym)
     # ── 组合级智能推荐：收集所有信号后，只推最优的1-2个 ──
@@ -7982,7 +8011,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
 # Web 面板
 # ---------------------------------------------------------------------------
 def start_dashboard(state):
-    from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class H(BaseHTTPRequestHandler):
         def _handle_journal_import(self):
@@ -8487,7 +8516,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/journal_strategy":
                 # F1 多策略 / 多账户视图：按 strategy 或 account 聚合盈亏
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _gb = _q.get("group_by", ["strategy"])[0]
                     body = json.dumps(tj.by_strategy(group_by=_gb), ensure_ascii=False, default=str)
@@ -8775,7 +8804,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/chat":
                 # 指定日期的全部消息（默认今天），用于逐日复盘
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _d = _q.get("date", [None])[0]
                     _feed = load_chat_feed(_d, limit=None)
@@ -8800,7 +8829,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/discipline":
                 # 管住手复盘卡（日/周/月纪律评分）+ 收盘快照回看
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     if "list" in _q:
                         # 返回 日/周/月 三套记录列表，供复盘页下拉填充
@@ -8861,7 +8890,7 @@ def start_dashboard(state):
                 # 席位态度榜（龙虎榜 C_pos 排序：偏多/偏空）
                 # 支持 ?date=YYYYMMDD 回看历史交易日
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _d = _q.get("date", [None])[0]
                     body = json.dumps(cpos_ranking(date=_d), ensure_ascii=False, default=str)
@@ -8876,7 +8905,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/export":
                 # CSV 导出：type=journal|performance|discipline&kind=daily|weekly|monthly
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _type = _q.get("type", ["journal"])[0]
                     _kind = _q.get("kind", ["daily"])[0]
@@ -8967,7 +8996,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/holdings_kline":
                 # 持仓K线 + SR位 + 止损止盈标注
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     q = parse_qs(urlparse(self.path).query)
                     sym = q.get("sym", [None])[0]
                     if not sym or sym not in SYMBOLS:
@@ -9018,7 +9047,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/stress_corr":
                 # #128 相关性崩溃 / 危机趋同 stress 专项
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(correlation_breakdown_stress(force=_force), ensure_ascii=False, default=str)
@@ -9032,7 +9061,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/sector_rotation":
                 # #129 板块强弱轮动排序
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(sector_rotation(force=_force), ensure_ascii=False, default=str)
@@ -9047,7 +9076,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/signal_feed":
                 # 信号瀑布流：最近 N 条信号时间线
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     limit = int((_q.get("limit", ["30"]))[0])
                     since = _q.get("since", [None])[0]  # 增量拉取：只返回此时间之后的
@@ -9063,7 +9092,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/vol_target":
                 # #130 波动率目标化头寸：?vol_target_pct=N(默认1.0) &force=1
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     _vt = float((_q.get("vol_target_pct") or ["1.0"])[0])
@@ -9080,7 +9109,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/liquidity_risk":
                 # #131 流动性风险 Liquidity-at-Risk：?force=1
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(liquidity_at_risk(force=_force),
@@ -9096,7 +9125,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/risk_rules":
                 # #132 组合预警规则引擎：?force=1 绕过缓存
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(evaluate_risk_rules(force=_force),
@@ -9112,7 +9141,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/playback":
                 # #133 交互式历史回放（时间机器）：返回 [最早事件,最晚事件] 逐日组合状态帧序列
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(build_playback_timeline(force=_force),
@@ -9128,7 +9157,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/playback_kline":
                 # #133 单品种截至 asof 的日线(OHLC) + 交易记录开/平仓标记
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _sym = _q.get("symbol", [""])[0]
                     _asof = _q.get("asof", [None])[0]
@@ -9148,7 +9177,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/sensitivity":
                 # #134 参数鲁棒性敏感性地图：?force=1&symbols=FG,SA,JM,jd
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     _sym_str = _q.get("symbols", [""])[0]
@@ -9166,7 +9195,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/var":
                 # #123 组合 VaR / CVaR（参数法 1 日）
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _force = _q.get("force", ["0"])[0] in ("1", "true")
                     body = json.dumps(portfolio_var(force=_force), ensure_ascii=False, default=str)
@@ -9248,7 +9277,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/alerts":
                 # 报警历史（C4）：可按类型过滤
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     kind = (_q.get("kind") or [""])[0]
                     limit = int((_q.get("limit") or ["120"])[0])
@@ -9286,7 +9315,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/calendar":
                 # #13 事件日历闸门：?hours=N
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     _q = parse_qs(urlparse(self.path).query)
                     _h = int((_q.get("hours") or ["24"])[0])
                     body = json.dumps(ec.upcoming(lookahead_hours=_h),

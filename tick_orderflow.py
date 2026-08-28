@@ -17,8 +17,8 @@ tick 输入格式（每笔，由接入层产生）：
 
 本模块纯计算，不负责网络；网络接入在 four_dim_live_runner 的 TickFeedConnector。
 """
-import time
 import math
+import time
 
 
 def _side_from_tick(price, last, side):

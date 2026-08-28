@@ -37,18 +37,17 @@
    - 中英文混合也能识别
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import pandas as pd
-import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from four_dim_strategy import combine_bias, regime_weights, _norm_daily_cols
-
+from four_dim_strategy import _norm_daily_cols, combine_bias, regime_weights
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. combine_bias

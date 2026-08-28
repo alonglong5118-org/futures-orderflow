@@ -19,10 +19,11 @@ LOCKED 时禁止新开仓。
   scale = info['combined']
 """
 from __future__ import annotations
-import os
+
 import json
-import time
+import os
 import threading
+import time
 
 # ============ 风控闸参数（da哥 原值） ============
 RED_LINE = 0.45          # 保证金使用率红线（禁新开）

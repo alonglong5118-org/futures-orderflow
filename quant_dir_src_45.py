@@ -12,7 +12,9 @@
 """
 import json
 import os
+
 import numpy as np
+
 import four_dim_strategy as fd
 
 HERE = os.path.dirname(os.path.abspath(__file__))

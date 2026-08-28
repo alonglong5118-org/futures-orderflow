@@ -3,7 +3,10 @@
   (1) 数据里到底有没有换月跳空（|open-prevclose|/prevclose 较大的根）？
   (2) 现有阈值 ROLL_GAP_PCT=1.0% / ROLL_GAP_MULT=1.0*stop 是否曾触发？
 不写回任何文件。"""
-import json, os, sys
+import json
+import os
+import sys
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import four_dim_papertrack as fp
@@ -54,7 +57,6 @@ for p in parsed:
 print(f"前向 bar 总数(估) : {len(all_gaps)}")
 print(f"命中现有阈值的根数 : {triggered}  (P0-2 实际会跳过的数量)")
 print()
-import statistics
 if all_gaps:
     all_gaps_sorted = sorted(all_gaps)
     n = len(all_gaps_sorted)

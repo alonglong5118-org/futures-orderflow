@@ -42,21 +42,23 @@
    - 返回 float
 """
 
-import sys
-import os
-import unittest
 import math
-from datetime import datetime, date, timedelta
+import os
+import sys
+import unittest
+from datetime import date, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from discipline_review import (
-    _parse_time, _period_bounds, _friday_of, _is_last_trading_day,
+    _friday_of,
+    _is_last_trading_day,
+    _parse_time,
+    _period_bounds,
 )
 from macro_context import _norm_tanh
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _parse_time

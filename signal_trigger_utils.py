@@ -22,7 +22,7 @@
 """
 
 import math
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 def compute_bias_FC(F: float, C: float) -> float:

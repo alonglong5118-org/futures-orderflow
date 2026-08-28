@@ -17,9 +17,8 @@ fundamentals.json / info_dimension.json 的「外部写/内部读」隔离模式
 
 用法：/usr/bin/python3 fetch_macro_context.py
 """
-import os
-import sys
 import json
+import os
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -50,7 +49,8 @@ def _fetch_crude_series():
     except Exception:
         pass
     try:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         url = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
                "?fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
                "&klt=101&fqt=0&secid=114.sc0&beg=0&end=20500101")

@@ -42,20 +42,18 @@ GA 质量过滤工具 — 单元测试
    - 日期部分正确但时间错 → 0
 """
 
-import sys
 import os
+import sys
 import unittest
-import time
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from ga_quality_filter import check_quality, QUALITY_THRESHOLDS
-from fundamental_metrics import _value_at
 from blunder_check import _to_ts
-
+from fundamental_metrics import _value_at
+from ga_quality_filter import check_quality
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. check_quality

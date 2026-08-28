@@ -37,8 +37,8 @@ T 分计算工具 — 单元测试
    - factor 范围：[1 - contr_damp, 1.0]
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -47,10 +47,9 @@ sys.path.insert(0, ROOT)
 
 from t_score_utils import (
     cluster_vote_and_consensus,
-    crowd_penalty_factor,
     contrarian_damping_factor,
+    crowd_penalty_factor,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. cluster_vote_and_consensus

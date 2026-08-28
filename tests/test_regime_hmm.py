@@ -24,17 +24,17 @@ HMM 市场状态识别 — 单元测试
    - 未知标签 → 默认 1.0
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from regime_hmm import _features_raw, _rule_label, thr_mult, THR_MULT, DEFAULT_THR_MULT
-
+from regime_hmm import DEFAULT_THR_MULT, _features_raw, _rule_label, thr_mult
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _features_raw

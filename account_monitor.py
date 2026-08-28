@@ -24,7 +24,11 @@ papertrack 评分与状态机**，否则优雅降级为手动记账（不影响�
       am.auto_sync(acc, prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
 from __future__ import annotations
-import os, json, threading, time
+
+import json
+import os
+import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(HERE, "account_monitor.json")
@@ -50,8 +54,9 @@ def _map_symbol(tqsdk_sym):
             实现逐合约持仓拆卡）；② 否则剥掉月份数字取品种字母
             （CZCE.FG2609 -> 'FG'、CZCE.SA -> 'SA'、DCE.m|JM2609 -> 'JM'）。"""
     try:
-        import four_dim_strategy as fd
         import re
+
+        import four_dim_strategy as fd
         s = str(tqsdk_sym).upper()
         # 去交易所前缀 (如 DCE.m| / CZCE. / KQ.m@)
         if "|" in s:
@@ -93,7 +98,7 @@ def _get_tqsdk_account(cfg):
     """TqSdk 只读账户（da龘 同款逻辑）。失败/未装返回 None。"""
     global _last_account, _last_fetch
     try:
-        from tqsdk import TqApi, TqAccount
+        from tqsdk import TqAccount, TqApi
     except Exception:
         print("[账户监控] tqsdk 未安装，跳过自动读取（维持手动记账）")
         return None

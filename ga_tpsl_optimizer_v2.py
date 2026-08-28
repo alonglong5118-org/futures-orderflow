@@ -15,14 +15,15 @@ Phase 2 升级内容（相对 Phase 1）：
     python3 ga_tpsl_optimizer_v2.py --symbol jd --pop 50 --gen 30 --full
 """
 from __future__ import annotations
-import os
-import sys
-import json
-import copy
-import time
+
 import argparse
-import random
+import copy
+import json
 import math
+import os
+import random
+import sys
+import time
 
 # 防止 numpy/pandas 内部多线程与 multiprocessing 争抢 CPU
 os.environ.setdefault('OMP_NUM_THREADS', '1')
@@ -34,10 +35,9 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import four_dim_strategy as fd
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG, load_daily
+from deap import base, creator, tools
 
-from deap import base, creator, tools, algorithms
+from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 # ============================================================================
 # 配置

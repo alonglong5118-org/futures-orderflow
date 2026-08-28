@@ -15,8 +15,8 @@ signal_explain.py · #4 信号解释（确定性 driver 解释器 + 可选 LLM �
   "llm_prompt": 可直接喂 LLM 的结构化提示(若日后接入真实 LLM)
 }
 """
-import os
 import json
+import os
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))

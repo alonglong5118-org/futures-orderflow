@@ -32,17 +32,16 @@
    - 不匹配 → 空集合
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from refresh_main_contracts import ym_of, _add_months, _next_month_code
 from info_dimension import _tag_to_symbols
-
+from refresh_main_contracts import _add_months, _next_month_code, ym_of
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. ym_of

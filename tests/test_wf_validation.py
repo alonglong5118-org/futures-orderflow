@@ -24,10 +24,10 @@ Walk-Forward 验证工具 — 单元测试
    - 步长 = 窗口大小 → 不重叠
 """
 
-import sys
 import os
+import sys
 import unittest
-import numpy as np
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,6 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from wf_validation import _calc_max_drawdown, rolling_windows
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _calc_max_drawdown

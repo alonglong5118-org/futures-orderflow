@@ -12,10 +12,10 @@
   python scripts/discover_tests.py --update  # 更新 run_tests.py 中的 TEST_MODULES
 """
 
-import sys
+import glob
 import os
 import re
-import glob
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)

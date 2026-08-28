@@ -18,8 +18,8 @@
    - 历史：P2-④ 权重配置化（从硬编码改为可扫参）
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,8 +27,8 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    combine_bias,
     DEFAULT_CONFIG,
+    combine_bias,
 )
 
 

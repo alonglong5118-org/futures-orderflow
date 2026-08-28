@@ -25,16 +25,15 @@
    - level 分级：OK / WARN / HIGH
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from direction_source_monitor import divergence, DivergenceTracker
-
+from direction_source_monitor import DivergenceTracker, divergence
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. divergence

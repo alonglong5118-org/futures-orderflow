@@ -21,13 +21,14 @@
     bi.import_file(path, apply=True)   # 真正回灌
 """
 from __future__ import annotations
+
+import csv
+import glob
+import json
 import os
 import re
-import csv
-import json
-import glob
-import time
 import threading
+import time
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -230,8 +231,8 @@ def _mark_imported(tids, path, applied):
 # ── 回灌 ──────────────────────────────────────────────────────────────────
 def _apply_fill(f):
     """把一条成交写进 trade_journal + account_tracker。返回 (ok, msg)。"""
-    import trade_journal as tj
     import account_tracker as at
+    import trade_journal as tj
     sym, lots, px = f["symbol"], f["lots"], f["price"]
     side, offset = f["side"], f["offset"]
     if not side:

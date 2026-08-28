@@ -42,8 +42,8 @@ Kelly因子 + 回归状态 + 合约工具 — 单元测试
    - 无法识别 → None
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,9 +51,8 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from kelly_utils import compute_kelly_factor
-from regression_test import classify_status, calc_signal_agreement
-from minishare_live import _is_tradeable_contract, _contract_ym
-
+from minishare_live import _contract_ym, _is_tradeable_contract
+from regression_test import calc_signal_agreement, classify_status
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. compute_kelly_factor

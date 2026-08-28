@@ -19,10 +19,10 @@ SR 位分析 — 单元测试
   - 双面验证加分（既是支撑又是压力的结构位更强）
 """
 
-import sys
 import os
+import sys
 import unittest
-import numpy as np
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -30,15 +30,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from sr_analyzer import (
-    signal_quality_boost,
+    HOSTILE_DANGER_PENALTY,
+    _classify,
     _cluster_levels,
     _score_strength,
-    _classify,
-    analyze,
     adjust_exit_plan,
-    HOSTILE_TIGHT_PCT,
-    HOSTILE_DANGER_PENALTY,
-    PROXIMITY_PCT,
+    analyze,
+    signal_quality_boost,
 )
 
 

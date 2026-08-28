@@ -71,8 +71,8 @@
    - 返回 float
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,10 +80,14 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from sentiment_engine import (
-    is_hard_filtered, _label_for, _thr_mult, _risk_scale,
-    _factor_breadth, _factor_activity, _factor_amplitude,
+    _factor_activity,
+    _factor_amplitude,
+    _factor_breadth,
+    _label_for,
+    _risk_scale,
+    _thr_mult,
+    is_hard_filtered,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. is_hard_filtered

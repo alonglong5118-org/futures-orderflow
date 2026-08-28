@@ -14,13 +14,13 @@ da龘 开盘前一键巡检 (preflight_check.py)
 
 退出码: 0=全绿  1=有黄(待处理)  2=有红(异常)
 """
-import sys
-import json
-import time
 import argparse
-import urllib.request
-import urllib.error
 import datetime
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
 
 HOST_DEFAULT = "127.0.0.1:8731"
 

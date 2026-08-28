@@ -34,16 +34,15 @@
    - reliable 标志（n ≥ _MIN_N）
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from perf_breakdown import _hold_minutes, _hold_bucket, _weekday, _stat, _MIN_N
-
+from perf_breakdown import _MIN_N, _hold_bucket, _hold_minutes, _stat, _weekday
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _hold_minutes

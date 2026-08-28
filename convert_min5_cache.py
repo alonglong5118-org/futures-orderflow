@@ -10,8 +10,12 @@
 不改动 tq_free/ 与任何源文件，只写 data_5m/_XX0_min5.csv。
 加性数据工程，不在四红线内。
 """
-import os, json, glob
+import glob
+import json
+import os
+
 import pandas as pd
+
 import four_dim_strategy as fd
 
 HERE = os.path.dirname(os.path.abspath(__file__))

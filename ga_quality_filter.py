@@ -9,17 +9,16 @@ GA 优化结果质量筛选
   python3 ga_quality_filter.py --apply   # 直接更新缓存（不合格的删除，让策略回退默认权重）
 """
 
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import ga_factor_miner as gfm
-from four_dim_strategy import SYMBOLS, DEFAULT_CONFIG
-
+from four_dim_strategy import SYMBOLS
 
 # 质量筛选阈值（放宽版：T下限极低，F/C上限放宽）
 QUALITY_THRESHOLDS = {

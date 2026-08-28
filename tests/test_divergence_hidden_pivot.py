@@ -61,17 +61,16 @@
    - a/b/c/p/stop 都按 tick 取整
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from direction_source_monitor import divergence, DivergenceTracker
-from hidden_pivot import round_tick, latest_abc, hidden_pivot
-
+from direction_source_monitor import DivergenceTracker, divergence
+from hidden_pivot import hidden_pivot, latest_abc, round_tick
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. divergence

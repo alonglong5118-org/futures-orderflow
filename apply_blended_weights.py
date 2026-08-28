@@ -16,18 +16,17 @@
   python3 apply_blended_weights.py --dry-run
 """
 
-import os
-import sys
-import json
-import shutil
 import argparse
+import json
+import os
+import shutil
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from four_dim_strategy import SYMBOLS
 import ga_factor_miner as gfm
-
+from four_dim_strategy import SYMBOLS
 
 # 板块级 alpha（GA 权重占比）
 GROUP_ALPHA = {

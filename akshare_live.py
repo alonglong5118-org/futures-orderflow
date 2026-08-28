@@ -20,10 +20,8 @@ akshare_live.py — 分钟级实时行情模块
     snap = f.poll()   # 返回 {symbol: {'close': price, 'ts': timestamp, ...}}
 """
 
-import time
-import json
-import os
 import threading
+import time
 
 # 主力合约映射（品种 → akshare 合约代码）
 ALL_CONTRACTS = {

@@ -27,17 +27,16 @@
    - 在影响半径外的事件不触发
 """
 
-import sys
 import os
+import sys
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from event_calendar import _next_occurrence, scale_factor, gate
-
+from event_calendar import _next_occurrence, gate, scale_factor
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _next_occurrence

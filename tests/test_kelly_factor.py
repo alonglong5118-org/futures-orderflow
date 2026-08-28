@@ -18,8 +18,8 @@ Kelly 因子计算 — 单元测试
   - 修复：标准化线性映射 + kelly_max 封顶 1.2x + 近景门槛
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +27,6 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from kelly_utils import compute_kelly_factor
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  基础线性映射

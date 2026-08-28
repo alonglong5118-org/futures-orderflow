@@ -23,11 +23,11 @@
   - 脚本结束后会把 var_method 复位为 "hist"（升级后的默认新法）。
 """
 
+import argparse
 import json
 import os
 import sys
 import time
-import argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(HERE, "trade_config.json")

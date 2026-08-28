@@ -38,18 +38,17 @@ OOS 验证工具 — 单元测试
    - 字符串数字也能转
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import pandas as pd
-import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from oos_weight_validation import _deep_merge, split_is_oos, _metric
-
+from oos_weight_validation import _deep_merge, _metric, split_is_oos
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _deep_merge

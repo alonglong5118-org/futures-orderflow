@@ -41,8 +41,8 @@
    - 非法输入 → 其他
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,12 +51,11 @@ sys.path.insert(0, ROOT)
 
 from trade_journal import (
     _dir_sign,
-    _validate_entry_stop,
-    _normalize_sym,
     _leg_fee,
+    _normalize_sym,
     _session_of,
+    _validate_entry_stop,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _dir_sign
@@ -278,7 +277,7 @@ class TestLegFee(unittest.TestCase):
 
     def test_unknown_symbol_fallback(self):
         """未知品种 → 回退默认费率"""
-        from trade_journal import _FEE_DEFAULT, _MULTIPLIERS
+        from trade_journal import _FEE_DEFAULT
         fee = _leg_fee("UNKNOWN_XYZ", 1000, 1, side="open")
         # 回退模式：price * mult * lots * _FEE_DEFAULT
         expected = round(1000 * 10 * 1 * _FEE_DEFAULT, 2)

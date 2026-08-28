@@ -40,17 +40,16 @@ SR分类 + 信号质量 + 基本面指标计算 — 单元测试
    - 多 leg 正确累加
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from sr_analyzer import _classify, signal_quality_boost
 from fundamental_metrics import _value_at
-
+from sr_analyzer import _classify, signal_quality_boost
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _classify

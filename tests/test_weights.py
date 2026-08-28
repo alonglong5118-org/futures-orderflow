@@ -22,8 +22,8 @@
   - P-D 季节性分组加权：农产品/化工等季节性品种 seasonal 权重更高
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,12 +31,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    regime_weights,
-    cluster_weights,
     STRAT_CLUSTERS,
+    cluster_weights,
+    regime_weights,
 )
-from strategy_layer import TREND_STRATS, MEAN_STRATS, ALL_STRATS
-
+from strategy_layer import ALL_STRATS, MEAN_STRATS, TREND_STRATS
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. regime_weights — regime 级策略权重
@@ -254,7 +253,7 @@ class TestClusterWeights(unittest.TestCase):
 
     def test_strat_clusters_definition_matches(self):
         """STRAT_CLUSTERS 定义与策略模块的簇划分一致"""
-        from strategy_layer import TREND_STRATS, MEAN_STRATS
+        from strategy_layer import MEAN_STRATS, TREND_STRATS
         self.assertEqual(set(STRAT_CLUSTERS["trend"]), set(TREND_STRATS))
         self.assertEqual(set(STRAT_CLUSTERS["mean"]), set(MEAN_STRATS))
         self.assertEqual(STRAT_CLUSTERS["seasonal"], ["seasonal"])

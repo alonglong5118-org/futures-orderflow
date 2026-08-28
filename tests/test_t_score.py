@@ -10,8 +10,8 @@ T 评分合成（compute_T_score）— 单元测试
 contrarian_damping_factor）的单元测试见 test_t_score_utils.py。
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))

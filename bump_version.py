@@ -10,9 +10,9 @@
     python3 bump_version.py major "架构重构"
 """
 
+import datetime
 import re
 import sys
-import datetime
 
 HERE = __import__('os').path.dirname(__import__('os').path.abspath(__file__))
 

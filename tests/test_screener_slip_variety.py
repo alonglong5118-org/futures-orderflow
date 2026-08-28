@@ -38,17 +38,16 @@
    - 未知合约 → 原样返回
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from symbol_screener import _check_criteria
 from four_dim_strategy import get_slip_pts, variety_of
-
+from symbol_screener import _check_criteria
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _check_criteria

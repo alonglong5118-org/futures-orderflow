@@ -17,17 +17,15 @@
   - 验证：确保 corr > gate 时弱维度确实变为 0
 """
 
-import sys
 import os
+import sys
 import unittest
-import math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from corr_gate_utils import apply_corr_gate, _pearson_corr
-
+from corr_gate_utils import _pearson_corr, apply_corr_gate
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  工具：生成指定相关系数的测试数据

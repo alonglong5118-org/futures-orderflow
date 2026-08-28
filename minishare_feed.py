@@ -16,12 +16,12 @@ minishare_feed · da龘 全品种实时报价接入
 安装：pip install minishare --extra-index-url https://minidoc.pages.dev/simple/ -U
 配置：minishare.json {"enabled": true, "token": "..."}
 """
+import datetime
 import json
 import os
 import re
-import time
-import datetime
 import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "minishare.json")

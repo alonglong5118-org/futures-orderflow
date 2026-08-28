@@ -18,6 +18,7 @@ da龘 用 minishare rt_fut_k 全市场快照做「异动扫描」（按涨跌幅
   # result = {"ok", "updated", "total", "by_symbol": {...}, "top_up":[...], "top_down":[...]}
 """
 from __future__ import annotations
+
 import time
 
 W_PCT = 0.7     # 涨跌幅权重

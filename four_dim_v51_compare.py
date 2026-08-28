@@ -17,16 +17,16 @@ v5 vs v5.1 回测对比脚本
   - 尾仓占比
 """
 
-import sys
-import os
-import json
 import copy
+import json
+import os
+import sys
+
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import four_dim_strategy as fd
-import four_dim_live_runner as runner
 
 DEFAULT_TARGETS = ["jd", "lh", "FG", "SA", "JM", "J"]
 

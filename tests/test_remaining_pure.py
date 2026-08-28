@@ -57,20 +57,19 @@
    - 临界值边界
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import pandas as pd
-import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from four_dim_strategy import _norm_daily_cols
 from fetch_info_dimension import _col, _latest_change
-from regression_test import color, calc_signal_agreement, classify_status
-
+from four_dim_strategy import _norm_daily_cols
+from regression_test import calc_signal_agreement, classify_status, color
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _norm_daily_cols

@@ -21,18 +21,17 @@
    - 已有映射 + 未知品种兜底
 """
 
-import sys
-import os
-import unittest
 import datetime
+import os
+import sys
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from preflight_check import is_trading_day, parse_ts, HOLIDAY_SET_2026
-from four_dim_strategy import variety_of, VARIETY_OF
-
+from four_dim_strategy import VARIETY_OF, variety_of
+from preflight_check import HOLIDAY_SET_2026, is_trading_day, parse_ts
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. is_trading_day — 交易日判断

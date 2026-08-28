@@ -28,8 +28,8 @@
    - symbol 不在校准表 → 默认值
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,12 +37,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
+    DEFAULT_CONFIG,
     _is_risk_locked,
     compute_kelly_factor,
-    DEFAULT_CONFIG,
 )
 from strategy_layer import walk_forward_gate
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _is_risk_locked — 风控锁定

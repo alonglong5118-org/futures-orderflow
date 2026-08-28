@@ -22,7 +22,7 @@
   - 2026-08-16：分品种保证金上限收紧（JM/J 低胜率品种）
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 def calc_risk_lots(

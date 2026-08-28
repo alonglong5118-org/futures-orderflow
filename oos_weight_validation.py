@@ -6,10 +6,9 @@
   · 只报告，不自动 apply（遵守 auto-stage + 手动 apply 铁律）
 用法：python3 oos_weight_validation.py [--symbols jd,lh,FG,SA,JM,J] [--pilot]
 """
-import json
-import copy
 import argparse
-import numpy as np
+import copy
+import json
 
 import four_dim_strategy as fd
 

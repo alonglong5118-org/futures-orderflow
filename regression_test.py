@@ -13,10 +13,10 @@
   python regression_test.py --update-baseline --version v6.1  # 更新基准
 """
 
-import sys
-import os
-import json
 import argparse
+import json
+import os
+import sys
 from datetime import datetime
 
 # ── 路径 ──────────────────────────────────────────────────────────────────
@@ -24,7 +24,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import four_dim_strategy as fd
-
 
 # ── 配置 ──────────────────────────────────────────────────────────────────
 BASELINE_FILE = os.path.join(HERE, "regression_baseline.json")

@@ -7,11 +7,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import time
 import threading
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
 
 FLAGS_FILE = os.path.join(os.path.dirname(__file__), "feature_flags.json")
 CHANGELOG_FILE = os.path.join(os.path.dirname(__file__), "feature_flags_changelog.json")

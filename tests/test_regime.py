@@ -18,9 +18,10 @@ Regime 分类 — 单元测试
   - 优先级顺序：波动 > 震荡 > 趋势 > 过渡（容易踩坑的地方）
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -28,7 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from strategy_layer import classify_regime, REGIME_THRESHOLDS
+from strategy_layer import REGIME_THRESHOLDS, classify_regime
 
 
 def make_price_df(prices):

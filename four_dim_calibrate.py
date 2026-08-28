@@ -24,19 +24,17 @@ four_dim_strategy.py 的 DEFAULT_CONFIG["thresholds_by_symbol"][sym]["T_thresh"]
   4. 改进报告生成：结构化输出，便于程序化处理
 """
 from __future__ import annotations
+
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
-import copy
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import numpy as np
-import four_dim_strategy as fd
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG, load_daily
+from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 CALIB_JSON = os.path.join(HERE, "calibration_params.json")
 DRIFT_JSON = os.path.join(HERE, "calibration_drift.json")

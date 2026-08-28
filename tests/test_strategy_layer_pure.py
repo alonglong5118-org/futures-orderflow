@@ -24,18 +24,17 @@
    - 5种状态全覆盖
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import pandas as pd
-import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from strategy_layer import crossover, classify_regime
-
+from strategy_layer import classify_regime, crossover
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. crossover

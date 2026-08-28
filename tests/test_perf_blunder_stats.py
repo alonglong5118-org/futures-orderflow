@@ -38,17 +38,16 @@
    - 返回 dict
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+from blunder_check import _b, _to_ts
 from perf_breakdown import _hold_bucket, _stat
-from blunder_check import _to_ts, _b
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _hold_bucket

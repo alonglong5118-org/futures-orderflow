@@ -21,8 +21,15 @@
 详见 四维策略_规格草案.md (v1.1)。
 """
 from __future__ import annotations
-import os, sys, json, math, time, bisect
+
+import bisect
+import json
+import math
+import os
+import sys
+import time
 from datetime import datetime
+
 import numpy as np
 
 # ── v5.1 集成常量 ──
@@ -43,9 +50,10 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from strategy_layer import (STRATS, TREND_STRATS, MEAN_STRATS,
-                            classify_regime, atr as strat_atr)
 import fundamental_feed as ff  # 基本面 F 数据源（基差/库存）
+from strategy_layer import MEAN_STRATS, STRATS, TREND_STRATS, classify_regime
+from strategy_layer import atr as strat_atr
+
 # P1-16: 实时风控状态注入 —— 由 four_dim_live_runner 在每轮评估前设置
 # 策略层在 live 模式下读取此状态，前置否决被锁定/熔断的信号生成
 # 回测模式下 _LIVE_RISK_STATE 为 None，不影响回测逻辑
@@ -516,7 +524,8 @@ def _norm_daily_cols(raw):
 
 def _fetch_daily_eastmoney(code):
     """东财期货主连日K（公开 HTTP，无需 token；best-effort）。返回已标准化(date索引)的 df。"""
-    import urllib.request, json as _json
+    import json as _json
+    import urllib.request
     secid = "114." + code.lower()
     url = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
            "?fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
@@ -540,8 +549,9 @@ def _fetch_daily_eastmoney(code):
 def _fetch_daily_robust(code):
     """多源日线兜底：① sina 主源 → ② sina-main(带日期范围) → ③ 东财 HTTP。
     任一阵列失败即跳下一源；全失败抛 RuntimeError（由上层沿用上次值）。"""
-    import akshare as ak
     from datetime import datetime, timedelta
+
+    import akshare as ak
     last_err = None
     # ① sina 主源（现有逻辑）
     try:

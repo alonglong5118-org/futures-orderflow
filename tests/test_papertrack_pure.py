@@ -55,10 +55,10 @@ paper track 纯函数 — 单元测试
    - 0 → 0
 """
 
-import sys
 import os
+import sys
 import unittest
-import json
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -66,10 +66,14 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_papertrack import (
-    bars_to_records, records_to_bars, sig_id, parse_signal,
-    aggregate, _dim_vote, SIGNAL_TYPE, DIRECTION_MAP,
+    SIGNAL_TYPE,
+    _dim_vote,
+    aggregate,
+    bars_to_records,
+    parse_signal,
+    records_to_bars,
+    sig_id,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. bars_to_records

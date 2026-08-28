@@ -31,10 +31,10 @@
    - 奇函数：f(-x) = -f(x)
 """
 
-import sys
-import os
-import unittest
 import math
+import os
+import sys
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -43,7 +43,6 @@ sys.path.insert(0, ROOT)
 from apply_blended_weights import blend_weights
 from four_dim_calibrate import best_stop_rr
 from macro_context import _norm_tanh
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. blend_weights
@@ -100,7 +99,6 @@ class TestBlendWeights(unittest.TestCase):
     def test_linear_interpolation(self):
         """中间值线性插值"""
         ga_w = {"T": 0.8, "F": 0.1, "C": 0.1}
-        from apply_blended_weights import DEFAULT_W
         # alpha=0 → default, alpha=1 → ga
         r0 = blend_weights(ga_w, alpha=0.0)
         r1 = blend_weights(ga_w, alpha=1.0)

@@ -26,8 +26,14 @@
   （远月套保等固定场景）。未指定合约的品种（纯信号生成）才按中文名匹配到主连。
 """
 from __future__ import annotations
-import os, sys, json, time, re
+
+import json
+import os
+import re
+import sys
+import time
 from datetime import datetime
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -355,6 +361,7 @@ class MinishareLiveFeed:
     def _discover(self, df):
         """从 rt_fut_k 全量数据自动发现品种→代码映射（按中文名匹配）。"""
         import re as _re
+
         from four_dim_strategy import SYMBOLS
 
         # 第零步（权威）：trade_config 指定了真实交割合约的品种，先钉死到该合约，

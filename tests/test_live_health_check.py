@@ -26,8 +26,8 @@
    - 70 年以上归 19xx（如 rb9901 → 199901）
 """
 
-import sys
 import os
+import sys
 import unittest
 from datetime import datetime
 
@@ -36,7 +36,6 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from live_health_check import _market_open_now, ym_of
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _market_open_now

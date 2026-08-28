@@ -20,9 +20,10 @@ EMA 指标 + 稳健池闸门配置 — 单元测试
    - 恢复默认值
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -31,16 +32,15 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from strategy_layer import (
-    ema,
-    configure_robust_gate,
-    get_robust_gate,
-    set_robust_gate,
     _ROBUST_GATE,
     _ROBUST_GATE_CFG,
-    STABILITY_THRESHOLD,
     OOS_EXPR_THRESHOLD,
+    STABILITY_THRESHOLD,
+    configure_robust_gate,
+    ema,
+    get_robust_gate,
+    set_robust_gate,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. ema — 指数移动平均

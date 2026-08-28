@@ -121,15 +121,16 @@
     "floor_oos": 0.1
   },
   "account": {
-    "equity": 612140,
-    "equity_note": "模拟盘当前权益(2026-08-11收盘)。回本目标=1,000,000。每日收盘后手动同步一次真实权益。",
+    "equity": 984950.0,
+    "equity_note": "当前权益(2026-08-28 16:00同步)",
     "risk_pct": 1.5,
     "margin_cap_pct": 30,
     "max_lots": 6,
     "per_symbol_lots": {},
     "portfolio_margin_cap_pct": 60,
     "max_total_lots": 20,
-    "use_realtime_margin": true
+    "use_realtime_margin": true,
+    "available": 867642.75
   },
   "notify": {
     "enabled": true,
@@ -206,14 +207,14 @@
       "margin_rate": 0.1,
       "limit_pct": 0.05,
       "name": "螺纹钢",
-      "contract": "RB2610"
+      "contract": "RB2701"
     },
     "hc": {
       "multiplier": 10,
       "margin_rate": 0.1,
       "limit_pct": 0.05,
       "name": "热卷",
-      "contract": "HC2610"
+      "contract": "HC2701"
     },
     "ss": {
       "multiplier": 5,

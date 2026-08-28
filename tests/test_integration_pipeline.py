@@ -40,22 +40,22 @@
    - 影响 stop_dist 和目标位
 """
 
-import sys
 import os
+import sys
 import unittest
-import math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    risk_gate, exit_plan, build_signal, pipeline,
-    _is_risk_locked, get_slip_pts,
     DEFAULT_CONFIG,
+    _is_risk_locked,
+    build_signal,
+    exit_plan,
+    get_slip_pts,
+    risk_gate,
 )
-import sr_analyzer as sra
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  测试辅助

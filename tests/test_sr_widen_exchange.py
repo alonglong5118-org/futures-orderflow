@@ -46,8 +46,8 @@ SR 放宽 + 行情时段 + 交易所分类 — 单元测试
    - 空串 → False
 """
 
-import sys
 import os
+import sys
 import unittest
 from datetime import datetime
 
@@ -55,9 +55,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from sr_widen_sweep import widen_stop_with_sr
 from minishare_feed import _classify_exchange, _in_trading_session, _is_rate_limit
-
+from sr_widen_sweep import widen_stop_with_sr
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. widen_stop_with_sr

@@ -22,17 +22,17 @@
    - 空列表 → None
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from anomaly_scan import compute as anomaly_compute, W_PCT, W_AMP
+from anomaly_scan import W_AMP, W_PCT
+from anomaly_scan import compute as anomaly_compute
 from calibration import _future_close
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. anomaly_scan.compute

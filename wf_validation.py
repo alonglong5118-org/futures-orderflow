@@ -19,20 +19,19 @@ wf_validation.py — Walk-Forward 滚动验证工具
     python3 wf_validation.py --result ga_tpsl_v2_ru_result.json --compare-baseline
 """
 from __future__ import annotations
+
+import argparse
+import copy
+import json
 import os
 import sys
-import json
-import copy
-import argparse
+
 import numpy as np
-from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import four_dim_strategy as fd
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG, load_daily
-
+from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 # ============================================================================
 # 指标计算

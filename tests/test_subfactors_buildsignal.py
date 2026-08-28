@@ -19,9 +19,10 @@ T 子因子分解 + 信号包裹 — 单元测试
    - reason 文案包含关键信息
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -30,14 +31,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    compute_T_subfactors,
+    DEFAULT_CONFIG,
     build_signal,
+    compute_T_subfactors,
+    exit_plan,
     pipeline,
     risk_gate,
-    exit_plan,
-    DEFAULT_CONFIG,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  测试数据

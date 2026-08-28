@@ -15,8 +15,12 @@ four_dim_papertrack.py · 四维策略模拟盘「真实回测」复盘器
 输出：papertrack_report.json
 """
 from __future__ import annotations
-import os, sys, json, hashlib
+
+import hashlib
+import json
+import os
 from datetime import datetime
+
 import pandas as pd
 
 # 四维子分重建需要引擎的 pipeline / 配置（仅 backfill_subscores 用，lazy import 避免顶层循环依赖）

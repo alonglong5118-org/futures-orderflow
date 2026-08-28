@@ -22,8 +22,8 @@ SR 阈值验证 — 单元测试
    - 多档混合统计正确
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,6 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from sr_threshold_validation import analyze_by_zone, fine_grained_bins
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  辅助

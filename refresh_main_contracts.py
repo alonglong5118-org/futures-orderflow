@@ -24,12 +24,12 @@ refresh_main_contracts.py — 换月期全市场主力合约实时核对与强�
   python3 refresh_main_contracts.py --report   # 同上（显式）
   python3 refresh_main_contracts.py --apply    # 报告 + 用 akshare 近月强制锁定并更新缓存
 """
-import sys
+import argparse
+import json
 import os
 import re
-import json
+import sys
 import time
-import argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "minishare_hot_contracts.json")
@@ -141,8 +141,9 @@ def _get_ine_main():
     改用 futures_settle_ine 获取交易所官方结算数据, 选取近月活跃合约。
     INE 目前仅上市 SC(原油) 一个品种。
     """
-    import akshare as ak
     from datetime import datetime
+
+    import akshare as ak
     
     out = {}
     today = datetime.now().strftime("%Y%m%d")

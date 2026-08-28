@@ -5,19 +5,20 @@ SR 位阈值验证 v4 - 方向感知版
 - 评估不同阈值下的过滤效果
 """
 
+import argparse
 import os
 import sys
-import argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import numpy as np
 import pandas as pd
 
 import sr_analyzer as sra
 from four_dim_strategy import (
-    SYMBOLS, load_daily, walk_forward_backtest, DEFAULT_CONFIG,
+    DEFAULT_CONFIG,
+    load_daily,
+    walk_forward_backtest,
 )
 
 

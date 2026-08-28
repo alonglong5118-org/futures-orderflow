@@ -13,7 +13,11 @@
 未覆盖（限产/疫情/USDA 等）交给 info_dimension_manual.json 人工补。
 """
 from __future__ import annotations
-import os, json, time, sys, subprocess
+
+import json
+import os
+import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "info_dimension.json")

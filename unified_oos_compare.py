@@ -13,13 +13,18 @@ D. 5 因子稳健版（剔除 T_seasonal）
 - min_bars: 60
 - 最低交易数: 5 笔/品种
 """
-import os, sys, copy, json
+import copy
+import json
+import os
+import sys
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import numpy as np
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG
-from ga_group_six_factor import get_group_symbols, load_group_data
+
+from four_dim_strategy import DEFAULT_CONFIG, walk_forward_backtest
+from ga_group_six_factor import load_group_data
 
 TRAIN_BARS = 300
 TEST_BARS = 200

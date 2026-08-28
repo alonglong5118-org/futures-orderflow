@@ -9,14 +9,14 @@ off = make_cfg(False) (v12, 五块开关全 False)
 输出：oos_5m_45_result.json（结构同 oos_5m_result.json，扩展到全市场）。
 单品种超时保护；可重入（先恢复已完成）。
 """
+import argparse
+import gc
 import json
 import os
-import sys
 import signal
-import gc
-import argparse
-import four_dim_strategy as fd
+
 import four_dim_oos_compare as oc
+import four_dim_strategy as fd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PER_SYM_TIMEOUT = 600

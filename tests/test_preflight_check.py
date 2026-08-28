@@ -23,8 +23,8 @@
    - 接受 date 对象
 """
 
-import sys
 import os
+import sys
 import unittest
 from datetime import date
 
@@ -32,8 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from preflight_check import parse_ts, is_trading_day
-
+from preflight_check import is_trading_day, parse_ts
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. parse_ts

@@ -40,17 +40,16 @@
    - 其他 → "其他"
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from take_profit_utils import calc_exit_plan
 from discipline_review import _duration, _source_label
-
+from take_profit_utils import calc_exit_plan
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. calc_exit_plan

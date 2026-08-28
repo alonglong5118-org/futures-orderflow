@@ -17,8 +17,9 @@
     rep = bv.data()
 """
 from __future__ import annotations
-import os
+
 import json
+import os
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 REPORT_JSON = os.path.join(_HERE, "papertrack_report.json")

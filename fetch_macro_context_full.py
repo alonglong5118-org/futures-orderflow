@@ -28,11 +28,10 @@ Tushare HTTP 约定：
   body = {"api_name": "...", "token": "...", "params": {...}, "fields": "..."}
   返回 = {"code": 0, "msg": "", "data": {"fields": [...], "items": [[...], ...]}}
 """
-import os
-import sys
-import json
-import time
 import argparse
+import json
+import os
+import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))

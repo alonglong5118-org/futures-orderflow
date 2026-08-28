@@ -30,26 +30,22 @@
    - 加权分数范围 0-1
 """
 
-import sys
 import os
+import sys
 import unittest
-from unittest.mock import patch
-from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from info_dimension import (
-    _tag_to_symbols,
-    _age_factor,
     SYMBOL_TAGS,
+    _age_factor,
+    _tag_to_symbols,
 )
 from symbol_screener import (
     _check_criteria,
-    CRITERIA_WEIGHTS,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _tag_to_symbols

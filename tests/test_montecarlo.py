@@ -26,17 +26,15 @@
    - maxdd 始终 ≥ 0
 """
 
-import sys
 import os
+import sys
 import unittest
-import math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from montecarlo import _risk_amount, simulate
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _risk_amount

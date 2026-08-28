@@ -3,7 +3,10 @@
 确认：①重放 outcome/R 与已存储完全一致(=可复现, 确定性修复生效) ②快照上 P0-2
 换月跳空跳过总根数(应在冻结数据上稳定为 0, 验证 P0-2 空转)。
 不写回任何文件。"""
-import json, os, sys
+import json
+import os
+import sys
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import four_dim_papertrack as fp

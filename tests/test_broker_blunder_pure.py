@@ -56,8 +56,8 @@ broker_import + blunder 纯函数 — 单元测试
    - 返回 float
 """
 
-import sys
 import os
+import sys
 import unittest
 from datetime import datetime
 
@@ -65,12 +65,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from broker_import import (
-    _norm_key, _map_columns, contract_to_symbol,
-    _parse_side, _parse_offset, _to_num,
-)
 from blunder_check import _to_ts
-
+from broker_import import (
+    _map_columns,
+    _norm_key,
+    _parse_offset,
+    _parse_side,
+    _to_num,
+    contract_to_symbol,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _norm_key

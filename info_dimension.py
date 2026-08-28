@@ -15,7 +15,10 @@
   · score 幅度有界，且仅作为「F 的定性加分/减分」，不直接改方向/手数（防失控）。
 """
 from __future__ import annotations
-import os, json, time
+
+import json
+import os
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "info_dimension.json")       # 自动采集（fetch_info_dimension.py 写）

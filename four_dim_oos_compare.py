@@ -28,12 +28,14 @@
 依赖：four_dim_strategy.walk_forward_backtest / walk_forward_backtest_5m_exit（需 pandas/numpy + 本地数据）。
 """
 import copy
+import fcntl
 import json
 import os
-import sys
 import signal
-import fcntl
+import sys
+
 import numpy as np
+
 import four_dim_strategy as fd
 
 PER_SYM_TIMEOUT = 900  # 单品种(on+off两遍)超时秒数，超时跳过防止永久卡死（2026-08-16 放宽至900s以容纳FG等慢品种≈505s）

@@ -56,25 +56,24 @@
    - 随机 dict → _is_signal_backed
 """
 
-import sys
-import os
-import unittest
-import random
 import math
+import os
+import random
 import string
+import sys
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+from broker_import import _norm_key, _parse_offset, _parse_side, _to_num
+from discipline_review import _is_manual_record, _is_signal_backed
+from four_dim_strategy import DEFAULT_CONFIG, risk_gate
+from fundamental_feed import seasonal_f
 from kelly_utils import compute_kelly_factor
 from macro_context import _norm_tanh
 from refresh_main_contracts import _add_months, ym_of
-from broker_import import _parse_side, _parse_offset, _to_num, _norm_key
-from fundamental_feed import seasonal_f
-from discipline_review import _is_signal_backed, _is_manual_record
-from four_dim_strategy import risk_gate, DEFAULT_CONFIG
-import sr_analyzer as sra
 
 # 随机测试次数
 N_RANDOM = 200

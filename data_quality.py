@@ -18,6 +18,7 @@ observe() 更新；check() 给出每个品种的健康状态：
     rep = dq.check()                 # 取健康快照
 """
 from __future__ import annotations
+
 import time
 from datetime import datetime
 

@@ -79,21 +79,22 @@
    - abs(corr) 用于判定（负相关也触发）
 """
 
-import sys
 import os
-import math
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from price_protection import (
-    validate_price, _dir_sign, validate_entry_stop,
-    protect_user_price, validate_take_profit,
-)
 from corr_gate_utils import _pearson_corr, apply_corr_gate
-
+from price_protection import (
+    _dir_sign,
+    protect_user_price,
+    validate_entry_stop,
+    validate_price,
+    validate_take_profit,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. validate_price

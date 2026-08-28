@@ -18,6 +18,7 @@ R 口径：单笔 R = pnl / 计划风险额。计划风险额优先用 stop_dist
     pb.print_report(rep)            # 终端人话版
 """
 from __future__ import annotations
+
 import time
 from datetime import datetime
 

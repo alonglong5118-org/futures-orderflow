@@ -52,19 +52,18 @@
    - 主连 M 后缀
 """
 
-import sys
-import os
-import unittest
 import math
+import os
+import sys
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from broker_import import _norm_key, contract_to_symbol, _parse_side, _parse_offset, _to_num
-from macro_context import _norm_tanh
 from account_monitor import _map_symbol
-
+from broker_import import _norm_key, _parse_offset, _parse_side, _to_num, contract_to_symbol
+from macro_context import _norm_tanh
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _norm_key

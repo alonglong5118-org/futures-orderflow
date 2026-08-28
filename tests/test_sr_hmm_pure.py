@@ -53,18 +53,18 @@ SR分析 + HMM状态 + 校准 — 单元测试
    - 返回 float
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from sr_analyzer import _finalize_cluster, _classify, _empty_result
 from regime_hmm import _rule_label, thr_mult
-
+from sr_analyzer import _classify, _empty_result, _finalize_cluster
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _finalize_cluster

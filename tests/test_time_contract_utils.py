@@ -54,19 +54,18 @@
    - 空串 → False
 """
 
-import sys
 import os
+import sys
 import unittest
-from datetime import datetime, date
+from datetime import date, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+from calibration import _future_close, _parse
+from minishare_live import _contract_ym, _is_tradeable_contract, normalize_contract_code
 from preflight_check import is_trading_day, parse_ts
-from calibration import _parse, _future_close
-from minishare_live import normalize_contract_code, _contract_ym, _is_tradeable_contract
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. is_trading_day

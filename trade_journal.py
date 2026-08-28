@@ -20,7 +20,11 @@ Web API（已集成到 four_dim_live_runner.py）:
   GET  /api/journal  → 返回 summary + compare 报告
 """
 from __future__ import annotations
-import os, json, uuid, threading
+
+import json
+import os
+import threading
+import uuid
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -351,7 +355,6 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
     if symbol not in _MULTIPLIERS:
         return False, f"未知品种 {symbol}", 0.0
     # 防重复提交检查
-    import time
     _fp = f"exit:{symbol}:{direction}:{lots}:{price}:{reason}"
     if _check_duplicate_request(_fp):
         print(f"[record_exit] 重复请求已拒绝: {_fp}")
@@ -1531,8 +1534,8 @@ def current_loss_streak():
     避免被熔断前的亏损'卡'住，导致系统永远无法恢复。
     熔断强平交易本身计入统计（视为正常交易结果）。
     """
-    import os
     import json as _json
+    import os
     data = _load()
     # 查找最近的熔断解除时间戳
     ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'killswitch_state.json')

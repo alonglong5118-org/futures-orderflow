@@ -8,17 +8,28 @@
 
 直接在训练集上跑，结果与无约束版对比。
 """
-import os, sys, copy, json, time, argparse, random
+import argparse
+import copy
+import json
+import os
+import random
+import sys
+import time
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import numpy as np
-from deap import base, creator, tools, algorithms
+from deap import algorithms, base, creator, tools
+
+from four_dim_strategy import DEFAULT_CONFIG, walk_forward_backtest
 from ga_group_six_factor import (
-    load_group_data, _normalize_weights, _ind_to_weights,
-    SF_NAMES, GROUP_CXPB, GROUP_MUTPB, MIN_TRADES_PER_SYMBOL,
+    GROUP_CXPB,
+    GROUP_MUTPB,
+    SF_NAMES,
+    _ind_to_weights,
+    load_group_data,
 )
-from four_dim_strategy import load_daily, walk_forward_backtest, DEFAULT_CONFIG
 
 # ===== 稳健性参数 =====
 MAX_WEIGHT = 0.35        # 单因子权重上限

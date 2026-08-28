@@ -34,26 +34,27 @@
   （通过环境变量 UPDATE_BASELINE=1 触发）
 """
 
-import sys
-import os
-import unittest
 import json
-import math
+import os
+import sys
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+import data_quality as dq
+from broker_import import _norm_key, _parse_offset, _parse_side, _to_num
 from four_dim_strategy import (
-    walk_forward_backtest, load_daily, DEFAULT_CONFIG,
-    risk_gate, build_signal,
+    DEFAULT_CONFIG,
+    load_daily,
+    risk_gate,
+    walk_forward_backtest,
 )
+from fundamental_feed import seasonal_f
 from kelly_utils import compute_kelly_factor
 from macro_context import _norm_tanh
-from refresh_main_contracts import _add_months, ym_of
-from fundamental_feed import seasonal_f
-from broker_import import _parse_side, _parse_offset, _to_num, _norm_key
-import data_quality as dq
+from refresh_main_contracts import _add_months
 
 # 基准文件路径
 BASELINE_FILE = os.path.join(HERE, "_baseline_values.json")

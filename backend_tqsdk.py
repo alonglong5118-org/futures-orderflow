@@ -27,12 +27,11 @@ tick 输出格式（严格对齐 tick_orderflow.TickOrderflow.push）：
   python backend_tqsdk.py                 # 生产：连天勤，写 jsonl + 起 HTTP
   SELFTEST=1 python backend_tqsdk.py      # 自测：合成 tick，不连网
 """
-import os
-import sys
-import time
 import json
+import os
 import signal
 import threading
+import time
 import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,6 +53,7 @@ SYMBOLS = list(SYMBOL_MAP.keys())
 
 # 内存累积器（HTTP /api/signals 用，只读，绝不调 api）
 from tick_orderflow import TickOrderflow, ticks_from_jsonl
+
 _MEM = {s: TickOrderflow(s) for s in SYMBOLS}
 _MEM_LOCK = threading.Lock()
 

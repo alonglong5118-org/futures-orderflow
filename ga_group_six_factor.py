@@ -9,24 +9,28 @@
   python3 ga_group_six_factor.py --all --pop 25 --gen 12
 """
 
+import argparse
+import copy
+import json
 import os
 import sys
-import json
-import copy
-import argparse
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from four_dim_strategy import (
-    DEFAULT_CONFIG, SYMBOLS, load_daily, walk_forward_backtest,
+    DEFAULT_CONFIG,
+    SYMBOLS,
+    load_daily,
+    walk_forward_backtest,
 )
 
 try:
-    from deap import base, creator, tools, algorithms
     import random
+
     import numpy as np
+    from deap import algorithms, base, creator, tools
     _HAVE_DEAP = True
 except ImportError:
     _HAVE_DEAP = False

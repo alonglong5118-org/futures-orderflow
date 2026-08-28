@@ -10,9 +10,10 @@ v5.1 回测集成模块
     r = walk_forward_backtest_v51("jd", cfg)
 """
 
-import sys
-import os
 import math
+import os
+import sys
+
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

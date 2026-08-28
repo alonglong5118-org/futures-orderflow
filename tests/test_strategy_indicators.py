@@ -34,19 +34,18 @@
    - 刚好接触不算（a[-2] == b[-2] 且 a[-1] > b[-1] → 算上穿）
 """
 
-import sys
 import os
+import sys
 import unittest
-import math
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from strategy_layer import sma, ema, atr, rsi, crossover
-
+from strategy_layer import atr, crossover, ema, rsi, sma
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. sma

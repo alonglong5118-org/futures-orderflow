@@ -22,20 +22,22 @@
    - 连续 observe 的状态演进
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from four_dim_strategy import (
-    walk_forward_backtest, load_daily, DEFAULT_CONFIG,
-)
 import data_quality as dq
-
+from four_dim_strategy import (
+    DEFAULT_CONFIG,
+    load_daily,
+    walk_forward_backtest,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  一、深度回测集成

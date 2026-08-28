@@ -29,17 +29,16 @@
    - 2 月闰年/平年
 """
 
-import sys
 import os
+import sys
 import unittest
-from datetime import datetime, date, timedelta
+from datetime import date, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from discipline_review import _duration, _friday_of, _is_last_trading_day
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _duration

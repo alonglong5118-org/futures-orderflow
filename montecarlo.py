@@ -26,10 +26,11 @@ R 口径与 perf_breakdown 一致：单笔 R = 净盈亏 / 计划风险额。
   4. 批量计算最大回撤，避免逐路径计算
 """
 from __future__ import annotations
-import os
+
 import json
+import os
+
 import numpy as np
-from statistics import median
 
 import trade_journal as tj
 

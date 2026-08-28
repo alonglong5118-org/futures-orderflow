@@ -40,17 +40,15 @@
    - 返回字段齐全
 """
 
-import sys
 import os
+import sys
 import unittest
-import math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from hidden_pivot import round_tick, find_swings, latest_abc, hidden_pivot
-
+from hidden_pivot import find_swings, hidden_pivot, latest_abc, round_tick
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. round_tick

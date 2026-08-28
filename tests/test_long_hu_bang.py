@@ -24,16 +24,15 @@
    - 极端情况 clamp 到 ±100
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from long_hu_bang import to_num, compute_c_score
-
+from long_hu_bang import compute_c_score, to_num
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. to_num

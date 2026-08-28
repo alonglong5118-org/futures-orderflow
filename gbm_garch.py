@@ -18,8 +18,9 @@
   3. 滚动波动率计算优化：用 numpy 滑动窗口
   4. 缓存机制改进：LRU 缓存防止内存泄漏
 """
-import numpy as np
 from collections import OrderedDict
+
+import numpy as np
 
 try:
     from scipy.optimize import minimize

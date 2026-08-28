@@ -31,9 +31,10 @@
   日线回测看不到盘中回撤，必须用 5m 细粒度验证。
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))

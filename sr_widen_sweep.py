@@ -7,17 +7,26 @@ import json
 import math
 import os
 import sys
+
 import numpy as np
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from four_dim_strategy import (
-    pipeline, risk_gate, exit_plan, get_slip_pts,
-    ROLL_GAP_PCT, ROLL_GAP_MULT, _FALLBACK_SPEC,
-    load_daily, strat_atr, DEFAULT_CONFIG, SYMBOLS,
-)
 import sr_analyzer as sra
+from four_dim_strategy import (
+    _FALLBACK_SPEC,
+    DEFAULT_CONFIG,
+    ROLL_GAP_MULT,
+    ROLL_GAP_PCT,
+    SYMBOLS,
+    exit_plan,
+    get_slip_pts,
+    load_daily,
+    pipeline,
+    risk_gate,
+    strat_atr,
+)
 
 
 def widen_stop_with_sr(exit_dict, sr_result, direction, entry_price, max_mult=2.0):

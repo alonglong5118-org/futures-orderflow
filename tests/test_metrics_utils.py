@@ -27,10 +27,10 @@
    - 空 DataFrame → 不变
 """
 
-import sys
 import os
+import sys
 import unittest
-import numpy as np
+
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,8 +38,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_oos_compare import max_drawdown, summarize
-from four_dim_strategy import variety_of, _norm_daily_cols
-
+from four_dim_strategy import _norm_daily_cols, variety_of
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. max_drawdown — 最大回撤
@@ -216,7 +215,7 @@ class TestVarietyOf(unittest.TestCase):
 
     def test_variety_key_in_symbols(self):
         """VARIETY_OF 中的品种 key 都在 SYMBOLS 里"""
-        from four_dim_strategy import VARIETY_OF, SYMBOLS
+        from four_dim_strategy import SYMBOLS, VARIETY_OF
         missing = []
         for contract, variety in VARIETY_OF.items():
             if variety not in SYMBOLS:

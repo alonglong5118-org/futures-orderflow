@@ -38,8 +38,8 @@
    - 包含 ANSI 转义码
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -47,12 +47,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from regression_test import (
+    C,
     calc_signal_agreement,
     classify_status,
     fmt_delta,
-    C,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. calc_signal_agreement

@@ -10,10 +10,13 @@
   ⑦ 夜盘资格配置一致性（防止无夜盘品种在夜盘误发信号）
 """
 from __future__ import annotations
+
+import json
 import math
+import os
 import time
-import os, json, time
 from datetime import datetime
+
 import account_tracker as at  # P0-10 fix: needed by check_account_fields
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -153,7 +156,7 @@ def check_night_session_eligibility():
     防止新增品种时遗漏 NO_NIGHT_DEFAULT，导致无夜盘品种在夜盘时段误发信号。"""
     issues = []
     try:
-        from four_dim_strategy import SYMBOLS, NO_NIGHT_DEFAULT
+        from four_dim_strategy import NO_NIGHT_DEFAULT, SYMBOLS
     except Exception as e:
         return {"ok": False, "name": "夜盘资格配置一致性", "detail": f"导入失败: {e}"}
 

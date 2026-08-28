@@ -20,8 +20,7 @@
   - 尾仓止损初始值算错（应该是 t2 ± tail_stop_dist）
 """
 
-from typing import List, Tuple, Optional, Dict, Any
-
+from typing import Any, Dict, List, Tuple
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 止盈止损参数计算（exit_plan 核心）

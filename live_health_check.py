@@ -3,7 +3,13 @@
 # 校验：① health 可达 ② edge 数据真的非空(防 CALIB_FILE 类静默失明) ③ 合约一致性(state/account == main_overrides) ④ consistency ok
 #     ⑤ 换月前瞻预警(基于 main_overrides 各主力合约 YYMM，判断近月/交割月/过期)
 # 告警：复用项目 push_notify（Bark/Telegram/企微）；仅在 OK→FAIL 边沿 + FAIL→OK 恢复 + 换月新预警 时推送，避免刷屏。
-import json, os, sys, time, re, urllib.request, urllib.error
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import date, datetime
 
 HERE = os.environ.get("FOUR_DIM_HOME") or os.path.dirname(os.path.abspath(__file__))

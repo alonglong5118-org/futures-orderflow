@@ -29,19 +29,18 @@
 4. _is_rate_limit 已经在另一个文件测了，此处不重复
 """
 
-import sys
-import os
-import unittest
 import json
+import os
+import sys
 import tempfile
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from fundamental_feed import seasonal_f, _today_str
+from fundamental_feed import _today_str, seasonal_f
 from self_check import _safe_load
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. seasonal_f

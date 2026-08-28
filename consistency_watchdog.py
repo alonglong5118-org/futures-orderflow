@@ -15,9 +15,8 @@ consistency_watchdog.py · #5 训练/服务一致性看门狗（train/serve pari
   3b. broken_gated：漂移判 broken 但已被动态门控 papertrack_gated 压制（不发信号）→ 风险已控，仅提示（不计入 ok=false）。
   4. stale：recalibrated_at 超过 STALE_DAYS 天未刷新 → 建议重校。
 """
-import os
 import json
-import time
+import os
 from datetime import datetime, timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))

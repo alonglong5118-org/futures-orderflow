@@ -24,8 +24,8 @@ C 维度流量聚合 — 单元测试
   与 T（技术面）、F（基本面）、C（基本面/资金面）共同构成背景偏置和信号触发。
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -33,7 +33,6 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import FlowAggregator, compute_C_flow
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 基础累积与净流方向

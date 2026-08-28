@@ -17,14 +17,13 @@
   或: python tests/test_take_profit.py
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from take_profit_utils import calc_exit_plan, sim_exit_bars
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  一、calc_exit_plan 测试

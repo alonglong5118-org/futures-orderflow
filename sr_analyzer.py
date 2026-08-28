@@ -17,9 +17,8 @@ exit_plan 动态止盈止损参考。三重验证：局部极值 + 成交量剖�
   4. 角色判定：当前价上方=压力位，下方=支撑位
 """
 from __future__ import annotations
-import math
+
 import numpy as np
-import pandas as pd
 
 # ── 参数 ──
 SWING_WINDOW = 5          # 局部极值窗口（左右各 5 根 K 线）

@@ -17,8 +17,8 @@ macro_context.py — 跨资产宏观语境因子（纯 stdlib，跑 live runner 
 合成：macro_bias = 0.40*equity_mom + 0.30*rate_trend + 0.30*fx_trend，夹断[-1,1]。
 各分项先经 tanh 归一化到(-1,1)再加权。
 """
-import os
 import json
+import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "macro_context.json")

@@ -17,22 +17,23 @@ Phase 1：2 参数（stop_atr_mult + rr_ratio）+ 单目标 + 全样本回测
     - 参数稳健性检验
 """
 from __future__ import annotations
-import os
-import sys
-import json
-import copy
-import time
+
 import argparse
+import copy
+import json
+import os
 import random
+import sys
+import time
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import four_dim_strategy as fd
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG
+from deap import base, creator, tools
 
-from deap import base, creator, tools, algorithms
+from four_dim_strategy import DEFAULT_CONFIG, walk_forward_backtest
 
 # ============================================================================
 # 配置

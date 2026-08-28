@@ -26,7 +26,10 @@
   cards = dr.get_all()   # {"daily":{...}, "weekly":{...}, "monthly":{...}}
 """
 from __future__ import annotations
-import os, json, threading, re
+
+import json
+import os
+import threading
 from datetime import datetime, timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))

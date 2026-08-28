@@ -25,9 +25,12 @@
   - sentiment_scale: 0.5~1.0（极端情绪→缩仓，供 risk_state_machine）
 """
 from __future__ import annotations
-import os, json, math, time
+
+import json
+import os
+import time
+
 import numpy as np
-import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

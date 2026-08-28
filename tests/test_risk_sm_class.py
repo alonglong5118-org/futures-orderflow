@@ -20,29 +20,25 @@ scale():
   - 连续止损: × 0.8^n（封底 0.2）
 """
 
-import sys
 import os
+import sys
 import unittest
 from unittest.mock import patch
-import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from risk_state_machine import (
-    RiskStateMachine,
-    RED_LINE,
-    WARN_LINE,
-    DAILY_LOSS_STOP,
-    LOSS_DECAY,
-    LOSS_FLOOR,
     CONSEC_LOCK,
     CONSEC_WARN,
+    DAILY_LOSS_STOP,
     LOCK_RELEASE_SEC,
+    LOSS_DECAY,
+    LOSS_FLOOR,
     WARN_RELEASE_SEC,
+    RiskStateMachine,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 初始状态

@@ -18,7 +18,13 @@
   snap = at.snapshot(prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
 from __future__ import annotations
-import os, json, sys, threading, tempfile, time
+
+import json
+import os
+import sys
+import tempfile
+import threading
+import time
 from datetime import datetime
 
 # ★ 2026-08-27: akshare 实时行情（分钟级，新浪数据源）

@@ -27,11 +27,11 @@
 或者运行 python scripts/discover_tests.py --update 自动发现。
 """
 
-import sys
 import os
-import unittest
 import subprocess
+import sys
 import time
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)

@@ -32,24 +32,26 @@
   PERF_CHECK=1 python tests/test_performance.py  # 严格模式，退化超阈值失败
 """
 
-import sys
 import os
-import unittest
-import time
 import statistics
+import sys
+import time
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+import data_quality as dq
+from broker_import import _norm_key, _parse_offset, _parse_side, _to_num
 from four_dim_strategy import (
-    walk_forward_backtest, load_daily, DEFAULT_CONFIG,
+    DEFAULT_CONFIG,
+    load_daily,
     risk_gate,
+    walk_forward_backtest,
 )
 from kelly_utils import compute_kelly_factor
 from macro_context import _norm_tanh
-from broker_import import _parse_side, _parse_offset, _to_num, _norm_key
-import data_quality as dq
 
 # 是否启用严格性能检查
 PERF_CHECK = os.environ.get("PERF_CHECK", "0") == "1"

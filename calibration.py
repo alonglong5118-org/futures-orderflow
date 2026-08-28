@@ -24,7 +24,11 @@
   # /api/calibration 直接返回 r
 """
 from __future__ import annotations
-import os, json, threading, time
+
+import json
+import os
+import threading
+import time
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))

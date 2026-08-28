@@ -39,9 +39,10 @@ GBM/GARCH 波动率工具 — 单元测试
    - 单调性验证：low ≥ normal ≥ high ≥ extreme（仓位）
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -50,18 +51,17 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from gbm_garch import (
-    _log_returns,
-    _ewma_vol,
-    _rolling_std,
-    _garch_nll,
-    thr_mult,
-    risk_scale,
-    THR_MULT,
-    RISK_SCALE,
-    DEFAULT_THR_MULT,
     DEFAULT_RISK_SCALE,
+    DEFAULT_THR_MULT,
+    RISK_SCALE,
+    THR_MULT,
+    _ewma_vol,
+    _garch_nll,
+    _log_returns,
+    _rolling_std,
+    risk_scale,
+    thr_mult,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _log_returns

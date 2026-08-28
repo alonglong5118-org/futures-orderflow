@@ -48,16 +48,15 @@
    - price 字段兼容（price/last/现价）
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from risk_state_machine import _pos_lots, _pos_dir, build_flatten_plan
-
+from risk_state_machine import _pos_dir, _pos_lots, build_flatten_plan
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. _pos_lots

@@ -18,6 +18,7 @@
     bc.print_report(rep)             # 终端人话版
 """
 from __future__ import annotations
+
 from datetime import datetime
 
 import trade_journal as tj

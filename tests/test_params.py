@@ -17,8 +17,8 @@
 而且是 OOS 校准和 walk-forward 的关键入口。
 """
 
-import sys
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,12 +26,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from four_dim_strategy import (
-    effective_params,
-    regime_params_for,
     DEFAULT_CONFIG,
     SYMBOLS,
+    effective_params,
+    regime_params_for,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. effective_params — 阈值参数解析

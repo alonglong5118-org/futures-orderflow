@@ -32,9 +32,10 @@
    - price=0 → 不崩溃
 """
 
-import sys
 import os
+import sys
 import unittest
+
 import numpy as np
 import pandas as pd
 
@@ -43,10 +44,12 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from strategy_layer import (
-    compute_strategy, STRATS, set_robust_gate, get_robust_gate,
-    _ROBUST_GATE, _ROBUST_GATE_CFG, configure_robust_gate,
+    _ROBUST_GATE,
+    _ROBUST_GATE_CFG,
+    STRATS,
+    compute_strategy,
+    set_robust_gate,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  测试数据构造
