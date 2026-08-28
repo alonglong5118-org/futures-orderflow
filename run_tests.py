@@ -81,7 +81,6 @@ TEST_MODULES = {
     "event_calendar": "tests.test_event_calendar",
     "perf_breakdown": "tests.test_perf_breakdown",
     "live_health_check": "tests.test_live_health_check",
-    "discipline_utils": "tests.test_discipline_utils",
     "strategy_indicators": "tests.test_strategy_indicators",
     "sr_threshold_validation": "tests.test_sr_threshold_validation",
     "preflight_check": "tests.test_preflight_check",

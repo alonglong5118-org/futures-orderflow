@@ -1,0 +1,63 @@
+[project]
+requires-python = ">=3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+# 排除目录
+exclude = [
+    "ponytail/",     # 外部项目
+    "ga_v4_*",       # 回测结果目录
+    "ga_v5_*",       # 回测结果目录
+    ".git/",
+    "__pycache__/",
+    "*.egg-info/",
+    ".venv/",
+    "venv/",
+]
+
+# ── 完整规则集（用于建议级检查） ────────────────────────────────
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "PTH", "W"]
+
+ignore = [
+    "E501",   # line too long — 由 line-length 控制
+    "F403",   # 'from module import *' — 策略文件中常见
+    "F405",   # name may be undefined — import * 带来的
+    "B008",   # function call does not bind — 装饰器常见
+    "UP007",  # X | Y type union — 渐进迁移
+    "UP006",  # list/dict 泛型 — 渐进迁移
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = [
+    "E402",   # module level import not at top
+    "F841",   # unused variable
+    "S101",   # assert used
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ── mypy 配置 ──────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = false
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_redundant_casts = true
+show_error_codes = true
+
+exclude = [
+    "ponytail/",
+    "ga_v4_*/",
+    "ga_v5_*/",
+    "tests/",
+]

@@ -1,18 +1,26 @@
 # ==============================================================================
 #  CI：代码质量检查
 # ==============================================================================
-#  触发时机：PR 到 main/master
+#  触发时机：PR 到 main/master、手动触发
 #  检查内容：
 #    · 语法检查（py_compile）
 #    · 测试文件命名规范
 #    · 基准文件完整性
 #    · 预提交钩子一致性
+#    · Ruff 关键 lint（阻塞级 — 抓真 bug）
+#    · Ruff 风格 lint（建议级 — 只报告）
+#    · Ruff 格式化检查（建议级）
+#    · mypy 类型检查（建议级）
 # ==============================================================================
 
 name: Code Quality
 
 on:
   pull_request:
+    branches:
+      - main
+      - master
+  push:
     branches:
       - main
       - master
@@ -58,7 +66,6 @@ jobs:
       - name: Check test file naming
         run: |
           echo "=== 测试文件命名规范 ==="
-          # 测试文件应以 test_ 开头
           mismatched=$(find tests/ -name "*.py" -not -name "test_*" -not -name "_*" 2>/dev/null || true)
           if [ -n "$mismatched" ]; then
             echo "❌ 以下测试文件命名不规范（应以 test_ 开头）："
@@ -102,12 +109,10 @@ jobs:
       - name: Run discover and compare
         run: |
           echo "=== 测试发现一致性检查 ==="
-          # 生成当前发现结果
           python scripts/discover_tests.py > /tmp/discovered.txt
           echo ""
           echo "检查 run_tests.py 中的 TEST_MODULES 是否与实际文件一致..."
-          
-          # 简单验证：discover_tests.py 能正常运行且输出非空
+
           count=$(grep -c "→ tests.test_" /tmp/discovered.txt || true)
           if [ "$count" -lt 10 ]; then
             echo "❌ 发现的测试模块太少（$count 个），可能有问题"
@@ -117,3 +122,143 @@ jobs:
           echo ""
           echo "💡 提示：如果新增了测试文件但忘记注册，运行："
           echo "   python scripts/discover_tests.py --update"
+
+  # ── Ruff 关键 lint（阻塞级） ────────────────────────────────────────────
+  #  只抓确定性 bug（无需人工判断的硬错误）：
+  #    F601  — 字典重复 key（后面的值会覆盖前面的，几乎一定是 bug）
+  #    F701  — break/continue 在循环外（语法就通不过）
+  #  注：F821/F823/B023 等放在建议级，需逐个确认后再收紧
+  # ========================================================================
+  ruff-critical:
+    name: "Ruff · Critical lint"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run critical lint
+        run: |
+          echo "=== Ruff 关键检查（阻塞级）==="
+          echo "检查确定性代码错误..."
+          ruff check . \
+            --select F601,F701 \
+            --output-format=github
+          echo "✅ 关键检查通过，未发现严重问题"
+
+  # ── Ruff 风格 lint（建议级 · 不阻塞） ──────────────────────────────────
+  ruff-style:
+    name: "Ruff · Style lint (advisory)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run style lint
+        run: |
+          echo "=== Ruff 风格检查（建议级，不阻塞合并）==="
+          echo "包含：代码风格、导入排序、未使用导入、pathlib 建议等"
+          echo ""
+          ruff check . --statistics --exit-zero
+          echo ""
+          echo "📊 以上为建议改进项，不阻塞 PR 合并"
+
+  # ── Ruff 格式化检查（建议级 · 不阻塞） ─────────────────────────────────
+  ruff-format:
+    name: "Ruff · Format check (advisory)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Check formatting
+        run: |
+          echo "=== Ruff 格式化检查（建议级）==="
+          echo "检查代码格式是否符合规范..."
+          echo ""
+          if ruff format --check --diff . 2>&1; then
+            echo "✅ 格式检查通过"
+          else
+            echo "⚠️  部分文件格式不规范（上方 diff 显示差异）"
+            echo "💡 可运行 'ruff format .' 自动修复"
+            exit 0  # 建议级，不阻塞
+          fi
+
+  # ── mypy 类型检查（建议级 · 不阻塞） ───────────────────────────────────
+  mypy:
+    name: "mypy · Type check (advisory)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run mypy
+        run: |
+          echo "=== mypy 类型检查（建议级，不阻塞合并）==="
+          echo "对核心源码进行静态类型检查..."
+          echo ""
+          mypy . --ignore-missing-imports 2>&1 || true
+          echo ""
+          echo "📊 以上为类型检查建议，不阻塞 PR 合并"
