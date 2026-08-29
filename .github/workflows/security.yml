@@ -59,12 +59,22 @@ jobs:
         with:
           fetch-depth: 0  # 需要全量历史才能扫描
 
+      - name: Install gitleaks
+        run: |
+          # 安装最新版 gitleaks CLI（完全免费，无组织限制）
+          GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+          curl -sL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+          gitleaks version
+
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          config-path: .gitleaks.toml
+        run: |
+          echo "=== 密钥泄露检测（gitleaks）==="
+          echo "扫描全量历史..."
+          echo ""
+          gitleaks detect --source . --config .gitleaks.toml --verbose --redact
+          echo ""
+          echo "✅ 密钥泄露检测通过"
 
   # ── 依赖变更审查（仅 PR） ────────────────────────────────────────────
   #  在 PR 中检查依赖变更，防止引入有已知漏洞的包
