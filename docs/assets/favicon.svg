@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Futures OrderFlow Favicon">
+  <defs>
+    <!-- 主渐变：靛蓝 → 紫 → 品红 -->
+    <linearGradient id="favGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <!-- 深色背景渐变 -->
+    <linearGradient id="favBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆角方块 -->
+  <rect x="2" y="2" width="60" height="60" rx="14" ry="14" fill="url(#favBg)" />
+
+  <!--
+    简化 K 线 + 趋势线组合
+    三根 K 线构成上升趋势，配合一条上扬的订单流曲线
+  -->
+  <g transform="translate(14, 18)">
+    <!-- 第一根 K 线（小阳） -->
+    <line x1="5" y1="16" x2="5" y2="26" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" />
+    <rect x="2" y="19" width="6" height="5" rx="1" fill="#10b981" />
+
+    <!-- 第二根 K 线（中阳） -->
+    <line x1="17" y1="10" x2="17" y2="26" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" />
+    <rect x="14" y="14" width="6" height="9" rx="1" fill="#8b5cf6" />
+
+    <!-- 第三根 K 线（大阳，核心） -->
+    <line x1="29" y1="4" x2="29" y2="24" stroke="url(#favGrad)" stroke-width="1.5" stroke-linecap="round" />
+    <rect x="25.5" y="8" width="7" height="12" rx="1.5" fill="url(#favGrad)" />
+
+    <!-- 趋势曲线（订单流） -->
+    <path d="M 0 30 Q 12 26 22 20 Q 30 15 36 10" fill="none" stroke="url(#favGrad)" stroke-width="1.5" stroke-linecap="round" opacity="0.8" />
+  </g>
+</svg>

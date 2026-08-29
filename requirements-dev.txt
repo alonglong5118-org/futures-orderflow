@@ -15,3 +15,14 @@ mypy>=1.11
 # 安全扫描
 bandit>=1.7
 pip-audit>=2.7
+
+# MkDocs 文档站
+mkdocs>=1.6
+mkdocs-material>=9.5
+mkdocs-glightbox>=0.4
+mkdocs-video>=1.5
+mkdocs-git-revision-date-localized-plugin>=1.2
+# 可选插件（需额外编译依赖，CI 环境按需安装）
+# mkdocs-minify-plugin>=0.8
+# mkdocs-git-committers-plugin-2>=2.3
+# mkdocs-offline>=0.2
