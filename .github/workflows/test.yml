@@ -267,6 +267,10 @@ jobs:
         run: |
           python run_tests.py unit --coverage
 
+      - name: Generate coverage JSON (for gate check)
+        run: |
+          python -m coverage json -o coverage.json
+
       - name: Generate coverage XML (for Codecov)
         run: |
           python -m coverage xml -o coverage.xml
