@@ -60,13 +60,13 @@
 
 "area: research":
   - ga_*.py
-  - *backtest*.py
-  - *oos*.py
-  - *simulate*.py
-  - *sweep*.py
-  - *compare*.py
-  - *compare.py
-  - *ablation*.py
+  - "*backtest*.py"
+  - "*oos*.py"
+  - "*simulate*.py"
+  - "*sweep*.py"
+  - "*compare*.py"
+  - "*compare.py"
+  - "*ablation*.py"
   - factor_miner.py
   - new_factor_explorer.py
   - ga_group_*.py
