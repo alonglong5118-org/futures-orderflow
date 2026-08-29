@@ -58,7 +58,8 @@
         lint lint-critical lint-style format format-check typecheck quality actionlint \
         secretscan bandit bandit-advisory depscan security \
         list discover watch hooks deps deps-update deps-outdated deps-check clean \
-        bench bench-strict bench-update
+        bench bench-strict bench-update \
+        docs-serve docs-build docs-deploy docs-clean
 
 # Python 命令（优先 python3）
 PYTHON := python3
@@ -107,6 +108,12 @@ help:
 	@echo "  make deps           安装开发依赖"
 	@echo "  make deps-update    更新开发依赖到最新"
 	@echo "  make clean          清理缓存和临时文件"
+	@echo ""
+	@echo "── 文档站 ────────────────────────────────────────────────────"
+	@echo "  make docs-serve     启动 MkDocs 本地预览（http://127.0.0.1:8000）"
+	@echo "  make docs-build     构建文档站静态站点到 site/"
+	@echo "  make docs-deploy    部署到 GitHub Pages"
+	@echo "  make docs-clean     清理文档构建产物"
 
 # ── 测试 ──────────────────────────────────────────────────────────────
 
@@ -335,3 +342,25 @@ t-pipeline:
 
 t-backtest:
 	@$(PYTHON) run_tests.py integration_backtest_dq --py-only -v
+
+# ── 文档站 ──────────────────────────────────────────────────────────────
+
+docs-serve:
+	@echo "📖  启动 MkDocs 本地预览..."
+	@echo "    访问 http://127.0.0.1:8000 查看文档"
+	@$(PYTHON) -m mkdocs serve
+
+docs-build:
+	@echo "📖  构建文档站静态站点..."
+	@$(PYTHON) -m mkdocs build
+	@echo "✅  构建完成，输出目录: site/"
+
+docs-deploy:
+	@echo "📖  部署文档站到 GitHub Pages..."
+	@$(PYTHON) -m mkdocs gh-deploy --force
+	@echo "✅  部署完成"
+
+docs-clean:
+	@echo "🧹  清理文档构建产物..."
+	@rm -rf site
+	@echo "✅  清理完成"

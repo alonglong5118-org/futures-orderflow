@@ -57,7 +57,7 @@ make hooks    # 安装 Git 钩子
 make smoke    # 冒烟测试，验证环境
 ```
 
-完整步骤请参阅 [贡献指南 - 开发环境搭建](../dev-guide/contributing.md#开发环境搭建)。
+完整步骤请参阅 [贡献指南 - 开发环境搭建](../dev-guide/contributing.md)。
 
 ### 提交代码有什么规范？
 

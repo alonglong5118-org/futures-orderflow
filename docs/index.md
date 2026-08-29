@@ -42,7 +42,7 @@ GA 因子挖掘、参数优化、OOS 样本外验证一体化流程，持续优�
 [![CodeQL](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/alonglong5118-org/futures-orderflow/branch/main/graph/badge.svg)](https://codecov.io/gh/alonglong5118-org/futures-orderflow)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alonglong5118-org/futures-orderflow/badge)](https://scorecard.dev/viewer/?uri=github.com/alonglong5118-org/futures-orderflow)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/alonglong5118-org/futures-orderflow/blob/main/LICENSE)
 
 </div>
 

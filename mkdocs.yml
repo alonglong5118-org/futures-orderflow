@@ -192,6 +192,20 @@ nav:
     - resources/changelog.md
 
 # ──────────────────────────────────────────────────────────
+#  验证设置（构建时检查链接/锚点/缺失文件）
+# ──────────────────────────────────────────────────────────
+validation:
+  nav:
+    omitted_files: warn       # docs 中存在但未在 nav 列出的文件 → 警告
+    not_found: warn           # nav 中引用但不存在的文件 → 警告
+    absolute_links: warn      # nav 中的绝对链接 → 警告
+  links:
+    not_found: warn           # 死链接 → 警告
+    absolute_links: ignore    # 外部绝对链接 → 忽略
+    unrecognized_links: ignore # 无法识别的链接格式 → 忽略
+    anchors: warn             # 锚点不存在 → 警告
+
+# ──────────────────────────────────────────────────────────
 #  额外配置
 # ──────────────────────────────────────────────────────────
 extra:
@@ -212,6 +226,18 @@ extra:
 
   # 版权
   copyright: Copyright &copy; 2026 alonglong5118-org · MIT License
+
+  # 生成器隐藏（更干净）
+  generator: false
+
+# ──────────────────────────────────────────────────────────
+#  额外 CSS / JS
+# ──────────────────────────────────────────────────────────
+extra_css:
+  - assets/stylesheets/extra.css
+
+extra_javascript:
+  - assets/javascripts/extra.js
 
 # ──────────────────────────────────────────────────────────
 #  监控与验证
