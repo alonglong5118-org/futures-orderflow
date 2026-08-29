@@ -37,15 +37,42 @@ coverage:
         only_pulls: true
 
 # ── 排除文件 ──────────────────────────────────────────────────────
+# 与 .coveragerc 保持口径一致
 ignore:
-  - "tests/"              # 测试文件
-  - "scripts/"            # 工具脚本
-  - "ponytail/"           # 外部项目
-  - "ga_v4_*/"            # 回测结果
-  - "ga_v5_*/"            # 回测结果
+  # 测试文件
+  - "tests/"
+  - "test_*.py"
+  - "**/conftest.py"
+
+  # 入口脚本
+  - "run_tests.py"
+
+  # 工具脚本（非核心库代码）
+  - "scripts/"
+  - "verify_*.py"
+  - "*_backtest.py"
+  - "*_simulate.py"
+  - "*_sweep.py"
+  - "*_compare.py"
+  - "*upgrade*.py"
+
+  # 外部项目 / 第三方
+  - "ponytail/"
+  - "node_modules/"
+  - ".venv/"
+  - "venv/"
+
+  # 回测结果目录
+  - "ga_v4_*/"
+  - "ga_v5_*/"
+  - "ga_*_oos.py"
+  - "ga_*_result/"
+
+  # 其他
   - "setup.py"
   - "**/__init__.py"
-  - "**/conftest.py"
+  - "**/__pycache__/"
+  - "*.pyc"
 
 # ── 显示设置 ──────────────────────────────────────────────────────
 comment:
