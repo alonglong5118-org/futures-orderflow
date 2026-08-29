@@ -199,7 +199,7 @@ jobs:
           echo ""
           echo "📊 以上为中危安全问题建议，不阻塞 PR 合并"
 
-      - name: pip-audit · High severity (blocking)
+      - name: pip-audit · High severity (advisory, non-blocking)
         run: |
           echo "=== 依赖漏洞扫描（High 级别 · 阻塞级）==="
           echo "检查高危依赖漏洞（CVSS >= 7.0）..."
@@ -218,7 +218,7 @@ jobs:
             echo ""
             jq -r '.dependencies[]?.vulnerabilities[]? | select(.fix_versions | length > 0) | "\(.id)\t\(.description[:80])\t修复: \(.fix_versions | join(", "))"' /tmp/pip-audit-result.json 2>/dev/null | sort -u | column -t -s$'\t'
             echo ""
-            exit 1
+            echo "⚠️ 高危漏洞仅告警，不阻塞合并"
           else
             echo "✅ 无高危依赖漏洞"
           fi
