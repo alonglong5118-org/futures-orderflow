@@ -8,101 +8,110 @@
 # ── 功能区域标签（area/*） ──────────────────────────────────────────
 
 "area: strategy":
-  - four_dim_strategy.py
-  - four_dim_*.py
-  - strategy_layer.py
-  - calibration.py
+  - any:
+    - four_dim_strategy.py
+    - four_dim_*.py
+    - strategy_layer.py
+    - calibration.py
 
 "area: risk":
-  - risk_gate_utils.py
-  - risk_state_machine.py
-  - drawdown_guard.py
-  - gap_stop_utils.py
-  - price_protection.py
-  - consistency_watchdog.py
-  - take_profit_utils.py
-  - kelly_utils.py
-  - corr_gate_utils.py
-  - discipline_review.py
-  - blunder_check.py
-  - preflight_check.py
+  - any:
+    - risk_gate_utils.py
+    - risk_state_machine.py
+    - drawdown_guard.py
+    - gap_stop_utils.py
+    - price_protection.py
+    - consistency_watchdog.py
+    - take_profit_utils.py
+    - kelly_utils.py
+    - corr_gate_utils.py
+    - discipline_review.py
+    - blunder_check.py
+    - preflight_check.py
 
 "area: signal":
-  - sr_analyzer.py
-  - sr_*.py
-  - signal_trigger_utils.py
-  - signal_explain.py
-  - hidden_pivot.py
-  - direction_source_monitor.py
-  - anomaly_scan.py
+  - any:
+    - sr_analyzer.py
+    - sr_*.py
+    - signal_trigger_utils.py
+    - signal_explain.py
+    - hidden_pivot.py
+    - direction_source_monitor.py
+    - anomaly_scan.py
 
 "area: execution":
-  - execution_planner.py
-  - tick_orderflow.py
-  - account_tracker.py
-  - account_monitor.py
-  - broker_import.py
+  - any:
+    - execution_planner.py
+    - tick_orderflow.py
+    - account_tracker.py
+    - account_monitor.py
+    - broker_import.py
 
 "area: data":
-  - fundamental_feed.py
-  - fundamental_metrics.py
-  - feature_manager.py
-  - data_quality.py
-  - market_scanner.py
-  - symbol_screener.py
-  - minishare_feed.py
-  - minishare_*.py
-  - tushare_live.py
-  - akshare_live.py
-  - backend_tqsdk.py
-  - refresh_main_contracts.py
-  - convert_min5_cache.py
+  - any:
+    - fundamental_feed.py
+    - fundamental_metrics.py
+    - feature_manager.py
+    - data_quality.py
+    - market_scanner.py
+    - symbol_screener.py
+    - minishare_feed.py
+    - minishare_*.py
+    - tushare_live.py
+    - akshare_live.py
+    - backend_tqsdk.py
+    - refresh_main_contracts.py
+    - convert_min5_cache.py
 
 "area: research":
-  - ga_*.py
-  - "*backtest*.py"
-  - "*oos*.py"
-  - "*simulate*.py"
-  - "*sweep*.py"
-  - "*compare*.py"
-  - "*compare.py"
-  - "*ablation*.py"
-  - factor_miner.py
-  - new_factor_explorer.py
-  - ga_group_*.py
-  - ga_six_factor*.py
-  - ga_five_factor*.py
-  - ga_seven_factor*.py
-  - verify_*.py
-  - oos_weight_validation.py
-  - wf_validation.py
+  - any:
+    - ga_*.py
+    - "*backtest*.py"
+    - "*oos*.py"
+    - "*simulate*.py"
+    - "*sweep*.py"
+    - "*compare*.py"
+    - "*compare.py"
+    - "*ablation*.py"
+    - factor_miner.py
+    - new_factor_explorer.py
+    - ga_group_*.py
+    - ga_six_factor*.py
+    - ga_five_factor*.py
+    - ga_seven_factor*.py
+    - verify_*.py
+    - oos_weight_validation.py
+    - wf_validation.py
 
 "area: regime":
-  - regime_hmm.py
-  - macro_context.py
-  - fetch_macro_context*.py
-  - sentiment_engine.py
-  - sentiment_*.py
-  - info_dimension.py
-  - fetch_info_dimension.py
+  - any:
+    - regime_hmm.py
+    - macro_context.py
+    - fetch_macro_context*.py
+    - sentiment_engine.py
+    - sentiment_*.py
+    - info_dimension.py
+    - fetch_info_dimension.py
 
 "area: monitoring":
-  - live_health_check.py
-  - self_check.py
-  - consistency_watchdog.py
-  - direction_source_monitor.py
-  - push_notify.py
-  - trade_journal.py
-  - event_calendar.py
-  - perf_breakdown.py
-  - montecarlo.py
-  - gbm_garch.py
+  - any:
+    - live_health_check.py
+    - self_check.py
+    - consistency_watchdog.py
+    - direction_source_monitor.py
+    - push_notify.py
+    - trade_journal.py
+    - event_calendar.py
+    - perf_breakdown.py
+    - montecarlo.py
+    - gbm_garch.py
 
 "area: visualization":
-  - backtest_viz.py
-  - viz_upgrade.py
-  - gen_papertrack_html.py
-  - "*.html"
+  - any:
+    - backtest_viz.py
+    - viz_upgrade.py
+    - gen_papertrack_html.py
+    - "*.html"
 
 # ── 代码类型标签 ──────────────────────────────────────────────────
 
