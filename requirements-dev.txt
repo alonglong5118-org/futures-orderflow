@@ -13,7 +13,7 @@ ruff>=0.6
 mypy>=1.11
 
 # 安全扫描
-bandit>=1.7
+bandit>=1.9.4
 pip-audit>=2.7
 
 # MkDocs 文档站
