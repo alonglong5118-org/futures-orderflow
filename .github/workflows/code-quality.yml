@@ -157,11 +157,11 @@ jobs:
       - name: Actionlint (workflow 语法检查)
         uses: raven-actions/actionlint@v2
         with:
-          path: .github/workflows/
-          fail_on_error: true
+          files: .github/workflows/
+          fail-on-error: true
           # 禁用 shellcheck 风格检查（workflow 中 ${{ }} 表达式是安全的）
           # actionlint 核心价值：YAML 语法、action 引用、secrets 检查等
-          args: "-shellcheck=disable"
+          flags: "-shellcheck=disable"
 
       - name: Quick checks summary
         if: always()
