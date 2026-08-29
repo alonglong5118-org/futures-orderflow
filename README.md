@@ -6,12 +6,12 @@
 
 | 类别 | 状态 |
 |---|---|
-| **测试** | [![Test](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/test.yml) |
-| **代码质量** | [![Code Quality](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/code-quality.yml/badge.svg?branch=main)](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/code-quality.yml) |
-| **安全扫描** | [![Security](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/security.yml) |
-| **CodeQL** | [![CodeQL](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/alonglong5118-rgb/futures-orderflow/actions/workflows/codeql.yml) |
-| **覆盖率** | [![codecov](https://codecov.io/gh/alonglong5118-rgb/futures-orderflow/branch/main/graph/badge.svg)](https://codecov.io/gh/alonglong5118-rgb/futures-orderflow) |
-| **Scorecard** | [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alonglong5118-rgb/futures-orderflow/badge)](https://scorecard.dev/viewer/?uri=github.com/alonglong5118-rgb/futures-orderflow) |
+| **测试** | [![Test](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/test.yml) |
+| **代码质量** | [![Code Quality](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/code-quality.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/code-quality.yml) |
+| **安全扫描** | [![Security](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/security.yml) |
+| **CodeQL** | [![CodeQL](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/codeql.yml) |
+| **覆盖率** | [![codecov](https://codecov.io/gh/alonglong5118-org/futures-orderflow/branch/main/graph/badge.svg)](https://codecov.io/gh/alonglong5118-org/futures-orderflow) |
+| **Scorecard** | [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alonglong5118-org/futures-orderflow/badge)](https://scorecard.dev/viewer/?uri=github.com/alonglong5118-org/futures-orderflow) |
 
 ## 快速开始
 
