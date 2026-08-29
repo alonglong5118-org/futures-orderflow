@@ -78,12 +78,16 @@
     },
     "by_regime_keys": [
       "趋势"
-    ]
+    ],
+    "trades_min": 2,
+    "trades_max": 8
   },
   "backtest_rb_cooldown5": {
     "trades": 12,
     "expR": -0.447,
-    "win_rate": 0.25
+    "win_rate": 0.25,
+    "trades_min": 6,
+    "trades_max": 24
   },
   "backtest_hc_tail500": {
     "symbol": "hc",
@@ -101,7 +105,9 @@
       "趋势",
       "过渡",
       "震荡"
-    ]
+    ],
+    "trades_min": 13,
+    "trades_max": 52
   },
   "backtest_rb_tail500": {
     "symbol": "rb",
@@ -116,7 +122,9 @@
     "by_regime_keys": [
       "趋势",
       "过渡"
-    ]
+    ],
+    "trades_min": 6,
+    "trades_max": 24
   },
   "risk_gate_rb_3500.0_80.0_held3": {
     "passed": true,

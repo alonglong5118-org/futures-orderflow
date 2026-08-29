@@ -113,6 +113,10 @@ COPY four_dim_live_runner.py ./
 COPY feature_flags.json calibration_params.json stop_rr_overrides.json ./
 COPY tq_config.example.json ./tq_config.json
 
+# 测试脚本（冒烟测试需要）
+COPY run_tests.py ./
+COPY tests/ ./tests/
+
 # 入口脚本
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

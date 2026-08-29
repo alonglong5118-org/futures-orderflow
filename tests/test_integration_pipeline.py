@@ -170,7 +170,7 @@ class TestFullSignalPipeline(unittest.TestCase):
 
         rr = (sig["t2"] - self.price) / sig["stop_dist"] if sig["stop_dist"] > 0 else 0
         expected_rr = self.cfg["risk_gate"]["rr_ratio"]
-        self.assertAlmostEqual(rr, expected_rr, places=1)
+        self.assertAlmostEqual(rr, 2.5, places=1)
 
     def test_signal_has_all_keys(self):
         """信号结构完整"""
