@@ -92,22 +92,8 @@ WORKDIR /app
 
 # ── 复制应用代码（按变更频率分层，低频在前） ────────────────────────────────
 
-# 工具模块（稳定，极少变更）
-COPY kelly_utils.py gap_stop_utils.py take_profit_utils.py price_protection.py \
-     corr_gate_utils.py signal_trigger_utils.py risk_gate_utils.py \
-     anomaly_scan.py hidden_pivot.py t_score_utils.py ./
-
-# 分析模块（较稳定）
-COPY fundamental_feed.py fundamental_metrics.py macro_context.py \
-     akshare_live.py tushare_live.py ./
-
-# 核心策略模块（经常变更）
-COPY consistency_watchdog.py direction_source_monitor.py event_calendar.py \
-     info_dimension.py sr_analyzer.py sentiment_engine.py \
-     risk_state_machine.py strategy_layer.py four_dim_strategy.py ./
-
-# 运行器（最常变更）
-COPY four_dim_live_runner.py ./
+# 所有 Python 模块（通配符复制，避免遗漏新增模块）
+COPY *.py ./
 
 # 配置文件
 COPY feature_flags.json calibration_params.json stop_rr_overrides.json ./
