@@ -46,12 +46,11 @@ jobs:
 
     steps:
       - name: Run release drafter
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-name: release-drafter.yml
-          disable-autolabeler: true  # 不使用内置的 labeler（已有独立的 labeler）
 
   # ── 发布正式 release（打 v* tag 时） ────────────────────────────────
   #  将最新的 draft release 转为正式发布
@@ -65,15 +64,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 100  # 需要一些历史来生成变更日志
 
       - name: Publish release from draft
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@v7
         with:
           config-name: release-drafter.yml
-          disable-autolabeler: true
           # 指定版本号为 tag 名
           version: ${{ github.ref_name }}
           # 发布为正式 release（非 draft）

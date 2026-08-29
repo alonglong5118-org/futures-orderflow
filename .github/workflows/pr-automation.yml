@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Calculate PR size
         id: size
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -121,7 +121,7 @@ jobs:
 
     steps:
       - name: Auto-assign PR to author
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo, number } = context.issue;
@@ -149,12 +149,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # labeler 需要完整历史
 
       - name: Label PR by changed files
-        uses: actions/labeler@v5
+        uses: actions/labeler@v6
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           configuration-path: .github/labeler.yml
@@ -173,7 +173,7 @@ jobs:
 
     steps:
       - name: Validate PR title
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const title = context.payload.pull_request.title.trim();

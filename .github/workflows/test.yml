@@ -86,7 +86,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -96,7 +96,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Restore test cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .pytest_cache
           key: pytest-${{ matrix.os }}-py${{ matrix.python-version }}-${{ github.sha }}
@@ -134,7 +134,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.scope }}
           path: test-results/
@@ -152,7 +152,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -162,7 +162,7 @@ jobs:
           python-version: "3.11"
 
       - name: Restore pytest cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .pytest_cache
           key: pytest-${{ runner.os }}-py3.11-integration-${{ github.sha }}
@@ -189,7 +189,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-py3.11-integration
           path: test-results/
@@ -206,7 +206,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -228,7 +228,7 @@ jobs:
           coverage xml -o coverage.xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           flags: unit
@@ -237,7 +237,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}  # 私有仓库需要，公共仓库可省略
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: coverage-html/
@@ -254,7 +254,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -276,7 +276,7 @@ jobs:
           python -m coverage xml -o coverage.xml
 
       - name: Upload coverage to Codecov (PR)
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           flags: unit,pr
@@ -304,7 +304,7 @@ jobs:
 
       - name: Comment coverage report on PR
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');

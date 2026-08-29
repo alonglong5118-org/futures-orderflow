@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # 需要全量历史才能扫描
 
@@ -89,12 +89,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Dependency review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # 高危漏洞阻塞，中低危只警告
           fail-on-severity: high
@@ -117,7 +117,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -127,7 +127,7 @@ jobs:
           python-version: "3.11"
 
       - name: Restore pip-audit OSV cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip-audit
           key: pip-audit-osv-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}

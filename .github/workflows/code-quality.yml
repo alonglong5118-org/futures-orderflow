@@ -63,12 +63,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -185,7 +185,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -195,7 +195,7 @@ jobs:
           python-version: "3.11"
 
       - name: Restore Ruff cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ruff
           key: ruff-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'ruff.toml', '.ruff.toml') }}
@@ -228,7 +228,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -238,7 +238,7 @@ jobs:
           python-version: "3.11"
 
       - name: Restore Ruff cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ruff
           key: ruff-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'ruff.toml', '.ruff.toml') }}
@@ -264,7 +264,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -274,7 +274,7 @@ jobs:
           python-version: "3.11"
 
       - name: Restore mypy cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .mypy_cache
           key: mypy-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'mypy.ini', '.mypy.ini') }}
