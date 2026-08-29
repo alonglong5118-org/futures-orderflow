@@ -1,10 +1,14 @@
 # ==============================================================================
 #  Futures OrderFlow · Dockerfile
-#  多阶段构建：builder 层编译依赖 → runtime 层精简镜像
+#  多阶段构建：deps 层编译依赖 → runtime 层精简镜像
+#
+#  构建参数：
+#    PYTHON_VERSION  Python 版本（默认 3.11）
+#    TUSHARE_TOKEN   Tushare Pro token（构建时测试用，不会留在镜像中）
 #
 #  构建：
 #    docker build -t futures-orderflow .
-#    docker build --build-arg PYTHON_VERSION=3.11 -t futures-orderflow .
+#    docker buildx build --platform linux/amd64,linux/arm64 -t futures-orderflow .
 #
 #  运行：
 #    docker run -d -p 8741:8741 --name futures-orderflow \
@@ -13,118 +17,113 @@
 #      futures-orderflow
 # ==============================================================================
 
-# ── Builder 阶段：编译依赖 ───────────────────────────────────────────────────
+# ── 可配置参数 ────────────────────────────────────────────────────────────────
 ARG PYTHON_VERSION=3.11
-FROM python:${PYTHON_VERSION}-slim AS builder
+
+# ── Base 层：共用基础（apt 依赖 + 时区）─────────────────────────────────────
+FROM python:${PYTHON_VERSION}-slim AS base
 
 LABEL org.opencontainers.image.title="Futures OrderFlow"
 LABEL org.opencontainers.image.description="期货订单流策略系统"
 LABEL org.opencontainers.image.source="https://github.com/alonglong5118-org/futures-orderflow"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim"
 
-# 安装编译依赖（numpy/scipy/hmmlearn 需要）
+# 系统依赖（运行时必需）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    gfortran \
-    libopenblas-dev \
-    liblapack-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# 创建虚拟环境并安装依赖
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# 升级 pip
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# 先安装核心依赖（体积大，单独分层利用缓存）
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
-
-# 可选数据源（默认安装 akshare，tqsdk 按需安装）
-RUN pip install --no-cache-dir akshare tushare
-
-# ── Runtime 阶段：精简运行镜像 ───────────────────────────────────────────────
-FROM python:${PYTHON_VERSION}-slim AS runtime
-
-# 运行时依赖（OpenBLAS 等）
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libopenblas0 \
-    curl \
     ca-certificates \
+    curl \
+    libopenblas0 \
     tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && echo "Asia/Shanghai" > /etc/timezone
 
-# 从 builder 拷贝虚拟环境
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
+# Python 环境变量
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+# 创建虚拟环境
+RUN python -m venv /opt/venv
+
+# ── Builder 层：编译 Python 依赖 ─────────────────────────────────────────────
+FROM base AS builder
+
+# 编译依赖（numpy/scipy/hmmlearn 需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# 升级基础工具
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# 1) 核心依赖（先装，体积大，缓存友好）
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# 2) 可选数据源（默认安装）
+RUN pip install --no-cache-dir akshare tushare
+
+# 3) 清理 .pyc 和缓存，减小体积
+RUN find /opt/venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true \
+    && find /opt/venv -type f -name "*.pyc" -delete 2>/dev/null || true \
+    && find /opt/venv -type f -name "*.pyo" -delete 2>/dev/null || true \
+    && find /opt/venv -type d -name "*.dist-info" | while read d; do \
+         [ -f "$d/RECORD" ] || continue; \
+       done; true
+
+# ── Runtime 层：最终运行镜像 ────────────────────────────────────────────────
+FROM base AS runtime
+
+# 从 builder 拷贝虚拟环境（仅运行时需要的二进制和包）
+COPY --from=builder /opt/venv /opt/venv
 
 # 创建非 root 用户
-RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
+RUN groupadd -r appuser && useradd -r -m -g appuser -d /app appuser
 
-# 工作目录
 WORKDIR /app
 
-# 复制应用代码（先复制依赖清单，利用缓存）
-COPY requirements.txt ./
-COPY requirements-dev.txt ./
+# ── 复制应用代码（按变更频率分层，低频在前） ────────────────────────────────
 
-# 复制核心代码
-COPY four_dim_strategy.py ./
-COPY strategy_layer.py ./
-COPY risk_state_machine.py ./
-COPY consistency_watchdog.py ./
-COPY direction_source_monitor.py ./
-COPY event_calendar.py ./
-COPY info_dimension.py ./
-COPY sr_analyzer.py ./
-COPY sentiment_engine.py ./
+# 工具模块（稳定，极少变更）
+COPY kelly_utils.py gap_stop_utils.py take_profit_utils.py price_protection.py \
+     corr_gate_utils.py signal_trigger_utils.py risk_gate_utils.py \
+     anomaly_scan.py hidden_pivot.py t_score_utils.py ./
 
-# 工具模块
-COPY kelly_utils.py ./
-COPY gap_stop_utils.py ./
-COPY take_profit_utils.py ./
-COPY price_protection.py ./
-COPY corr_gate_utils.py ./
-COPY signal_trigger_utils.py ./
-COPY risk_gate_utils.py ./
-COPY anomaly_scan.py ./
-COPY hidden_pivot.py ./
-COPY t_score_utils.py ./
+# 分析模块（较稳定）
+COPY fundamental_feed.py fundamental_metrics.py macro_context.py \
+     akshare_live.py tushare_live.py ./
 
-# 数据源模块
-COPY fundamental_feed.py ./
-COPY fundamental_metrics.py ./
-COPY macro_context.py ./
-COPY akshare_live.py ./
-COPY tushare_live.py ./
+# 核心策略模块（经常变更）
+COPY consistency_watchdog.py direction_source_monitor.py event_calendar.py \
+     info_dimension.py sr_analyzer.py sentiment_engine.py \
+     risk_state_machine.py strategy_layer.py four_dim_strategy.py ./
 
-# 实盘运行器
+# 运行器（最常变更）
 COPY four_dim_live_runner.py ./
 
-# 配置文件（必须入库的核心配置）
-COPY feature_flags.json ./
-COPY calibration_params.json ./
-COPY stop_rr_overrides.json ./
+# 配置文件
+COPY feature_flags.json calibration_params.json stop_rr_overrides.json ./
 COPY tq_config.example.json ./tq_config.json
 
 # 入口脚本
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# 权限
+# 权限设置
 RUN chown -R appuser:appuser /app
 USER appuser
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:${PORT:-8741}/api/health || exit 1
+    CMD curl -fsS http://127.0.0.1:${PORT:-8741}/api/health >/dev/null 2>&1 || exit 1
 
 # 端口
 EXPOSE 8741

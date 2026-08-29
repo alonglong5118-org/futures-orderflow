@@ -184,6 +184,7 @@ nav:
     - dev-guide/ci-cd.md
     - dev-guide/code-style.md
     - dev-guide/docker-deploy.md
+    - dev-guide/docker-advanced.md
   - API 参考:
     - reference/api.md
   - 资源:
