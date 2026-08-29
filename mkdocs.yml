@@ -183,6 +183,7 @@ nav:
     - dev-guide/commit-conventions.md
     - dev-guide/ci-cd.md
     - dev-guide/code-style.md
+    - dev-guide/docker-deploy.md
   - API 参考:
     - reference/api.md
   - 资源:

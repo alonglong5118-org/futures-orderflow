@@ -1,0 +1,46 @@
+# ==============================================================================
+#  Futures OrderFlow · 文档站 Dockerfile
+#  多阶段构建：构建 MkDocs → Nginx 托管静态站点
+#
+#  构建：
+#    docker build -f Dockerfile.docs -t futures-orderflow-docs .
+#  运行：
+#    docker run -d -p 8080:80 futures-orderflow-docs
+# ==============================================================================
+
+# ── 构建阶段：MkDocs 生成静态站点 ─────────────────────────────────────────────
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+WORKDIR /docs
+
+# 安装 MkDocs 依赖
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+        mkdocs>=1.6 \
+        mkdocs-material>=9.5 \
+        mkdocs-glightbox>=0.4 \
+        mkdocs-video>=1.5 \
+        mkdocs-git-revision-date-localized-plugin>=1.2
+
+# 复制文档
+COPY mkdocs.yml ./
+COPY docs/ ./docs/
+
+# 构建静态站点
+RUN mkdocs build --strict
+
+# ── 运行阶段：Nginx 托管 ─────────────────────────────────────────────────────
+FROM nginx:alpine
+
+# 复制构建产物
+COPY --from=builder /docs/site /usr/share/nginx/html
+
+# Nginx 配置（支持 SPA 风格的干净 URL）
+COPY docker/nginx-docs.conf /etc/nginx/conf.d/default.conf
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+
+EXPOSE 80

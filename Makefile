@@ -59,7 +59,9 @@
         secretscan bandit bandit-advisory depscan security \
         list discover watch hooks deps deps-update deps-outdated deps-check clean \
         bench bench-strict bench-update \
-        docs-serve docs-build docs-deploy docs-clean
+        docs-serve docs-build docs-deploy docs-clean \
+        docker-build docker-build-docs docker-up docker-up-docs docker-down \
+        docker-logs docker-logs-runner docker-restart docker-shell docker-test docker-clean
 
 # Python 命令（优先 python3）
 PYTHON := python3
@@ -114,6 +116,17 @@ help:
 	@echo "  make docs-build     构建文档站静态站点到 site/"
 	@echo "  make docs-deploy    部署到 GitHub Pages"
 	@echo "  make docs-clean     清理文档构建产物"
+	@echo ""
+	@echo "── Docker ────────────────────────────────────────────────────"
+	@echo "  make docker-build   构建 Docker 镜像"
+	@echo "  make docker-up      一键启动服务（docker compose up -d）"
+	@echo "  make docker-up-docs 启动服务 + 文档站"
+	@echo "  make docker-down    停止服务"
+	@echo "  make docker-logs    查看实时日志"
+	@echo "  make docker-restart 重启服务"
+	@echo "  make docker-shell   进入容器 shell"
+	@echo "  make docker-test    容器内跑冒烟测试"
+	@echo "  make docker-clean   清理 Docker 资源"
 
 # ── 测试 ──────────────────────────────────────────────────────────────
 
@@ -363,4 +376,62 @@ docs-deploy:
 docs-clean:
 	@echo "🧹  清理文档构建产物..."
 	@rm -rf site
+	@echo "✅  清理完成"
+
+# ── Docker ──────────────────────────────────────────────────────────────
+
+docker-build:
+	@echo "🐳  构建 Docker 镜像..."
+	docker build -t futures-orderflow .
+	@echo "✅  构建完成"
+
+docker-build-docs:
+	@echo "🐳  构建文档站 Docker 镜像..."
+	docker build -f Dockerfile.docs -t futures-orderflow-docs .
+	@echo "✅  构建完成"
+
+docker-up:
+	@echo "🐳  启动服务（docker compose up -d）..."
+	docker compose up -d
+	@echo "✅  服务已启动"
+	@echo "    面板: http://localhost:8741"
+	@echo "    日志: make docker-logs"
+
+docker-up-docs:
+	@echo "🐳  启动服务 + 文档站..."
+	docker compose --profile docs up -d
+	@echo "✅  服务已启动"
+	@echo "    面板: http://localhost:8741"
+	@echo "    文档: http://localhost:8742"
+
+docker-down:
+	@echo "🐳  停止服务..."
+	docker compose down
+	@echo "✅  服务已停止"
+
+docker-logs:
+	@echo "🐳  查看实时日志（Ctrl+C 退出）..."
+	docker compose logs -f --tail=100
+
+docker-logs-runner:
+	@echo "🐳  查看 runner 实时日志..."
+	docker exec -it futures-orderflow tail -f /app/logs/runner.log
+
+docker-restart:
+	@echo "🐳  重启服务..."
+	docker compose restart
+	@echo "✅  已重启"
+
+docker-shell:
+	@echo "🐳  进入容器 shell..."
+	docker exec -it futures-orderflow bash
+
+docker-test:
+	@echo "🐳  在容器中运行测试..."
+	docker run --rm futures-orderflow smoke
+
+docker-clean:
+	@echo "🧹  清理 Docker 资源..."
+	docker compose down -v
+	docker image prune -f
 	@echo "✅  清理完成"
