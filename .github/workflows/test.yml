@@ -205,13 +205,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: detect-changes
-    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'merge_group'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
 
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
-          fetch-depth: 1  # 浅克隆，加速拉取
+          fetch-depth: 1
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
@@ -259,13 +259,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [detect-changes, test]
-    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'merge_group'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
 
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
-          fetch-depth: 1  # 浅克隆，加速拉取
+          fetch-depth: 1
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
