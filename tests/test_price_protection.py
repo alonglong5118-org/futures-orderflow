@@ -25,6 +25,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from price_protection import (
+    _dir_sign,
     protect_user_price,
     validate_entry_stop,
     validate_price,
@@ -405,6 +406,86 @@ class TestThreeLayerDefense(unittest.TestCase):
         sv = validate_entry_stop(direction, user_price, wrong_stop)
         self.assertTrue(sv["fixed"], "止损方向错误应该被修正")
         self.assertAlmostEqual(sv["stop"], 95.0)  # 镜像修正到下方
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  边界与异常路径补充
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSignFunction(unittest.TestCase):
+    """_dir_sign 内部函数的边界测试。"""
+
+    def test_positive_direction(self):
+        """正数方向 → 返回 1"""
+        self.assertEqual(_dir_sign(1), 1)
+        self.assertEqual(_dir_sign(100), 1)
+        self.assertEqual(_dir_sign(0.5), 1)
+
+    def test_negative_direction(self):
+        """负数方向 → 返回 -1"""
+        self.assertEqual(_dir_sign(-1), -1)
+        self.assertEqual(_dir_sign(-100), -1)
+        self.assertEqual(_dir_sign(-0.5), -1)
+
+    def test_zero_direction(self):
+        """零方向 → 返回 0（中性）"""
+        self.assertEqual(_dir_sign(0), 0)
+        self.assertEqual(_dir_sign(0.0), 0)
+
+    def test_unknown_type_returns_zero(self):
+        """未知类型（列表/dict/None）→ 返回 0"""
+        self.assertEqual(_dir_sign([1, 2]), 0)
+        self.assertEqual(_dir_sign({"key": "val"}), 0)
+        self.assertEqual(_dir_sign(None), 0)
+
+
+class TestProtectUserPriceExceptions(unittest.TestCase):
+    """protect_user_price 异常路径测试。"""
+
+    def test_invalid_original_price_string(self):
+        """用户价是非法字符串 → 异常兜底为 0"""
+        r = protect_user_price(original_price="abc", computed_price=100.0, user_provided_price=True)
+        # original_price 转 float 失败 → 兜底为 0.0，与 100 不同 → 触发保护
+        self.assertTrue(r["was_protected"])
+        # 最终价格应被还原为用户价（兜底 0.0）
+        self.assertAlmostEqual(r["final_price"], 0.0)
+
+    def test_invalid_computed_price_string(self):
+        """计算价是非法字符串 → 异常兜底为 0"""
+        r = protect_user_price(original_price=100.0, computed_price="not_a_number", user_provided_price=True)
+        # computed_price 转 float 失败 → 兜底为 0.0，与 100 不同 → 触发保护
+        self.assertTrue(r["was_protected"])
+        # 最终价格被还原为用户价 100.0
+        self.assertAlmostEqual(r["final_price"], 100.0)
+
+    def test_invalid_original_price_none_type(self):
+        """用户价是列表等非数字类型 → 异常兜底为 0"""
+        r = protect_user_price(original_price=[1, 2], computed_price=100.0, user_provided_price=True)
+        self.assertTrue(r["was_protected"])
+        self.assertAlmostEqual(r["final_price"], 0.0)
+
+
+class TestValidateTakeProfitExceptions(unittest.TestCase):
+    """validate_take_profit 异常路径测试。"""
+
+    def test_invalid_entry_price_string(self):
+        """入场价是非法字符串 → 校验失败，原因含价格格式错误"""
+        r = validate_take_profit("多", "abc", 110.0)
+        self.assertFalse(r["valid"])
+        self.assertIn("价格格式错误", r["reason"])
+
+    def test_invalid_tp_price_string(self):
+        """止盈价是非法字符串 → 校验失败"""
+        r = validate_take_profit("多", 100.0, "xyz")
+        self.assertFalse(r["valid"])
+        self.assertIn("价格格式错误", r["reason"])
+
+    def test_invalid_entry_price_none_type(self):
+        """入场价是非数字类型（如列表）→ 校验失败"""
+        r = validate_take_profit("多", [100], 110.0)
+        self.assertFalse(r["valid"])
+        self.assertIn("价格格式错误", r["reason"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════

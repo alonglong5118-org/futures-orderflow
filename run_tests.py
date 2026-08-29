@@ -128,6 +128,8 @@ TEST_MODULES = {
     "property_fuzz": "tests.test_property_fuzz",
     "baseline_regression": "tests.test_baseline_regression",
     "performance": "tests.test_performance",
+    "consistency_watchdog": "tests.test_consistency_watchdog",
+    "risk_gate_property": "tests.test_risk_gate_property",
 }
 
 # 默认全量测试时跳过的模块（性能测试等耗时/波动大的）

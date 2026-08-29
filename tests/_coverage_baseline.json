@@ -57,10 +57,10 @@
       "excluded_lines": 6
     },
     "consistency_watchdog.py": {
-      "covered_lines": 0,
+      "covered_lines": 53,
       "num_statements": 71,
-      "percent_covered": 0.0,
-      "missing_lines": 71,
+      "percent_covered": 74.64788732394366,
+      "missing_lines": 18,
       "excluded_lines": 2
     },
     "continue_tail_tq.py": {
@@ -288,10 +288,10 @@
       "excluded_lines": 2
     },
     "price_protection.py": {
-      "covered_lines": 83,
+      "covered_lines": 85,
       "num_statements": 90,
-      "percent_covered": 92.22222222222223,
-      "missing_lines": 7,
+      "percent_covered": 94.44444444444444,
+      "missing_lines": 5,
       "excluded_lines": 0
     },
     "push_notify.py": {
@@ -429,8 +429,8 @@
     }
   },
   "totals": {
-    "covered_lines": 2415,
+    "covered_lines": 2470,
     "num_statements": 10641,
-    "percent_covered": 22.7
+    "percent_covered": 23.2
   }
 }

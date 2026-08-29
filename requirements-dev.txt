@@ -3,6 +3,7 @@
 
 # 测试
 coverage>=7.0
+hypothesis>=6.0  # property-based testing
 
 # 遗传算法（测试依赖）
 deap>=1.3
