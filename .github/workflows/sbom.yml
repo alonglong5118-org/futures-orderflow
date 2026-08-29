@@ -1,0 +1,128 @@
+# ==============================================================================
+#  CI：SBOM — 软件物料清单
+# ==============================================================================
+#  触发时机：
+#    · push 到 main/master → 生成 SBOM 并上传为 artifact
+#    · Release 发布时 → 生成并附加到 release assets
+#    · 手动触发
+#
+#  生成格式：
+#    · SPDX 2.3（标准格式，可被各种安全工具扫描）
+#    · CycloneDX 1.5（OWASP 标准，供应链安全常用）
+#
+#  工具：
+#    · syft — 生成 SBOM（Anchore 出品，支持多种格式）
+# ==============================================================================
+
+name: SBOM
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "requirements*.txt"
+      - "**/requirements*.txt"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: sbom-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read   # 代码检出
+  packages: write  # release 时上传 asset
+
+jobs:
+  generate:
+    name: "Generate SBOM"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    outputs:
+      artifact-name: sbom
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+        with:
+          syft-version: v1.12.0
+
+      - name: Generate SBOM (SPDX format)
+        run: |
+          syft \
+            --file sbom-futures-orderflow.spdx.json \
+            --output spdx-json \
+            --source-file . \
+            --name "futures-orderflow" \
+            --version "${{ github.ref_name }}"
+
+      - name: Generate SBOM (CycloneDX format)
+        run: |
+          syft \
+            --file sbom-futures-orderflow.cyclonedx.json \
+            --output cyclonedx-json \
+            --source-file . \
+            --name "futures-orderflow" \
+            --version "${{ github.ref_name }}"
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            sbom-futures-orderflow.spdx.json
+            sbom-futures-orderflow.cyclonedx.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: SBOM summary
+        if: always()
+        run: |
+          echo "### 📦 SBOM 生成完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 格式 | 文件 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| SPDX 2.3 | sbom-futures-orderflow.spdx.json |" >> $GITHUB_STEP_SUMMARY
+          echo "| CycloneDX 1.5 | sbom-futures-orderflow.cyclonedx.json |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> **什么是 SBOM？** 软件物料清单（Software Bill of Materials）" >> $GITHUB_STEP_SUMMARY
+          echo "> 列出项目所有依赖及其版本，用于供应链安全审计和漏洞追踪" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 可下载后用以下工具扫描漏洞：" >> $GITHUB_STEP_SUMMARY
+          echo "> - [grype](https://github.com/anchore/grype) — Anchore 漏洞扫描器" >> $GITHUB_STEP_SUMMARY
+          echo "> - [trivy](https://github.com/aquasecurity/trivy) — Aqua Security 漏洞扫描器" >> $GITHUB_STEP_SUMMARY
+
+  # ── Release 时附加 SBOM 到发布资产 ──────────────────────────────────
+  attach-to-release:
+    name: "Attach SBOM to release"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: generate
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    permissions:
+      contents: write  # 需要写 release assets
+
+    steps:
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+
+      - name: Upload SBOM to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            sbom-futures-orderflow.spdx.json
+            sbom-futures-orderflow.cyclonedx.json
+          fail_on_unmatched_files: true

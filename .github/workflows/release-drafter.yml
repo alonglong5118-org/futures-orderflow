@@ -4,12 +4,14 @@
 #  触发时机：
 #    · PR 合并到 main → 更新 draft release
 #    · push 到 main → 更新 draft release
+#    · 推送 v* tag → 发布正式 release（将 draft 转为正式发布）
 #    · 手动触发
 #
 #  功能：
 #    · 自动根据 PR 分类生成发布日志
 #    · 维护一个 draft release，随时预览下个版本的内容
 #    · 版本号根据 breaking/feature/fix 自动递增
+#    · 打 v* tag 时自动发布正式 release
 # ==============================================================================
 
 name: Release Drafter
@@ -19,6 +21,8 @@ on:
     branches:
       - main
       - master
+    tags:
+      - "v*"
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled]
     branches:
@@ -28,14 +32,17 @@ on:
 
 # 最小权限
 permissions:
-  contents: write    # 需要创建/更新 draft release
+  contents: write    # 需要创建/更新 release
   pull-requests: read  # 读取 PR 信息
 
 jobs:
-  update_release_draft:
+  # ── 更新 draft release（PR 合并 / push 到 main 时） ────────────────
+  update_draft:
     name: "Update release draft"
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # 只有非 tag push 或 PR 或手动触发时才更新 draft
+    if: startsWith(github.ref, 'refs/tags/v') == false
 
     steps:
       - name: Run release drafter
@@ -45,3 +52,39 @@ jobs:
         with:
           config-name: release-drafter.yml
           disable-autolabeler: true  # 不使用内置的 labeler（已有独立的 labeler）
+
+  # ── 发布正式 release（打 v* tag 时） ────────────────────────────────
+  #  将最新的 draft release 转为正式发布
+  #  使用方式：git tag v1.0.0 && git push --tags
+  # ========================================================================
+  publish_release:
+    name: "Publish release"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 100  # 需要一些历史来生成变更日志
+
+      - name: Publish release from draft
+        uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+          disable-autolabeler: true
+          # 指定版本号为 tag 名
+          version: ${{ github.ref_name }}
+          # 发布为正式 release（非 draft）
+          publish: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        run: |
+          echo "### 🚀 ${{ github.ref_name }} 已发布" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Release: [${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 发布日志由 Release Drafter 自动生成" >> $GITHUB_STEP_SUMMARY

@@ -2,9 +2,9 @@
 #  CI：单元测试 + 冒烟测试
 # ==============================================================================
 #  触发时机：
-#    · PR 到 main/master → 跑全量单元测试
-#    · push 到 main/master → 跑全量单元测试 + 覆盖率
-#    · push 到其他分支 → 跑冒烟测试（快速反馈）
+#    · PR 到 main/master → Linux + 3.11 单元测试（快速反馈）
+#    · push 到 main/master → Linux/macOS + 3.10/3.11/3.12 全矩阵 + 覆盖率
+#    · 手动触发
 # ==============================================================================
 
 name: Test
@@ -59,18 +59,25 @@ permissions:
   pull-requests: write  # coverage-gate 评论 PR
 
 jobs:
-  # ── 单元测试（多版本 Python） ────────────────────────────────────────────
+  # ── 单元测试（多平台 × 多 Python 版本） ─────────────────────────────────
   test:
-    name: "Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
-    runs-on: ubuntu-latest
+    name: "${{ matrix.os }} · Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       max-parallel: 6
       matrix:
-        # PR 只跑 3.11（快速反馈），push 到 main 跑全矩阵（兼容性保障）
+        # PR 只跑 Linux + 3.11（快速反馈），push 到 main 跑全矩阵
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
         python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.11"]' || '["3.10", "3.11", "3.12"]') }}
         scope: ["unit"]
+        exclude:
+          # macOS 上只跑 3.11（减少资源消耗，macOS runner 贵）
+          - os: macos-latest
+            python-version: "3.10"
+          - os: macos-latest
+            python-version: "3.12"
 
     steps:
       - name: Checkout code
@@ -83,13 +90,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Restore pytest cache
+      - name: Restore test cache
         uses: actions/cache@v4
         with:
           path: .pytest_cache
-          key: pytest-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.sha }}
+          key: pytest-${{ matrix.os }}-py${{ matrix.python-version }}-${{ github.sha }}
           restore-keys: |
-            pytest-${{ runner.os }}-py${{ matrix.python-version }}-
+            pytest-${{ matrix.os }}-py${{ matrix.python-version }}-
 
       - name: Determine test scope
         id: scope
@@ -124,7 +131,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-py${{ matrix.python-version }}-${{ matrix.scope }}
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.scope }}
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
