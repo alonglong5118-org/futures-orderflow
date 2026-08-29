@@ -215,8 +215,9 @@ jobs:
   #  关键 lint 规则（会导致 bug 的）：
   #    F401/F601/F701/F821/F823/I001/B023/B904/E722/E712
   # ========================================================================
-  ruff:
-    name: "Ruff · lint + format"
+  # ── Ruff Critical lint + Format check（拆分为两个独立 job 匹配 Required checks）──────────
+  ruff-lint:
+    name: "Ruff · Critical lint"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: detect-changes
@@ -250,10 +251,36 @@ jobs:
             --output-format=github
           echo "✅ 关键检查通过"
 
+
       - name: Format check
         run: |
           echo "=== Ruff 格式化检查（阻塞级）==="
           echo "检查代码格式是否符合规范..."
+          ruff format --check .
+          echo "✅ 格式检查通过"
+
+  # ── Ruff Format check（独立 job 匹配 Required check）────────────────────
+  ruff-format:
+    name: "Ruff · Format check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python and deps
+        uses: ./.github/actions/setup-python-deps
+        with:
+          python-version: "3.11"
+
+      - name: Run format check
+        run: |
+          echo "=== Ruff 格式化检查（阻塞级）==="
           ruff format --check .
           echo "✅ 格式检查通过"
 
