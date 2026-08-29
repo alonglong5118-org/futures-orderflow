@@ -3,6 +3,7 @@
 # ==============================================================================
 #  功能：
 #    · 自动给 PR 打 size 标签（XS/S/M/L/XL，自动移除旧标签）
+#    · 根据改动文件自动打 area/* 标签
 #    · PR 标题规范检查（Conventional Commits）
 # ==============================================================================
 
@@ -104,6 +105,29 @@ jobs:
           echo "| M | 100 - 500 行 |" >> $GITHUB_STEP_SUMMARY
           echo "| L | 500 - 2000 行 |" >> $GITHUB_STEP_SUMMARY
           echo "| XL | > 2000 行 |" >> $GITHUB_STEP_SUMMARY
+
+  # ── PR 区域标签（根据改动文件自动打 area/* 标签） ───────────────────
+  #  配置文件：.github/labeler.yml
+  #  标签分类：strategy / risk / signal / execution / data / research / ...
+  # ========================================================================
+  area-label:
+    name: "Area label"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # labeler 需要完整历史
+
+      - name: Label PR by changed files
+        uses: actions/labeler@v5
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          configuration-path: .github/labeler.yml
+          sync-labels: true  # 同步：文件不再改动时移除对应标签
 
   # ── PR 标题规范检查 ──────────────────────────────────────────────────────
   #  检查 PR 标题是否符合 Conventional Commits 规范

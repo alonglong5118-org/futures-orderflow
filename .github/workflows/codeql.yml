@@ -1,0 +1,97 @@
+# ==============================================================================
+#  CI：CodeQL 语义代码分析
+# ==============================================================================
+#  触发时机：
+#    · push 到 main/master → 全量分析
+#    · PR 到 main/master → 分析变更（增量）
+#    · 每周一凌晨 3 点（北京时间）→ 定期全量扫描
+#    · 手动触发
+#
+#  价值：
+#    · 语义级分析，能发现普通 lint 找不到的深层 bug
+#    · 安全漏洞检测（注入、越权、敏感信息泄露等）
+#    · 代码质量问题（空指针、资源泄漏、逻辑错误等）
+# ==============================================================================
+
+name: CodeQL
+
+run-name: "CodeQL · ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.message || 'scheduled' }}"
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE*"
+  pull_request:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE*"
+  schedule:
+    # 每周一北京时间 03:00 = UTC 19:00（周日）
+    - cron: "0 19 * * 0"
+  workflow_dispatch:
+
+# 并发控制：同一分支/PR 只保留最新一次
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则
+permissions:
+  contents: read          # 代码检出
+  security-events: write  # 上报安全事件到 GitHub Security tab
+  actions: read           # 读取 action 缓存
+
+jobs:
+  analyze:
+    name: "CodeQL · Python"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # PR 需要 2 层深度来对比基线
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # 查询套件：security-extended（安全扩展）+ quality（质量）
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        # Python 项目不需要 build，但 autobuild 会自动处理依赖
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          upload: true
+
+      - name: CodeQL summary
+        if: always()
+        run: |
+          echo "### 🔍 CodeQL 分析完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **语言**: ${{ matrix.language }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **查询套件**: security-extended + security-and-quality" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 详细结果查看：" >> $GITHUB_STEP_SUMMARY
+          echo "> 1. 仓库 **Security** → **Code scanning** 标签页" >> $GITHUB_STEP_SUMMARY
+          echo "> 2. 或本页面下方 **Annotations** 区域" >> $GITHUB_STEP_SUMMARY
