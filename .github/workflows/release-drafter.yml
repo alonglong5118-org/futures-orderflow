@@ -4,7 +4,7 @@
 #  触发时机：
 #    · PR 合并到 main → 更新 draft release
 #    · push 到 main → 更新 draft release
-#    · 推送 v* tag → 发布正式 release（将 draft 转为正式发布）
+#    · 推送 v* tag → 发布正式 release（生成 SBOM → 发布 → 附加资产）
 #    · 手动触发
 #
 #  功能：
@@ -12,6 +12,8 @@
 #    · 维护一个 draft release，随时预览下个版本的内容
 #    · 版本号根据 breaking/feature/fix 自动递增
 #    · 打 v* tag 时自动发布正式 release
+#    · 发布前生成 SBOM + 漏洞扫描（高危漏洞阻塞发布）
+#    · SBOM 与漏洞报告自动附加到 Release Assets
 # ==============================================================================
 
 name: Release Drafter
@@ -35,6 +37,10 @@ permissions:
   contents: write    # 需要创建/更新 release
   pull-requests: read  # 读取 PR 信息
 
+concurrency:
+  group: release-drafter-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ── 更新 draft release（PR 合并 / push 到 main 时） ────────────────
   update_draft:
@@ -52,15 +58,146 @@ jobs:
         with:
           config-name: release-drafter.yml
 
+  # ── 生成 SBOM + 漏洞扫描（仅 tag 发布时） ──────────────────────────
+  #  在正式发布前先生成 SBOM 并扫描漏洞
+  #  高危/严重漏洞（有修复版本的）会阻塞发布
+  # ========================================================================
+  generate-sbom:
+    name: "Generate SBOM + scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    outputs:
+      artifact-name: sbom
+      critical: ${{ steps.grype-scan.outputs.critical }}
+      high: ${{ steps.grype-scan.outputs.high }}
+      medium: ${{ steps.grype-scan.outputs.medium }}
+      low: ${{ steps.grype-scan.outputs.low }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+        with:
+          syft-version: v1.12.0
+
+      - name: Install Grype
+        uses: anchore/scan-action/download-grype@v4
+        with:
+          grype-version: v0.82.0
+
+      - name: Generate SBOM (SPDX format)
+        run: |
+          syft \
+            --file sbom-futures-orderflow.spdx.json \
+            --output spdx-json \
+            --source-file . \
+            --name "futures-orderflow" \
+            --version "${{ github.ref_name }}"
+
+      - name: Generate SBOM (CycloneDX format)
+        run: |
+          syft \
+            --file sbom-futures-orderflow.cyclonedx.json \
+            --output cyclonedx-json \
+            --source-file . \
+            --name "futures-orderflow" \
+            --version "${{ github.ref_name }}"
+
+      - name: Scan SBOM for vulnerabilities (grype)
+        id: grype-scan
+        run: |
+          echo "=== 漏洞扫描（grype）==="
+          echo "基于 SBOM 扫描已知漏洞（CVSS）..."
+          echo ""
+
+          # 生成表格格式报告（便于查看）
+          grype sbom:sbom-futures-orderflow.spdx.json \
+            --output table \
+            --fail-on high \
+            --only-fixed 2>&1 | tee /tmp/grype-table.txt || true
+
+          # 生成 JSON 格式报告（用于 release asset）
+          grype sbom:sbom-futures-orderflow.spdx.json \
+            --output json \
+            --fail-on never > grype-futures-orderflow.json 2>/dev/null || true
+
+          # 统计各严重级别数量
+          CRITICAL=$(jq '.matches[] | select(.vulnerability.severity == "Critical")' grype-futures-orderflow.json 2>/dev/null | grep -c '"id"' || echo "0")
+          HIGH=$(jq '.matches[] | select(.vulnerability.severity == "High")' grype-futures-orderflow.json 2>/dev/null | grep -c '"id"' || echo "0")
+          MEDIUM=$(jq '.matches[] | select(.vulnerability.severity == "Medium")' grype-futures-orderflow.json 2>/dev/null | grep -c '"id"' || echo "0")
+          LOW=$(jq '.matches[] | select(.vulnerability.severity == "Low")' grype-futures-orderflow.json 2>/dev/null | grep -c '"id"' || echo "0")
+
+          echo ""
+          echo "=== 漏洞统计 ==="
+          echo "| 严重级别 | 数量 |"
+          echo "|----------|------|"
+          echo "| Critical | $CRITICAL |"
+          echo "| High     | $HIGH |"
+          echo "| Medium   | $MEDIUM |"
+          echo "| Low      | $LOW |"
+          echo ""
+
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "low=$LOW" >> $GITHUB_OUTPUT
+
+          # 高危漏洞阻塞（有修复版本的）
+          if [ "$HIGH" -gt 0 ] || [ "$CRITICAL" -gt 0 ]; then
+            echo "⚠️  发现高危/严重漏洞，请查看详细报告"
+            echo "注意：只有有修复版本的漏洞才会阻塞"
+            HAS_FIX=$(jq '[.matches[] | select(.vulnerability.severity == "Critical" or .vulnerability.severity == "High") | select(.vulnerability.fix?.version != null)] | length' grype-futures-orderflow.json 2>/dev/null || echo "0")
+            echo "有修复版本的高危/严重漏洞数: $HAS_FIX"
+            if [ "$HAS_FIX" -gt 0 ]; then
+              echo "❌ 存在有修复版本的高危漏洞，阻塞发布"
+              exit 1
+            fi
+          fi
+
+          echo "✅ 漏洞扫描完成（无阻塞级高危漏洞）"
+
+      - name: Generate SBOM checksums
+        run: |
+          echo "=== 生成校验和 ==="
+          sha256sum \
+            sbom-futures-orderflow.spdx.json \
+            sbom-futures-orderflow.cyclonedx.json \
+            grype-futures-orderflow.json \
+            > sbom-futures-orderflow.sha256
+          cat sbom-futures-orderflow.sha256
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: sbom
+          path: |
+            sbom-futures-orderflow.spdx.json
+            sbom-futures-orderflow.cyclonedx.json
+            sbom-futures-orderflow.sha256
+            grype-futures-orderflow.json
+          if-no-files-found: error
+          retention-days: 90
+
   # ── 发布正式 release（打 v* tag 时） ────────────────────────────────
   #  将最新的 draft release 转为正式发布
   #  使用方式：git tag v1.0.0 && git push --tags
+  #  依赖：SBOM 生成 + 漏洞扫描通过后才发布
   # ========================================================================
   publish_release:
     name: "Publish release"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: generate-sbom
+
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -69,6 +206,7 @@ jobs:
           fetch-depth: 100  # 需要一些历史来生成变更日志
 
       - name: Publish release from draft
+        id: release-drafter
         uses: release-drafter/release-drafter@v7
         with:
           config-name: release-drafter.yml
@@ -79,10 +217,43 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: sbom
+
+      - name: Upload SBOM + vulnerability report to release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            sbom-futures-orderflow.spdx.json
+            sbom-futures-orderflow.cyclonedx.json
+            sbom-futures-orderflow.sha256
+            grype-futures-orderflow.json
+          fail_on_unmatched_files: true
+          append_body: false
+
       - name: Release summary
         run: |
           echo "### 🚀 ${{ github.ref_name }} 已发布" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Release: [${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**漏洞扫描结果**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 严重级别 | 数量 |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | ${{ needs.generate-sbom.outputs.critical }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| High     | ${{ needs.generate-sbom.outputs.high }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Medium   | ${{ needs.generate-sbom.outputs.medium }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Low      | ${{ needs.generate-sbom.outputs.low }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**发布资产**" >> $GITHUB_STEP_SUMMARY
+          echo "- SBOM (SPDX 2.3)" >> $GITHUB_STEP_SUMMARY
+          echo "- SBOM (CycloneDX 1.5)" >> $GITHUB_STEP_SUMMARY
+          echo "- Grype 漏洞报告" >> $GITHUB_STEP_SUMMARY
+          echo "- SHA256 校验和" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "> 发布日志由 Release Drafter 自动生成" >> $GITHUB_STEP_SUMMARY
+          echo "> SBOM 与漏洞扫描由 Syft + Grype 生成" >> $GITHUB_STEP_SUMMARY

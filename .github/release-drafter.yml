@@ -8,7 +8,7 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 
-# 版本号自动递增规则（基于 PR type）
+# 版本号自动递增规则（基于 PR label）
 version-resolver:
   major:
     labels:
@@ -16,16 +16,20 @@ version-resolver:
       - "breaking-change"
   minor:
     labels:
-      - "enhancement"
+      - "feat"
       - "feature"
+      - "enhancement"
   patch:
     labels:
-      - "bug"
-      - "bugfix"
       - "fix"
+      - "bugfix"
+      - "bug"
       - "dependencies"
       - "security"
       - "maintenance"
+      - "perf"
+      - "refactor"
+      - "chore"
   default: patch
 
 # 分类模板（按 PR label 归类）
@@ -103,23 +107,49 @@ no-changes-template: "暂无显著变更"
 exclude-labels:
   - "skip-changelog"
   - "no-release-notes"
-  - "dependencies"  # 依赖更新在"依赖"分类中显示，这里不排除
 
-# 替换标题格式（美化 PR 标题显示）
+# 替换标题格式（美化 PR 标题显示，去掉 type 前缀）
 replacers:
   - search: '/^(feat|fix|perf|refactor|style|docs|test|ci|build|chore|revert)(\([^)]+\))?!?: /i'
     replace: ''
 
 # ── 发布日志模板 ──────────────────────────────────────────────────
 template: |
-  ## 变更概览
+  ## 📦 v$RESOLVED_VERSION
+
+  ### 本版本概览
 
   $CHANGES
 
   ---
 
-  **完整变更对比**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+  ## 🔐 供应链安全
 
-  **贡献者**: $CONTRIBUTORS
+  本版本附带软件物料清单（SBOM）与漏洞扫描报告，可在下方 **Assets** 中下载：
+
+  | 文件 | 说明 |
+  |---|---|
+  | `sbom-futures-orderflow.spdx.json` | SBOM（SPDX 2.3 格式） |
+  | `sbom-futures-orderflow.cyclonedx.json` | SBOM（CycloneDX 1.5 格式） |
+  | `grype-futures-orderflow.json` | Grype 漏洞扫描报告（JSON） |
+  | `sbom-futures-orderflow.sha256` | SHA256 校验和 |
+
+  **验证完整性**：
+  ```bash
+  sha256sum -c sbom-futures-orderflow.sha256
+  ```
+
+  **漏洞扫描状态**：发布前已通过 Grype 扫描（高危 & 严重级别有修复版本的漏洞为零）
+
+  ---
+
+  ## 📋 完整变更
+
+  **对比范围**：[$PREVIOUS_TAG...v$RESOLVED_VERSION](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION)
+
+  **贡献者**：$CONTRIBUTORS
+
+  ---
 
   > 💡 本发布日志由 [Release Drafter](https://github.com/release-drafter/release-drafter) 自动生成
+  > 📦 SBOM 与漏洞报告由 [Syft](https://github.com/anchore/syft) + [Grype](https://github.com/anchore/grype) 生成
