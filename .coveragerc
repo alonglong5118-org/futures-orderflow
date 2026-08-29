@@ -21,8 +21,83 @@ omit =
     *_sweep.py
     *_compare.py
     *upgrade*.py
+    bump_version.py
 
-    # 第三方
+    # 临时 / 探针 / 诊断脚本（_ 开头）
+    _*.py
+
+    # 遗传算法优化脚本（一次性脚本，非库代码）
+    ga_*.py
+
+    # 回测 / 分析 / 报告类脚本（非库代码）
+    regression_test.py
+    perf_breakdown.py
+    discipline_review.py
+    sr_threshold_validation.py
+    sr_exit_ablation.py
+    oos_weight_validation.py
+    wf_validation.py
+    long_hu_bang.py
+    apply_blended_weights.py
+    signal_explain.py
+    four_dim_calibrate.py
+    four_dim_recalibrate.py
+    four_dim_papertrack.py
+    four_dim_live_runner.py
+    gen_papertrack_html.py
+    backtest_viz.py
+    diag_p02_gaps.py
+    batch_5m_exit_45.py
+    _phase4_modules_ab.py
+    _merge_chunks.py
+    _analyze_all.py
+    _qa_*.py
+    _test_tq_*.py
+    quant_dir_src_45.py
+    _quant_dir_src.py
+    _temp_import.py
+    montecarlo.py
+
+    # 数据源 / 经纪商 / 实盘运行（依赖外部 API，不适合单元测试）
+    minishare_live.py
+    minishare_permission_check.py
+    minishare_feed.py
+    tushare_live.py
+    akshare_live.py
+    backend_tqsdk.py
+    broker_import.py
+    preflight_check.py
+    live_health_check.py
+    push_notify.py
+    execution_planner.py
+    tick_orderflow.py
+    market_scanner.py
+    data_quality.py
+    convert_min5_cache.py
+    fetch_macro_context.py
+    fetch_macro_context_full.py
+    fetch_info_dimension.py
+    account_monitor.py
+    account_tracker.py
+    trade_journal.py
+    drawdown_guard.py
+    refresh_main_contracts.py
+    continue_tail_tq.py
+    blunder_check.py
+    fundamental_feed.py
+    fundamental_metrics.py
+    feature_manager.py
+    calibration.py
+    gbm_garch.py
+    regime_hmm.py
+    new_factor_explorer.py
+    symbol_screener.py
+    macro_context.py
+    sentiment_sr_combined_bt.py
+    self_check.py
+
+    # 第三方代码
+    ponytail/*
     node_modules/*
     .venv/*
     venv/*
