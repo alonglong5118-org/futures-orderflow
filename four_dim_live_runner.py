@@ -43,7 +43,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.4.0"
+APP_VERSION = "v3.5.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -228,6 +228,7 @@ for _blk in (
     "risk_gate",
     "contract_specs",
     "per_symbol_risk",
+    "thresholds_by_symbol",  # GA优化T_thresh逐品种覆盖 (2026-08-29 Phase 3.5)
 ):
     _tc_blk = _tc_all.get(_blk)
     if isinstance(_tc_blk, dict):
@@ -261,6 +262,7 @@ except Exception:
 import account_monitor as am  # 账户监控驱动 papertrack 自动化
 import anomaly_scan as asc  # 异动扫描层（广度选品）
 import backtest_viz as bv  # #17 回测可视化(水下曲线/逐笔散点)
+import paper_trading_integration as pti  # 自动模拟交易引擎集成
 import blunder_check as bc  # #12 纪律自动体检(blunder检测)
 import broker_import as bi  # #9 经纪商成交明细自动回灌
 import calibration as cal  # #120 概率校准 + 置信度分层命中率
@@ -9775,6 +9777,11 @@ def start_dashboard(state):
                             _s2["contract"] = ml.normalize_contract_code(_ct)
                 # 版本号随 /api/state 实时下发，前端侧栏动态渲染（方案 B）
                 state["version"] = APP_VERSION
+                # ★ 注入自动模拟交易状态
+                try:
+                    state["paper_trading"] = pti.get_state()
+                except Exception:
+                    state["paper_trading"] = {"enabled": False, "error": "获取失败"}
                 # P1-②：门控品种定性提示（lh/JM 等被动态门控暂停发信号的，让面板露出覆盖缺口）
                 try:
                     state["gated_notices"] = _build_gated_notices()
@@ -10536,6 +10543,13 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/paper":
                 self._handle_paper()
                 return
+            elif self.path.split("?")[0] == "/api/paper-trading":
+                # 自动模拟交易引擎 API
+                if self.command == "OPTIONS":
+                    pti.handle_options(self)
+                else:
+                    pti.handle_api(self)
+                return
             elif self.path.split("?")[0] == "/api/holdings_kline":
                 # 持仓K线 + SR位 + 止损止盈标注
                 try:
@@ -11072,6 +11086,45 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
 
+            elif self.path.split("?")[0].startswith("/paper_dashboard/"):
+                # ★ 模拟交易仪表盘静态文件
+                _req_path = self.path.split("?")[0]
+                # 安全：规范化路径，防止目录穿越
+                _safe_path = _req_path.replace("/paper_dashboard/", "", 1)
+                _safe_path = _safe_path.lstrip("/").replace("..", "")
+                _file_path = os.path.join(HERE, "paper_dashboard", _safe_path)
+                _file_path = os.path.normpath(_file_path)
+                # 确保在 paper_dashboard 目录内
+                if not _file_path.startswith(os.path.join(HERE, "paper_dashboard")):
+                    self.send_response(403)
+                    self.end_headers()
+                    return
+                if os.path.isfile(_file_path):
+                    # 根据扩展名设置 Content-Type
+                    _ext = os.path.splitext(_file_path)[1].lower()
+                    _ct = {
+                        ".html": "text/html; charset=utf-8",
+                        ".js": "application/javascript; charset=utf-8",
+                        ".css": "text/css; charset=utf-8",
+                        ".ttf": "font/ttf",
+                        ".woff": "font/woff",
+                        ".woff2": "font/woff2",
+                        ".svg": "image/svg+xml",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".json": "application/json; charset=utf-8",
+                    }.get(_ext, "application/octet-stream")
+                    self.send_response(200)
+                    self.send_header("Content-Type", _ct)
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    with open(_file_path, "rb") as _f:
+                        self.wfile.write(_f.read())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -11138,6 +11191,10 @@ def start_dashboard(state):
                 return
             if self.path.split("?")[0] == "/api/paper":
                 self._handle_paper()
+                return
+            if self.path.split("?")[0] == "/api/paper-trading":
+                # 自动模拟交易引擎 API
+                pti.handle_api(self)
                 return
             if self.path.split("?")[0] == "/api/journal":
                 try:
@@ -13003,6 +13060,14 @@ def main():
         at.start_ak_poller(interval=5)
     except Exception as _e:
         print(f"[account_tracker] ak_poller 启动失败: {_e}")
+    # ★ 启动自动模拟交易引擎
+    try:
+        pti.init(
+            price_feed=feed if feed_ok else None,
+            contract_specs=_TCFG.get("contract_specs", {}),
+        )
+    except Exception as _e:
+        print(f"[PaperTrading] 初始化失败: {_e}")
     last_gate = time.time()
     global LAST_CYCLE_TS  # #16 心跳：main 内给模块全局赋值必须声明 global，否则只更新局部、看门狗读到永远 0.0
     global last_recover  # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
@@ -13030,6 +13095,11 @@ def main():
                 pass
         # —— 从 da龘 合并进来的三件事（每轮）——
         _update_aux(feed, state)
+        # ★ 自动模拟交易：检查新信号 + 检查持仓 TP/SL
+        try:
+            pti.tick(state)
+        except Exception as _pte:
+            print(f"[PaperTrading] tick 异常: {repr(_pte)[:80]}")
         # 日内权益采样（每轮都跑，内部按分钟去重）
         try:
             prices = {}
