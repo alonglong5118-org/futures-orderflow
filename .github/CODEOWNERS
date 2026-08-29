@@ -1,0 +1,126 @@
+# ==============================================================================
+#  CODEOWNERS — 代码所有者配置
+# ==============================================================================
+#  当 PR 修改了以下路径的文件时，自动请求对应负责人审查
+#  文档：https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+#  格式：路径模式  @owner1 @owner2
+#  越靠后的规则优先级越高
+# ==============================================================================
+
+# ── 默认负责人（任何修改都通知） ─────────────────────────────────────
+# 留空则不设置默认审查人
+# *  @alonglong5118
+
+# ── 策略核心 ──────────────────────────────────────────────────────
+/four_dim_strategy.py       @alonglong5118
+/four_dim_*.py              @alonglong5118
+/strategy_layer.py          @alonglong5118
+/calibration.py             @alonglong5118
+
+# ── 风控模块 ──────────────────────────────────────────────────────
+/risk_gate_utils.py         @alonglong5118
+/risk_state_machine.py      @alonglong5118
+/drawdown_guard.py          @alonglong5118
+/gap_stop_utils.py          @alonglong5118
+/price_protection.py        @alonglong5118
+/consistency_watchdog.py    @alonglong5118
+/take_profit_utils.py       @alonglong5118
+/kelly_utils.py             @alonglong5118
+/corr_gate_utils.py         @alonglong5118
+/discipline_review.py       @alonglong5118
+/blunder_check.py           @alonglong5118
+/preflight_check.py         @alonglong5118
+
+# ── 信号模块 ──────────────────────────────────────────────────────
+/sr_analyzer.py             @alonglong5118
+/sr_*.py                    @alonglong5118
+/signal_trigger_utils.py    @alonglong5118
+/signal_explain.py          @alonglong5118
+/hidden_pivot.py            @alonglong5118
+/direction_source_monitor.py @alonglong5118
+/anomaly_scan.py            @alonglong5118
+
+# ── 数据模块 ──────────────────────────────────────────────────────
+/fundamental_feed.py        @alonglong5118
+/fundamental_metrics.py     @alonglong5118
+/feature_manager.py         @alonglong5118
+/data_quality.py            @alonglong5118
+/market_scanner.py          @alonglong5118
+/symbol_screener.py         @alonglong5118
+/minishare_feed.py          @alonglong5118
+/minishare_*.py             @alonglong5118
+/tushare_live.py            @alonglong5118
+/akshare_live.py            @alonglong5118
+/backend_tqsdk.py           @alonglong5118
+
+# ── 执行模块 ──────────────────────────────────────────────────────
+/execution_planner.py       @alonglong5118
+/tick_orderflow.py          @alonglong5118
+/account_tracker.py         @alonglong5118
+/account_monitor.py         @alonglong5118
+/broker_import.py           @alonglong5118
+
+# ── 宏观 / 情绪 / 状态识别 ─────────────────────────────────────────
+/regime_hmm.py              @alonglong5118
+/macro_context.py           @alonglong5118
+/fetch_macro_context*.py    @alonglong5118
+/sentiment_engine.py        @alonglong5118
+/sentiment_*.py             @alonglong5118
+/info_dimension.py          @alonglong5118
+/fetch_info_dimension.py    @alonglong5118
+
+# ── 回测 / 研究 / GA ──────────────────────────────────────────────
+/ga_*.py                    @alonglong5118
+/*backtest*.py              @alonglong5118
+/*oos*.py                   @alonglong5118
+/*simulate*.py              @alonglong5118
+/*sweep*.py                 @alonglong5118
+/*compare.py                @alonglong5118
+/*ablation*.py              @alonglong5118
+/factor_miner.py            @alonglong5118
+/new_factor_explorer.py     @alonglong5118
+/ga_group_*.py              @alonglong5118
+/ga_six_factor*.py          @alonglong5118
+/ga_five_factor*.py         @alonglong5118
+/ga_seven_factor*.py        @alonglong5118
+/verify_*.py                @alonglong5118
+/oos_weight_validation.py   @alonglong5118
+/wf_validation.py           @alonglong5118
+
+# ── 监控 / 健康检查 / 通知 ─────────────────────────────────────────
+/live_health_check.py       @alonglong5118
+/self_check.py              @alonglong5118
+/push_notify.py             @alonglong5118
+/trade_journal.py           @alonglong5118
+/event_calendar.py          @alonglong5118
+/perf_breakdown.py          @alonglong5118
+/montecarlo.py              @alonglong5118
+/gbm_garch.py               @alonglong5118
+
+# ── 可视化 ────────────────────────────────────────────────────────
+/backtest_viz.py            @alonglong5118
+/viz_upgrade.py             @alonglong5118
+/gen_papertrack_html.py     @alonglong5118
+
+# ── CI / 基础设施 ─────────────────────────────────────────────────
+/.github/workflows/         @alonglong5118
+/.github/actions/           @alonglong5118
+/.github/labeler.yml        @alonglong5118
+/.codecov.yml               @alonglong5118
+/.coveragerc                @alonglong5118
+/.pre-commit-config.yaml    @alonglong5118
+/run_tests.py               @alonglong5118
+/Makefile                   @alonglong5118
+
+# ── 依赖配置 ──────────────────────────────────────────────────────
+/requirements*.txt          @alonglong5118
+/pyproject.toml             @alonglong5118
+
+# ── 测试代码 ──────────────────────────────────────────────────────
+/tests/                     @alonglong5118
+/scripts/check_coverage.py  @alonglong5118
+
+# ── 文档 ──────────────────────────────────────────────────────────
+*.md                        @alonglong5118
+/docs/                      @alonglong5118

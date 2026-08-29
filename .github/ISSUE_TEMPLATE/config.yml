@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 项目文档
+    url: https://github.com/alonglong5118-rgb/futures-orderflow
+    about: 查看项目 README 和使用指南
+  - name: 💬 讨论区
+    url: https://github.com/alonglong5118-rgb/futures-orderflow/discussions
+    about: 通用讨论、想法分享、问答

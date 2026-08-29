@@ -5,6 +5,7 @@
 #    · 自动给 PR 打 size 标签（XS/S/M/L/XL，自动移除旧标签）
 #    · 根据改动文件自动打 area/* 标签
 #    · PR 标题规范检查（Conventional Commits）
+#    · 自动将 PR 分配给作者
 # ==============================================================================
 
 name: PR Automation
@@ -105,6 +106,36 @@ jobs:
           echo "| M | 100 - 500 行 |" >> $GITHUB_STEP_SUMMARY
           echo "| L | 500 - 2000 行 |" >> $GITHUB_STEP_SUMMARY
           echo "| XL | > 2000 行 |" >> $GITHUB_STEP_SUMMARY
+
+  # ── 自动分配 PR 给作者 ──────────────────────────────────────────────────
+  #  PR 创建时自动将 PR 分配给提交者，便于跟踪责任
+  # ========================================================================
+  auto-assign:
+    name: "Auto-assign"
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+
+    permissions:
+      pull-requests: write  # 需要写权限来分配 PR
+
+    steps:
+      - name: Auto-assign PR to author
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const author = context.payload.pull_request.user.login;
+
+            // 分配给 PR 作者
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: number,
+              assignees: [author],
+            });
+
+            console.log(`✅ PR #${number} 已分配给 @${author}`);
 
   # ── PR 区域标签（根据改动文件自动打 area/* 标签） ───────────────────
   #  配置文件：.github/labeler.yml
