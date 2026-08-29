@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 策略总入口 compute_strategy — 集成测试
 =========================================

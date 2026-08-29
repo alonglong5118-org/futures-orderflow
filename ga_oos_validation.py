@@ -187,12 +187,12 @@ def main():
 
     # 汇总
     print(f"\n{'=' * 80}")
-    print(f"[3/4] OOS 汇总")
+    print("[3/4] OOS 汇总")
     print(f"{'=' * 80}")
     print(f"总品种: {len(valid_syms)} | 总耗时: {total_time / 60:.1f}min")
 
     # OOS 对比
-    print(f"\n--- 样本外（OOS）对比 ---")
+    print("\n--- 样本外（OOS）对比 ---")
     print(
         f"{'品种':<6} {'板块':<5} {'OOS默认':>9} {'OOS_GA':>9} {'差值':>8} {'变化%':>8} "
         f"{'IS默认':>9} {'IS_GA':>9} {'过拟合':>8}"
@@ -266,7 +266,7 @@ def main():
         groups[r["group"]]["default"].append(r["oos"]["default"]["expR"])
         groups[r["group"]]["ga"].append(r["oos"]["ga"]["expR"])
 
-    print(f"\n--- 板块 OOS 平均 expR ---")
+    print("\n--- 板块 OOS 平均 expR ---")
     print(f"{'板块':<6} {'品种数':>6} {'默认avg':>9} {'GA avg':>9} {'变化':>8} {'变化%':>8}")
     print("-" * 55)
     for grp in sorted(groups.keys(), key=lambda g: -(sum(groups[g]["ga"]) / max(len(groups[g]["ga"]), 1))):

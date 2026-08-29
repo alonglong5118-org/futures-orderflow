@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 信息维度层（#1 · F 维度定性面）
 =================================================
 架构（刻意复用 fundamentals.json 的「外部写、runner 只读」模式）：
@@ -54,7 +53,7 @@ def _now_ts():
 
 def load_cache():
     try:
-        with open(CACHE, "r", encoding="utf-8") as f:
+        with open(CACHE, encoding="utf-8") as f:
             d = json.load(f)
         if isinstance(d, dict) and "items" in d:
             return d
@@ -65,7 +64,7 @@ def load_cache():
 
 def load_manual():
     try:
-        with open(MANUAL, "r", encoding="utf-8") as f:
+        with open(MANUAL, encoding="utf-8") as f:
             d = json.load(f)
         if isinstance(d, dict) and "items" in d:
             return d

@@ -14,9 +14,9 @@ import four_dim_papertrack as fp
 
 REPORT = fp.REPORT_JSON
 SIGNALS = fp.SIGNALS_JSON
-with open(REPORT, "r", encoding="utf-8") as f:
+with open(REPORT, encoding="utf-8") as f:
     report = json.load(f)
-with open(SIGNALS, "r", encoding="utf-8") as f:
+with open(SIGNALS, encoding="utf-8") as f:
     signals = json.load(f)
 
 old_ids = set(t["id"] for t in report["trades"])

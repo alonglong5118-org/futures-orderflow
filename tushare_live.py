@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 tushare_live.py — Tushare Pro 实时行情模块
 

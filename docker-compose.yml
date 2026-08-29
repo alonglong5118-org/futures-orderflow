@@ -1,0 +1,99 @@
+# ==============================================================================
+#  Futures OrderFlow · Docker Compose 一键部署
+#
+#  用法：
+#    docker compose up -d              # 启动（后台）
+#    docker compose logs -f            # 查看日志
+#    docker compose down               # 停止
+#    docker compose restart            # 重启
+#
+#  配置：
+#    复制 .env.example 为 .env，修改对应配置即可
+# ==============================================================================
+
+services:
+  # ── 四维策略实盘运行器 ────────────────────────────────────────────────────
+  futures-orderflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+    image: futures-orderflow:${TAG:-latest}
+    container_name: futures-orderflow
+    restart: unless-stopped
+
+    # 端口映射
+    ports:
+      - "${PORT:-8741}:8741"
+
+    # 环境变量
+    environment:
+      - PORT=8741
+      - MODE=${MODE:-watchdog}           # watchdog / direct
+      - NO_VOICE=${NO_VOICE:-0}          # 1=关闭语音
+      - WATCHDOG_STALL=${WATCHDOG_STALL:-90}
+      - WATCHDOG_RESTART=${WATCHDOG_RESTART:-4}
+      - TUSHARE_TOKEN=${TUSHARE_TOKEN:-}
+      - TZ=Asia/Shanghai
+
+    # 数据卷
+    volumes:
+      # 配置文件（用户自定义）
+      - ./config:/app/config:ro
+      # 运行时数据（状态、日志等）
+      - ./data:/app/data
+      # 日志
+      - ./logs:/app/logs
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8741/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+
+    # 安全选项
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    cap_drop:
+      - ALL
+
+    # 网络
+    networks:
+      - orderflow-net
+
+    # 命令（覆盖 CMD）
+    command: ["live"]
+
+  # ── 文档站（可选）────────────────────────────────────────────────────────
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    image: futures-orderflow-docs:${TAG:-latest}
+    container_name: futures-orderflow-docs
+    restart: unless-stopped
+    ports:
+      - "${DOCS_PORT:-8742}:80"
+    profiles:
+      - docs
+    networks:
+      - orderflow-net
+
+# ── 网络 ────────────────────────────────────────────────────────────────────
+networks:
+  orderflow-net:
+    driver: bridge
+    name: futures-orderflow-net

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 da龘 开盘前一键巡检 (preflight_check.py)
 =======================================
@@ -130,7 +129,7 @@ def main():
     try:
         d = fetch(args.host)
         add(0, "后端进程", f"http://{args.host} 在线, server_time={d.get('server_time')}")
-    except urllib.error.URLError as e:
+    except urllib.error.URLError:
         add(2, "后端进程", f"无法连接 http://{args.host} — 请先 `bash start.sh` 启动后端")
         _finish(report, use_color, g, strict=args.strict)
         return 2
@@ -283,7 +282,7 @@ def _finish(report, use_color, g, strict=False):
     else:
         verdict = "OK"
     # 严格模式下黄也算ERR? 这里黄=待处理不算错误, 仅红算错误
-    print(g(C_BOLD) + f"----------------------------------------" + g(C_RESET))
+    print(g(C_BOLD) + "----------------------------------------" + g(C_RESET))
     print(g(C_BOLD) + f"SUMMARY: {verdict}  (红={reds} 黄={yellows})" + g(C_RESET))
     print()
 

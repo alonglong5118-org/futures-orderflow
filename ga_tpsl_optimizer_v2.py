@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 ga_tpsl_optimizer_v2.py — 止盈止损参数 GA 联合优化器（Phase 2 完整版）
 ===================================================================
@@ -616,7 +615,7 @@ def run_optimization(
     baseline_metrics_is = single_evaluate(baseline_ind, symbol, df_is)
     baseline_metrics_oos = single_evaluate(baseline_ind, symbol, df_oos)
 
-    print(f"\n📐 基线参数:")
+    print("\n📐 基线参数:")
     for i, name in enumerate(PARAM_NAMES):
         print(f"   {name} = {baseline_ind[i]}")
     print(
@@ -650,9 +649,9 @@ def run_optimization(
     # 创建种群
     pop = toolbox.population(n=pop_size)
 
-    print(f"\n🚀 开始 NSGA-II 多目标优化")
+    print("\n🚀 开始 NSGA-II 多目标优化")
     print(f"   种群: {pop_size}, 代数: {gen_count}")
-    print(f"   目标: expR中位数 + 卡玛比率中位数 + 胜率稳定性")
+    print("   目标: expR中位数 + 卡玛比率中位数 + 胜率稳定性")
     print(f"   WF窗口: 训练{train_bars}根 + 验证{valid_bars}根, 步长{step_bars}根")
     print()
 
@@ -784,7 +783,7 @@ def run_optimization(
     # 筛选候选方案
     candidates = select_candidates(pareto_front)
 
-    print(f"\n🏆 候选方案:")
+    print("\n🏆 候选方案:")
     for key, cand in candidates.items():
         print(f"   [{cand['label']}]")
         for pname, pval in cand["params"].items():
@@ -796,7 +795,7 @@ def run_optimization(
         )
 
     # OOS 验证
-    print(f"\n🔬 纯 OOS 验证:")
+    print("\n🔬 纯 OOS 验证:")
     candidate_inds = []
     candidate_keys = []
     for key, cand in candidates.items():
@@ -841,7 +840,7 @@ def run_optimization(
         print(f"     IS expR={metrics_is_full['expR']:.4f} → OOS expR={metrics_oos['expR']:.4f}  ({deg_str})")
 
     # 稳健性检验（只对 OOS 通过的候选做，节省时间）
-    print(f"\n🔍 参数稳健性检验:")
+    print("\n🔍 参数稳健性检验:")
     robustness_results = {}
     for key in candidate_keys:
         ind = [candidates[key]["params"][name] for name in PARAM_NAMES]

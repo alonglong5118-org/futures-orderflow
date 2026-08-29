@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 fetch_macro_context_full.py — P3 数据源补全采集器（骨架版，2026-08-18）
 

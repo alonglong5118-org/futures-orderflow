@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 minishare_feed · da龘 全品种实时报价接入
 =========================================

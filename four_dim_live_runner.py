@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 实盘信号 runner（独立）
 =================================================================
 盘中循环：盘前用 akshare 刷新 F，盘中每 60s 用 minishare 实时快照算
@@ -26,6 +25,7 @@ import io
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -43,7 +43,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.4.0"
+APP_VERSION = "v3.5.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -228,6 +228,7 @@ for _blk in (
     "risk_gate",
     "contract_specs",
     "per_symbol_risk",
+    "thresholds_by_symbol",  # GA优化T_thresh逐品种覆盖 (2026-08-29 Phase 3.5)
 ):
     _tc_blk = _tc_all.get(_blk)
     if isinstance(_tc_blk, dict):
@@ -281,6 +282,7 @@ import info_dimension as idim  # #1 信息维度(资讯/新闻/情绪/另类数�
 import macro_context as mctx  # #6 跨资产宏观语境(live 专属，回测 macro_label=None 不进)
 import market_scanner as mscan  # #11 全市场批量扫描(并行)
 import montecarlo as mc  # #11 蒙特卡洛权益曲线置信区间
+import paper_trading_integration as pti  # 自动模拟交易引擎集成
 import push_notify as pn  # #15 手机推送(Telegram/Bark/企业微信)
 import regime_hmm as rhmm  # #7 HMM 市场状态识别(live 专属，回测不要调用)
 import sentiment_engine as senteng  # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
@@ -407,7 +409,7 @@ def _ak_poller():
                 _ak_errors += 1
                 if _ak_errors >= 5:
                     _AK_AVAILABLE = False
-        except Exception as e:
+        except Exception:
             _ak_errors += 1
             if _ak_errors >= 5:
                 _AK_AVAILABLE = False
@@ -445,7 +447,7 @@ def _ts_poller():
                 _ts_errors += 1
                 if _ts_errors >= 5:
                     _TS_AVAILABLE = False
-        except Exception as e:
+        except Exception:
             _ts_errors += 1
             if _ts_errors >= 5:
                 _TS_AVAILABLE = False
@@ -1065,7 +1067,7 @@ def load_dedup_state(last_fire):
     使重启/多进程共享同一份去重记忆，避免重复推送。"""
     global _SIG_PREV_DIR
     try:
-        with open(DEDUP_STATE_FILE, "r") as f:
+        with open(DEDUP_STATE_FILE) as f:
             d = json.load(f)
         last_fire.clear()
         last_fire.update(d.get("last", {}))
@@ -1101,7 +1103,7 @@ def load_pos_alert_dedup():
     """从磁盘载入持仓触价告警去重状态，每次 evaluate/_update_aux 开头调用。"""
     global _POS_ALERT_GUARD
     try:
-        with open(POS_ALERT_DEDUP_FILE, "r") as f:
+        with open(POS_ALERT_DEDUP_FILE) as f:
             d = json.load(f)
         _POS_ALERT_GUARD.clear()
         for sym, levels in d.get("guards", {}).items():
@@ -1336,7 +1338,16 @@ def chat_feed_path(date_str=None):
     """按天落盘：signal_chat_feed_YYYY-MM-DD.jsonl。默认今天。"""
     if not date_str:
         date_str = datetime.now().strftime("%Y-%m-%d")
-    return os.path.join(HERE, f"signal_chat_feed_{date_str}.jsonl")
+    # Security: validate date_str to prevent path traversal injection
+    # Only allow strictly formatted YYYY-MM-DD strings, reject anything else
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(date_str)):
+        raise ValueError(f"Invalid date_str format: {date_str!r}, expected YYYY-MM-DD")
+    # Normalize and ensure resolved path stays within HERE directory
+    raw_path = os.path.join(HERE, f"signal_chat_feed_{date_str}.jsonl")
+    resolved = os.path.realpath(raw_path)
+    if not resolved.startswith(os.path.realpath(HERE) + os.sep):
+        raise ValueError(f"Path escape detected: {date_str!r}")
+    return raw_path
 
 
 def list_chat_days():
@@ -1359,7 +1370,7 @@ def load_chat_feed(date_str=None, limit=None):
     out = []
     path = chat_feed_path(date_str)
     try:
-        with open(path, "r") as f:
+        with open(path) as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -1591,7 +1602,7 @@ def _rebuild_dedup_from_chat(last_fire):
         # name -> sym 反向查找表（缓存一次）
         name_to_sym = {v.get("name", k): k for k, v in SYMBOLS.items()}
         latest = {}  # sym -> (time_str, dir_T, price)
-        for line in open(p, "r", encoding="utf-8"):
+        for line in open(p, encoding="utf-8"):
             line = line.strip()
             if not line:
                 continue
@@ -1674,7 +1685,7 @@ def ensure_F(today):
             print(f"[F] 刷新基本面(akshare) {today} …")
             ff.refresh(basis_start="20240101")
         else:
-            print(f"[F] 已有当日缓存，跳过刷新")
+            print("[F] 已有当日缓存，跳过刷新")
     except Exception as e:
         print(f"[F] 刷新失败，继续(中性): {e}")
 
@@ -2116,7 +2127,7 @@ market_state_cache = {}  # symbol -> {state, tech_score, perf_score, ...}
 auto_opt_params = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
 if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
     try:
-        with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as _f:
+        with open(AUTO_OPT_LOG_FILE, encoding="utf-8") as _f:
             _data = json.load(_f)
             if "params" in _data:
                 for _k, _v in _data["params"].items():
@@ -2128,7 +2139,7 @@ if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
 auto_opt_adjustment_logs = []
 try:
     if os.path.exists(AUTO_OPT_LOG_FILE):
-        with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as _f:
+        with open(AUTO_OPT_LOG_FILE, encoding="utf-8") as _f:
             _data = json.load(_f)
             if "logs" in _data:
                 auto_opt_adjustment_logs = _data["logs"]
@@ -2157,7 +2168,7 @@ trader_state = {
 decision_diary = []
 try:
     if os.path.exists(DECISION_DIARY_FILE):
-        with open(DECISION_DIARY_FILE, "r", encoding="utf-8") as _f:
+        with open(DECISION_DIARY_FILE, encoding="utf-8") as _f:
             _dd = json.load(_f)
             decision_diary = _dd.get("entries", [])
 except Exception:
@@ -7499,7 +7510,7 @@ def _load_state_log():
         return []
     try:
         if os.path.exists(STATE_LOG_FILE):
-            with open(STATE_LOG_FILE, "r", encoding="utf-8") as f:
+            with open(STATE_LOG_FILE, encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         print(f"[v6.0] 加载状态日志失败: {e}")
@@ -7574,7 +7585,7 @@ def _load_auto_opt_params():
         return {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
     try:
         if os.path.exists(AUTO_OPT_LOG_FILE):
-            with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as f:
+            with open(AUTO_OPT_LOG_FILE, encoding="utf-8") as f:
                 data = json.load(f)
                 if "params" in data:
                     result = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
@@ -9775,6 +9786,11 @@ def start_dashboard(state):
                             _s2["contract"] = ml.normalize_contract_code(_ct)
                 # 版本号随 /api/state 实时下发，前端侧栏动态渲染（方案 B）
                 state["version"] = APP_VERSION
+                # ★ 注入自动模拟交易状态
+                try:
+                    state["paper_trading"] = pti.get_state()
+                except Exception:
+                    state["paper_trading"] = {"enabled": False, "error": "获取失败"}
                 # P1-②：门控品种定性提示（lh/JM 等被动态门控暂停发信号的，让面板露出覆盖缺口）
                 try:
                     state["gated_notices"] = _build_gated_notices()
@@ -10032,7 +10048,7 @@ def start_dashboard(state):
                             ddg.reset_peak(float(_peak)) if _peak else ddg.reset_peak()
                         except Exception:
                             pass
-                        print(f"[熔断] 已人工解除（面板操作）")
+                        print("[熔断] 已人工解除（面板操作）")
                     else:
                         body = json.dumps(rsm.KILL.summary(), ensure_ascii=False, default=str)
                 except Exception as e:
@@ -10278,7 +10294,7 @@ def start_dashboard(state):
                 # 所有有消息的日期（降序），供复盘下拉
                 try:
                     body = json.dumps(list_chat_days(), ensure_ascii=False)
-                except Exception as e:
+                except Exception:
                     body = json.dumps([], ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -10535,6 +10551,13 @@ def start_dashboard(state):
                     return
             elif self.path.split("?")[0] == "/api/paper":
                 self._handle_paper()
+                return
+            elif self.path.split("?")[0] == "/api/paper-trading":
+                # 自动模拟交易引擎 API
+                if self.command == "OPTIONS":
+                    pti.handle_options(self)
+                else:
+                    pti.handle_api(self)
                 return
             elif self.path.split("?")[0] == "/api/holdings_kline":
                 # 持仓K线 + SR位 + 止损止盈标注
@@ -11072,6 +11095,45 @@ def start_dashboard(state):
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
 
+            elif self.path.split("?")[0].startswith("/paper_dashboard/"):
+                # ★ 模拟交易仪表盘静态文件
+                _req_path = self.path.split("?")[0]
+                # 安全：规范化路径，防止目录穿越
+                _safe_path = _req_path.replace("/paper_dashboard/", "", 1)
+                _safe_path = _safe_path.lstrip("/").replace("..", "")
+                _file_path = os.path.join(HERE, "paper_dashboard", _safe_path)
+                _file_path = os.path.normpath(_file_path)
+                # 确保在 paper_dashboard 目录内
+                if not _file_path.startswith(os.path.join(HERE, "paper_dashboard")):
+                    self.send_response(403)
+                    self.end_headers()
+                    return
+                if os.path.isfile(_file_path):
+                    # 根据扩展名设置 Content-Type
+                    _ext = os.path.splitext(_file_path)[1].lower()
+                    _ct = {
+                        ".html": "text/html; charset=utf-8",
+                        ".js": "application/javascript; charset=utf-8",
+                        ".css": "text/css; charset=utf-8",
+                        ".ttf": "font/ttf",
+                        ".woff": "font/woff",
+                        ".woff2": "font/woff2",
+                        ".svg": "image/svg+xml",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".json": "application/json; charset=utf-8",
+                    }.get(_ext, "application/octet-stream")
+                    self.send_response(200)
+                    self.send_header("Content-Type", _ct)
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    with open(_file_path, "rb") as _f:
+                        self.wfile.write(_f.read())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -11138,6 +11200,10 @@ def start_dashboard(state):
                 return
             if self.path.split("?")[0] == "/api/paper":
                 self._handle_paper()
+                return
+            if self.path.split("?")[0] == "/api/paper-trading":
+                # 自动模拟交易引擎 API
+                pti.handle_api(self)
                 return
             if self.path.split("?")[0] == "/api/journal":
                 try:
@@ -12589,7 +12655,7 @@ PAPER_INIT_CASH = 1_000_000.0
 
 def _paper_load():
     try:
-        with open(PAPER_PATH, "r") as f:
+        with open(PAPER_PATH) as f:
             d = json.load(f)
         d.setdefault("cash", PAPER_INIT_CASH)
         d.setdefault("realized", 0.0)
@@ -13003,6 +13069,14 @@ def main():
         at.start_ak_poller(interval=5)
     except Exception as _e:
         print(f"[account_tracker] ak_poller 启动失败: {_e}")
+    # ★ 启动自动模拟交易引擎
+    try:
+        pti.init(
+            price_feed=feed if feed_ok else None,
+            contract_specs=_TCFG.get("contract_specs", {}),
+        )
+    except Exception as _e:
+        print(f"[PaperTrading] 初始化失败: {_e}")
     last_gate = time.time()
     global LAST_CYCLE_TS  # #16 心跳：main 内给模块全局赋值必须声明 global，否则只更新局部、看门狗读到永远 0.0
     global last_recover  # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
@@ -13030,6 +13104,11 @@ def main():
                 pass
         # —— 从 da龘 合并进来的三件事（每轮）——
         _update_aux(feed, state)
+        # ★ 自动模拟交易：检查新信号 + 检查持仓 TP/SL
+        try:
+            pti.tick(state)
+        except Exception as _pte:
+            print(f"[PaperTrading] tick 异常: {repr(_pte)[:80]}")
         # 日内权益采样（每轮都跑，内部按分钟去重）
         try:
             prices = {}

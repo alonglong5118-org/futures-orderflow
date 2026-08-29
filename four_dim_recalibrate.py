@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 four_dim_recalibrate.py · 四维策略「在线自适应重校准」之漂移检测（P1-4）
 =========================================================================
@@ -58,7 +57,7 @@ def load_calib():
     if not os.path.exists(CALIB_JSON):
         return {}
     try:
-        with open(CALIB_JSON, "r", encoding="utf-8") as _f:
+        with open(CALIB_JSON, encoding="utf-8") as _f:
             return json.load(_f)
     except Exception as e:
         print(f"[recalibrate] 加载 CALIB_JSON 失败(非缺失): {e}", flush=True)
@@ -70,7 +69,7 @@ def load_papertrack_trades():
     if not os.path.exists(PAPERTRACK_JSON):
         return []
     try:
-        with open(PAPERTRACK_JSON, "r", encoding="utf-8") as _f:
+        with open(PAPERTRACK_JSON, encoding="utf-8") as _f:
             rep = json.load(_f)
         return [t for t in rep.get("trades", []) if t.get("status") == "done"]
     except Exception as e:

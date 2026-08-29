@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 参数解析 — 单元测试
 =========================
@@ -75,10 +74,10 @@ class TestEffectiveParams(unittest.TestCase):
                 "黑系": {"T_thresh": 22, "T_small_thresh": 15, "conv_thresh": 50, "bias_hard": 60},
             },
             "thresholds_by_symbol": {
-                "jm": {"T_thresh": 30, "bias_hard_base": 70},  # 焦煤特殊配置
+                "JM": {"T_thresh": 30, "bias_hard_base": 70},  # 焦煤特殊配置
             },
         }
-        T_base, bhd = effective_params("jm", cfg=custom_cfg)
+        T_base, bhd = effective_params("JM", cfg=custom_cfg)
         # per_symbol 覆盖：T_thresh=30（不是分组的 22）
         self.assertEqual(T_base, 30)
         # bias_hard_base=70 → 趋势=70, 波动=75, 震荡=80

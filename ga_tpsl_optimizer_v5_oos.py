@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 ga_tpsl_optimizer_v5_oos.py — OOS 感知 GA 优化器（Phase 3.5）
 ================================================================
@@ -1585,14 +1584,14 @@ def main():
 
     if not args.full and len(df_is) > 800:
         df_is = df_is.tail(800).copy()
-        print(f"   IS 数据: 800 根 (截断加速，用 --full 用全量)")
+        print("   IS 数据: 800 根 (截断加速，用 --full 用全量)")
     else:
         print(f"   IS 数据: {len(df_is)} 根 ({df_is.index[0].date()} ~ {df_is.index[-1].date()})")
 
     print(f"   OOS 数据: {len(df_oos)} 根 ({df_oos.index[0].date()} ~ {df_oos.index[-1].date()})")
 
     # 基线评估
-    print(f"\n📐 计算基线参数...")
+    print("\n📐 计算基线参数...")
     baseline_dict = _get_baseline_params(symbol)
     baseline_ind = _baseline_to_optimized_individual(baseline_dict)
     print(f"   T_thresh_mult = 1.0 (基线 {baseline_dict['T_thresh_base']:.1f})")
@@ -1600,7 +1599,7 @@ def main():
     print(f"   rr_ratio = {baseline_dict['rr_ratio']:.2f}")
 
     # 基线全量 IS 评估
-    print(f"\n📊 基线 IS 全量评估...")
+    print("\n📊 基线 IS 全量评估...")
     base_is_m = evaluate_full_period(baseline_ind, symbol, df_is)
     base_oos_m = evaluate_full_period(baseline_ind, symbol, df_oos)
     print(
@@ -1613,11 +1612,11 @@ def main():
     )
 
     # WF 配置打印
-    print(f"\n🔄 Walk-Forward 配置:")
+    print("\n🔄 Walk-Forward 配置:")
     print(f"   训练 {train_bars} 根 + 验证 {valid_bars} 根, 步长 {step_bars} 根")
 
     # 运行 GA
-    print(f"\n🧬 开始 GA 优化...")
+    print("\n🧬 开始 GA 优化...")
     result = run_ga_nsga2(
         symbol,
         df_is,
@@ -1638,7 +1637,7 @@ def main():
     print(f"   帕累托前沿大小: {len(result['pareto_front'])} 个解")
 
     # 候选方案
-    print(f"\n🏆 候选方案:")
+    print("\n🏆 候选方案:")
     for key, cand in result["candidates"].items():
         p = cand["params"]
         f = cand["fitness"]
@@ -1648,7 +1647,7 @@ def main():
         print(f"     fitness: expR={f[0]:.4f}, calmar={f[1]:.2f}, stability={f[2]:.4f}")
 
     # OOS 验证
-    print(f"\n🔬 纯 OOS 验证:")
+    print("\n🔬 纯 OOS 验证:")
     oos_results = run_oos_validation(result["candidates"], symbol, df_is, df_oos, result["toolbox"])
     for key, oos in oos_results.items():
         status = "✅ 通过" if oos["passed"] else "❌ 失败"
@@ -1659,14 +1658,14 @@ def main():
         )
 
     # 稳健性检验
-    print(f"\n🔍 参数稳健性检验:")
+    print("\n🔍 参数稳健性检验:")
     robust_results = run_robustness_test(result["candidates"], symbol, df_is, result["toolbox"])
     for key, rob in robust_results.items():
         status = "✅ 稳健" if rob["robust"] else "⚠️ 敏感"
         print(f"   [{rob['label']}] {status}  综合得分={rob['overall_score']:.3f}")
 
     # 生成报告
-    print(f"\n📝 生成 HTML 报告...")
+    print("\n📝 生成 HTML 报告...")
     report_path = generate_html_report(
         symbol,
         result,
@@ -1717,7 +1716,7 @@ def main():
         json.dump(json_result, f, ensure_ascii=False, indent=2)
     print(f"   JSON 结果已保存: {json_path}")
 
-    print(f"\n🎉 Phase 3.5 OOS 感知优化完成！")
+    print("\n🎉 Phase 3.5 OOS 感知优化完成！")
     return 0
 
 

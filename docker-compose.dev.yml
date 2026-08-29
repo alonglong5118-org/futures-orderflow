@@ -1,0 +1,121 @@
+# ==============================================================================
+#  Docker Compose · 开发环境
+#  用法：
+#    docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#    或：make docker-dev
+#
+#  差异（对比生产 docker-compose.yml）：
+#    · 代码挂载到容器（修改代码无需重建镜像）
+#    · 直连模式（无看门狗，便于调试）
+#    · 开放更多端口（调试用）
+#    · 禁用资源限制
+#    · 自动重启改为 no（崩溃时停下来便于排查）
+# ==============================================================================
+
+services:
+  futures-orderflow:
+    # 覆盖构建参数
+    build:
+      target: builder   # 开发阶段使用 builder 层（有编译工具）
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+
+    # 代码挂载（热更新）
+    volumes:
+      # 源代码挂载（覆盖镜像内的代码）
+      - ./four_dim_strategy.py:/app/four_dim_strategy.py:ro
+      - ./strategy_layer.py:/app/strategy_layer.py:ro
+      - ./risk_state_machine.py:/app/risk_state_machine.py:ro
+      - ./consistency_watchdog.py:/app/consistency_watchdog.py:ro
+      - ./direction_source_monitor.py:/app/direction_source_monitor.py:ro
+      - ./event_calendar.py:/app/event_calendar.py:ro
+      - ./info_dimension.py:/app/info_dimension.py:ro
+      - ./sr_analyzer.py:/app/sr_analyzer.py:ro
+      - ./sentiment_engine.py:/app/sentiment_engine.py:ro
+      # 工具模块
+      - ./kelly_utils.py:/app/kelly_utils.py:ro
+      - ./gap_stop_utils.py:/app/gap_stop_utils.py:ro
+      - ./take_profit_utils.py:/app/take_profit_utils.py:ro
+      - ./price_protection.py:/app/price_protection.py:ro
+      - ./corr_gate_utils.py:/app/corr_gate_utils.py:ro
+      - ./signal_trigger_utils.py:/app/signal_trigger_utils.py:ro
+      - ./risk_gate_utils.py:/app/risk_gate_utils.py:ro
+      - ./anomaly_scan.py:/app/anomaly_scan.py:ro
+      - ./hidden_pivot.py:/app/hidden_pivot.py:ro
+      - ./t_score_utils.py:/app/t_score_utils.py:ro
+      # 数据源
+      - ./fundamental_feed.py:/app/fundamental_feed.py:ro
+      - ./fundamental_metrics.py:/app/fundamental_metrics.py:ro
+      - ./macro_context.py:/app/macro_context.py:ro
+      - ./akshare_live.py:/app/akshare_live.py:ro
+      - ./tushare_live.py:/app/tushare_live.py:ro
+      # 运行器
+      - ./four_dim_live_runner.py:/app/four_dim_live_runner.py:ro
+      # 配置文件
+      - ./feature_flags.json:/app/feature_flags.json:ro
+      - ./calibration_params.json:/app/calibration_params.json:ro
+      - ./stop_rr_overrides.json:/app/stop_rr_overrides.json:ro
+      # 本地配置
+      - ./tq_config.json:/app/tq_config.json:ro
+      # 测试代码（开发时需要）
+      - ./tests:/app/tests:ro
+      - ./run_tests.py:/app/run_tests.py:ro
+      # 数据卷（继承生产配置）
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+    # 环境变量
+    environment:
+      - MODE=direct           # 开发用直连模式
+      - NO_VOICE=1            # 开发默认关语音
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG       # 开发时详细日志
+
+    # 端口（开放更多调试端口）
+    ports:
+      - "${PORT:-8741}:8741"
+      - "5678:5678"           # debugpy 调试端口
+
+    # 开发时不自动重启（崩溃了好排查）
+    restart: "no"
+
+    # 移除资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "4.0"
+
+    # 开发时可提权（便于安装额外依赖等）
+    security_opt: []
+    cap_drop: []
+    user: root
+
+    # 入口命令（开发模式用 direct）
+    command: ["live"]
+
+  # ── 文档站开发服务 ─────────────────────────────────────────────────────────
+  docs-dev:
+    image: python:3.11-slim
+    container_name: futures-orderflow-docs-dev
+    working_dir: /docs
+    command: >
+      sh -c "
+        pip install --no-cache-dir
+          mkdocs>=1.6
+          mkdocs-material>=9.5
+          mkdocs-glightbox>=0.4
+          mkdocs-video>=1.5
+          mkdocs-git-revision-date-localized-plugin>=1.2 &&
+        mkdocs serve --dev-addr=0.0.0.0:8000
+      "
+    volumes:
+      - ./mkdocs.yml:/docs/mkdocs.yml:ro
+      - ./docs:/docs/docs:ro
+    ports:
+      - "${DOCS_PORT:-8742}:8000"
+    profiles:
+      - docs-dev
+    restart: unless-stopped

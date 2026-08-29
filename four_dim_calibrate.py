@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 four_dim_calibrate.py — 四维策略「真重校准」工具
 ================================================
@@ -178,7 +177,7 @@ def recalibrate_report(symbols, tail: int = 250, min_trades: int = 10, T_candida
             print(f"  -> 提议新 T_thresh={best['T']} (Δ{delta:+d}), 近期期望R≈{best['expR']:+.3f} (作新 mean_oos)")
         else:
             print(f"  警告: 近期窗口内无任何 T 能达到 >= {min_trades} 笔有效交易")
-            print(f"     该品种近期 walk-forward 极度稀疏/全负 -> 建议「维持门控/考虑剔除」")
+            print("     该品种近期 walk-forward 极度稀疏/全负 -> 建议「维持门控/考虑剔除」")
         print()
 
         report["items"].append(

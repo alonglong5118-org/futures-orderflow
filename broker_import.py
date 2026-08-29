@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 经纪商成交回灌（#9）
 =====================================
 背景：实盘持仓只读接口要天勤专业版（9988/年，不买），所以真实成交一直靠手敲记账 ——
@@ -135,7 +134,7 @@ def _read_rows(path):
             raise RuntimeError(f"Excel 读取失败({e})，可另存为 CSV 再导入") from e
     for enc in ("utf-8-sig", "gbk", "gb18030", "utf-8"):
         try:
-            with open(path, "r", encoding=enc, newline="") as f:
+            with open(path, encoding=enc, newline="") as f:
                 sample = f.read(4096)
                 f.seek(0)
                 try:
@@ -209,7 +208,7 @@ def parse_file(path):
 # ── 已导入去重 ────────────────────────────────────────────────────────────
 def _load_state():
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
+        with open(STATE_FILE, encoding="utf-8") as f:
             return json.load(f) or {}
     except Exception:
         return {}

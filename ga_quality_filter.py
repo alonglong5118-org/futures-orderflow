@@ -165,11 +165,11 @@ def main():
             reason_type = r.split("=")[0]
             reason_counter[reason_type] += 1
 
-    print(f"\n  失败原因分布:")
+    print("\n  失败原因分布:")
     for reason, count in reason_counter.most_common():
         print(f"    {reason}: {count} 个")
 
-    print(f"\n  未通过明细:")
+    print("\n  未通过明细:")
     for f in sorted(failed, key=lambda x: -x["expR"]):
         reason_str = "; ".join(f["reasons"][:2])
         print(f"    {f['symbol']:<6} expR={f['expR']:>7.4f} robust={f['robust']:>6.3f} | {reason_str}")
@@ -181,7 +181,7 @@ def main():
         groups = defaultdict(list)
         for p in passed:
             groups[p["group"]].append(p["expR"])
-        print(f"\n通过品种的板块平均 expR:")
+        print("\n通过品种的板块平均 expR:")
         for grp, expRs in sorted(groups.items(), key=lambda x: -sum(x[1]) / len(x[1])):
             avg = sum(expRs) / len(expRs)
             print(f"  {grp}: {avg:.4f} (n={len(expRs)})")
@@ -203,9 +203,9 @@ def main():
             json.dump(new_cache, f, ensure_ascii=False, indent=2)
 
         print(f"已应用筛选: 删除 {removed} 个不合格品种，保留 {len(new_cache)} 个")
-        print(f"  → 不合格品种将使用默认权重")
+        print("  → 不合格品种将使用默认权重")
 
-    print(f"\n提示: 加 --apply 参数可实际更新缓存文件")
+    print("\n提示: 加 --apply 参数可实际更新缓存文件")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """gen_papertrack_html.py
 把 papertrack_report.json(四维策略真实 walk-forward 回测)渲染成自包含可视化面板。
 

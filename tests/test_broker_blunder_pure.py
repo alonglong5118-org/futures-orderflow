@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 broker_import + blunder 纯函数 — 单元测试
 ==============================================

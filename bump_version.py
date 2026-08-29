@@ -18,7 +18,7 @@ HERE = __import__("os").path.dirname(__import__("os").path.abspath(__file__))
 
 
 def read_file(path):
-    with open(path, "r") as f:
+    with open(path) as f:
         return f.read()
 
 

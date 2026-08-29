@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """生成性能基准测试报告（Markdown + JSON）。
 
 从 results.json（测试输出）和 _perf_baseline.json（历史基线）读取数据，

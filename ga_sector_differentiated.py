@@ -222,7 +222,7 @@ def process_group(group_name):
 
     group_data = load_group_data(group_name, min_bars=500, tail=0)
     if len(group_data) < 3:
-        print(f"  跳过：有效品种不足", flush=True)
+        print("  跳过：有效品种不足", flush=True)
         return None
 
     print(f"  有效品种: {len(group_data)}", flush=True)
@@ -234,7 +234,7 @@ def process_group(group_name):
         train_d, val_d, test_d = split_fold(group_data, fold)
 
         if len(train_d) < 3 or len(test_d) < 3:
-            print(f"    跳过：数据不足", flush=True)
+            print("    跳过：数据不足", flush=True)
             continue
 
         # 基准
@@ -305,7 +305,7 @@ def process_group(group_name):
 
     best_uniform = max(avg_archetype_test, key=avg_archetype_test.get)
 
-    print(f"\n  两折汇总:", flush=True)
+    print("\n  两折汇总:", flush=True)
     print(f"    基准平均 test_expR:    {avg_base_test:+.3f}", flush=True)
     for aname, avg_v in sorted(avg_archetype_test.items(), key=lambda x: -x[1]):
         marker = " ★" if aname == best_uniform else ""
@@ -356,7 +356,7 @@ def main():
         )
 
     # 各板块每折选择的原型
-    print(f"\n各板块每折选择的原型:", flush=True)
+    print("\n各板块每折选择的原型:", flush=True)
     for g, r in results.items():
         choices = [f"F{f['fold'] + 1}:{f['best_archetype']}" for f in r["fold_results"]]
         print(f"  {g}: {', '.join(choices)}", flush=True)

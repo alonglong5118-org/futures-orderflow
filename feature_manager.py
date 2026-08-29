@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 FLAGS_FILE = os.path.join(os.path.dirname(__file__), "feature_flags.json")
 CHANGELOG_FILE = os.path.join(os.path.dirname(__file__), "feature_flags_changelog.json")
@@ -132,7 +132,7 @@ class FeatureManager:
     def get_change_log(self, limit: int = 20) -> List[Dict[str, Any]]:
         """获取最近 N 条开关变更记录。"""
         try:
-            with open(self._changelog_path, "r", encoding="utf-8") as f:
+            with open(self._changelog_path, encoding="utf-8") as f:
                 logs = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return []
@@ -157,9 +157,9 @@ class FeatureManager:
             st = os.stat(self._flags_path)
             self._cached_mtime = st.st_mtime
             self._cached_at = time.time()
-            with open(self._flags_path, "r", encoding="utf-8") as f:
+            with open(self._flags_path, encoding="utf-8") as f:
                 self._cached_flags = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             self._cached_flags = {}
             self._cached_mtime = 0.0
             self._cached_at = 0.0
@@ -197,7 +197,7 @@ class FeatureManager:
 
     def _append_changelog(self, feature: str, enabled: bool, reason: str, operator: str) -> None:
         try:
-            with open(self._changelog_path, "r", encoding="utf-8") as f:
+            with open(self._changelog_path, encoding="utf-8") as f:
                 logs = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             logs = []
@@ -218,7 +218,7 @@ class FeatureManager:
 
 
 # 模块级单例 — 供 runner 直接 import 使用
-_MANAGER: Optional[FeatureManager] = None
+_MANAGER: FeatureManager | None = None
 
 
 def get_manager() -> FeatureManager:

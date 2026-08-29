@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 wf_validation.py — Walk-Forward 滚动验证工具
 =============================================
@@ -399,14 +398,14 @@ def main():
     args = parser.parse_args()
 
     # 加载结果
-    with open(args.result, "r") as f:
+    with open(args.result) as f:
         result_data = json.load(f)
 
     symbol = result_data["symbol"]
     version, param_names, opt_params, make_cfg_opt = detect_version_and_params(result_data)
 
     print(f"\n{'=' * 60}")
-    print(f"📈 Walk-Forward 滚动验证")
+    print("📈 Walk-Forward 滚动验证")
     print(f"{'=' * 60}")
     print(f"   品种: {symbol}")
     print(f"   版本: {version} ({len(param_names)} 参数)")
@@ -432,7 +431,7 @@ def main():
     baseline_windows = None
     if args.compare_baseline:
         bl_names, bl_params, make_cfg_bl = get_baseline_params(symbol, version)
-        print(f"\n📐 基线参数:")
+        print("\n📐 基线参数:")
         for n, v in zip(bl_names, bl_params):
             print(f"   {n} = {v}")
 
@@ -443,9 +442,9 @@ def main():
         print_analysis(baseline_analysis)
 
         # 对比
-        print(f"\n⚖️ 优化 vs 基线 对比")
+        print("\n⚖️ 优化 vs 基线 对比")
         print(f"{'=' * 50}")
-        print(f"   指标          优化参数      基线参数      提升")
+        print("   指标          优化参数      基线参数      提升")
         print(f"   {'-' * 48}")
         print(
             f"   盈利窗口占比   {opt_analysis['profit_ratio']:6.1%}      "
@@ -526,7 +525,7 @@ def main():
     print()
 
     # 最终结论
-    print(f"🎯 结论")
+    print("🎯 结论")
     print(f"{'=' * 50}")
     pr = opt_analysis["profit_ratio"]
     if pr >= 0.7:

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 refresh_main_contracts.py — 换月期全市场主力合约实时核对与强制更新
 
@@ -241,7 +240,7 @@ def ak_main_all():
         ine_out = _get_ine_main()
         out.update(ine_out)
     except Exception:
-        print(f"  [warn] ine 主力获取失败，跳过", file=sys.stderr)
+        print("  [warn] ine 主力获取失败，跳过", file=sys.stderr)
         failed.append("ine")
 
     return out, failed

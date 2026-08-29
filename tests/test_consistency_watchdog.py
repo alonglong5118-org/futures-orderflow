@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 consistency_watchdog — 单元测试
 ================================
@@ -33,14 +32,13 @@ import os
 import sys
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 import consistency_watchdog as cw
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  工具函数

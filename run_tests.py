@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 四维策略 — 单元测试总入口
 ==========================
@@ -740,9 +739,9 @@ def run_tests(
     print(color(f"  总耗时: {total_elapsed / 1000:.2f}s", C.BOLD))
 
     if all_ok:
-        print(color(f"  状态: ✅ 全部通过", C.BOLD, C.GREEN))
+        print(color("  状态: ✅ 全部通过", C.BOLD, C.GREEN))
     else:
-        print(color(f"  状态: ❌ 有失败", C.BOLD, C.RED))
+        print(color("  状态: ❌ 有失败", C.BOLD, C.RED))
     print()
 
     return all_ok

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ga_seven_factor_oos.py — 7 因子（6+SR_breakout）板块级 GA 优化 + OOS 走步法验证
 
@@ -301,7 +300,7 @@ def main():
     else:
         sectors = ["化工"]
 
-    print(f"=== 7 因子 GA + OOS 验证 ===")
+    print("=== 7 因子 GA + OOS 验证 ===")
     print(f"因子: {', '.join(SF7)}")
     print(f"板块: {', '.join(sectors)}")
     print(f"训练集: {args.train} bar, 验证集: {args.test} bar")

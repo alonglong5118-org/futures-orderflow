@@ -1,0 +1,103 @@
+# ==============================================================================
+#  .dockerignore — Docker 构建时排除的文件
+# ==============================================================================
+
+# Git
+.git
+.gitignore
+.github
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 构建产物
+site/
+htmlcov/
+coverage-html/
+test-results/
+benchmark-results/
+
+# 覆盖率
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+
+# 本地状态/数据文件（运行时生成，不打包进镜像）
+*.json
+!feature_flags.json
+!calibration_params.json
+!stop_rr_overrides.json
+!tq_config.example.json
+
+# 日志
+*.log
+logs/
+
+# 临时脚本/探针
+_*.py
+_*.md
+_*.txt
+_*.sh
+_*.json
+
+# 备份
+*.bak
+*.bak_*
+
+# 第三方代码
+ponytail/
+node_modules/
+
+# 文档（运行时不需要）
+docs/
+mkdocs.yml
+
+# 图片/截图
+*.png
+*.jpg
+*.jpeg
+*.gif
+!icon-192.png
+!icon-512.png
+
+# HTML 报告
+*_report.html
+*.html
+!manifest.webmanifest
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 回测结果（体积大）
+*_backtest_result/
+ga_v*_result/
+
+# 数据目录
+data_5m/
+data/
+broker_fills/
+
+# 环境变量
+.env
+.env.*

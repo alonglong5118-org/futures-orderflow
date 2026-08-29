@@ -1,0 +1,295 @@
+# ==============================================================================
+#  CI：Docker 镜像构建与发布
+# ==============================================================================
+#  触发时机：
+#    · push 到 main 分支 → 构建并发布 latest 标签
+#    · 打 tag（v*） → 构建并发布版本标签
+#    · PR → 仅构建（不推送），验证 Dockerfile 正确性
+#    · 手动触发
+#
+#  功能：
+#    · 多架构构建（amd64 + arm64）
+#    · 推送到 GitHub Container Registry (GHCR)
+#    · Trivy 镜像漏洞扫描
+#    · 构建产物 SBOM
+# ==============================================================================
+
+name: Docker
+
+run-name: "Docker · ${{ github.event_name }} · ${{ github.ref_name }}"
+
+# ── 触发条件 ──────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - "Dockerfile"
+      - "Dockerfile.docs"
+      - "docker-entrypoint.sh"
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "docker/**"
+      - ".github/workflows/docker.yml"
+      - "four_dim_strategy.py"
+      - "strategy_layer.py"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "Dockerfile"
+      - "Dockerfile.docs"
+      - "docker-entrypoint.sh"
+      - "requirements*.txt"
+      - "docker/**"
+      - ".github/workflows/docker.yml"
+
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "是否推送到 GHCR"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      platforms:
+        description: "构建架构"
+        required: false
+        default: "linux/amd64"
+        type: choice
+        options:
+          - "linux/amd64"
+          - "linux/arm64"
+          - "linux/amd64,linux/arm64"
+
+# ── 权限 ──────────────────────────────────────────────────────────────────────
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+
+# ── 并发控制 ──────────────────────────────────────────────────────────────────
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+# ── 环境变量 ──────────────────────────────────────────────────────────────────
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PLATFORMS: linux/amd64,linux/arm64
+
+# ── Job 定义 ──────────────────────────────────────────────────────────────────
+jobs:
+  # ---------------------------------------------------------------------------
+  #  构建主镜像
+  # ---------------------------------------------------------------------------
+  build-main:
+    name: Build Main Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_digest: ${{ steps.build-and-push.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU（多架构支持）
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && (github.event.inputs.push != 'false' || github.event_name == 'push')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取 Docker 元数据（标签/标签）
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=long,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 构建并推送
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ github.event.inputs.platforms || env.PLATFORMS }}
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push != 'false' || github.event_name == 'push') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=3.11
+
+      - name: 输出镜像信息
+        run: |
+          echo "### 镜像信息" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **名称**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Digest**: \`${{ steps.build-and-push.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **标签**:" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.meta.outputs.tags }}' | sed 's/^/  - /' >> $GITHUB_STEP_SUMMARY
+          echo "- **架构**: ${{ github.event.inputs.platforms || env.PLATFORMS }}" >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  #  构建文档站镜像
+  # ---------------------------------------------------------------------------
+  build-docs:
+    name: Build Docs Image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    outputs:
+      image_digest: ${{ steps.build-and-push.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && (github.event.inputs.push != 'false' || github.event_name == 'push')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取 Docker 元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-docs
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,format=long,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 构建并推送
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.docs
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push != 'false' || github.event_name == 'push') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docs
+          cache-to: type=gha,mode=max,scope=docs
+
+  # ---------------------------------------------------------------------------
+  #  Trivy 镜像漏洞扫描
+  # ---------------------------------------------------------------------------
+  scan:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: build-main
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 运行 Trivy 漏洞扫描
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-main.outputs.image_digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+
+      - name: 上传 SARIF 到 GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-docker
+
+      - name: 生成扫描报告摘要
+        run: |
+          echo "### Trivy 漏洞扫描结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "镜像: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-main.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f trivy-results.sarif ]; then
+            echo "扫描完成，已上传到 GitHub Security 面板。" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ---------------------------------------------------------------------------
+  #  生成 SBOM（软件物料清单）
+  # ---------------------------------------------------------------------------
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: build-main
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: 生成镜像 SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-main.outputs.image_digest }}
+          format: spdx-json
+          output-file: image-sbom.spdx.json
+          upload-artifact: true
+          upload-release-assets: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
+  # ---------------------------------------------------------------------------
+  #  验证镜像可运行（冒烟测试）
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: Smoke Test Image
+    runs-on: ubuntu-latest
+    needs: build-main
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 构建测试镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: futures-orderflow:test
+          cache-from: type=gha
+          build-args: |
+            PYTHON_VERSION=3.11
+
+      - name: 冒烟测试
+        run: |
+          docker run --rm futures-orderflow:test smoke

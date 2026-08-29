@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 macro_context.py — 跨资产宏观语境因子（纯 stdlib，跑 live runner venv 3.13）
 

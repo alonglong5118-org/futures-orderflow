@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Phase A：把全市场 5m 多源合并为 pipeline 可用的 data_5m/_XX0_min5.csv。
 
 源（按日期去重合并，取并集 -> 最长连续覆盖）：
@@ -142,7 +141,7 @@ for key in report:
 print(f"\n=== 合并完成：{sum(1 for v in report.values() if v.get('ok'))} 个文件，总行数={n_total_rows} ===")
 print(f"有日线(可跑5m出场回测): {len(have_daily)} 个")
 print(f"无日线: {len(miss_daily)} 个 -> {miss_daily}")
-print(f"\nDISABLED_SYMBOLS(校准判死, 回测结果仅作数据参考):", sorted(set(have_daily) & fd.DISABLED_SYMBOLS))
+print("\nDISABLED_SYMBOLS(校准判死, 回测结果仅作数据参考):", sorted(set(have_daily) & fd.DISABLED_SYMBOLS))
 
 with open(os.path.join(HERE, "_convert_min5_report.json"), "w") as f:
     json.dump(

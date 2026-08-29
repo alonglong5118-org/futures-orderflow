@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Futures OrderFlow Logo">
+  <defs>
+    <!-- 主渐变：靛蓝 → 深紫 → 品红 -->
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <!-- 背景渐变 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+    <!-- 上涨色（绿） -->
+    <linearGradient id="bullGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <!-- 下跌色（红） -->
+    <linearGradient id="bearGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="100%" stop-color="#f87171" />
+    </linearGradient>
+    <!-- 发光效果 -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 背景圆角矩形 -->
+  <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="url(#bgGrad)" />
+
+  <!-- 内环装饰 -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+  <circle cx="256" cy="256" r="140" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1" />
+
+  <!--
+    订单流 K 线图组合
+    左侧：三根阳线（上涨）
+    中间：一根大阳线（主导）
+    右侧：两根阴线（下跌）
+    整体呈上升趋势，象征订单流策略的收益曲线
+  -->
+  <g transform="translate(128, 150)" filter="url(#glow)">
+    <!-- 第一根：小阳线 -->
+    <line x1="30" y1="80" x2="30" y2="140" stroke="url(#bullGrad)" stroke-width="2" stroke-linecap="round" />
+    <rect x="22" y="95" width="16" height="30" rx="3" fill="url(#bullGrad)" />
+
+    <!-- 第二根：中阳线 -->
+    <line x1="70" y1="55" x2="70" y2="130" stroke="url(#bullGrad)" stroke-width="2" stroke-linecap="round" />
+    <rect x="62" y="70" width="16" height="45" rx="3" fill="url(#bullGrad)" />
+
+    <!-- 第三根：大阳线（核心，最高） -->
+    <line x1="110" y1="20" x2="110" y2="115" stroke="url(#primaryGrad)" stroke-width="2.5" stroke-linecap="round" />
+    <rect x="100" y="35" width="20" height="65" rx="4" fill="url(#primaryGrad)" />
+
+    <!-- 第四根：小阴线（回调） -->
+    <line x1="150" y1="45" x2="150" y2="100" stroke="url(#bearGrad)" stroke-width="2" stroke-linecap="round" />
+    <rect x="142" y="55" width="16" height="30" rx="3" fill="url(#bearGrad)" />
+
+    <!-- 第五根：中阴线（继续回调） -->
+    <line x1="190" y1="35" x2="190" y2="105" stroke="url(#bearGrad)" stroke-width="2" stroke-linecap="round" />
+    <rect x="182" y="50" width="16" height="40" rx="3" fill="url(#bearGrad)" />
+
+    <!-- 成交量柱状图（底部） -->
+    <g opacity="0.4">
+      <rect x="25" y="165" width="10" height="15" rx="2" fill="#6366f1" />
+      <rect x="65" y="158" width="10" height="22" rx="2" fill="#8b5cf6" />
+      <rect x="105" y="150" width="10" height="30" rx="2" fill="#ec4899" />
+      <rect x="145" y="160" width="10" height="20" rx="2" fill="#8b5cf6" />
+      <rect x="185" y="163" width="10" height="17" rx="2" fill="#6366f1" />
+    </g>
+  </g>
+
+  <!-- 订单流箭头（数据流动感） -->
+  <g transform="translate(256, 370)" opacity="0.7">
+    <path d="M -80 0 Q -40 -15 0 0 Q 40 15 80 0" fill="none" stroke="url(#primaryGrad)" stroke-width="2.5" stroke-linecap="round" />
+    <polygon points="80,0 70,-5 70,5" fill="url(#primaryGrad)" />
+  </g>
+
+  <!-- FO 字母标记（右下角小字） -->
+  <g transform="translate(370, 410)" opacity="0.6">
+    <text x="0" y="0" font-family="'Roboto Mono', 'SF Mono', monospace" font-size="14" font-weight="700" fill="url(#primaryGrad)" letter-spacing="2">
+      FO
+    </text>
+  </g>
+</svg>

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 tick_orderflow.py — 盘口级订单流 → C 维度增量（#3）
 

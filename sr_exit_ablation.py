@@ -325,7 +325,7 @@ def main():
     os.makedirs("logs", exist_ok=True)
     with open("logs/sr_exit_ablation.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2, default=str)
-    print(f"\n结果已保存到 logs/sr_exit_ablation.json")
+    print("\n结果已保存到 logs/sr_exit_ablation.json")
 
 
 if __name__ == "__main__":

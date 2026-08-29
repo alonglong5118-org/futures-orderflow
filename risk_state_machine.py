@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 仓位状态机（从 da龘 移植并适配）
 ================================================
 da龘 的 RiskStateMachine 是账户级「会认输」的风控：NORMAL→WARNING→LOCKED，
@@ -48,7 +47,7 @@ def _load_consec_gate():
     try:
         cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trade_config.json")
         if os.path.exists(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with open(cfg_path, encoding="utf-8") as f:
                 cfg = json.load(f) or {}
             gate = cfg.get("consec_loss_gate") or {}
             w = int(gate.get("warn", CONSEC_WARN))
@@ -348,7 +347,7 @@ class KillSwitch:
     def _load(self):
         try:
             if os.path.exists(self.path):
-                with open(self.path, "r", encoding="utf-8") as f:
+                with open(self.path, encoding="utf-8") as f:
                     d = json.load(f) or {}
                 self.halted = bool(d.get("halted"))
                 self.reason = d.get("reason", "")

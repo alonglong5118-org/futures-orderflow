@@ -122,15 +122,15 @@ def generate_report(
         threshold = baseline_total - tolerance
         if current_total < threshold:
             passed = False
-            lines.append(f"> ❌ **覆盖率门禁不通过**")
+            lines.append("> ❌ **覆盖率门禁不通过**")
             lines.append(f"> 当前 {current_total:.2f}% 低于基线 {baseline_total:.2f}% （容忍度 ±{tolerance:.2f}%）")
-            lines.append(f"> 请为新增代码补充测试，或更新基线（`make coverage-update-baseline`）")
+            lines.append("> 请为新增代码补充测试，或更新基线（`make coverage-update-baseline`）")
         else:
-            lines.append(f"> ✅ **覆盖率门禁通过**")
+            lines.append("> ✅ **覆盖率门禁通过**")
             lines.append(f"> 当前 {current_total:.2f}% ≥ 基线 {baseline_total:.2f}% （容忍度 ±{tolerance:.2f}%）")
     else:
-        lines.append(f"> ⚠️ 未找到基线文件，跳过门禁检查")
-        lines.append(f"> 运行 `make coverage-update-baseline` 创建初始基线")
+        lines.append("> ⚠️ 未找到基线文件，跳过门禁检查")
+        lines.append("> 运行 `make coverage-update-baseline` 创建初始基线")
 
     lines.append("")
 

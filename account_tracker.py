@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 账户状态追踪器（实时账户表）
 ========================================================
 读取 trade_config.json（用户填好的真实账户参数 + 品种合约参数），
@@ -238,7 +237,7 @@ def start_ak_poller(interval=5):
                     _get_ak_prices_batch(held_syms)
                     errors = 0
                 time.sleep(interval)
-            except Exception as e:
+            except Exception:
                 errors += 1
                 if errors >= 5:
                     print(f"[akshare_live] 轮询错误过多({errors}次)，暂停30秒")

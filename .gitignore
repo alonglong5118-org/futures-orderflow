@@ -36,6 +36,8 @@ _*.sh
 *.jsonl
 # 生成物报告（已跟踪的固定文档不受影响）
 *.md
+!SECURITY.md      # 安全策略文件（Scorecard Security-Policy 得分项）
+!CONTRIBUTING.md  # 贡献指南
 # 临时脚本/产物（下划线前缀）
 _*.txt
 _*.sh
@@ -77,8 +79,11 @@ tq_config.json
 !requirements*.txt
 !.coveragerc
 !docs/*.md
+!docs/**/*.md
+!docs/assets/
 !README.md
 !codecov.yml
+!mkdocs.yml
 # ---- 测试基准（必须入库，防退化黄金标准）----
 !tests/_baseline_values.json
 !tests/_perf_baseline.json
@@ -101,3 +106,6 @@ benchmark-results/
 ga_v*_result/
 *_backtest_result/
 *_report.html
+
+# ---- MkDocs 文档站构建产物（不入库）----
+site/

@@ -403,7 +403,7 @@ def main():
     os.makedirs("logs", exist_ok=True)
     with open("logs/sentiment_sr_combined_bt.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2, default=str)
-    print(f"\n结果已保存到 logs/sentiment_sr_combined_bt.json")
+    print("\n结果已保存到 logs/sentiment_sr_combined_bt.json")
 
 
 if __name__ == "__main__":

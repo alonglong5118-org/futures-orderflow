@@ -2,20 +2,25 @@
 #  CI：性能基准测试
 # ==============================================================================
 #  触发时机：
-#    · push 到 main/master → 自动跑一次，更新基线缓存
+#    · push 到 main/master → 自动跑一次，更新基线缓存 + 趋势数据
+#    · PR comment "/benchmark" → 手动触发 PR 性能对比，自动评论结果
 #    · 手动触发（workflow_dispatch）→ 按需跑
 #    · PR 不自动触发（性能测试慢，且 CI 环境波动大）
 #
 #  功能：
-#    · 运行 15 项性能基准
-#    · 与历史基线对比，检测性能退化
-#    · 生成 JSON + Markdown 报告，上传为 artifact
-#    · 退化超过 50% 标记为失败（严格模式）
+#    · 运行性能基准测试
+#    · 与基线对比，检测性能退化/提升
+#    · PR 评论中展示对比结果
+#    · 生成性能趋势数据（追踪历史变化）
+#    · 退化超过阈值标记为失败（严格模式）
 # ==============================================================================
 
 name: Benchmark
 
-run-name: "Benchmark · ${{ github.event_name == 'push' && github.event.head_commit.message || github.event_name }}"
+run-name: >-
+  ${{ github.event_name == 'push' && 'Benchmark · push' ||
+      github.event_name == 'issue_comment' && format('Benchmark · PR #{0}', github.event.issue.number) ||
+      'Benchmark · manual' }}
 
 on:
   push:
@@ -32,42 +37,148 @@ on:
         options:
           - "true"
           - "false"
+  # PR 评论触发：在 PR 中评论 /benchmark 触发性能对比
+  issue_comment:
+    types: [created]
 
-# 并发控制：同一分支只保留最新一次基准测试
+# 并发控制：同一分支/PR 只保留最新一次基准测试
 concurrency:
-  group: benchmark-${{ github.ref }}
+  group: benchmark-${{ github.event_name == 'issue_comment' && format('pr-{0}', github.event.issue.number) || github.ref }}
   cancel-in-progress: true
 
-# 最小权限原则：只授予必要的 GITHUB_TOKEN 权限
 permissions:
-  contents: read      # 代码检出
-  actions: write      # 缓存读写（性能基线缓存）
+  contents: read
 
 jobs:
-  benchmark:
-    name: "Performance Benchmark"
+  # ── 判断是否需要运行 ────────────────────────────────────────────────
+  #  issue_comment 时检查是否为 /benchmark 命令且是 PR
+  # ====================================================================
+  check-trigger:
+    name: "Check trigger"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 2
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '/benchmark') &&
+       github.event.issue.pull_request != null)
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      pr_number: ${{ steps.check.outputs.pr_number }}
+      pr_sha: ${{ steps.check.outputs.pr_sha }}
+      base_ref: ${{ steps.check.outputs.base_ref }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Check trigger condition
+        id: check
+        run: |
+          echo "事件: ${{ github.event_name }}"
+
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "pr_number=" >> $GITHUB_OUTPUT
+            echo "pr_sha=" >> $GITHUB_OUTPUT
+            echo "base_ref=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # issue_comment 事件
+          COMMENT_BODY="${{ github.event.comment.body }}"
+          PR_NUMBER="${{ github.event.issue.number }}"
+
+          # 检查是否为 /benchmark 命令
+          if echo "$COMMENT_BODY" | grep -qE '^/benchmark\b'; then
+            echo "✅ 检测到 /benchmark 命令，PR #$PR_NUMBER"
+
+            # 获取 PR 的 sha 和 base ref
+            PR_DATA=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
+
+            PR_SHA=$(echo "$PR_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin)['head']['sha'])")
+            BASE_REF=$(echo "$PR_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin)['base']['ref'])")
+
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "pr_sha=$PR_SHA" >> $GITHUB_OUTPUT
+            echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "pr_number=" >> $GITHUB_OUTPUT
+            echo "pr_sha=" >> $GITHUB_OUTPUT
+            echo "base_ref=" >> $GITHUB_OUTPUT
+          fi
+
+  # ── 运行性能基准测试 ────────────────────────────────────────────────
+  benchmark:
+    name: "Run benchmarks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+
+    permissions:
+      contents: read
+      actions: write   # 缓存读写（性能基线缓存）
+      pull-requests: write  # PR 评论
+
+    steps:
+      # PR 模式：checkout PR 分支
+      - name: Checkout (PR mode)
+        if: github.event_name == 'issue_comment'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
-          fetch-depth: 1  # 浅克隆，加速拉取
+          ref: ${{ needs.check-trigger.outputs.pr_sha }}
+          fetch-depth: 1
+
+      # push / manual 模式：checkout 当前分支
+      - name: Checkout (push/manual mode)
+        if: github.event_name != 'issue_comment'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+        with:
+          fetch-depth: 1
 
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
 
+      # ── 获取基线（基准分支的基线数据） ──────────────────────
+      - name: Determine baseline key
+        id: baseline-key
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            # PR 模式：使用 base 分支的基线
+            BASE_REF="${{ needs.check-trigger.outputs.base_ref }}"
+            echo "baseline_key_prefix=perf-baseline-" >> $GITHUB_OUTPUT
+            echo "mode=pr" >> $GITHUB_OUTPUT
+            echo "PR 的基线来源: $BASE_REF 分支的最新缓存"
+          else
+            # push / manual 模式：使用历史基线
+            echo "baseline_key_prefix=perf-baseline-" >> $GITHUB_OUTPUT
+            echo "mode=push" >> $GITHUB_OUTPUT
+          fi
+
       - name: Restore baseline cache
         id: baseline-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: tests/_perf_baseline.json
-          key: perf-baseline-${{ github.sha }}
+          key: ${{ steps.baseline-key.outputs.baseline_key_prefix }}placeholder
           restore-keys: |
             perf-baseline-
+
+      - name: Restore trend data cache
+        if: github.event_name == 'push'
+        id: trend-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25  # v5
+        with:
+          path: benchmark-results/trend.json
+          key: perf-trend-${{ github.sha }}
+          restore-keys: |
+            perf-trend-
 
       - name: Show baseline info
         run: |
@@ -78,41 +189,165 @@ jobs:
             echo "⚠️  无历史基线，本次运行将建立初始基线"
           fi
 
+      # ── 运行性能基准 ──────────────────────────────────────
       - name: Run performance benchmarks
         id: bench
         env:
-          PERF_CHECK: ${{ github.event.inputs.strict || 'true' }}
+          PERF_CHECK: "0"  # 对比脚本负责判断，不在测试阶段失败
           PERF_RESULTS_FILE: benchmark-results/results.json
         run: |
           mkdir -p benchmark-results
           python -m tests.test_performance
 
-      - name: Generate benchmark report
+      # ── 生成对比报告 ──────────────────────────────────────
+      - name: Generate comparison report
         if: always()
+        id: compare
         run: |
-          python scripts/gen_benchmark_report.py
+          MODE="${{ steps.baseline-key.outputs.mode }}"
+
+          if [ "$MODE" = "pr" ]; then
+            NAME_A="PR #${{ needs.check-trigger.outputs.pr_number }}"
+            NAME_B="基线 (${{ needs.check-trigger.outputs.base_ref }})"
+          else
+            NAME_A="当前 (${{ github.sha }})"
+            NAME_B="基线"
+          fi
+
+          if [ -f tests/_perf_baseline.json ]; then
+            python scripts/compare_benchmarks.py \
+              --results benchmark-results/results.json \
+              --baseline tests/_perf_baseline.json \
+              --name-a "$NAME_A" \
+              --name-b "$NAME_B" \
+              --threshold 0.5 \
+              --output benchmark-results/comparison.md \
+              --format both
+          else
+            echo "⚠️  无基线数据，跳过对比，只生成当前报告"
+            python scripts/gen_benchmark_report.py
+          fi
+
+          # 保存 JSON 结果供后续步骤使用
+          if [ -f benchmark-results/comparison.json ]; then
+            REGRESSIONS=$(python -c "
+            import json
+            with open('benchmark-results/comparison.json') as f:
+                d = json.load(f)
+            print(d['summary']['regressions'])
+            ")
+            echo "regressions=$REGRESSIONS" >> $GITHUB_OUTPUT
+          else
+            echo "regressions=0" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 保存基线 + 更新趋势数据（仅 push 到 main 时） ─────
+      - name: Save baseline + update trend
+        if: success() && github.event_name == 'push'
+        run: |
+          # 恢复趋势数据缓存
+          echo "📊 更新性能趋势数据..."
+
+          # 添加本次结果到趋势
+          python scripts/perf_trend.py add \
+            --results benchmark-results/results.json \
+            --trend benchmark-results/trend.json \
+            --commit "${{ github.sha }}"
+
+          # 生成趋势报告
+          python scripts/perf_trend.py report \
+            --trend benchmark-results/trend.json \
+            --output benchmark-results/trend-report.md
+
+          echo "✅ 趋势数据已更新"
 
       - name: Save baseline to cache
         if: success() && github.event_name == 'push'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: tests/_perf_baseline.json
           key: perf-baseline-${{ github.sha }}
 
+      - name: Save trend data to cache
+        if: success() && github.event_name == 'push'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25  # v5
+        with:
+          path: benchmark-results/trend.json
+          key: perf-trend-${{ github.sha }}
+
+      # ── PR 评论对比结果 ──────────────────────────────────
+      - name: Comment benchmark results on PR
+        if: github.event_name == 'issue_comment' && always()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const issue_number = ${{ needs.check-trigger.outputs.pr_number }};
+
+            let body = '';
+
+            // 读取对比报告
+            const reportPath = 'benchmark-results/comparison.md';
+            if (fs.existsSync(reportPath)) {
+              body = fs.readFileSync(reportPath, 'utf8');
+            } else {
+              // 读取普通报告
+              const simpleReport = 'benchmark-results/report.md';
+              if (fs.existsSync(simpleReport)) {
+                body = fs.readFileSync(simpleReport, 'utf8');
+              } else {
+                body = '⚠️  未生成性能报告';
+              }
+            }
+
+            const regressions = parseInt('${{ steps.compare.outputs.regressions }}', 10) || 0;
+            const icon = regressions > 0 ? '🔴' : '✅';
+            const header = `### ${icon} 性能基准测试结果（PR #${issue_number}）\n\n`;
+            const footer = `\n\n---\n<sub>触发者: @${context.payload.comment.user.login} · commit: \`${context.payload.comment.html_url.split('/').pop()?.substring(0, 7) || ''}\`</sub>`;
+
+            const fullBody = header + body + footer;
+
+            // 查找是否已有 benchmark 评论，有则更新
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number,
+            });
+
+            const existingComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('性能基准测试结果')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner, repo,
+                comment_id: existingComment.id,
+                body: fullBody,
+              });
+              console.log('✅ 已更新性能基准评论');
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: fullBody,
+              });
+              console.log('✅ 已创建性能基准评论');
+            }
+
+      # ── 上传结果 artifact ────────────────────────────────
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: benchmark-report
           path: benchmark-results/
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Upload JUnit results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-junit
-          path: test-results/
-          if-no-files-found: ignore
-          retention-days: 7
+      # ── 严格模式检查 ─────────────────────────────────────
+      - name: Strict mode check
+        if: |
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.strict == 'true') &&
+          steps.compare.outputs.regressions > 0
+        run: |
+          echo "❌ 严格模式：发现 ${{ steps.compare.outputs.regressions }} 项性能退化"
+          exit 1

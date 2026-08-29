@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 集成测试（二）— 回测验证 + 数据质量监控
 ==============================================
@@ -429,7 +428,7 @@ class TestBacktestRiskGateIntegration(unittest.TestCase):
         detail = result["trades_detail"]
         for t in detail:
             self.assertIn("reason", t)
-            self.assertIn(t["reason"], ["止损", "止盈", "尾仓离场", "信号反转"])
+            self.assertIn(t["reason"], ["止损", "止盈", "止盈2R", "尾仓离场", "信号反转", "期末平"])
 
     def test_exit_reasons_count_matches(self):
         """exit_reasons 计数 == 实际交易出场分布"""

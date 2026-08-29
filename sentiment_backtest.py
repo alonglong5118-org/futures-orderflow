@@ -384,7 +384,7 @@ def main():
         print(f"  已加载 {len(sentiment_daily)} 天")
 
     if not sentiment_daily:
-        print(f"\n计算每日情绪序列...")
+        print("\n计算每日情绪序列...")
         t0 = time.time()
         sentiment_daily = compute_daily_sentiment(
             all_syms, tail=args.tail + 50, min_bars=args.min_bars, window=args.window
@@ -434,7 +434,7 @@ def main():
             print(f"  {sym}: 失败 - {e}")
 
     # 汇总
-    print(f"\n--- 汇总 ---")
+    print("\n--- 汇总 ---")
     if results:
         n = len(results)
         avg_base = sum(r["base"]["expR"] for r in results) / n
@@ -461,7 +461,7 @@ def main():
                 # expR × 交易数 = 总R（近似），后面再按总笔数平均
                 all_by_sent[band]["total_expR"] += data["expR"] * data["trades"]
 
-        print(f"\n  各情绪档表现:")
+        print("\n  各情绪档表现:")
         for band in ["extreme_greed", "greed", "neutral", "fear", "extreme_fear"]:
             if band in all_by_sent and all_by_sent[band]["trades"] > 0:
                 d = all_by_sent[band]

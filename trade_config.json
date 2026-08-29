@@ -121,14 +121,14 @@
     "floor_oos": 0.1
   },
   "account": {
-    "equity": 984950.0,
-    "equity_note": "当前权益(2026-08-28 16:00同步)",
-    "risk_pct": 1.5,
-    "margin_cap_pct": 30,
-    "max_lots": 6,
+    "equity": 100000.0,
+    "equity_note": "小资金验证模式 - 模拟权益10万元",
+    "risk_pct": 0.5,
+    "margin_cap_pct": 25,
+    "max_lots": 2,
     "per_symbol_lots": {},
-    "portfolio_margin_cap_pct": 60,
-    "max_total_lots": 20,
+    "portfolio_margin_cap_pct": 40,
+    "max_total_lots": 5,
     "use_realtime_margin": true,
     "available": 867642.75
   },
@@ -142,7 +142,7 @@
     "stop_atr_mult": 1.5,
     "rr_ratio": 2.0,
     "limit_proximity": 0.9,
-    "consec_loss_lock": 3,
+    "consec_loss_lock": 2,
     "slip_pts": 1
   },
   "contract_specs": {
@@ -527,8 +527,252 @@
     }
   },
   "consec_loss_gate": {
-    "warn": 2,
-    "lock": 3,
-    "_note": "连续止损≥warn笔软警告，≥lock笔当日冻结（跨日解除）"
+    "warn": 1,
+    "lock": 2,
+    "_note": "小资金验证模式：1笔警告，2笔当日冻结"
+  },
+  "thresholds_by_symbol": {
+    "JM": {
+      "T_thresh": 13.1,
+      "T_thresh_mult": 0.9354,
+      "T_thresh_base": 14.0,
+      "_note": "GA优化 v1.0, 基线=14.0, 倍率=0.9354",
+      "bias_hard_base": 50
+    },
+    "MA": {
+      "T_thresh": 9.58,
+      "T_thresh_mult": 0.5987,
+      "T_thresh_base": 16.0,
+      "_note": "GA优化 v1.0, 基线=16.0, 倍率=0.5987",
+      "bias_hard_base": 50
+    },
+    "SR": {
+      "T_thresh": 36.68,
+      "T_thresh_mult": 1.2228,
+      "T_thresh_base": 30.0,
+      "_note": "GA优化 v1.0, 基线=30.0, 倍率=1.2228",
+      "bias_hard_base": 50
+    },
+    "TA": {
+      "T_thresh": 7.28,
+      "T_thresh_mult": 0.6068,
+      "T_thresh_base": 12.0,
+      "_note": "GA优化 v1.0, 基线=12.0, 倍率=0.6068",
+      "bias_hard_base": 50
+    },
+    "ag": {
+      "T_thresh": 11.61,
+      "T_thresh_mult": 0.7256,
+      "T_thresh_base": 16.0,
+      "_note": "GA优化 v1.0, 基线=16.0, 倍率=0.7256",
+      "bias_hard_base": 50
+    },
+    "al": {
+      "T_thresh": 16.86,
+      "T_thresh_mult": 1.4054,
+      "T_thresh_base": 12.0,
+      "_note": "GA优化 v1.0, 基线=12.0, 倍率=1.4054",
+      "bias_hard_base": 50
+    },
+    "c": {
+      "T_thresh": 29.48,
+      "T_thresh_mult": 1.1339,
+      "T_thresh_base": 26.0,
+      "_note": "GA优化 v1.0, 基线=26.0, 倍率=1.1339",
+      "bias_hard_base": 50
+    },
+    "hc": {
+      "T_thresh": 17.81,
+      "T_thresh_mult": 1.2725,
+      "T_thresh_base": 14.0,
+      "_note": "GA优化 v1.0, 基线=14.0, 倍率=1.2725",
+      "bias_hard_base": 50
+    },
+    "i": {
+      "T_thresh": 13.19,
+      "T_thresh_mult": 0.9422,
+      "T_thresh_base": 14.0,
+      "_note": "GA优化 v1.0, 基线=14.0, 倍率=0.9422",
+      "bias_hard_base": 50
+    },
+    "jd": {
+      "T_thresh": 34.4,
+      "T_thresh_mult": 1.1467,
+      "T_thresh_base": 30.0,
+      "_note": "GA优化 v1.0, 基线=30.0, 倍率=1.1467",
+      "bias_hard_base": 50
+    },
+    "m": {
+      "T_thresh": 11.4,
+      "T_thresh_mult": 0.9499,
+      "T_thresh_base": 12.0,
+      "_note": "GA优化 v1.0, 基线=12.0, 倍率=0.9499",
+      "bias_hard_base": 50
+    },
+    "p": {
+      "T_thresh": 18.04,
+      "T_thresh_mult": 1.503,
+      "T_thresh_base": 12.0,
+      "_note": "GA优化 v1.0, 基线=12.0, 倍率=1.5030",
+      "bias_hard_base": 50
+    },
+    "rb": {
+      "T_thresh": 31.86,
+      "T_thresh_mult": 1.4482,
+      "T_thresh_base": 22.0,
+      "_note": "GA优化 v1.0, 基线=22.0, 倍率=1.4482",
+      "bias_hard_base": 50
+    },
+    "ru": {
+      "T_thresh": 38.82,
+      "T_thresh_mult": 1.3866,
+      "T_thresh_base": 28.0,
+      "_note": "GA优化 v1.0, 基线=28.0, 倍率=1.3866",
+      "bias_hard_base": 50,
+      "combine_weights": {
+        "T": 0.45,
+        "F": 0.4,
+        "C": 0.15
+      }
+    },
+    "y": {
+      "T_thresh": 11.71,
+      "T_thresh_mult": 0.9757,
+      "T_thresh_base": 12.0,
+      "_note": "GA优化 v1.0, 基线=12.0, 倍率=0.9757",
+      "bias_hard_base": 50
+    },
+    "zn": {
+      "T_thresh": 33.09,
+      "T_thresh_mult": 0.9731,
+      "T_thresh_base": 34.0,
+      "_note": "GA优化 v1.0, 基线=34.0, 倍率=0.9731",
+      "bias_hard_base": 50
+    }
+  },
+  "per_symbol_risk": {
+    "JM": {
+      "stop_atr_mult": 0.8525,
+      "rr_ratio": 2.4822,
+      "_note": "GA优化 v1.0, OOS expR=0.3893"
+    },
+    "MA": {
+      "stop_atr_mult": 1.3979,
+      "rr_ratio": 3.2643,
+      "_note": "GA优化 v1.0, OOS expR=-0.0980"
+    },
+    "SR": {
+      "stop_atr_mult": 1.1163,
+      "rr_ratio": 1.3747,
+      "_note": "GA优化 v1.0, OOS expR=0.7436"
+    },
+    "TA": {
+      "stop_atr_mult": 1.4796,
+      "rr_ratio": 3.9917,
+      "_note": "GA优化 v1.0, OOS expR=1.1755"
+    },
+    "ag": {
+      "stop_atr_mult": 1.9169,
+      "rr_ratio": 2.573,
+      "_note": "GA优化 v1.0, OOS expR=4.0919"
+    },
+    "al": {
+      "stop_atr_mult": 1.8112,
+      "rr_ratio": 3.9985,
+      "_note": "GA优化 v1.0, OOS expR=0.1269"
+    },
+    "c": {
+      "stop_atr_mult": 1.7595,
+      "rr_ratio": 1.7578,
+      "_note": "GA优化 v1.0, OOS expR=0.1296"
+    },
+    "hc": {
+      "stop_atr_mult": 1.12,
+      "rr_ratio": 1.3048,
+      "_note": "GA优化 v1.0, OOS expR=0.1658"
+    },
+    "i": {
+      "stop_atr_mult": 1.9351,
+      "rr_ratio": 1.997,
+      "_note": "GA优化 v1.0, OOS expR=-0.4625"
+    },
+    "jd": {
+      "stop_atr_mult": 1.5858,
+      "rr_ratio": 2.4991,
+      "_note": "GA优化 v1.0, OOS expR=2.5049"
+    },
+    "m": {
+      "stop_atr_mult": 2.1031,
+      "rr_ratio": 1.5998,
+      "_note": "GA优化 v1.0, OOS expR=0.4815"
+    },
+    "p": {
+      "stop_atr_mult": 1.668,
+      "rr_ratio": 2.9934,
+      "_note": "GA优化 v1.0, OOS expR=0.3009"
+    },
+    "rb": {
+      "stop_atr_mult": 1.799,
+      "rr_ratio": 2.0143,
+      "_note": "GA优化 v1.0, OOS expR=0.3124"
+    },
+    "ru": {
+      "stop_atr_mult": 1.0708,
+      "rr_ratio": 2.0479,
+      "_note": "GA优化 v1.0, OOS expR=0.6795"
+    },
+    "y": {
+      "stop_atr_mult": 1.2917,
+      "rr_ratio": 2.5892,
+      "_note": "GA优化 v1.0, OOS expR=0.2188"
+    },
+    "zn": {
+      "stop_atr_mult": 1.6612,
+      "rr_ratio": 1.3782,
+      "_note": "GA优化 v1.0, OOS expR=0.1894"
+    }
+  },
+  "_small_cap_mode": {
+    "mode": "small_cap_validation",
+    "version": "v1.0",
+    "description": "GA优化参数小资金验证模式 - 10万模拟权益",
+    "account": {
+      "equity": 100000.0,
+      "equity_note": "小资金验证模式 - 模拟权益10万元",
+      "risk_pct": 0.5,
+      "margin_cap_pct": 25,
+      "max_lots": 2,
+      "portfolio_margin_cap_pct": 40,
+      "max_total_lots": 5
+    },
+    "risk_gate": {
+      "consec_loss_lock": 2,
+      "slip_pts": 1
+    },
+    "consec_loss_gate": {
+      "warn": 1,
+      "lock": 2,
+      "_note": "小资金验证模式：1笔警告，2笔当日冻结"
+    },
+    "validation_only_positive_oos": true,
+    "excluded_symbols": [
+      "MA",
+      "i"
+    ],
+    "excluded_reason": "OOS样本外负收益，小资金验证阶段暂不纳入",
+    "validation_targets": {
+      "min_trades": 30,
+      "min_win_rate": 0.35,
+      "min_expR": 0.1,
+      "max_drawdown_pct": 5,
+      "validation_period_days": 60
+    },
+    "graduation_criteria": {
+      "trades": 50,
+      "win_rate": 0.38,
+      "expR": 0.2,
+      "calmar": 2.0,
+      "max_drawdown_pct": 3
+    }
   }
 }

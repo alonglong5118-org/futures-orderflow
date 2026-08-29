@@ -2,6 +2,8 @@
 
 本项目遵循 **Conventional Commits** 提交规范，配合 Git 钩子自动检查，确保提交历史清晰可读。
 
+---
+
 ## 快速上手
 
 ### 提交格式
@@ -46,6 +48,21 @@ git commit -m "feat(api)!: 重构策略接口，不兼容旧版"
 git commit -m "ci(coverage): 添加覆盖率门禁"
 ```
 
+---
+
+## 破坏性变更
+
+如果提交包含破坏性变更（Breaking Change），在 type 后加 `!`，并在 body 中说明：
+
+```
+feat!(api): 修改风险门禁接口
+
+BREAKING CHANGE: RiskGate.check() 返回值从 bool 改为 GateResult 对象
+迁移方式：将 if gate.check() 改为 if gate.check().passed
+```
+
+---
+
 ## 自动检查机制
 
 项目内置了 **3 层提交检查**，通过 Git 钩子（Hook）自动运行：
@@ -55,10 +72,12 @@ git commit -m "ci(coverage): 添加覆盖率门禁"
 **触发时机**：`git commit` 提交前
 
 **检查内容**：
-- 🎨 暂存的 Python 文件是否符合 Ruff 格式规范
-- 🧪 冒烟测试（快速验证，< 3s）
+
+- 暂存的 Python 文件是否符合 Ruff 格式规范
+- 冒烟测试（快速验证，< 3s）
 
 **未通过怎么办**：
+
 ```bash
 # 自动格式化
 make format
@@ -78,6 +97,7 @@ git commit -m "..."
 **检查内容**：提交信息是否符合 Conventional Commits 规范
 
 **未通过怎么办**：
+
 - 按规范修改提交信息格式
 - 参考上方「类型说明」选择合适的 type
 
@@ -88,6 +108,7 @@ git commit -m "..."
 **检查内容**：全量单元测试 + 集成测试
 
 **未通过怎么办**：
+
 - 修复失败的测试
 - 确保本地 `make test` 通过后再推送
 
@@ -101,7 +122,10 @@ git commit --no-verify
 git push --no-verify
 ```
 
-> ⚠️ 跳过检查可能导致不规范的代码或提交进入仓库，请谨慎使用。CI 中仍会运行完整检查。
+!!! warning
+    跳过检查可能导致不规范的代码或提交进入仓库，请谨慎使用。CI 中仍会运行完整检查。
+
+---
 
 ## 安装钩子
 
@@ -127,6 +151,8 @@ make hooks
 ./scripts/install_hooks.sh uninstall
 ```
 
+---
+
 ## CI 中的检查
 
 除了本地钩子，GitHub Actions 中也有对应的检查：
@@ -140,6 +166,8 @@ make hooks
 | 单元测试 | Test | 多版本 Python 全量测试 |
 | 覆盖率门禁 | Test | 覆盖率不退化检查 |
 
+---
+
 ## 最佳实践
 
 1. **小步提交**：每个 commit 只做一件事，方便回滚和 Code Review
@@ -147,15 +175,17 @@ make hooks
 3. **先格式化再提交**：养成 `make format` 的习惯，避免被钩子拦截
 4. **本地跑测试**：提交前至少跑过冒烟测试，push 前跑全量测试
 5. **合理使用 type**：
-   - 改了功能 → `feat` / `fix`
-   - 改了性能但不改功能 → `perf`
-   - 改了代码结构但不改行为 → `refactor`
-   - 只改格式/空格/排序 → `style`
-   - 只改文档 → `docs`
-   - 只改测试 → `test`
-   - 改 CI/工作流 → `ci`
-   - 改依赖/构建脚本 → `build`
-   - 其他杂项 → `chore`
+    - 改了功能 → `feat` / `fix`
+    - 改了性能但不改功能 → `perf`
+    - 改了代码结构但不改行为 → `refactor`
+    - 只改格式/空格/排序 → `style`
+    - 只改文档 → `docs`
+    - 只改测试 → `test`
+    - 改 CI/工作流 → `ci`
+    - 改依赖/构建脚本 → `build`
+    - 其他杂项 → `chore`
+
+---
 
 ## 相关资源
 

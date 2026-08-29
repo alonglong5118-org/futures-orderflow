@@ -195,7 +195,7 @@ def optimize_group(group, pop_size=GROUP_POP, n_gen=GROUP_GEN, verbose=True, tai
         # 早停：连续 5 代无提升
         if gen >= 5 and all(h["max"] >= record["max"] - 0.001 for h in history[-5:]):
             if verbose:
-                print(f"  早停：连续 5 代无显著提升")
+                print("  早停：连续 5 代无显著提升")
             break
 
     best = hof[0]
