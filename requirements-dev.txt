@@ -14,7 +14,7 @@ mypy>=1.11
 
 # 安全扫描
 bandit>=1.7
-pip-audit>=2.7
+pip-audit>=2.10.1
 
 # MkDocs 文档站
 mkdocs>=1.6
