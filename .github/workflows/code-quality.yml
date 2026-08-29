@@ -35,6 +35,10 @@ on:
       - "LICENSE*"
       - ".gitignore"
 
+  # Merge Queue：合并前验证
+  merge_group:
+    types: [checks_requested]
+
   workflow_dispatch:
 
 # 并发控制：同一分支/PR 只保留最新一次运行，旧的自动取消
@@ -120,6 +124,35 @@ jobs:
           echo ""
           echo "💡 提示：如果新增了测试文件但忘记注册，运行："
           echo "   python scripts/discover_tests.py --update"
+
+      - name: Large file check
+        run: |
+          echo "=== 大文件检测 ==="
+          # 阈值：1 MB（二进制/数据文件不应该提交到 git）
+          MAX_SIZE=1048576  # 1 MB in bytes
+          # 排除的目录和文件（图标等必要文件除外）
+          large_files=$(find . -type f \
+            -not -path "./.git/*" \
+            -not -path "./node_modules/*" \
+            -not -path "./ponytail/*" \
+            -not -path "./ga_*_result/*" \
+            -not -path "./coverage-html/*" \
+            -not -path "./test-results/*" \
+            -not -name "*.parquet" \
+            -not -name "*.h5" \
+            -not -name "*.pkl" \
+            -size +1M 2>/dev/null || true)
+
+          if [ -n "$large_files" ]; then
+            echo "❌ 发现超过 1MB 的文件（不应提交到 git）："
+            echo "$large_files"
+            echo ""
+            echo "💡 建议："
+            echo "   · 如果是数据文件，放到 .gitignore 或用 LFS"
+            echo "   · 如果是二进制产物，改为运行时生成"
+            exit 1
+          fi
+          echo "✅ 无超大文件"
 
       - name: Actionlint (workflow 语法检查)
         uses: raven-actions/actionlint@v2

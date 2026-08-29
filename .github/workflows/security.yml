@@ -26,6 +26,10 @@ on:
       - main
       - master
 
+  # Merge Queue：合并前安全验证
+  merge_group:
+    types: [checks_requested]
+
   workflow_dispatch:
 
 # 并发控制：同一分支/PR 只保留最新一次运行，旧的自动取消
@@ -110,6 +114,14 @@ jobs:
         uses: ./.github/actions/setup-python-deps
         with:
           python-version: "3.11"
+
+      - name: Restore pip-audit OSV cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip-audit
+          key: pip-audit-osv-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            pip-audit-osv-${{ runner.os }}-
 
       - name: Bandit · High severity (blocking)
         run: |

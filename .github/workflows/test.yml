@@ -4,6 +4,7 @@
 #  触发时机：
 #    · PR 到 main/master → Linux + 3.11 单元测试（快速反馈）
 #    · push 到 main/master → Linux/macOS + 3.10/3.11/3.12 全矩阵 + 覆盖率
+#    · Merge Queue → 合并前最终验证（保证 main 永远绿）
 #    · 手动触发
 # ==============================================================================
 
@@ -32,6 +33,10 @@ on:
       - "docs/**"
       - "LICENSE*"
       - ".gitignore"
+
+  # Merge Queue：进入合并队列后跑全量测试（保证 main 永远绿）
+  merge_group:
+    types: [checks_requested]
 
   # 支持手动触发
   workflow_dispatch:
