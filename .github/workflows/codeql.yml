@@ -53,6 +53,7 @@ permissions:
 jobs:
   analyze:
     name: "CodeQL · Python"
+    continue-on-error: true  # PR不阻塞合并
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

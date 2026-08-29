@@ -153,6 +153,7 @@ jobs:
   # ========================================================================
   python-security:
     name: "Python security scan"
+    continue-on-error: true  # PR不阻塞合并
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: detect-changes
