@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -62,7 +62,7 @@ jobs:
 
       - name: Restore baseline cache
         id: baseline-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: tests/_perf_baseline.json
           key: perf-baseline-${{ github.sha }}
@@ -94,14 +94,14 @@ jobs:
 
       - name: Save baseline to cache
         if: success() && github.event_name == 'push'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: tests/_perf_baseline.json
           key: perf-baseline-${{ github.sha }}
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: benchmark-report
           path: benchmark-results/
@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload JUnit results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: benchmark-junit
           path: test-results/

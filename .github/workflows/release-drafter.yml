@@ -52,7 +52,7 @@ jobs:
 
     steps:
       - name: Run release drafter
-        uses: release-drafter/release-drafter@v7
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -77,17 +77,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1
 
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610  # v0
         with:
           syft-version: v1.12.0
 
       - name: Install Grype
-        uses: anchore/scan-action/download-grype@v4
+        uses: anchore/scan-action/download-grype@64a33b277ea7a1215a3c142735a1091341939ff5  # v4
         with:
           grype-version: v0.82.0
 
@@ -173,7 +173,7 @@ jobs:
           cat sbom-futures-orderflow.sha256
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: sbom
           path: |
@@ -201,13 +201,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 100  # 需要一些历史来生成变更日志
 
       - name: Publish release from draft
         id: release-drafter
-        uses: release-drafter/release-drafter@v7
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
         with:
           config-name: release-drafter.yml
           # 指定版本号为 tag 名
@@ -218,12 +218,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download SBOM artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
         with:
           name: sbom
 
       - name: Upload SBOM + vulnerability report to release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3
         with:
           tag_name: ${{ github.ref_name }}
           files: |

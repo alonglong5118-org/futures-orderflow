@@ -56,17 +56,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1
 
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610  # v0
         with:
           syft-version: v1.12.0
 
       - name: Install Grype
-        uses: anchore/scan-action/download-grype@v4
+        uses: anchore/scan-action/download-grype@64a33b277ea7a1215a3c142735a1091341939ff5  # v4
         with:
           grype-version: v0.82.0
 
@@ -152,7 +152,7 @@ jobs:
           cat sbom-futures-orderflow.sha256
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: sbom
           path: |
@@ -209,12 +209,12 @@ jobs:
 
     steps:
       - name: Download SBOM artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
         with:
           name: sbom
 
       - name: Submit dependencies to GitHub
-        uses: actions/dependency-review-action@v5
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5
         with:
           format: SPDX
           sbom-path: sbom-futures-orderflow.spdx.json

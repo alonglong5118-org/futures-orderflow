@@ -81,13 +81,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 2  # 需要 base 对比
 
       - name: Paths filter
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad  # v3
         with:
           filters: |
             python_code:
@@ -142,7 +142,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -152,7 +152,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Restore test cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: .pytest_cache
           key: pytest-${{ matrix.os }}-py${{ matrix.python-version }}-${{ github.sha }}
@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.scope }}
           path: test-results/
@@ -209,7 +209,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -219,7 +219,7 @@ jobs:
           python-version: "3.11"
 
       - name: Restore pytest cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: .pytest_cache
           key: pytest-${{ runner.os }}-py3.11-integration-${{ github.sha }}
@@ -246,7 +246,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: test-results-py3.11-integration
           path: test-results/
@@ -263,7 +263,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -285,7 +285,7 @@ jobs:
           coverage xml -o coverage.xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
           files: coverage.xml
           flags: unit
@@ -294,7 +294,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}  # 私有仓库需要，公共仓库可省略
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: coverage-report
           path: coverage-html/
@@ -311,7 +311,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1  # 浅克隆，加速拉取
 
@@ -333,7 +333,7 @@ jobs:
           python -m coverage xml -o coverage.xml
 
       - name: Upload coverage to Codecov (PR)
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
           files: coverage.xml
           flags: unit,pr
@@ -361,7 +361,7 @@ jobs:
 
       - name: Comment coverage report on PR
         if: always()
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
           script: |
             const fs = require('fs');

@@ -37,7 +37,9 @@ on:
   # 手动触发
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read          # 代码检出
+  actions: read           # 读取 action 信息（id-token 需要）
 
 jobs:
   analysis:
@@ -57,13 +59,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Run Scorecard analysis
-        uses: ossf/scorecard-action@v2
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc  # v2
         with:
           results_file: results.sarif
           results_format: sarif
@@ -74,7 +76,7 @@ jobs:
 
       - name: Upload results to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           sarif_file: results.sarif
           category: scorecard

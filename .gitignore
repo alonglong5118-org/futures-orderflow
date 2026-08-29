@@ -36,6 +36,7 @@ _*.sh
 *.jsonl
 # 生成物报告（已跟踪的固定文档不受影响）
 *.md
+!SECURITY.md   # 安全策略文件（Scorecard Security-Policy 得分项）
 # 临时脚本/产物（下划线前缀）
 _*.txt
 _*.sh
