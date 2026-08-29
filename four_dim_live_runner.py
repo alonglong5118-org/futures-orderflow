@@ -25,6 +25,7 @@ import io
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -1339,8 +1340,7 @@ def chat_feed_path(date_str=None):
         date_str = datetime.now().strftime("%Y-%m-%d")
     # Security: validate date_str to prevent path traversal injection
     # Only allow strictly formatted YYYY-MM-DD strings, reject anything else
-    import re as _re
-    if not _re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(date_str)):
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(date_str)):
         raise ValueError(f"Invalid date_str format: {date_str!r}, expected YYYY-MM-DD")
     # Normalize and ensure resolved path stays within HERE directory
     raw_path = os.path.join(HERE, f"signal_chat_feed_{date_str}.jsonl")

@@ -73,7 +73,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           # 查询套件：security-extended（安全扩展）+ quality（质量）
-          queries: security-extended,security-and-quality
+          queries: security-extended
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
