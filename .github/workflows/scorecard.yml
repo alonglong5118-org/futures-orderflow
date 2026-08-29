@@ -1,0 +1,90 @@
+# ==============================================================================
+#  CI：OpenSSF Scorecard — 开源项目安全健康度评分
+# ==============================================================================
+#  触发时机：
+#    · 每周五北京时间早 6 点 → 定期全量评分（UTC 周四 22:00）
+#    · push 到 default 分支 → 触发评分（可选，默认关闭以节省时间）
+#    · 手动触发
+#
+#  评分维度（18 项检查）：
+#    · 代码评审（Code-Review）
+#    · 分支保护（Branch-Protection）
+#    · CI 测试（CI-Tests）
+#    · 危险工作流（Dangerous-Workflow）
+#    · 依赖更新工具（Dependency-Update-Tool）
+#    · 固定 action 版本（Pinned-Dependencies）
+#    · 令牌权限最小化（Token-Permissions）
+#    · 安全策略（Security-Policy）
+#    · 签名发布（Signed-Releases）
+#    · 等等...
+#
+#  结果会上传到 OpenSSF Scorecard 平台，可在 security scorecard 页面查看
+# ==============================================================================
+
+name: Scorecard supply-chain security
+
+on:
+  # 定期运行：每周五北京时间 06:00 = UTC 周四 22:00
+  schedule:
+    - cron: "0 22 * * 4"
+
+  # 默认分支推送时也跑（确保改动及时反映）
+  push:
+    branches:
+      - main
+      - master
+
+  # 手动触发
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: "Scorecard analysis"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      # 需要写安全事件到 Security tab
+      security-events: write
+      # 需要读取 repo 内容（公共仓库不需要，但私有仓库需要）
+      contents: read
+      # 读取 actions（用于 id-token）
+      actions: read
+      # id-token 用于向 Scorecard 服务证明身份
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # 公开评分结果（可选，设为 true 会在 OpenSSF 平台显示）
+          publish_results: true
+          # 要检查的仓库（默认当前仓库）
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: scorecard
+
+      - name: Scorecard summary
+        if: always()
+        run: |
+          echo "### 🔒 OpenSSF Scorecard 分析完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "结果已上传到 **Security → Code scanning** 页面" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 评分维度包括：分支保护、代码评审、CI 测试、依赖更新、令牌权限、安全策略等 18 项" >> $GITHUB_STEP_SUMMARY
+          echo "> 查看完整评分：https://securityscorecards.dev/viewer/?uri=github.com/${{ github.repository }}" >> $GITHUB_STEP_SUMMARY

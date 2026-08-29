@@ -1,0 +1,73 @@
+# ==============================================================================
+#  CI：自动删除已合并 PR 的源分支
+# ==============================================================================
+#  触发时机：
+#    · PR 被合并后 → 删除源分支（仅删除本仓库内的分支）
+#
+#  规则：
+#    · 只删除本仓库的分支（不删除 fork 来的分支）
+#    · 不删除 main/master/develop 等保护分支
+#    · 不删除以 `release/`、`hotfix/` 开头的长期分支
+# ==============================================================================
+
+name: Clean up branches
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write  # 需要写权限来删除分支
+  pull-requests: read
+
+jobs:
+  delete-merged-branch:
+    name: "Delete merged branch"
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Delete merged branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const branchName = pr.head.ref;
+
+            // 跳过保护分支
+            const protectedBranches = ['main', 'master', 'develop', 'dev', 'production', 'staging'];
+            if (protectedBranches.includes(branchName)) {
+              console.log(`⏭  跳过保护分支: ${branchName}`);
+              return;
+            }
+
+            // 跳过长期维护分支（release/hotfix 前缀）
+            if (branchName.startsWith('release/') || branchName.startsWith('hotfix/')) {
+              console.log(`⏭  跳过长期分支: ${branchName}`);
+              return;
+            }
+
+            // 只删除本仓库的分支（不删 fork 来的）
+            if (pr.head.repo.full_name !== pr.base.repo.full_name) {
+              console.log(`⏭  PR 来自 fork，不删除源分支`);
+              return;
+            }
+
+            try {
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${branchName}`,
+              });
+              console.log(`✅ 已删除分支: ${branchName}`);
+            } catch (error) {
+              // 分支可能已被手动删除，忽略 422 错误
+              if (error.status === 422) {
+                console.log(`ℹ️  分支 ${branchName} 不存在或已删除`);
+              } else {
+                throw error;
+              }
+            }
