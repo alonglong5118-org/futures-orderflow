@@ -1042,7 +1042,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest('t_score_utils not available')
+            self.skipTest("t_score_utils not available")
 
         scores, mean, std = z_score_list([50.0])
         # 单值时均值 = 原值，标准差 = 0
@@ -1054,7 +1054,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest('t_score_utils not available')
+            self.skipTest("t_score_utils not available")
 
         scores, mean, std = z_score_list([])
         assert scores == []
@@ -1066,7 +1066,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest('t_score_utils not available')
+            self.skipTest("t_score_utils not available")
 
         scores, mean, std = z_score_list([50.0, 50.0, 50.0])
         assert mean == pytest.approx(50.0)
@@ -1079,7 +1079,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest('t_score_utils not available')
+            self.skipTest("t_score_utils not available")
 
         data = [-2, -1, 0, 1, 2]
         scores, mean, std = z_score_list(data)

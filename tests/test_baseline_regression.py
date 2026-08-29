@@ -237,8 +237,16 @@ class TestBacktestBaseline(unittest.TestCase):
 
         # trades: range match preferred (GA upgrade causes variance), fallback to exact
         if "trades_min" in expected and "trades_max" in expected:
-            self.assertGreaterEqual(result["trades"], expected["trades_min"], f"{key}: trades={result['trades']} < min={expected['trades_min']}")
-            self.assertLessEqual(result["trades"], expected["trades_max"], f"{key}: trades={result['trades']} > max={expected['trades_max']}")
+            self.assertGreaterEqual(
+                result["trades"],
+                expected["trades_min"],
+                f"{key}: trades={result['trades']} < min={expected['trades_min']}",
+            )
+            self.assertLessEqual(
+                result["trades"],
+                expected["trades_max"],
+                f"{key}: trades={result['trades']} > max={expected['trades_max']}",
+            )
         else:
             self.assertEqual(result["trades"], expected["trades"], f"{key}: trades mismatch")
         _assert_almost_equal(self, result["expR"], expected["expR"], f"{key}.expR", places=4)
