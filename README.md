@@ -29,6 +29,26 @@
 
 ---
 
+## 📑 目录
+
+- [特性](#-特性)
+- [快速开始](#-快速开始)
+- [架构概览](#️-架构概览)
+- [核心模块](#-核心模块)
+- [快速示例](#-快速示例)
+- [测试体系](#-测试体系)
+- [开发工具](#-开发工具)
+- [CI/CD 流水线](#-cicd-流水线)
+- [性能基准](#-性能基准)
+- [路线图](#-路线图)
+- [常见问题](#-常见问题)
+- [安全](#-安全)
+- [贡献指南](#-贡献指南)
+- [社区与支持](#-社区与支持)
+- [许可证](#-许可证)
+
+---
+
 ## ✨ 特性
 
 - **四维策略引擎** — 基于成交量、持仓量、价格、时间四个维度的综合研判
@@ -190,6 +210,76 @@ futures-orderflow/
 
 ---
 
+## 💡 快速示例
+
+### 风险门禁检查
+
+```python
+from risk_gate_utils import RiskGate, RiskGateConfig
+
+# 配置风险门禁
+config = RiskGateConfig(
+    max_position=10,          # 最大持仓手数
+    max_daily_loss_pct=0.03,  # 日最大亏损比例 3%
+    max_drawdown_pct=0.10,    # 最大回撤 10%
+    corr_threshold=0.7,       # 相关性阈值
+)
+
+gate = RiskGate(config)
+
+# 检查是否允许开仓
+result = gate.check(
+    signal=my_signal,
+    position=current_position,
+    portfolio=portfolio,
+    market_data=market_data,
+)
+
+if result.passed:
+    execute_order(signal)
+else:
+    print(f"风险门禁拦截: {result.reasons}")
+```
+
+### 凯利仓位计算
+
+```python
+from kelly_utils import kelly_fraction, kelly_position_size
+
+# 计算凯利比例
+fraction = kelly_fraction(
+    win_rate=0.55,       # 胜率 55%
+    win_loss_ratio=1.5,  # 盈亏比 1.5:1
+)
+print(f"凯利仓位: {fraction:.2%}")  # 约 25%
+
+# 计算实际仓位手数
+position_size = kelly_position_size(
+    account_balance=100_000,
+    win_rate=0.55,
+    win_loss_ratio=1.5,
+    contract_value=50_000,
+    kelly_multiplier=0.5,  # 半凯利（更保守）
+)
+print(f"建议仓位: {position_size:.1f} 手")
+```
+
+### 支撑阻力分析
+
+```python
+from sr_analyzer import SRAnalyzer
+
+analyzer = SRAnalyzer(bar_count=200)
+levels = analyzer.detect(bars=kline_data)
+
+for level in levels:
+    print(f"{level.type}: {level.price:.2f} (强度: {level.strength}/5)")
+```
+
+> 💡 更多示例请参考 `tests/` 目录下的测试用例，它们也是很好的用法参考。
+
+---
+
 ## 🧪 测试体系
 
 ### 测试层级
@@ -308,6 +398,81 @@ python scripts/perf_trend.py chart --trend trend.json --benchmark "risk_gate"
 
 ---
 
+## 🗺️ 路线图
+
+以下是项目的发展规划，按优先级排列。欢迎通过 Issue/PR 参与讨论和贡献。
+
+### ✅ 已完成
+
+- [x] 四维策略核心框架
+- [x] 多层风控体系（风险门禁 / 价格保护 / 一致性监控）
+- [x] 遗传算法优化工具链
+- [x] 回测系统 + 基准回归测试
+- [x] TqSdk 实盘接入
+- [x] 完整的 CI/CD 流水线
+- [x] 性能基准测试与趋势追踪
+- [x] SBOM + 供应链安全
+- [x] OpenSSF Scorecard 安全评分
+
+### 🚧 进行中 / 计划中
+
+- [ ] **实盘 Web 监控面板** — 实时行情 + 账户 + 信号可视化
+- [ ] **多策略组合管理** — 多品种/多策略资金分配与风控
+- [ ] **因子库扩展** — 更多订单流因子与情绪因子
+- [ ] **策略文档站** — MkDocs 搭建的完整文档站点
+- [ ] **Docker 化部署** — 一键启动实盘环境
+- [ ] **移动端通知** — 微信 / Telegram / 钉钉告警推送
+- [ ] **机器学习模型** — LSTM / Transformer 辅助信号判断
+
+### 💡 未来探索
+
+- [ ] **多账户管理** — 多账户资金分配与风控隔离
+- [ ] **社区策略市场** — 分享和订阅第三方策略
+- [ ] **云原生部署** — K8s 集群化运行与弹性扩缩
+
+> 有想法？欢迎通过 [Issue](https://github.com/alonglong5118-org/futures-orderflow/issues) 讨论！
+
+---
+
+## ❓ 常见问题
+
+### 这是什么类型的项目？
+
+这是一个期货订单流策略框架，基于成交量、持仓量、价格、时间四个维度进行交易决策。它包含策略引擎、风控系统、回测工具和实盘接入。
+
+### 可以直接用于实盘交易吗？
+
+本项目是策略研究和回测框架，实盘功能需要自行配置经纪商接口和参数。**实盘交易有风险，请充分回测和验证后谨慎使用**。
+
+### 支持哪些期货经纪商？
+
+目前主要适配 TqSdk（支持多家期货公司），架构上支持扩展其他经纪商后端。
+
+### 运行环境有什么要求？
+
+- Python 3.10+
+- 操作系统：Linux / macOS / Windows 均可
+- 内存：建议 4GB 以上（回测时需要更多）
+- 实盘需要稳定的网络连接
+
+### 如何贡献自己的策略？
+
+欢迎贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发流程。策略类贡献需要提供：
+1. 清晰的策略逻辑说明
+2. 配套的单元测试
+3. 回测结果验证
+4. 遵循项目代码风格
+
+### 项目使用什么许可证？
+
+MIT 许可证，可自由使用、修改和分发。详见 [LICENSE](LICENSE)。
+
+### 如何报告 Bug 或提出建议？
+
+通过 [GitHub Issues](https://github.com/alonglong5118-org/futures-orderflow/issues) 提交，尽量提供详细的复现步骤和环境信息。
+
+---
+
 ## 🔒 安全
 
 - **SBOM** — 每次发布生成 SPDX + CycloneDX 双格式软件物料清单
@@ -343,6 +508,36 @@ make quality
 
 # 5. 提交 PR
 ```
+
+---
+
+## 💬 社区与支持
+
+### 讨论与交流
+
+- **[GitHub Discussions](https://github.com/alonglong5118-org/futures-orderflow/discussions)** — 技术讨论、经验分享、问答
+- **[GitHub Issues](https://github.com/alonglong5118-org/futures-orderflow/issues)** — Bug 报告、功能建议
+
+### 寻求帮助
+
+如果你遇到问题，可以按以下途径寻求帮助：
+
+1. **先看文档** — 检查 README、CONTRIBUTING.md 和相关测试用例
+2. **搜索 Issue** — 搜索是否有人遇到过类似问题
+3. **发起讨论** — 在 Discussions 中发帖提问
+4. **提交 Issue** — 确认是 Bug 后，提交详细的 Issue
+
+提问时请尽量提供：
+- 你在做什么（预期行为）
+- 实际发生了什么
+- 复现步骤（最小可复现示例）
+- 环境信息（Python 版本、操作系统、依赖版本）
+
+### 项目状态
+
+- **维护状态**：活跃开发中
+- **主要维护者**：[@alonglong5118-org](https://github.com/alonglong5118-org)
+- **回复时间**：通常 1-3 个工作日内回复
 
 ---
 

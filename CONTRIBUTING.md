@@ -17,6 +17,9 @@
 - [提交规范](#提交规范)
 - [PR 规范](#pr-规范)
 - [发布流程](#发布流程)
+- [新手入门：第一次贡献指南](#-新手入门第一次贡献指南)
+- [Code Review 礼仪](#-code-review-礼仪)
+- [故障排查](#-故障排查)
 - [问题反馈](#问题反馈)
 - [常见问题](#常见问题)
 
@@ -414,6 +417,203 @@ git push origin v1.0.0
 - **功能描述** — 你想要什么功能
 - **使用场景** — 在什么场景下需要这个功能
 - **实现思路** — 你有什么实现想法（可选）
+
+---
+
+## 🌱 新手入门：第一次贡献指南
+
+如果你是第一次为开源项目做贡献，别担心！本节带你一步步完成你的第一次贡献。
+
+### 第一步：找一个适合的 Issue
+
+1. 浏览 [Issues 列表](https://github.com/alonglong5118-org/futures-orderflow/issues)
+2. 寻找标注了 **`good first issue`** 或 **`help wanted`** 的 Issue
+3. 在 Issue 下评论 "我想做这个"，让大家知道你在处理
+4. 如果不确定，随时提问，维护者会耐心解答
+
+> 💡 即使最终没有提交代码，参与讨论本身也是宝贵的贡献！
+
+### 第二步：开发你的改动
+
+```bash
+# 1. 同步上游（确保从最新代码开始）
+git checkout main
+git pull upstream main
+
+# 2. 创建功能分支
+git checkout -b fix/issue-123-some-bug
+
+# 3. 编写代码
+# ... 你的改动 ...
+
+# 4. 运行测试（确保没有破坏任何东西）
+make test
+make quality
+
+# 5. 提交
+git add .
+git commit -m "fix(scope): 修复 xxx 问题
+
+Closes #123"
+```
+
+### 第三步：提交 PR
+
+1. 推送你的分支：`git push origin fix/issue-123-some-bug`
+2. 点击 GitHub 上的 "Compare & pull request" 按钮
+3. 填写 PR 描述模板
+4. 提交 PR，等待 CI 检查和 Review
+
+### 第四步：响应 Code Review
+
+1. 维护者可能会提出修改建议
+2. 在同一分支上继续提交修改，然后推送
+3. 回复每条 review 意见（已修改 / 说明原因）
+4. PR 会自动更新，无需重新创建
+
+> 🎉 恭喜！你的 PR 合并后，你就是这个项目的贡献者了！
+
+---
+
+## 🤝 Code Review 礼仪
+
+Code Review 是提升代码质量和知识共享的重要环节。以下是一些建议：
+
+### 作者指南
+
+- **主动说明** — PR 描述中清楚说明「做了什么」和「为什么这样做」
+- **拆小 PR** — 大改动尽量拆成多个小 PR，方便 review
+- **虚心接受** — Review 意见是对代码不对人，不要有防御心理
+- **及时响应** — 尽量在 2-3 天内回复 review 意见
+- **主动标记** — 改好了可以在评论里说 "已修改，请再看"
+- **提问而非辩解** — 不同意某条意见时，先问清楚原因，再讨论
+
+### Reviewer 指南
+
+- **尊重作者** — 评论代码，不评论人
+- **明确区分** — 明确标注哪些是「必须改」哪些是「建议改」
+  - 🔴 **必须修改**（阻塞合并的问题）
+  - 🟡 **建议修改**（可以讨论，不强制）
+  - 💡 **想法建议**（仅供参考）
+- **给出理由** — 提建议时说明为什么这样更好
+- **提供替代方案** — 不只是说不好，也给出更好的写法
+- **肯定优点** — 看到好的代码不要吝啬表扬
+- **及时 Review** — 尽量在 2-3 天内完成 review
+
+### Review 中的常见讨论点
+
+| 主题 | 优先级 | 说明 |
+|---|---|---|
+| 正确性 Bug | 🔴 必须改 | 逻辑错误必须修复 |
+| 性能问题 | 🔴/🟡 | 显著退化必须改，微小优化是建议 |
+| 测试覆盖 | 🔴 必须改 | 新增代码应有测试 |
+| 命名风格 | 🟡 建议 | 不符合规范时建议修改 |
+| 代码结构 | 🟡 建议 | 可读性和可维护性 |
+| 注释文档 | 💡 建议 | 公共 API 应该有 docstring |
+| 个人偏好 | 💡 想法 | 仅供讨论，不阻塞合并 |
+
+---
+
+## 🔧 故障排查
+
+### 依赖安装失败
+
+**现象**：`pip install -r requirements.txt` 报错
+
+**解决方法**：
+```bash
+# 1. 升级 pip
+python -m pip install --upgrade pip
+
+# 2. 使用国内镜像源（中国大陆用户推荐）
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 3. 如果是某个特定包失败，单独安装调试
+pip install 包名 -v
+```
+
+### 测试运行失败
+
+**现象**：运行 `make test` 有测试失败
+
+**排查步骤**：
+```bash
+# 1. 单独运行失败的测试，看详细错误
+python -m pytest tests/test_xxx.py::test_xxx -v --tb=long
+
+# 2. 进入调试模式（失败时自动启动 pdb）
+python -m pytest tests/test_xxx.py::test_xxx --pdb
+
+# 3. 确认是你的改动导致的吗？
+git stash   # 暂存你的改动
+make test   # 跑一下原始代码
+git stash pop  # 恢复你的改动
+```
+
+### 格式化检查失败
+
+**现象**：`make format-check` 报错
+
+**解决方法**：
+```bash
+# 自动格式化
+make format
+
+# 然后重新提交
+git add .
+git commit --amend --no-edit
+```
+
+### Lint 检查失败
+
+**现象**：`make lint-critical` 有错误
+
+**常见问题与解决**：
+| 错误码 | 含义 | 解决方法 |
+|---|---|---|
+| F401 | 导入未使用 | 删除未使用的导入，或加 `# noqa: F401` |
+| F821 | 未定义的名字 | 检查是否拼写错误或缺少导入 |
+| I001 | 导入顺序不对 | 运行 `make format` 自动修复 |
+| E722 | 裸 except | 改为捕获具体异常类型 |
+
+### Git Hooks 不生效
+
+**现象**：安装了 hooks 但提交时没有触发
+
+**排查**：
+```bash
+# 检查 hooks 是否安装
+ls -la .git/hooks/
+
+# 重新安装
+make hooks
+
+# 手动测试 hook
+bash .git/hooks/pre-commit
+```
+
+### CI 失败但本地通过
+
+**现象**：本地测试通过，GitHub Actions 上失败
+
+**可能原因**：
+1. **平台差异** — CI 在 Ubuntu 上运行，本地可能是 macOS
+2. **Python 版本** — CI 跑多版本，本地只跑了一个版本
+3. **测试顺序** — 测试之间有隐藏的依赖关系
+4. **环境变量** — CI 环境与本地不同
+
+**排查方法**：
+- 仔细阅读 CI 日志中的错误信息
+- 在本地用同样的 Python 版本测试
+- 用 `make flake` 检测不稳定测试
+- 检查 CI 配置的环境变量
+
+### 其他问题
+
+如果以上都解决不了你的问题：
+1. 搜索 [Issues](https://github.com/alonglong5118-org/futures-orderflow/issues) 看是否有类似问题
+2. 在 [Discussions](https://github.com/alonglong5118-org/futures-orderflow/discussions) 中提问
+3. 提交新的 Issue 并附上详细的错误信息
 
 ---
 
