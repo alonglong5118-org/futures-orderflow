@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 v5 vs v5.1 回测对比脚本
 ======================
@@ -268,7 +267,7 @@ def compare_symbols(targets):
         elif avg_de < 0:
             print(f"\n  ❌ 结论: v5.1 反而降低了期望R {avg_de:+.4f}，可能过滤过于严格")
         else:
-            print(f"\n  ➡️ 结论: v5.1 效果中性，需要更多样本观察")
+            print("\n  ➡️ 结论: v5.1 效果中性，需要更多样本观察")
 
     # 保存结果
     out = {

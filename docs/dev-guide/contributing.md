@@ -231,6 +231,7 @@ tests/
 # 测试文件命名：test_模块名.py
 # 测试函数命名：test_功能_场景
 
+
 def test_risk_gate_blocks_high_risk():
     """高风险场景下风险门禁应拦截。"""
     gate = RiskGate(max_position=10)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """性能基准对比工具。
 
 对比两次性能基准测试结果，输出详细的差异报告，支持：
@@ -189,7 +188,7 @@ def generate_markdown(result, title="性能基准对比"):
     # 概览
     lines.append("### 📊 概览")
     lines.append("")
-    lines.append(f"| 指标 | 值 |")
+    lines.append("| 指标 | 值 |")
     lines.append("|---|---|")
     lines.append(f"| 对比 | **{name_a}** vs **{name_b}** |")
     lines.append(f"| 总项数 | {s['total']} |")

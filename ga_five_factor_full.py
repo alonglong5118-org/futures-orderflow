@@ -186,7 +186,7 @@ def optimize_and_validate(group_name):
         else:
             stall += 1
         if stall >= 5:
-            print(f"    早停：连续 5 代无显著提升", flush=True)
+            print("    早停：连续 5 代无显著提升", flush=True)
             break
 
     best = hof[0]

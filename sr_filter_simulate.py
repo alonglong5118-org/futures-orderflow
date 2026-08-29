@@ -120,7 +120,7 @@ def main():
         print(f"\n[{idx + 1}/{len(symbols)}] {sym} ", end="", flush=True)
         bt = walk_forward_backtest(sym, DEFAULT_CONFIG)
         if not bt or bt.get("trades", 0) == 0:
-            print(f"无交易")
+            print("无交易")
             continue
         trades_detail = bt.get("trades_detail", [])
         print(f"{bt['trades']}笔 expR={bt['expR']:.3f}...", end="", flush=True)
@@ -227,7 +227,7 @@ def main():
     print(f"  相对基准提升: {(best['expR'] - base_expR) / abs(base_expR) * 100 if base_expR else 0:+.1f}%")
 
     # 推荐方案
-    print(f"\n  推荐方案评估:")
+    print("\n  推荐方案评估:")
     hostile_r = [r for r in results if "逆向危险区 0.3~1.0%" in r["name"]][0]
     old_r = [r for r in results if "旧灰色地带 1.5~3.0%" in r["name"]][0]
 
@@ -241,11 +241,11 @@ def main():
     )
 
     if hostile_r["expR"] > old_r["expR"] and hostile_r["expR"] > base_expR:
-        print(f"  ✓ 逆向位危险区方案胜出，且优于基准")
+        print("  ✓ 逆向位危险区方案胜出，且优于基准")
     elif hostile_r["expR"] > base_expR:
-        print(f"  ~ 逆向位方案优于基准，但旧方案更好")
+        print("  ~ 逆向位方案优于基准，但旧方案更好")
     else:
-        print(f"  ⚠ 两种方案都没有提升 expR，可能需要调整参数或换思路")
+        print("  ⚠ 两种方案都没有提升 expR，可能需要调整参数或换思路")
 
 
 if __name__ == "__main__":

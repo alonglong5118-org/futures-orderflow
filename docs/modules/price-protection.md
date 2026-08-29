@@ -36,9 +36,9 @@ def validate_price(price) -> dict
 
 ```python
 {
-    "valid": bool,    # 是否合法
-    "price": float,   # 转换后的价格（不合法时为 0.0）
-    "reason": str     # 不合法的原因（合法时为空串）
+    "valid": bool,  # 是否合法
+    "price": float,  # 转换后的价格（不合法时为 0.0）
+    "reason": str,  # 不合法的原因（合法时为空串）
 }
 ```
 

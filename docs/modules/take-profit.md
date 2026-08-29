@@ -55,13 +55,13 @@ def calc_exit_plan(
 
 ```python
 {
-    "stop": float,             # 止损价
-    "t1": float,               # 第一止盈价（1R，平半）
-    "t2": float,               # 第二止盈价（rr_ratio R，全平或进入尾仓）
-    "stop_dist": float,        # 止损距离（绝对值，正数）
-    "tail_enabled": bool,      # 尾仓是否启用
-    "tail_stop_dist": float,   # 尾仓跟踪距离（绝对值 = tail_trail_R × stop_dist）
-    "tail_pct": float,         # 尾仓比例
+    "stop": float,  # 止损价
+    "t1": float,  # 第一止盈价（1R，平半）
+    "t2": float,  # 第二止盈价（rr_ratio R，全平或进入尾仓）
+    "stop_dist": float,  # 止损距离（绝对值，正数）
+    "tail_enabled": bool,  # 尾仓是否启用
+    "tail_stop_dist": float,  # 尾仓跟踪距离（绝对值 = tail_trail_R × stop_dist）
+    "tail_pct": float,  # 尾仓比例
 }
 ```
 
@@ -119,10 +119,10 @@ from take_profit_utils import calc_exit_plan
 # 场景 1：多单，基础参数
 plan = calc_exit_plan(
     entry=3000.0,
-    dir_T=1.0,          # 多单
-    atr_val=40.0,       # ATR = 40
+    dir_T=1.0,  # 多单
+    atr_val=40.0,  # ATR = 40
     stop_atr_mult=1.5,  # 止损 = 1.5 ATR
-    rr_ratio=2.0,       # 盈亏比 2:1
+    rr_ratio=2.0,  # 盈亏比 2:1
 )
 # stop_dist = 1.5 * 1.0 * 40 = 60
 # stop = 3000 - 60 = 2940.0
@@ -132,13 +132,13 @@ plan = calc_exit_plan(
 # 场景 2：空单，启用尾仓
 plan = calc_exit_plan(
     entry=3000.0,
-    dir_T=-1.0,         # 空单
+    dir_T=-1.0,  # 空单
     atr_val=40.0,
     stop_atr_mult=1.5,
     rr_ratio=2.0,
     tail_enabled=True,
-    tail_trail_R=2.0,   # 尾仓跟踪 2R
-    tail_pct=0.25,      # 留 25% 尾仓
+    tail_trail_R=2.0,  # 尾仓跟踪 2R
+    tail_pct=0.25,  # 留 25% 尾仓
 )
 # stop = 3000 + 60 = 3060.0
 # t1   = 3000 - 60 = 2940.0

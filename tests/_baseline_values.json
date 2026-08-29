@@ -82,30 +82,31 @@
   },
   "backtest_rb_cooldown5": {
     "trades": 12,
-    "expR": -0.427,
+    "expR": -0.447,
     "win_rate": 0.25
   },
   "backtest_hc_tail500": {
     "symbol": "hc",
-    "trades": 19,
-    "expR": -0.0589,
-    "win_rate": 0.421,
+    "trades": 26,
+    "expR": -0.1394,
+    "win_rate": 0.308,
     "roll_skipped": 0,
     "exit_reasons": {
-      "止损": 11,
-      "尾仓离场": 5,
-      "止盈2R": 2,
+      "止损": 18,
+      "止盈2R": 4,
+      "尾仓离场": 3,
       "期末平": 1
     },
     "by_regime_keys": [
       "趋势",
-      "过渡"
+      "过渡",
+      "震荡"
     ]
   },
   "backtest_rb_tail500": {
     "symbol": "rb",
     "trades": 12,
-    "expR": -0.427,
+    "expR": -0.447,
     "win_rate": 0.25,
     "roll_skipped": 2,
     "exit_reasons": {

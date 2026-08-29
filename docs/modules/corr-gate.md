@@ -74,12 +74,12 @@ def apply_corr_gate(
 
 ```python
 {
-    "T": float,            # 处理后的 T 得分
-    "C": float,            # 处理后的 C 得分
-    "corr": float or None, # 相关系数
-    "action": str,         # 动作描述
-    "applied": bool,       # 是否触发了降权
-    "dropped": str,        # 被降权的维度："T"/"C"/"none"
+    "T": float,  # 处理后的 T 得分
+    "C": float,  # 处理后的 C 得分
+    "corr": float or None,  # 相关系数
+    "action": str,  # 动作描述
+    "applied": bool,  # 是否触发了降权
+    "dropped": str,  # 被降权的维度："T"/"C"/"none"
 }
 ```
 
@@ -108,9 +108,18 @@ from corr_gate_utils import apply_corr_gate
 
 # 构造历史数据（T 和 C 的历史序列）
 corr_hist = [
-    [80, 70], [75, 65], [90, 80], [85, 75], [70, 60],
-    [60, 50], [95, 85], [78, 68], [82, 72], [88, 78],
-    [76, 66], [84, 74],  # 12 条数据，> min_history=10
+    [80, 70],
+    [75, 65],
+    [90, 80],
+    [85, 75],
+    [70, 60],
+    [60, 50],
+    [95, 85],
+    [78, 68],
+    [82, 72],
+    [88, 78],
+    [76, 66],
+    [84, 74],  # 12 条数据，> min_history=10
 ]
 
 # 场景 1：高度正相关，T > C → 降 C

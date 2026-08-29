@@ -175,10 +175,10 @@ from risk_gate_utils import (
 )
 
 # 1. 风险预算手数
-equity = 100000       # 账户权益 10 万
-risk_pct = 1.5        # 单笔风险 1.5%
-stop_pts = 30         # 止损 30 点
-multiplier = 10       # 合约乘数 10（每手 10 吨）
+equity = 100000  # 账户权益 10 万
+risk_pct = 1.5  # 单笔风险 1.5%
+stop_pts = 30  # 止损 30 点
+multiplier = 10  # 合约乘数 10（每手 10 吨）
 
 N_risk_raw = calc_risk_lots(equity, risk_pct, stop_pts, multiplier)
 # N_risk_raw = 100000 * 0.015 // (30 * 10) = 5 手
@@ -193,13 +193,11 @@ N_kelly = apply_kelly_scaling(N_risk, kelly_mult=0.9)
 # N_kelly = round(5 * 0.9) = 5 手（四舍五入）
 
 # 4. 保证金约束
-margin_cap_pct = 20   # 单品种保证金上限 20%
-price = 3000          # 当前价格
-margin_rate = 0.12    # 保证金率 12%
+margin_cap_pct = 20  # 单品种保证金上限 20%
+price = 3000  # 当前价格
+margin_rate = 0.12  # 保证金率 12%
 
-N_margin = calc_margin_lots(
-    equity, margin_cap_pct, price, multiplier, margin_rate
-)
+N_margin = calc_margin_lots(equity, margin_cap_pct, price, multiplier, margin_rate)
 # N_margin = 100000 * 0.2 // (3000 * 10 * 0.12) = 20000 // 3600 = 5 手
 
 # 最终手数 = min(N_kelly, N_margin, 持仓上限, ...)

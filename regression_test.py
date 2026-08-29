@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 四维策略自动回归测试
 ====================
@@ -172,7 +171,7 @@ def load_baseline():
     if not os.path.exists(BASELINE_FILE):
         return None
     try:
-        with open(BASELINE_FILE, "r", encoding="utf-8") as f:
+        with open(BASELINE_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return None

@@ -117,15 +117,15 @@ def hidden_pivot(abc, tick, limit_up=None, limit_down=None) -> dict or None
 
 ```python
 {
-    "direction": int,          # 方向：1 / -1
-    "direction_text": str,     # 方向描述："偏多" / "偏空"
-    "a": float,                # a 点价格（tick 取整）
-    "b": float,                # b 点价格
-    "c": float,                # c 点价格（止损锚）
-    "p": float,                # p 目标位（tick 取整）
-    "stop": float,             # 止损锚 = c 点
-    "reachable": bool,         # 目标位是否可达（未超涨跌停）
-    "gain_pts": float,         # 盈利空间（p - c，tick 取整后）
+    "direction": int,  # 方向：1 / -1
+    "direction_text": str,  # 方向描述："偏多" / "偏空"
+    "a": float,  # a 点价格（tick 取整）
+    "b": float,  # b 点价格
+    "c": float,  # c 点价格（止损锚）
+    "p": float,  # p 目标位（tick 取整）
+    "stop": float,  # 止损锚 = c 点
+    "reachable": bool,  # 目标位是否可达（未超涨跌停）
+    "gain_pts": float,  # 盈利空间（p - c，tick 取整后）
 }
 ```
 
@@ -158,16 +158,18 @@ from hidden_pivot import find_swings, latest_abc, hidden_pivot
 
 # 1. 摆动点检测
 highs = [100, 102, 105, 103, 101, 98, 100, 104, 106, ...]
-lows  = [98,  100, 103, 101, 99,  96, 97,  102, 104, ...]
+lows = [98, 100, 103, 101, 99, 96, 97, 102, 104, ...]
 closes = [99, 101, 104, 102, 100, 97, 99, 103, 105, ...]
 opens = [...]
 
 swings = find_swings(
-    highs, lows, closes,
+    highs,
+    lows,
+    closes,
     opens=opens,
-    deviation=0.004,   # 0.4% 摆动阈值
-    depth=3,           # 两侧各 3 根确认
-    gap_pct=0.0025,    # 0.25% 跳空阈值
+    deviation=0.004,  # 0.4% 摆动阈值
+    depth=3,  # 两侧各 3 根确认
+    gap_pct=0.0025,  # 0.25% 跳空阈值
 )
 # swings = [
 #   (2, 'high', 105),
@@ -185,9 +187,9 @@ abc = latest_abc(swings, direction=None)  # 自动检测方向
 # 3. 计算目标位和止损
 result = hidden_pivot(
     abc,
-    tick=1.0,              # 最小变动价位 1 元
-    limit_up=115.0,        # 涨停价
-    limit_down=90.0,       # 跌停价
+    tick=1.0,  # 最小变动价位 1 元
+    limit_up=115.0,  # 涨停价
+    limit_down=90.0,  # 跌停价
 )
 # 多头结构：
 #   p = 106 + (106 - 96) * 0.618 = 106 + 6.18 = 112.18 → 112.0（tick 取整）

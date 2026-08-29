@@ -41,11 +41,11 @@ NOCONST_FILE = os.path.join(HERE, "logs", "ga_group_six_factor.json")
 ROBUST_FILE = os.path.join(HERE, "logs", "ga_group_six_factor_robust.json")
 FIVE_FACTOR_FILE = os.path.join(HERE, "logs", "ga_five_factor_oos.json")
 
-with open(NOCONST_FILE, "r") as f:
+with open(NOCONST_FILE) as f:
     noconst_w = json.load(f)
-with open(ROBUST_FILE, "r") as f:
+with open(ROBUST_FILE) as f:
     robust_w = json.load(f)
-with open(FIVE_FACTOR_FILE, "r") as f:
+with open(FIVE_FACTOR_FILE) as f:
     five_factor_data = json.load(f)
 
 
@@ -88,7 +88,7 @@ for group in GROUPS:
     # 加载数据并切分
     group_data = load_group_data(group, min_bars=TRAIN_BARS + TEST_BARS, tail=0)
     if len(group_data) < 3:
-        print(f"  跳过", flush=True)
+        print("  跳过", flush=True)
         continue
 
     train_data = {}

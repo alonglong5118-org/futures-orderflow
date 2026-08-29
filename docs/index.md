@@ -96,10 +96,10 @@ make smoke
 
     # 配置风险门禁
     config = RiskGateConfig(
-        max_position=10,          # 最大持仓手数
+        max_position=10,  # 最大持仓手数
         max_daily_loss_pct=0.03,  # 日最大亏损比例 3%
-        max_drawdown_pct=0.10,    # 最大回撤 10%
-        corr_threshold=0.7,       # 相关性阈值
+        max_drawdown_pct=0.10,  # 最大回撤 10%
+        corr_threshold=0.7,  # 相关性阈值
     )
 
     gate = RiskGate(config)
@@ -125,7 +125,7 @@ make smoke
 
     # 计算凯利比例
     fraction = kelly_fraction(
-        win_rate=0.55,       # 胜率 55%
+        win_rate=0.55,  # 胜率 55%
         win_loss_ratio=1.5,  # 盈亏比 1.5:1
     )
     print(f"凯利仓位: {fraction:.2%}")  # 约 25%

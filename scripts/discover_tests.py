@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 自动发现测试模块
 ==================
@@ -89,7 +88,7 @@ def main():
 def update_run_tests(modules, integration, advanced, skip_default):
     """更新 run_tests.py 中的 TEST_MODULES 和分类集合。"""
     run_tests_path = os.path.join(ROOT, "run_tests.py")
-    with open(run_tests_path, "r", encoding="utf-8") as f:
+    with open(run_tests_path, encoding="utf-8") as f:
         content = f.read()
 
     # 生成新的 TEST_MODULES

@@ -17,7 +17,7 @@ TEST_BARS = 200  # 验证集 M 根
 POP = 20
 GEN = 10
 
-print(f"=== 板块级 6 因子 OOS 验证 ===", flush=True)
+print("=== 板块级 6 因子 OOS 验证 ===", flush=True)
 print(f"板块: {GROUP}", flush=True)
 print(f"训练集: 最近-{TRAIN_BARS + TEST_BARS} ~ 最近-{TEST_BARS}", flush=True)
 print(f"验证集: 最近-{TEST_BARS} ~ 最新", flush=True)

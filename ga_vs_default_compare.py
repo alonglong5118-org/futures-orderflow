@@ -166,7 +166,7 @@ def main():
 
     # 汇总
     print(f"\n{'=' * 80}")
-    print(f"[3/3] 汇总")
+    print("[3/3] 汇总")
     print(f"{'=' * 80}")
     print(
         f"总品种: {len(valid_syms)} | 有GA权重: {sum(1 for r in results.values() if r['has_ga'])} | "
@@ -245,7 +245,7 @@ def main():
             groups[r["group"]]["default"].append(r["default"]["expR"])
             groups[r["group"]]["ga"].append(r["ga"]["expR"])
 
-        print(f"\n--- 板块平均 expR 对比（有 GA 权重的品种） ---")
+        print("\n--- 板块平均 expR 对比（有 GA 权重的品种） ---")
         print(f"{'板块':<6} {'品种数':>6} {'默认avg':>9} {'GA avg':>9} {'变化':>8} {'变化%':>8}")
         print("-" * 55)
         for grp in sorted(groups.keys(), key=lambda g: -(sum(groups[g]["ga"]) / len(groups[g]["ga"]))):

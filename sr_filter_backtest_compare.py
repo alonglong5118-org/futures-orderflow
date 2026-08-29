@@ -209,9 +209,9 @@ def main():
 
     print("=" * 80)
     print(f"SR 过滤方案对比回测 · {len(symbols)} 个品种")
-    print(f"  方案 A: 无 SR 过滤 (baseline)")
-    print(f"  方案 B: 旧灰色地带过滤 (1.5~3.0%, 不分方向, 阈值×1.25)")
-    print(f"  方案 C: 逆向位危险区过滤 (0.3~1.0%, 方向感知, 阈值×1.30)")
+    print("  方案 A: 无 SR 过滤 (baseline)")
+    print("  方案 B: 旧灰色地带过滤 (1.5~3.0%, 不分方向, 阈值×1.25)")
+    print("  方案 C: 逆向位危险区过滤 (0.3~1.0%, 方向感知, 阈值×1.30)")
     print("=" * 80)
 
     modes = [
@@ -330,7 +330,7 @@ def main():
     new_expR = sum(all_Rs["逆向危险(C)"]) / len(all_Rs["逆向危险(C)"]) if all_Rs["逆向危险(C)"] else 0
     old_expR = sum(all_Rs["旧灰色(B)"]) / len(all_Rs["旧灰色(B)"]) if all_Rs["旧灰色(B)"] else 0
 
-    print(f"\n  整体 expR:")
+    print("\n  整体 expR:")
     print(f"    无过滤 (基准): {baseline_expR:.4f}")
     print(
         f"    旧灰色地带:   {old_expR:.4f} ({(old_expR - baseline_expR) / abs(baseline_expR) * 100 if baseline_expR else 0:+.1f}%)"
@@ -353,15 +353,15 @@ def main():
         and results["无过滤(A)"][idx]["trades"] > 0
         and results["逆向危险(C)"][idx]["expR"] < results["无过滤(A)"][idx]["expR"]
     )
-    print(f"\n  逐品种胜负（逆向危险 vs 无过滤）:")
+    print("\n  逐品种胜负（逆向危险 vs 无过滤）:")
     print(f"    提升: {n_better} 个品种")
     print(f"    下降: {n_worse} 个品种")
     print(f"    持平/无数据: {len(symbols) - n_better - n_worse} 个品种")
 
     if new_expR > baseline_expR:
-        print(f"\n  ✓ 逆向位危险区过滤整体提升 expR，方案有效")
+        print("\n  ✓ 逆向位危险区过滤整体提升 expR，方案有效")
     else:
-        print(f"\n  ⚠ 逆向位危险区过滤整体 expR 反而下降，需要调整参数或逻辑")
+        print("\n  ⚠ 逆向位危险区过滤整体 expR 反而下降，需要调整参数或逻辑")
 
 
 if __name__ == "__main__":

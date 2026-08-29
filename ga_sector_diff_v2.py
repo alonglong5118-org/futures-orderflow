@@ -214,7 +214,7 @@ def process_group(group_name):
 
     group_data = load_group_data(group_name, min_bars=TRAIN_BARS + TEST_BARS, tail=0)
     if len(group_data) < 3:
-        print(f"  跳过：有效品种不足", flush=True)
+        print("  跳过：有效品种不足", flush=True)
         return None
 
     print(f"  有效品种: {len(group_data)}", flush=True)
@@ -234,7 +234,7 @@ def process_group(group_name):
     print(f"  基准: train={base_train:+.3f}  test={base_test:+.3f}", flush=True)
 
     # 板块特征（训练集计算）
-    print(f"\n  [特征] 训练集因子分析:", flush=True)
+    print("\n  [特征] 训练集因子分析:", flush=True)
     chars = compute_sector_characteristics(train_data)
     for f, v in chars["factor_expRs"].items():
         print(f"    {f:14s}: {v:+.3f}", flush=True)
@@ -243,7 +243,7 @@ def process_group(group_name):
     print(f"  正收益因子数: {chars['n_positive_factors']}/6", flush=True)
 
     # 各原型 GA 优化
-    print(f"\n  [GA] 各原型优化:", flush=True)
+    print("\n  [GA] 各原型优化:", flush=True)
     archetype_results = {}
 
     for aname, acfg in ARCHETYPES.items():
@@ -291,7 +291,7 @@ def process_group(group_name):
     feature_selected_test = archetype_results[feature_selected]["test_expR"]
 
     # 统一最优（所有板块用同一个原型）
-    print(f"\n  [汇总]", flush=True)
+    print("\n  [汇总]", flush=True)
     print(f"    基准 test:       {base_test:+.3f}", flush=True)
     for aname in ARCHETYPES:
         r = archetype_results[aname]
@@ -347,7 +347,7 @@ def main():
         )
 
     # 差异化 vs 统一策略对比
-    print(f"\n差异化 vs 统一策略（测试集平均 expR）:", flush=True)
+    print("\n差异化 vs 统一策略（测试集平均 expR）:", flush=True)
     # 统一策略：每个原型取所有板块的平均
     for aname in ARCHETYPES:
         avg = np.mean([r["archetypes"][aname]["test_expR"] for r in results.values()])

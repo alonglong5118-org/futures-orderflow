@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """市场情绪量化引擎（Market Sentiment Engine）
 =================================================================
 从全市场品种快照计算综合情绪指数（0-100），供 live 信号路径调制 T_thresh
@@ -148,7 +147,7 @@ CACHE_FILE = os.path.join(HERE, "sentiment_cache.json")
 # 启动时从缓存恢复历史数据（重启不丢历史）
 try:
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r", encoding="utf-8") as _f:
+        with open(CACHE_FILE, encoding="utf-8") as _f:
             _saved = json.load(_f)
             if isinstance(_saved.get("history"), list):
                 _CACHE["history"] = _saved["history"][-MAX_HISTORY:]
@@ -497,7 +496,7 @@ def load_cache():
     """读取持久化缓存（供 API/面板消费）。"""
     try:
         if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(CACHE_FILE, encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass

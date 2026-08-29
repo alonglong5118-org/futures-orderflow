@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """系统自检模块 — 全链路数据一致性校验
 检查项：
   ① account_state.json ↔ trade_journal.json 持仓一致性
@@ -204,7 +203,7 @@ def check_night_session_eligibility():
         runner_night_set = set()
         runner_path = os.path.join(HERE, "four_dim_live_runner.py")
         if os.path.exists(runner_path):
-            with open(runner_path, "r") as rf:
+            with open(runner_path) as rf:
                 lines = rf.readlines()
             # 找到 NO_NIGHT = 的定义（可能跨多行）
             for i, line in enumerate(lines):

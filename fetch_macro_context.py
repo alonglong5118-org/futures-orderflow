@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 fetch_macro_context.py — 跨资产宏观语境采集器（系统 python3.9 + akshare 1.18.64）
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 实盘信号 runner（独立）
 =================================================================
 盘中循环：盘前用 akshare 刷新 F，盘中每 60s 用 minishare 实时快照算
@@ -262,7 +261,6 @@ except Exception:
 import account_monitor as am  # 账户监控驱动 papertrack 自动化
 import anomaly_scan as asc  # 异动扫描层（广度选品）
 import backtest_viz as bv  # #17 回测可视化(水下曲线/逐笔散点)
-import paper_trading_integration as pti  # 自动模拟交易引擎集成
 import blunder_check as bc  # #12 纪律自动体检(blunder检测)
 import broker_import as bi  # #9 经纪商成交明细自动回灌
 import calibration as cal  # #120 概率校准 + 置信度分层命中率
@@ -283,6 +281,7 @@ import info_dimension as idim  # #1 信息维度(资讯/新闻/情绪/另类数�
 import macro_context as mctx  # #6 跨资产宏观语境(live 专属，回测 macro_label=None 不进)
 import market_scanner as mscan  # #11 全市场批量扫描(并行)
 import montecarlo as mc  # #11 蒙特卡洛权益曲线置信区间
+import paper_trading_integration as pti  # 自动模拟交易引擎集成
 import push_notify as pn  # #15 手机推送(Telegram/Bark/企业微信)
 import regime_hmm as rhmm  # #7 HMM 市场状态识别(live 专属，回测不要调用)
 import sentiment_engine as senteng  # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
@@ -409,7 +408,7 @@ def _ak_poller():
                 _ak_errors += 1
                 if _ak_errors >= 5:
                     _AK_AVAILABLE = False
-        except Exception as e:
+        except Exception:
             _ak_errors += 1
             if _ak_errors >= 5:
                 _AK_AVAILABLE = False
@@ -447,7 +446,7 @@ def _ts_poller():
                 _ts_errors += 1
                 if _ts_errors >= 5:
                     _TS_AVAILABLE = False
-        except Exception as e:
+        except Exception:
             _ts_errors += 1
             if _ts_errors >= 5:
                 _TS_AVAILABLE = False
@@ -1067,7 +1066,7 @@ def load_dedup_state(last_fire):
     使重启/多进程共享同一份去重记忆，避免重复推送。"""
     global _SIG_PREV_DIR
     try:
-        with open(DEDUP_STATE_FILE, "r") as f:
+        with open(DEDUP_STATE_FILE) as f:
             d = json.load(f)
         last_fire.clear()
         last_fire.update(d.get("last", {}))
@@ -1103,7 +1102,7 @@ def load_pos_alert_dedup():
     """从磁盘载入持仓触价告警去重状态，每次 evaluate/_update_aux 开头调用。"""
     global _POS_ALERT_GUARD
     try:
-        with open(POS_ALERT_DEDUP_FILE, "r") as f:
+        with open(POS_ALERT_DEDUP_FILE) as f:
             d = json.load(f)
         _POS_ALERT_GUARD.clear()
         for sym, levels in d.get("guards", {}).items():
@@ -1361,7 +1360,7 @@ def load_chat_feed(date_str=None, limit=None):
     out = []
     path = chat_feed_path(date_str)
     try:
-        with open(path, "r") as f:
+        with open(path) as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -1593,7 +1592,7 @@ def _rebuild_dedup_from_chat(last_fire):
         # name -> sym 反向查找表（缓存一次）
         name_to_sym = {v.get("name", k): k for k, v in SYMBOLS.items()}
         latest = {}  # sym -> (time_str, dir_T, price)
-        for line in open(p, "r", encoding="utf-8"):
+        for line in open(p, encoding="utf-8"):
             line = line.strip()
             if not line:
                 continue
@@ -1676,7 +1675,7 @@ def ensure_F(today):
             print(f"[F] 刷新基本面(akshare) {today} …")
             ff.refresh(basis_start="20240101")
         else:
-            print(f"[F] 已有当日缓存，跳过刷新")
+            print("[F] 已有当日缓存，跳过刷新")
     except Exception as e:
         print(f"[F] 刷新失败，继续(中性): {e}")
 
@@ -2118,7 +2117,7 @@ market_state_cache = {}  # symbol -> {state, tech_score, perf_score, ...}
 auto_opt_params = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
 if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
     try:
-        with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as _f:
+        with open(AUTO_OPT_LOG_FILE, encoding="utf-8") as _f:
             _data = json.load(_f)
             if "params" in _data:
                 for _k, _v in _data["params"].items():
@@ -2130,7 +2129,7 @@ if AUTO_OPTIMIZE_ENABLED and os.path.exists(AUTO_OPT_LOG_FILE):
 auto_opt_adjustment_logs = []
 try:
     if os.path.exists(AUTO_OPT_LOG_FILE):
-        with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as _f:
+        with open(AUTO_OPT_LOG_FILE, encoding="utf-8") as _f:
             _data = json.load(_f)
             if "logs" in _data:
                 auto_opt_adjustment_logs = _data["logs"]
@@ -2159,7 +2158,7 @@ trader_state = {
 decision_diary = []
 try:
     if os.path.exists(DECISION_DIARY_FILE):
-        with open(DECISION_DIARY_FILE, "r", encoding="utf-8") as _f:
+        with open(DECISION_DIARY_FILE, encoding="utf-8") as _f:
             _dd = json.load(_f)
             decision_diary = _dd.get("entries", [])
 except Exception:
@@ -7501,7 +7500,7 @@ def _load_state_log():
         return []
     try:
         if os.path.exists(STATE_LOG_FILE):
-            with open(STATE_LOG_FILE, "r", encoding="utf-8") as f:
+            with open(STATE_LOG_FILE, encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         print(f"[v6.0] 加载状态日志失败: {e}")
@@ -7576,7 +7575,7 @@ def _load_auto_opt_params():
         return {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
     try:
         if os.path.exists(AUTO_OPT_LOG_FILE):
-            with open(AUTO_OPT_LOG_FILE, "r", encoding="utf-8") as f:
+            with open(AUTO_OPT_LOG_FILE, encoding="utf-8") as f:
                 data = json.load(f)
                 if "params" in data:
                     result = {k: dict(v) for k, v in AUTO_OPTIMIZE_PARAMS.items()}
@@ -10039,7 +10038,7 @@ def start_dashboard(state):
                             ddg.reset_peak(float(_peak)) if _peak else ddg.reset_peak()
                         except Exception:
                             pass
-                        print(f"[熔断] 已人工解除（面板操作）")
+                        print("[熔断] 已人工解除（面板操作）")
                     else:
                         body = json.dumps(rsm.KILL.summary(), ensure_ascii=False, default=str)
                 except Exception as e:
@@ -10285,7 +10284,7 @@ def start_dashboard(state):
                 # 所有有消息的日期（降序），供复盘下拉
                 try:
                     body = json.dumps(list_chat_days(), ensure_ascii=False)
-                except Exception as e:
+                except Exception:
                     body = json.dumps([], ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -12646,7 +12645,7 @@ PAPER_INIT_CASH = 1_000_000.0
 
 def _paper_load():
     try:
-        with open(PAPER_PATH, "r") as f:
+        with open(PAPER_PATH) as f:
             d = json.load(f)
         d.setdefault("cash", PAPER_INIT_CASH)
         d.setdefault("realized", 0.0)

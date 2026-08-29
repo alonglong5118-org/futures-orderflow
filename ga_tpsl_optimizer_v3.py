@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 ga_tpsl_optimizer_v3.py — 入场+出场参数 GA 联合优化器（Phase 3）
 =================================================================
@@ -789,7 +788,7 @@ def run_optimization(
     print(f"   OOS (纯样本外): {len(df_oos)} 根日K ({df_oos.index[0].date()} ~ {df_oos.index[-1].date()})")
     print(f"{'=' * 60}")
 
-    print(f"\n📐 基线参数:")
+    print("\n📐 基线参数:")
     for i, name in enumerate(PARAM_NAMES):
         print(f"   {name} = {baseline_ind[i]}")
     print(f"   (T_thresh 绝对值 = {baseline_dict['T_thresh_base']})")
@@ -851,10 +850,10 @@ def run_optimization(
         for j in range(N_PARAMS):
             pop[i][j] = baseline_ind[j]
 
-    print(f"\n🚀 开始 NSGA-II 多目标优化（Phase 3: 入场+出场联合优化）")
+    print("\n🚀 开始 NSGA-II 多目标优化（Phase 3: 入场+出场联合优化）")
     print(f"   种群: {pop_size}, 代数: {gen_count}")
     print(f"   参数: {N_PARAMS} 个（4 入场 + 5 出场）")
-    print(f"   目标: expR中位数 + 卡玛比率中位数 + 胜率稳定性")
+    print("   目标: expR中位数 + 卡玛比率中位数 + 胜率稳定性")
     print(f"   WF窗口: 训练{train_bars}根 + 验证{valid_bars}根, 步长{step_bars}根")
     print()
 
@@ -986,7 +985,7 @@ def run_optimization(
     # 筛选候选方案
     candidates = select_candidates(pareto_front)
 
-    print(f"\n🏆 候选方案:")
+    print("\n🏆 候选方案:")
     for key, cand in candidates.items():
         print(f"   [{cand['label']}]")
         for pname, pval in cand["params"].items():
@@ -998,7 +997,7 @@ def run_optimization(
         )
 
     # OOS 验证
-    print(f"\n🔬 纯 OOS 验证:")
+    print("\n🔬 纯 OOS 验证:")
     candidate_inds = []
     candidate_keys = []
     for key, cand in candidates.items():
@@ -1035,7 +1034,7 @@ def run_optimization(
         print(f"     IS expR={metrics_is_full['expR']:.4f} → OOS expR={metrics_oos['expR']:.4f}  ({deg_str})")
 
     # 稳健性检验
-    print(f"\n🔍 参数稳健性检验:")
+    print("\n🔍 参数稳健性检验:")
     robustness_results = {}
     for key in candidate_keys:
         ind = [candidates[key]["params"][name] for name in PARAM_NAMES]

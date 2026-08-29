@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 实盘健康检查 — 单元测试
 ===========================
@@ -181,7 +180,7 @@ class TestYmOf(unittest.TestCase):
         self.assertEqual(ym_of("rb6912"), 206912)
 
     def test_insufficient_digits_returns_none(self):
-        """数字不足 3 位 → None（无法匹配 \d{3,4}）"""
+        r"""数字不足 3 位 → None（无法匹配 \d{3,4}）"""
         # rb01 → 只有 2 位数字
         self.assertIsNone(ym_of("rb01"))
         # rb1 → 只有 1 位

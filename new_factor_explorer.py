@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 new_factor_explorer.py — 新因子挖掘与有效性检验
 =================================================

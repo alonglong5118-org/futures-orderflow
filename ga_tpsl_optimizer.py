@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 ga_tpsl_optimizer.py — 止盈止损参数 GA 联合优化器（Phase 1 原型版）
 =================================================================
@@ -301,7 +300,7 @@ def run_optimization(symbol, pop_size=DEFAULT_POP_SIZE, gen_count=DEFAULT_GEN_CO
             }
         )
 
-    print(f"\n🏆 最优解:")
+    print("\n🏆 最优解:")
     for k, v in best_params.items():
         print(f"   {k} = {v}")
     print(f"   expR = {best_result.get('expR', 'N/A')}")
@@ -441,7 +440,7 @@ def main():
         grid_best = grid_result["best_result"].get("expR", 0)
         diff = ga_best - grid_best
         diff_pct = (diff / grid_best) * 100 if grid_best > 0 else 0
-        print(f"\n📊 GA vs 网格搜索对比:")
+        print("\n📊 GA vs 网格搜索对比:")
         print(f"   网格搜索最优 expR = {grid_best:.4f}")
         print(f"   GA 最优 expR     = {ga_best:.4f}")
         print(f"   GA 优势 = {'+' if diff >= 0 else ''}{diff:.4f} ({'+' if diff_pct >= 0 else ''}{diff_pct:.1f}%)")

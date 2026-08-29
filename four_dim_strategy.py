@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略(4D)核心引擎 v1.0
 =================================================================
 把「管住手下单前四维自检卡」自动化为 信号发生器 + 风控闸门。
@@ -52,7 +51,21 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import fundamental_feed as ff  # 基本面 F 数据源（基差/库存）
-from strategy_layer import MEAN_STRATS, STRATS, TREND_STRATS, classify_regime
+from strategy_layer import (
+    MEAN_STRATS,
+    STRATS,
+    TREND_STRATS,
+    _atr_array,
+    _rolling_max_array,
+    _rolling_min_array,
+    _rolling_std_array,
+    _rsi_array,
+    _seasonal_month_stats,
+    _sma_last,
+    classify_regime,
+    classify_regime_array,
+    precompute_signals,
+)
 from strategy_layer import atr as strat_atr
 
 # P1-16: 实时风控状态注入 —— 由 four_dim_live_runner 在每轮评估前设置
@@ -96,6 +109,8 @@ def _is_risk_locked(risk_state=None):
 BACKTEST_DIR = "/Users/ken/WorkBuddy/管住手/2026-07-28-12-52-27/管住手_实盘工作区_Ken/量化回测"
 FUNDAMENTALS_JSON = os.path.join(HERE, "fundamentals.json")
 CPOS_JSON = os.path.join(HERE, "cpos_cache.json")
+# score_C 缓存（walk-forward 场景下每根 K 线都调用，缓存可省 40ms+/500bars）
+_CPOS_CACHE = {"mtime": 0.0, "data": None}
 DATA_5M_DIR = os.path.join(HERE, "data_5m")  # 本地 5m 缓存（sina 拉取落盘）
 os.makedirs(DATA_5M_DIR, exist_ok=True)
 
@@ -243,6 +258,24 @@ DEFAULT_CONFIG = {
         "max_total_lots": 15,
         "use_realtime_margin": True,
     },
+    # 组合管理（P4，2026-08-29）：按权重分配风险预算 + 板块/相关性约束
+    # enabled=False 时完全不影响原逻辑（risk_gate 中 pf_mult=1.0）。
+    # 开启后：
+    #   - 高权重品种仓位↑（最高 max_weight_mult 倍）
+    #   - 低权重品种仓位↓（最低 min_weight_mult 倍）
+    #   - 配合 portfolio_manager.py 做板块集中度 + 相关性监控 + 再平衡
+    "portfolio": {
+        "enabled": False,  # True=启用组合权重影响仓位；False=关闭（安全默认）
+        "mode": "kelly",  # "equal" | "kelly" | "manual"
+        "max_sector_weight": 0.35,  # 单板块最大权重 35%
+        "high_corr_threshold": 0.7,  # 高相关阈值
+        "rebalance_threshold": 0.05,  # 偏离 5% 触发再平衡
+        "max_weight_mult": 2.0,  # 单品种最大风险倍率（相对于等权）
+        "min_weight_mult": 0.3,  # 单品种最小风险倍率
+        "active_symbols": [],  # 活跃品种列表（空=全部 per_symbol_risk 品种）
+        "weights": {},  # 手动指定权重（mode="manual"时用）
+        "corr_matrix": {},  # 相关性矩阵（用于监控，不影响仓位计算）
+    },
     # 出场粒度（回测结论 2026-08-16：全市场5m出场 94%改善，默认开启）
     # live runner 已用 5m 派生 ATR + 实盘逐笔(stop/t2/尾仓)出场，等价于 5m 出场；
     # 此旗标固化"默认 on"口径，walk_forward_backtest_5m_exit 与之同源。
@@ -269,23 +302,85 @@ DEFAULT_CONFIG = {
         "SH": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
         "TA": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
         "al": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
-        "ao": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
-        "c": {"stop_atr_mult": 2.0, "rr_ratio": 1.5},
+        "ao": {"stop_atr_mult": 1.5, "rr_ratio": 2.5},  # P1: rr 1.5→2.5 (OOS+0.808 胜率100%)
+        "c": {"stop_atr_mult": 2.0, "rr_ratio": 2.5},  # P1: rr 1.5→2.5 (OOS+0.223 胜率60%)
         "eb": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
         "fu": {"stop_atr_mult": 1.0, "rr_ratio": 2.5},
         "jd": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
         "lc": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
-        "ni": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
+        "ni": {"stop_atr_mult": 1.5, "rr_ratio": 2.5},  # P1: rr 1.5→2.5 (OOS+0.647 胜率60%)
         "p": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
         "pp": {"stop_atr_mult": 2.0, "rr_ratio": 2.0},
         "sp": {"stop_atr_mult": 1.5, "rr_ratio": 2.5},
         "v": {"stop_atr_mult": 2.0, "rr_ratio": 1.5},
         "y": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
         "zn": {"stop_atr_mult": 1.0, "rr_ratio": 2.0},
+        # P1 新增：OOS 验证 rr 提升稳健的品种
+        "rb": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P1: rr=2.5 (OOS+0.492 胜率60%)"},
+        "ru": {"stop_atr_mult": 1.5, "rr_ratio": 3.0, "note": "P1: rr=3.0 (OOS+0.304 胜率80%)"},
+        "ss": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P1: rr=2.5 (OOS+0.199 胜率80%)"},
+        "hc": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P1: rr=2.5 (OOS+0.179 胜率80%)"},
         # 低胜率品种专项（回测结论 2026-08-16）：单笔保证金占比收紧至 18%，
         # 与 risk_state_machine.PER_SYMBOL_RISK 同步（账户级状态机 + 信号级手数双重约束）。
         "JM": {"margin_cap_pct": 18, "note": "焦煤低胜率(27%)：单笔占比≤18%"},
         "J": {"margin_cap_pct": 18, "note": "焦炭低胜率(34%)：单笔占比≤18%"},
+    },
+    # 逐品种 regime 风控系数覆盖（P2，2026-08-29）
+    # 解决弱品种在特定 regime 下大亏问题：对差表现 regime 调整 T 阈值和止损系数。
+    # 覆盖逻辑：effective_regime_coef(symbol, cfg) 逐 regime 逐键合并，未覆盖项沿用全局 regime_coef。
+    # 所有配置均经 walk-forward OOS 5 折验证，胜率 ≥ 60% 才上线。
+    "per_symbol_regime_coef": {
+        # P2 第一批：OOS 稳健通过（胜率≥60%）
+        "RM": {
+            # 菜粕：波动市大亏(-0.498) + 趋势市小亏(-0.231)
+            # OOS: -0.635 → -0.359 (+0.277), 100% 胜率
+            "波动": {"T": 0.80, "stop": 0.85, "note": "降T阈值+收紧止损，波动市减亏"},
+            "趋势": {"T": 0.80, "stop": 1.30, "note": "降T阈值+放宽止损，趋势市提升胜率"},
+        },
+        "rr": {
+            # 粳米：趋势市大亏(-0.920) + 震荡市大亏(-1.148)
+            # OOS: -0.534 → -0.293 (+0.240), 75% 胜率
+            "趋势": {"T": 0.80, "stop": 1.07, "note": "降T阈值，趋势市减少假信号"},
+            "过渡": {"T": 1.30, "stop": 1.15, "note": "提T阈值+放宽止损，过渡市过滤噪音"},
+        },
+        "MA": {
+            # 甲醇：波动市大亏(-0.350) + 过渡市小亏(-0.029)
+            # OOS: -0.364 → -0.161 (+0.203), 60% 胜率
+            "趋势": {"T": 0.80, "stop": 0.85, "note": "降T阈值+收紧止损，趋势市增效"},
+            "过渡": {"T": 0.80, "stop": 1.00, "note": "降T阈值，过渡市增加有效信号"},
+        },
+        "b": {
+            # 豆二：趋势市小亏(-0.105) + 波动市小亏(-0.203)
+            # OOS: -0.385 → -0.300 (+0.085), 60% 胜率
+            "趋势": {"T": 1.00, "stop": 1.30, "note": "放宽止损，趋势市避免震荡出局"},
+        },
+        # ========== 黑系专项（2026-08-29 走步法 OOS 验证）==========
+        # 诊断：黑系胜率仅35%，波动市/过渡市是主要亏损来源
+        # 策略：提高波动市开仓门槛（T×1.8）+ 收紧止损（stop×0.7），
+        #       同时适度放宽趋势/震荡市止损（stop×1.2），让盈利单奔跑
+        # 验证：5折走步法OOS，板块平均 +0.157 → +0.237（+51.5%），3/3 品种全正
+        "i": {
+            # 铁矿石：波动市(-0.144) + 过渡市(-0.267) 双亏
+            # OOS: +0.036 → +0.110（+205%）
+            "波动": {"T": 1.8, "stop": 0.7, "note": "黑系专项：提T门槛+收紧止损，回避波动市假突破"},
+            "趋势": {"stop": 1.2, "note": "黑系专项：放宽止损，趋势市拿住大行情"},
+            "震荡": {"stop": 1.2, "note": "黑系专项：放宽止损，震荡市增加容错"},
+        },
+        "rb": {
+            # 螺纹钢：表现最好的黑系品种，锦上添花
+            # OOS: +0.330 → +0.520（+57.6%）
+            "波动": {"T": 1.8, "stop": 0.7, "note": "黑系专项：提T门槛+收紧止损，回避波动市假突破"},
+            "趋势": {"stop": 1.2, "note": "黑系专项：放宽止损，趋势市拿住大行情"},
+            "震荡": {"stop": 1.2, "note": "黑系专项：放宽止损，震荡市增加容错"},
+        },
+        "hc": {
+            # 热卷：旧版为过渡市降T，新版改为黑系统一的波动市回避策略
+            # 注：OOS 微降（+0.104 → +0.082）但仍正收益，换取板块整体稳健性
+            # OOS: +0.104 → +0.082（-21%，仍正）
+            "波动": {"T": 1.8, "stop": 0.7, "note": "黑系专项：提T门槛+收紧止损，回避波动市假突破"},
+            "趋势": {"stop": 1.2, "note": "黑系专项：放宽止损，趋势市拿住大行情"},
+            "震荡": {"stop": 1.2, "note": "黑系专项：放宽止损，震荡市增加容错"},
+        },
     },
     # 合约参数（§2.1 占位；fee=单边每手元近似，回测扣费用）
     "contract_specs": {
@@ -390,6 +485,20 @@ DEFAULT_CONFIG = {
     },
     # 背景偏置合成权重（P2-④ 新增，供 OOS 扫参）。默认值与原硬编码 0.6/0.25/0.15 一致。
     "combine_weights": {"T": 0.6, "F": 0.25, "C": 0.15},
+    # 分板块合成权重（P0 基本面因子增强，2026-08-29）：
+    #   基本面因子效果好的板块（农产品、黑系、有色、贵金属）提高 F 权重，
+    #   效果不好的板块（化工、能源）保持原权重。
+    # 优先级：品种覆盖 > 板块权重 > 全局默认
+    "sector_combine_weights": {
+        "农产品": {"T": 0.50, "F": 0.35, "C": 0.15},  # ✅ 增强F+高权重
+        "黑系": {"T": 0.50, "F": 0.35, "C": 0.15},  # ✅ 增强F+高权重
+        "有色": {"T": 0.55, "F": 0.30, "C": 0.15},  # ✅ 增强F+中权重
+        "贵金属": {"T": 0.55, "F": 0.30, "C": 0.15},  # ✅ 增强F+中权重
+        "化工": {"T": 0.60, "F": 0.25, "C": 0.15},  # ❌ 旧版F，保持原权重
+        "能源": {"T": 0.60, "F": 0.25, "C": 0.15},  # ❌ 旧版F，保持原权重
+        "航运": {"T": 0.60, "F": 0.25, "C": 0.15},  # 无数据影响
+        "其他": {"T": 0.60, "F": 0.25, "C": 0.15},
+    },
     # 技术面 T 去相关（P-A，2026-08-14）：8 策略共线性 → 簇坍缩 + 趋势簇拥挤降权 + 趋势/均值背离阻尼。
     #   解决"趋势市5策略共线=5次投同一方向、T顶满、趋势末端追高杀低"问题。
     #   enabled=False 即退化为旧逐策略加权逻辑（一键回退 / A-B 对照）。
@@ -517,7 +626,11 @@ DEFAULT_CONFIG = {
             "T_thresh": 34,
             "bias_hard_base": 50,
         },  # 🔧2026-08-13重校准: 12→34 严格化后近期walk-forward转正(+0.007/胜40%)
-        "ni": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.229 胜45%
+        "ni": {
+            "T_thresh": 12,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # ✅ OOS+0.229 胜45% | P0: F权重OOS+0.134
         # sn: 交易数不足(锡) → 沿用 group 有色
         # ao: 交易数不足(氧化铝) → 沿用 group 有色
         "au": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.302(无稳健)
@@ -527,10 +640,18 @@ DEFAULT_CONFIG = {
             "T_thresh": 14,
             "bias_hard_base": 50,
         },  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.62)，模型实盘双确认衰减→维持门控/建议剔除
-        "ss": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.100(无稳健)
+        "ss": {
+            "T_thresh": 14,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # ⚠️ OOS−0.100(无稳健) | P0: F权重OOS+0.133
         "bu": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.008(无稳健)
         "fu": {"T_thresh": 14, "bias_hard_base": 50},  # ✅ OOS+0.149 胜41%
-        "ru": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.248 胜46%
+        "ru": {
+            "T_thresh": 28,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # ✅ OOS+0.248 胜46% | P0: F权重OOS+0.114
         "sp": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.058 胜39%
         # sc: 交易数不足(原油) → 沿用 group 能源
         # ── 上期能源 INE ──
@@ -545,7 +666,8 @@ DEFAULT_CONFIG = {
         "eb": {
             "T_thresh": 16,
             "bias_hard_base": 50,
-        },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控 | P0: F权重OOS+0.276
         "eg": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.180(无稳健)
         "l": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.064 胜38%
         "pp": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.029 胜37%
@@ -569,11 +691,23 @@ DEFAULT_CONFIG = {
         # PF: 交易数不足(短纤) → 沿用 group 化工
         # PX: 交易数不足(对二甲苯) → 沿用 group 化工
         # SH: 交易数不足(烧碱) → 沿用 group 化工
-        "UR": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.018 胜35%
+        "UR": {
+            "T_thresh": 12,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # ✅ OOS+0.018 胜35% | P0: F权重OOS+0.149
         # PR: 交易数不足(瓶片) → 沿用 group 化工
         "SR": {"T_thresh": 30, "bias_hard_base": 50},  # ✅ OOS+0.110 胜40%
-        "CF": {"T_thresh": 30, "bias_hard_base": 50},  # ✅ OOS+0.231 胜44%
-        "RM": {"T_thresh": 28, "bias_hard_base": 50},  # ⚠️ OOS−0.073(无稳健)
+        "CF": {
+            "T_thresh": 30,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # ✅ OOS+0.231 胜44% | P0: F权重OOS+0.251
+        "RM": {
+            "T_thresh": 28,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
+        },  # ⚠️ OOS−0.073(无稳健) | P0: F权重OOS+0.084
         "OI": {"T_thresh": 20, "bias_hard_base": 50},  # ✅ OOS+0.073 胜38%
         # PK: 交易数不足(花生) → 沿用 group 农产品
         "AP": {"T_thresh": 14, "bias_hard_base": 50},  # ✅ OOS+0.080 胜40%
@@ -599,13 +733,18 @@ COLMAP = {
 # 数据层
 # ----------------------------------------------------------------------------
 def load_daily(code):
-    """读主连日线 _XX0_daily.csv，中文列→标准列，DatetimeIndex。"""
+    """读主连日线 _XX0_daily.csv，中文列→标准列，DatetimeIndex。
+    带进程内只读缓存，重复调用省 CSV 解析开销。"""
+    code_u = code.upper()
+    if code_u in _DAILY_CACHE:
+        return _DAILY_CACHE[code_u][0]
     for c in (code, code.upper(), code.lower()):
         p = os.path.join(BACKTEST_DIR, f"_{c}0_daily.csv")
         if os.path.exists(p):
             df = pd.read_csv(p).rename(columns=COLMAP)
             df["date"] = pd.to_datetime(df["date"])
             df = df.set_index("date").sort_index()
+            _DAILY_CACHE[code_u] = (df, 0.0)  # 0.0 = 永不过期（只读 CSV，无刷新需求）
             return df
     return None
 
@@ -832,16 +971,34 @@ def score_F(symbol, date_str=None):
         return 0.0
 
 
+def _load_cpos_cached():
+    """带 mtime 缓存的 cpos_cache.json 加载。walk-forward 回测热点路径用。"""
+    global _CPOS_CACHE
+    try:
+        mtime = os.path.getmtime(CPOS_JSON)
+    except OSError:
+        return None
+    if _CPOS_CACHE["data"] is not None and mtime == _CPOS_CACHE["mtime"]:
+        return _CPOS_CACHE["data"]
+    try:
+        with open(CPOS_JSON, encoding="utf-8") as _f:
+            d = json.load(_f)
+        _CPOS_CACHE = {"mtime": mtime, "data": d}
+        return d
+    except (json.JSONDecodeError, OSError, ValueError):
+        _CPOS_CACHE = {"mtime": mtime, "data": None}
+        return None
+
+
 def score_C(symbol, date_str=None):
     """资金面 C ∈ [-100,100]；龙虎榜历史代理（缺 cpos_cache.json 时中性 0）。
     实时 C_flow 另由 compute_C_flow 提供（minishare 差分 + da龘 tick），不在本函数。
     若给定 date_str 且该日历史存在则取该日 C_score（回测用），否则取最新可用值。
-    B4 加固：json.load(open(CPOS_JSON)) 置于 try 内部 + 用 with 上下文管理器防止句柄泄漏。"""
-    if not os.path.exists(CPOS_JSON):
+    性能优化：带 mtime 缓存的文件加载，避免 walk-forward 中重复 json.load。"""
+    d = _load_cpos_cached()
+    if d is None:
         return 0.0
     try:
-        with open(CPOS_JSON, encoding="utf-8") as _f:
-            d = json.load(_f)
         ckey = _CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper())
         sym = d.get(ckey) if isinstance(d, dict) else None
         if sym:
@@ -852,9 +1009,87 @@ def score_C(symbol, date_str=None):
             v = sym.get("C_score")
             if v is not None:
                 return float(v)
-    except (json.JSONDecodeError, OSError, ValueError):
+    except (ValueError, TypeError):
         pass
     return 0.0
+
+
+def precompute_C_array(symbol, date_strs=None, date_ints=None):
+    """预计算 C 值数组（双指针 O(n)，省逐次 history 遍历查找）。
+    支持 date_strs（字符串）或 date_ints（整数 YYYYMMDD），优先用整数（更快）。
+    返回 float64 数组。无 cpos_cache 或无历史数据时返回全 0。"""
+    import numpy as np
+
+    if date_ints is not None:
+        n = len(date_ints)
+        use_int = True
+    elif date_strs is not None:
+        n = len(date_strs)
+        use_int = False
+    else:
+        return np.array([], dtype=np.float64)
+
+    if n == 0:
+        return np.array([], dtype=np.float64)
+
+    d = _load_cpos_cached()
+    if d is None:
+        return np.zeros(n, dtype=np.float64)
+
+    try:
+        ckey = _CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper())
+        sym = d.get(ckey) if isinstance(d, dict) else None
+        if not sym:
+            return np.zeros(n, dtype=np.float64)
+
+        history = sym.get("history", [])
+        if not history:
+            v = sym.get("C_score")
+            if v is not None:
+                return np.full(n, float(v), dtype=np.float64)
+            return np.zeros(n, dtype=np.float64)
+
+        # 构建排序后的日期 + C_score 列表
+        c_list = [(h["date"], float(h["C_score"])) for h in history if h.get("C_score") is not None and h.get("date")]
+        c_list.sort(key=lambda x: x[0])
+
+        result = np.zeros(n, dtype=np.float64)
+        latest = sym.get("C_score")
+        latest_val = float(latest) if latest is not None else 0.0
+
+        if not c_list:
+            return np.full(n, latest_val, dtype=np.float64) if latest_val != 0 else np.zeros(n, dtype=np.float64)
+
+        if use_int:
+            # 转成整数日期（支持 YYYY-MM-DD 和 YYYYMMDD 两种格式）
+            sorted_vals = [int(x[0].replace("-", "")) for x in c_list]
+            c_vals = [x[1] for x in c_list]
+            j = 0
+            nd = len(sorted_vals)
+            current_val = 0.0
+            for i in range(n):
+                di = date_ints[i]
+                while j < nd and sorted_vals[j] <= di:
+                    current_val = c_vals[j]
+                    j += 1
+                result[i] = current_val if j > 0 else 0.0
+        else:
+            sorted_dates = [x[0] for x in c_list]
+            c_vals = [x[1] for x in c_list]
+            j = 0
+            nd = len(sorted_dates)
+            current_val = 0.0
+            for i in range(n):
+                d_str = date_strs[i]
+                while j < nd and sorted_dates[j] <= d_str:
+                    current_val = c_vals[j]
+                    j += 1
+                result[i] = current_val if j > 0 else 0.0
+
+        return result
+    except (ValueError, TypeError):
+        pass
+    return np.zeros(n, dtype=np.float64)
 
 
 # ----------------------------------------------------------------------------
@@ -945,24 +1180,34 @@ def regime_weights(regime):
     return w
 
 
-def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
-    """簇级权重（P-A 去相关核心 + P-D 季节性分组加权）：
-    同簇策略高度共线，视为「一个代表信号」而非各自累加 —— 故每簇只取 ONE 代表权重
-    （取该簇成员在 regime 下的权重均值；同簇成员权重通常一致），而非 Σ各成员权重。
-    这把"趋势簇 5 个共线策略=5 次投同一方向"压成 1 票，消除共线放大；
-    regime 间的相对侧重（趋势市重趋势簇 / 震荡市重均值簇）仍由 regime_weights 决定。
+# 预计算每个 regime 的基础簇权重（cluster_weights 的无 cfg/group 版本）
+# 回测高频调用时直接查表，省 dict 遍历 + 生成器表达式开销
+def _precompute_cluster_base():
+    result = {}
+    for regime in ("趋势", "震荡", "波动", "过渡", "未知"):
+        rw = regime_weights(regime)
+        cw = {}
+        for cname, members in STRAT_CLUSTERS.items():
+            if not members:
+                cw[cname] = 0.0
+            else:
+                cw[cname] = sum(rw.get(m, 0.0) for m in members) / len(members)
+        result[regime] = cw
+    return result
 
-    P-D（季节性分组加权）：若 cfg["seasonal_boost"].enabled 且 group 已知，
-    对 seasonal 簇权重再乘 global_mult × by_group[group]（命中分组才乘），
-    使农产品/化工等强季节性品种的 seasonal 簇在 T 内获得真实话语权。
-    """
-    rw = regime_weights(regime)
-    cw = {}
-    for cname, members in STRAT_CLUSTERS.items():
-        if not members:
-            cw[cname] = 0.0
-            continue
-        cw[cname] = sum(rw.get(m, 0.0) for m in members) / len(members)
+
+_CLUSTER_WEIGHTS_BASE = _precompute_cluster_base()
+
+
+def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
+    """簇级权重（P-A 去相关核心 + P-D 季节性分组加权）。
+    基础权重查表（_CLUSTER_WEIGHTS_BASE），只在 seasonal_boost 开启时动态调整。
+    注意：返回的 dict 是共享引用，只读使用；如需修改请先 copy。"""
+    # 基础簇权重：直接查表，O(1)
+    base = _CLUSTER_WEIGHTS_BASE.get(regime, _CLUSTER_WEIGHTS_BASE["过渡"])
+    # 无 cfg / group / seasonal_boost → 直接返回基础值（只读，省 dict copy）
+    if cfg is None and group is None:
+        return base
     # P-D：seasonal 簇按品种分组加权提升
     sb = (cfg or {}).get("seasonal_boost", {})
     # 开关优先级：特性开关 > 旧配置 > 默认关闭
@@ -975,16 +1220,136 @@ def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
     if sb_enabled is None:
         sb_enabled = bool(sb.get("enabled", False))
     if sb_enabled and group is not None:
+        cw = dict(base)
         mult = float(sb.get("global_mult", 1.0))
         mult *= float(sb.get("by_group", {}).get(group, 1.0))
         cw["seasonal"] = cw.get("seasonal", 0.0) * mult
-    return cw
+        return cw
+    return base
 
 
 _DECORR_OFF_WARNED = [False]  # P2a 守卫：decorrelate.enabled=False 时一次性告警
 
 
-def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
+def precompute_T_array(sig_arrays, regime_codes, cfg=DEFAULT_CONFIG, group=None, feat_mgr=None):
+    """向量化预计算完整 T 值序列（簇投票 + 拥挤降权 + 反向阻尼 + 归一化）。
+    返回 T_arr (float64 数组, 已 round 到 1 位小数)。
+    与 compute_T 逐点结果一致（decorrelate.enabled=True 路径）。"""
+    from strategy_layer import REGIME_CODE_TO_NAME
+
+    n = len(regime_codes)
+    dc = (cfg or DEFAULT_CONFIG).get("decorrelate", {})
+    crowd_pen = float(dc.get("crowd_penalty", 0.35))
+    crowd_th = float(dc.get("crowd_thresh", 0.8))
+    contr_damp = float(dc.get("contrarian_damp", 0.25))
+
+    # 1) 簇投票 + 一致度（全向量化）
+    # trend 簇：5 个策略
+    trend_sigs = np.column_stack([sig_arrays[m] for m in STRAT_CLUSTERS["trend"]]).astype(np.float64)
+    cluster_trend = trend_sigs.mean(axis=1)
+    # 一致度：同方向信号比例
+    sgn_trend = np.sign(cluster_trend)
+    agree_trend = np.zeros(n)
+    for col in range(trend_sigs.shape[1]):
+        agree_trend += (trend_sigs[:, col] == sgn_trend).astype(np.float64)
+    agree_trend = np.where(sgn_trend != 0, agree_trend / trend_sigs.shape[1], 0.0)
+
+    # mean 簇：2 个策略
+    mean_sigs = np.column_stack([sig_arrays[m] for m in STRAT_CLUSTERS["mean"]]).astype(np.float64)
+    cluster_mean = mean_sigs.mean(axis=1)
+    sgn_mean = np.sign(cluster_mean)
+    agree_mean = np.zeros(n)
+    for col in range(mean_sigs.shape[1]):
+        agree_mean += (mean_sigs[:, col] == sgn_mean).astype(np.float64)
+    agree_mean = np.where(sgn_mean != 0, agree_mean / mean_sigs.shape[1], 0.0)
+
+    # seasonal 簇：1 个策略
+    cluster_seasonal = sig_arrays["seasonal"].astype(np.float64)
+    agree_seasonal = np.where(cluster_seasonal != 0, 1.0, 0.0)
+
+    # 2) 为每个 regime 预计算簇权重（cw 和 cw_base）
+    # cw: 含 seasonal_boost 的实际权重；cw_base: 未加权基础权重（用于归一化分母）
+    cw_by_regime = {}
+    cw_base_by_regime = {}
+    for code, name in REGIME_CODE_TO_NAME.items():
+        cw_by_regime[code] = cluster_weights(name, cfg, group, feat_mgr)
+        cw_base_by_regime[code] = cluster_weights(name, None, None, feat_mgr)
+
+    # 向量化：用 regime_codes 选择对应权重
+    cw_trend = np.zeros(n)
+    cw_mean = np.zeros(n)
+    cw_seasonal = np.zeros(n)
+    cw_base_sum = np.zeros(n)
+    for code in REGIME_CODE_TO_NAME:
+        mask = regime_codes == code
+        cw_trend[mask] = cw_by_regime[code]["trend"]
+        cw_mean[mask] = cw_by_regime[code]["mean"]
+        cw_seasonal[mask] = cw_by_regime[code]["seasonal"]
+        cb = cw_base_by_regime[code]
+        cw_base_sum[mask] = cb["trend"] + cb["mean"] + cb["seasonal"]
+
+    # 3) 拥挤降权（仅趋势簇）
+    crowd_factor = np.ones(n)
+    if crowd_pen > 0:
+        denom = (1.0 - crowd_th) if (1.0 - crowd_th) > 0 else 1.0
+        applies = (agree_trend > crowd_th) & (cluster_trend != 0)
+        over = np.minimum(1.0, (agree_trend - crowd_th) / denom)
+        crowd_factor = np.where(applies, np.maximum(0.0, 1.0 - crowd_pen * over), 1.0)
+
+    # 4) 各簇贡献 + 原始 raw
+    trend_contrib = cw_trend * cluster_trend * crowd_factor
+    mean_contrib = cw_mean * cluster_mean
+    seas_contrib = cw_seasonal * cluster_seasonal
+    raw = trend_contrib + mean_contrib + seas_contrib
+
+    # 5) 反向阻尼（趋势 vs 均值 背离）
+    if contr_damp > 0:
+        diverge = (trend_contrib * mean_contrib < 0) & (trend_contrib != 0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            div = np.minimum(np.abs(trend_contrib), np.abs(mean_contrib)) / (np.abs(trend_contrib) + 1e-9)
+        damp = np.where(diverge, 1.0 - contr_damp * div, 1.0)
+        raw = raw * damp
+
+    # 6) 归一化到 [-100, 100]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        abs_T = np.minimum(100.0, np.abs(raw) / np.maximum(cw_base_sum, 1e-9) * 100.0)
+    T_arr = np.copysign(abs_T, raw)
+    # cw_base_sum <= 0 → T = 0
+    T_arr = np.where(cw_base_sum > 0, T_arr, 0.0)
+    # round 到 1 位小数
+    T_arr = np.round(T_arr, 1)
+
+    return T_arr
+
+
+def compute_T(
+    df,
+    cfg=DEFAULT_CONFIG,
+    group=None,
+    symbol=None,
+    feat_mgr=None,
+    _c=None,
+    _h=None,
+    _l=None,
+    _m=None,
+    _atr14=None,
+    _rets=None,
+    _sma5=None,
+    _sma20=None,
+    _sma60=None,
+    _sma5_prev=None,
+    _sma20_prev=None,
+    _sma20_slope_prev=None,
+    _rsi14=None,
+    _std20=None,
+    _seasonal_cnt=None,
+    _seasonal_sum=None,
+    _seasonal_sumsq=None,
+    _signal_arrays=None,
+    _sig_idx=None,
+    _T_array=None,
+    _regime_code=None,
+):
     """8 策略 → regime 加权 → 去相关合成 → T_score ∈ [-100,100]（P-A 整改，2026-08-14）。
 
     去相关设计（对照 P-A 三条建议）：
@@ -1005,9 +1370,35 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
     """
     if df is None or len(df) < 60:
         return 0.0, "未知", "数据不足"
+
+    # 最快路径：T 值 + regime 均已预计算 → 直接索引返回
+    if _T_array is not None and _sig_idx is not None and _regime_code is not None:
+        from strategy_layer import REGIME_CODE_TO_NAME
+
+        T_val = float(_T_array[_sig_idx])
+        regime_name = REGIME_CODE_TO_NAME.get(int(_regime_code), "未知")
+        return T_val, regime_name, ""
+
+    # 预提取 numpy 数组 + 预计算 SMA5/20/60（去重：8 策略 + classify_regime 共用）
+    # 若外部已传入（walk-forward 预切片）则直接使用，省掉 DataFrame 列访问开销
+    if _c is None:
+        _c = df["close"].values
+        _h = df["high"].values
+        _l = df["low"].values
+        if _m is None:
+            _m = df.index.month.values if isinstance(df.index, pd.DatetimeIndex) else None
+    # 预计算 SMA5/20/60（外部已传入则直接用，省 _sma_last 切片+均值开销）
+    _sma5 = _sma5 if _sma5 is not None else _sma_last(_c, 5)
+    _sma20 = _sma20 if _sma20 is not None else _sma_last(_c, 20)
+    _sma60 = _sma60 if _sma60 is not None else _sma_last(_c, 60)
+    # 是否走纯 numpy 路径（外部预传入数组 → 回测高频调用）
+    _has_np = _c is not None and _h is not None and _l is not None
+
     # P-F：分品种 regime 阈值（波动大的品种放大阈值，避免长期被分错 regime）
     regime_rp = regime_params_for(symbol, cfg, feat_mgr) if symbol else {}
-    regime, rdesc = classify_regime(df, regime_rp)
+    regime, rdesc = classify_regime(
+        df, regime_rp, _close=_c, _high=_h, _low=_l, _atr14=_atr14, _sma20=_sma20, _sma20_slope_prev=_sma20_slope_prev
+    )
     dc = (cfg or DEFAULT_CONFIG).get("decorrelate", {})
     # 开关优先级：特性开关 > 旧配置 > 默认开启
     enabled = None
@@ -1020,13 +1411,44 @@ def compute_T(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_mgr=None):
         enabled = bool(dc.get("enabled", True))
 
     # 1) 各策略信号（与旧逻辑一致，异常防御）
+    # 快速路径：外部已预计算全部信号数组 → 直接索引（省 8 次函数调用 + dict 展开）
     sig = {}
-    for name, fn in STRATS.items():
-        try:
-            s, _ = fn(df)
-        except Exception:
-            s = 0
-        sig[name] = int(s)
+    if _signal_arrays is not None and _sig_idx is not None:
+        idx = _sig_idx
+        for name, arr in _signal_arrays.items():
+            sig[name] = int(arr[idx])
+    else:
+        # 通用 kwargs：所有策略都能识别 _close/_high/_low 等前缀参数，未使用的会被忽略
+        # _detail=False：回测高频调用时跳过详情 dict 构造（省 round + dict 分配开销）
+        _kw = {
+            "_close": _c,
+            "_high": _h,
+            "_low": _l,
+            "_months": _m,
+            "_sma5": _sma5,
+            "_sma20": _sma20,
+            "_sma60": _sma60,
+            "_atr14": _atr14,
+            "_rets": _rets,
+            "_detail": not _has_np,
+            "_sma5_prev": _sma5_prev,
+            "_sma20_prev": _sma20_prev,
+            "_rsi": _rsi14,
+            "_std20": _std20,
+            "_seasonal_cnt": _seasonal_cnt,
+            "_seasonal_sum": _seasonal_sum,
+            "_seasonal_sumsq": _seasonal_sumsq,
+        }
+        # 若外部已传入全部 numpy 数组，则纯 numpy 路径（跳过 df，省 DataFrame 访问开销）
+        for name, fn in STRATS.items():
+            try:
+                if _has_np:
+                    s, _ = fn(**_kw)
+                else:
+                    s, _ = fn(df, **_kw)
+            except Exception:
+                s = 0
+            sig[name] = int(s)
 
     # 兼容 / A-B 对照：旧逐策略 regime 加权累加
     if not enabled:
@@ -1139,13 +1561,96 @@ def compute_T_subfactors(df, cfg=DEFAULT_CONFIG, group=None, symbol=None, feat_m
 # ----------------------------------------------------------------------------
 # 流水线：F(背景) → T(触发) → C(确认) → 风控
 # ----------------------------------------------------------------------------
-def combine_bias(F, T, C, cfg=DEFAULT_CONFIG):
+def precompute_trigger_info(T_arr, F_arr, C_arr, regime_codes, cfg, symbol):
+    """向量化预计算触发信息：返回 (dir_T_arr, triggered_arr, bias_G_arr)。
+    对应 pipeline 中 direction_mode="threshold" 的默认路径（回测常用）。
+    与 pipeline 逐点结果一致（无 HMM/GARCH/sentiment/SR/5m 等 live 专属特性时）。"""
+    from strategy_layer import REGIME_CODE_TO_NAME
+
+    n = len(T_arr)
+    bs = cfg.get("bias_synthesis", {})
+    direction_mode = bs.get("direction_mode", "threshold")
+    fc_confirm = float(bs.get("fc_confirm", 25))
+    confirm_relief = float(bs.get("confirm_relief", 0.85))
+    fc_hard_base = float(bs.get("fc_hard", 25))
+    _so = cfg.get("thresholds_by_symbol", {}).get(symbol)
+    if _so and _so.get("bias_fc_hard") is not None:
+        fc_hard_base = float(_so["bias_fc_hard"])
+    _off = bs.get("fc_hard_regime_offset", {"趋势": 0, "波动": 5, "震荡": 10})
+
+    # combine_weights（支持按品种覆盖）
+    cw = effective_weights(symbol, cfg)
+    w_T, w_F, w_C = cw["T"], cw["F"], cw["C"]
+
+    # bias_G 和 bias_FC
+    # bias_FC 用 F/C 的绝对权重（用于确认/硬否决的强度判断），与 combine_weights 一致
+    bias_G = w_T * T_arr + w_F * F_arr + w_C * C_arr
+    bias_FC = np.round(w_F * F_arr + w_C * C_arr, 1)
+
+    # dir_T_raw = sign(T_D)
+    dir_T_raw = np.sign(T_arr).astype(np.int8)
+
+    # direction_mode: threshold → dir_T = dir_T_raw
+    if direction_mode == "combined":
+        bias_g_min = float(bs.get("bias_g_min", 50))
+        direction_alpha = float(bs.get("direction_alpha", 0.5))
+        _combined = T_arr + direction_alpha * bias_G
+        dir_T = np.where(_combined > 0, 1, np.where(_combined < 0, -1, 0)).astype(np.int8)
+        # 当 dir_T_raw == 0 且 abs(bias_G) < bias_g_min 时，dir_T 保持 0
+        keep_zero = (dir_T_raw == 0) & (np.abs(bias_G) < bias_g_min)
+        dir_T[keep_zero] = 0
+    else:
+        dir_T = dir_T_raw
+
+    # T_thresh_eff = T_base * rc["T"]（按 regime 变化，P2: 支持 per-symbol 覆盖）
+    T_base, _ = effective_params(symbol, cfg)
+    rc_all = effective_regime_coef(symbol, cfg)
+
+    # 按 regime code 计算 T_thresh_eff 和 fc_hard
+    T_thresh_eff = np.full(n, T_base, dtype=np.float64)
+    fc_hard_arr = np.full(n, fc_hard_base, dtype=np.float64)
+    for code, name in REGIME_CODE_TO_NAME.items():
+        mask = regime_codes == code
+        rc = rc_all.get(name, rc_all["波动"])
+        T_thresh_eff[mask] = T_base * rc["T"]
+        fc_hard_arr[mask] = fc_hard_base + _off.get(name, 0)
+
+    # 硬否决：|bias_FC| >= fc_hard 且 bias_FC 与 dir_T 反向
+    with np.errstate(invalid="ignore"):
+        fc_sign = np.sign(bias_FC)
+        hard_veto = (np.abs(bias_FC) >= fc_hard_arr) & (fc_sign != dir_T) & (dir_T != 0)
+
+    # triggered 计算（threshold 模式）
+    triggered = np.zeros(n, dtype=bool)
+    dir_nonzero = (dir_T != 0) & ~hard_veto
+
+    if direction_mode == "combined":
+        bias_g_min = float(bs.get("bias_g_min", 50))
+        cond1 = np.abs(T_arr) >= T_thresh_eff
+        cond2 = (np.abs(bias_G) >= bias_g_min) & (np.sign(bias_G) == dir_T)
+        triggered[dir_nonzero] = (cond1 | cond2)[dir_nonzero]
+    else:
+        # same_dir: bias_G 与 dir_T 同向（或 bias_G 近似 0）
+        same_dir = ((bias_G >= 0) & (dir_T > 0)) | ((bias_G <= 0) & (dir_T < 0)) | (np.abs(bias_G) < 1e-6)
+        # fc_align: bias_FC 与 dir_T 同向且 |bias_FC| >= fc_confirm
+        fc_align = (fc_sign == dir_T) & (np.abs(bias_FC) >= fc_confirm)
+        _thr = T_thresh_eff * np.where(fc_align, confirm_relief, 1.0)
+        cond = same_dir & (np.abs(T_arr) >= _thr)
+        triggered[dir_nonzero] = cond[dir_nonzero]
+
+    return dir_T, triggered, bias_G
+
+
+def combine_bias(F, T, C, cfg=DEFAULT_CONFIG, symbol=None):
     """背景偏置合成（§1.5）。F/C 中性时退化为 T 主导。
     P2-④：权重改读 cfg["combine_weights"]（默认 0.6/0.25/0.15，与原硬编码一致），
     使 OOS harness 可扫参验证，向后兼容。
+    P0 优化（2026-08-29）：支持按品种覆盖权重（thresholds_by_symbol[sym].combine_weights）。
+    P0 基本面增强（2026-08-29）：支持分板块权重（sector_combine_weights）。
     #10 GA 权重优化（2026-08-26）：若 ga_weights_cache.json 有该品种的优化权重，
     则用 GA 权重覆盖默认权重（仅 live 路径；回测走 cfg 不受影响）。"""
-    w = (cfg or DEFAULT_CONFIG).get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
+    # 优先级：GA 覆盖 > 按品种覆盖 > 分板块 > 全局默认
+    w = None
     # #10: GA 权重覆盖（live 路径，set_ga_weights_for_symbol 设置当前品种权重）
     _ga_current = getattr(combine_bias, "_ga_current", None)
     if _ga_current:
@@ -1153,6 +1658,27 @@ def combine_bias(F, T, C, cfg=DEFAULT_CONFIG):
         base = ga_w.get("base", {})
         if base:
             w = base
+    # 按品种覆盖（P0 优化）
+    if w is None and symbol:
+        sym_cfg = (cfg or DEFAULT_CONFIG).get("thresholds_by_symbol", {}).get(symbol, {})
+        override = sym_cfg.get("combine_weights")
+        if override:
+            default = (cfg or DEFAULT_CONFIG).get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
+            t = float(override.get("T", default["T"]))
+            f = float(override.get("F", default["F"]))
+            c = float(override.get("C", default["C"]))
+            s = t + f + c
+            if s > 0:
+                w = {"T": t / s, "F": f / s, "C": c / s}
+    # 分板块权重（P0 基本面增强）
+    if w is None and symbol:
+        sector = SYMBOLS.get(symbol, {}).get("group", "其他")
+        sector_w = (cfg or DEFAULT_CONFIG).get("sector_combine_weights", {}).get(sector)
+        if sector_w:
+            w = sector_w
+    # 全局默认
+    if w is None:
+        w = (cfg or DEFAULT_CONFIG).get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
     return round(w["T"] * T + w["F"] * F + w["C"] * C, 1)
 
 
@@ -1162,7 +1688,7 @@ def _load_ga_weights():
     try:
         _path = os.path.join(HERE, "ga_weights_cache.json")
         if os.path.exists(_path):
-            with open(_path, "r", encoding="utf-8") as f:
+            with open(_path, encoding="utf-8") as f:
                 _data = json.load(f)
             combine_bias._ga_cache = _data
             return _data
@@ -1191,15 +1717,63 @@ def effective_params(symbol, cfg=DEFAULT_CONFIG):
     """解析某品种生效的阈值参数（per-symbol 覆盖优先，否则回退 group + 全局）。
     返回 (T_thresh_base, bias_hard_dict)。bias_hard_dict: 趋势=base, 波动=base+5, 震荡=base+10。"""
     sym = cfg.get("thresholds_by_symbol", {}).get(symbol)
-    if sym:
+    th = cfg["thresholds"][SYMBOLS[symbol]["group"]]
+    if sym and "T_thresh" in sym:
         T_base = sym["T_thresh"]
-        bh_base = sym.get("bias_hard_base", 60)
+        bh_base = sym.get("bias_hard_base", th.get("bias_hard", 60))
     else:
-        th = cfg["thresholds"][SYMBOLS[symbol]["group"]]
         T_base = th["T_thresh"]
-        bh_base = th["bias_hard"]  # 用 group 级 bias_hard（如农产品=50），而非固定取 60
+        bh_base = th.get("bias_hard", 60)  # 用 group 级 bias_hard
     bhd = {"趋势": bh_base, "波动": bh_base + 5, "震荡": bh_base + 10}
     return T_base, bhd
+
+
+def effective_weights(symbol, cfg=DEFAULT_CONFIG):
+    """解析某品种生效的 F/T/C 合成权重。
+    优先级：品种覆盖 > 分板块 > 全局默认。
+    返回 dict: {"T", "F", "C"}，三者之和 = 1.0。"""
+    default = cfg.get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
+    sym = cfg.get("thresholds_by_symbol", {}).get(symbol, {})
+    override = sym.get("combine_weights")
+    if override:
+        # 归一化确保和为 1
+        t = float(override.get("T", default["T"]))
+        f = float(override.get("F", default["F"]))
+        c = float(override.get("C", default["C"]))
+        s = t + f + c
+        if s > 0:
+            return {"T": t / s, "F": f / s, "C": c / s}
+    # 分板块权重
+    sector = SYMBOLS.get(symbol, {}).get("group", "其他")
+    sector_w = cfg.get("sector_combine_weights", {}).get(sector)
+    if sector_w:
+        return {"T": float(sector_w["T"]), "F": float(sector_w["F"]), "C": float(sector_w["C"])}
+    return {"T": float(default["T"]), "F": float(default["F"]), "C": float(default["C"])}
+
+
+def effective_regime_coef(symbol, cfg=DEFAULT_CONFIG):
+    """解析某品种生效的 regime 风控系数（per-symbol 覆盖优先，否则回退全局）。
+    返回完整的 regime_coef dict: {regime_name: {"T", "conv", "stop", "cooldown"}}。
+
+    覆盖层级：全局 regime_coef → per_symbol_regime_coef[symbol]（后者优先，逐键覆盖）。
+    未在 per-symbol 中定义的 regime 或键，沿用全局值。
+    """
+    base = dict(cfg.get("regime_coef", {}))
+    # 深拷贝每个 regime 的 dict，避免修改共享引用
+    result = {rg: dict(params) for rg, params in base.items()}
+
+    sym_override = cfg.get("per_symbol_regime_coef", {}).get(symbol, {})
+    if not sym_override:
+        return result
+
+    for rg, overrides in sym_override.items():
+        if rg not in result:
+            # 新 regime（如"过渡"），以波动 regime 为基准再覆盖
+            base_rg = dict(result.get("波动", {"T": 1.0, "conv": 1.0, "stop": 1.2, "cooldown": 300}))
+            result[rg] = base_rg
+        for k, v in overrides.items():
+            result[rg][k] = v
+    return result
 
 
 def regime_params_for(symbol, cfg=DEFAULT_CONFIG, feat_mgr=None):
@@ -1385,6 +1959,7 @@ def pipeline(
     feat_mgr=None,
     sentiment_label=None,
     sr_result=None,
+    _precalc=None,
 ):
     """算三维修分 + 流水线合成，返回触发判定与中间量。
     date: 当前交易日(YYYYMMDD)，用于查真实基本面 F（缺失→中性）。
@@ -1429,18 +2004,49 @@ def pipeline(
             "sr_quality_note": "",
         }
 
-    T_D, regime, rdesc = compute_T(df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr)
+    T_D, regime, rdesc = compute_T(
+        df_daily,
+        cfg,
+        group,
+        symbol=symbol,
+        feat_mgr=feat_mgr,
+        _c=_precalc.get("_c") if _precalc else None,
+        _h=_precalc.get("_h") if _precalc else None,
+        _l=_precalc.get("_l") if _precalc else None,
+        _m=_precalc.get("_m") if _precalc else None,
+        _atr14=_precalc.get("_atr14") if _precalc else None,
+        _rets=_precalc.get("_rets") if _precalc else None,
+        _sma5=_precalc.get("_sma5") if _precalc else None,
+        _sma20=_precalc.get("_sma20") if _precalc else None,
+        _sma60=_precalc.get("_sma60") if _precalc else None,
+        _sma5_prev=_precalc.get("_sma5_prev") if _precalc else None,
+        _sma20_prev=_precalc.get("_sma20_prev") if _precalc else None,
+        _sma20_slope_prev=_precalc.get("_sma20_slope_prev") if _precalc else None,
+        _rsi14=_precalc.get("_rsi14") if _precalc else None,
+        _std20=_precalc.get("_std20") if _precalc else None,
+        _seasonal_cnt=_precalc.get("_seasonal_cnt") if _precalc else None,
+        _seasonal_sum=_precalc.get("_seasonal_sum") if _precalc else None,
+        _seasonal_sumsq=_precalc.get("_seasonal_sumsq") if _precalc else None,
+        _signal_arrays=_precalc.get("_signal_arrays") if _precalc else None,
+        _sig_idx=_precalc.get("_sig_idx") if _precalc else None,
+        _T_array=_precalc.get("_T_array") if _precalc else None,
+        _regime_code=_precalc.get("_regime_code") if _precalc else None,
+    )
     if date is None:
         date = df_daily.index[-1].strftime("%Y%m%d") if len(df_daily) else None
     F = F_override if F_override is not None else score_F(symbol, date)
-    C = c_override if c_override is not None else score_C(symbol, date)
+    # C 值快速路径：预计算值直接使用，省 score_C 内 history 遍历查找
+    if _precalc and _precalc.get("_C_val") is not None and c_override is None:
+        C = _precalc["_C_val"]
+    else:
+        C = c_override if c_override is not None else score_C(symbol, date)
     if ablate == "F":
         F = 0.0
     elif ablate == "C":
         C = 0.0
     elif ablate == "T":
         T_D = 0.0
-    bias_G = combine_bias(F, T_D, C, cfg)
+    bias_G = combine_bias(F, T_D, C, cfg, symbol=symbol)
 
     # ── #11 GA 6 因子挖掘模式（可选，默认关闭） ──
     # 子因子：T_trend / T_mean / T_seasonal / F_basis / F_seasonal / C
@@ -1449,8 +2055,15 @@ def pipeline(
     _sf_w = (cfg or {}).get("subfactor_weights", {})
     if _sf_w:
         try:
+            # 防前视偏差：walk_forward 模式下用 _sig_idx 截取到当前 bar 的历史数据
+            # 否则直接用 df_daily（live 模式 / 单根调用 = 最后一根就是当前）
+            _sf_idx = _precalc.get("_sig_idx") if _precalc else None
+            if _sf_idx is not None and isinstance(df_daily, pd.DataFrame):
+                _df_sf = df_daily.iloc[: _sf_idx + 1]
+            else:
+                _df_sf = df_daily
             _t_trend, _t_mean, _t_seas, _, _ = compute_T_subfactors(
-                df_daily, cfg, group, symbol=symbol, feat_mgr=feat_mgr
+                _df_sf, cfg, group, symbol=symbol, feat_mgr=feat_mgr
             )
             import fundamental_feed as _ff
 
@@ -1471,9 +2084,9 @@ def pipeline(
                 try:
                     import sr_analyzer as _sra
 
-                    _sr_res = _sra.find_sr_levels(df_daily, symbol=symbol)
+                    _sr_res = _sra.find_sr_levels(_df_sf, symbol=symbol)
                     if _sr_res and _sr_res.get("levels"):
-                        _cur = float(df_daily["close"].iloc[-1])
+                        _cur = float(_df_sf["close"].iloc[-1])
                         _nr = _sr_res.get("nearest_resistance")
                         _ns = _sr_res.get("nearest_support")
                         _rd = _nr["distance_pct"] if _nr else 999.0
@@ -1490,12 +2103,12 @@ def pipeline(
             _v_vol = 0.0
             if "V_vol" in _sf_w:
                 try:
-                    _close = df_daily["close"].astype(float).values
+                    _close = _df_sf["close"].astype(float).values
                     if len(_close) >= 40:
-                        _ret = np.diff(_close[-30:]) / (_close[-31:-1] + 1e-8)
+                        _ret = np.diff(_close[-30:]) / (_close[-30:-1] + 1e-8)  # 29日收益率
                         _vol = float(np.std(_ret) * 100)  # 20日波动率（%）
                         # 波动率分位：用过去 120 根做参考
-                        _long_ret = np.diff(_close[-120:]) / (_close[-121:-1] + 1e-8)
+                        _long_ret = np.diff(_close[-120:]) / (_close[-120:-1] + 1e-8)
                         _long_vols = np.array(
                             [float(np.std(_long_ret[max(0, i - 20) : i + 1]) * 100) for i in range(19, len(_long_ret))]
                         )
@@ -1510,6 +2123,75 @@ def pipeline(
                 except Exception:
                     _v_vol = 0.0
 
+            # Vol_vol 成交量因子（可选）：量价配合/量能异动
+            # 放量上涨 = 正，缩量上涨 = 负（假突破）；放量下跌 = 负，缩量下跌 = 正（假跌破）
+            _vol_vol = 0.0
+            if "Vol_vol" in _sf_w:
+                try:
+                    _close_arr = _df_sf["close"].astype(float).values
+                    _vol_arr = _df_sf["volume"].astype(float).values
+                    if len(_close_arr) >= 30 and len(_vol_arr) >= 30:
+                        _c20 = _close_arr[-20:]
+                        _v20 = _vol_arr[-20:]
+                        # 成交量分位（相对过去 60 日）
+                        if len(_vol_arr) >= 60:
+                            _v_long = _vol_arr[-60:]
+                            _v_pct = float(np.mean(_v_long < _v20[-1]))
+                        else:
+                            _v_pct = 0.5
+                        # 量价配合：价格方向 × 成交量方向
+                        _price_chg = (_c20[-1] - _c20[-6]) / (_c20[-6] + 1e-8)  # 5日涨跌
+                        _vol_chg = (_v20[-1] - np.mean(_v20[-10:-1])) / (np.mean(_v20[-10:-1]) + 1e-8)
+                        # 放量同向 = 正（趋势确认），放量反向 = 负（衰竭/反转）
+                        _direction = 1.0 if _price_chg > 0 else (-1.0 if _price_chg < 0 else 0.0)
+                        _score = _direction * _vol_chg * 80 + (_v_pct - 0.5) * 20
+                        _vol_vol = round(max(-100.0, min(100.0, _score)), 1)
+                except Exception:
+                    _vol_vol = 0.0
+
+            # OI_int 持仓量因子（可选）：持仓变化反映资金流入流出
+            # 持仓增加+上涨 = 正（新资金入场），持仓减少+下跌 = 负（资金离场）
+            _oi_int = 0.0
+            if "OI_int" in _sf_w:
+                try:
+                    _close_arr = _df_sf["close"].astype(float).values
+                    if "open_interest" in _df_sf.columns:
+                        _oi = _df_sf["open_interest"].astype(float).values
+                    elif "oi" in _df_sf.columns:
+                        _oi = _df_sf["oi"].astype(float).values
+                    else:
+                        _oi = None
+                    if _oi is not None and len(_oi) >= 20 and len(_close_arr) >= 20:
+                        # 持仓变化率（5日平均）
+                        if len(_oi) >= 10:
+                            _oi_chg = (_oi[-1] - np.mean(_oi[-10:-1])) / (np.mean(_oi[-10:-1]) + 1e-8)
+                        else:
+                            _oi_chg = 0.0
+                        # 价格方向
+                        _price_chg = (_close_arr[-1] - _close_arr[-6]) / (_close_arr[-6] + 1e-8)
+                        _direction = 1.0 if _price_chg > 0 else (-1.0 if _price_chg < 0 else 0.0)
+                        # 量价配合：增仓同向 = 正（资金推动趋势）
+                        _score = _direction * _oi_chg * 150
+                        _oi_int = round(max(-100.0, min(100.0, _score)), 1)
+                except Exception:
+                    _oi_int = 0.0
+
+            # Inv_stock 库存因子（可选）：库存变化反映供需
+            # 库存下降 = 正（需求旺/供应紧），库存上升 = 负（供应过剩）
+            _inv_stock = 0.0
+            if "Inv_stock" in _sf_w:
+                try:
+                    import fundamental_feed as _ff_inv
+
+                    _inv_rate = _ff_inv.stock_change_on(symbol, date)
+                    if _inv_rate is not None:
+                        # 库存下降 → 正分，库存上升 → 负分
+                        # 假设年化 10% 的库存变化对应 100 分
+                        _score = -_inv_rate / 0.10 * 100
+                        _inv_stock = round(max(-100.0, min(100.0, _score)), 1)
+                except Exception:
+                    _inv_stock = 0.0
+
             _bias = (
                 _sf_w.get("T_trend", 0) * _t_trend
                 + _sf_w.get("T_mean", 0) * _t_mean
@@ -1519,6 +2201,9 @@ def pipeline(
                 + _sf_w.get("C", 0) * C_sf
                 + _sf_w.get("SR_breakout", 0) * _sr_breakout
                 + _sf_w.get("V_vol", 0) * _v_vol
+                + _sf_w.get("Vol_vol", 0) * _vol_vol
+                + _sf_w.get("OI_int", 0) * _oi_int
+                + _sf_w.get("Inv_stock", 0) * _inv_stock
             )
             bias_G = round(max(-100.0, min(100.0, _bias)), 1)
         except Exception:
@@ -1541,7 +2226,8 @@ def pipeline(
         T_5m, used_5m = T_D, False
     dir_T_raw = 1 if T_5m > 0 else (-1 if T_5m < 0 else 0)
 
-    rc = cfg["regime_coef"].get(regime, cfg["regime_coef"]["波动"])
+    rc_all = effective_regime_coef(symbol, cfg)
+    rc = rc_all.get(regime, rc_all["波动"])
     T_base, bh_dict = effective_params(symbol, cfg)
     T_thresh_eff = T_base * rc["T"]
 
@@ -1592,7 +2278,9 @@ def pipeline(
     bias_g_min = float(bs.get("bias_g_min", 50))
 
     # 非技术面背景偏置（P-B/P-C 仅看 F/C，避免 T 自我否决）
-    bias_FC = round(0.25 * F + 0.15 * C, 1)
+    # 用 effective_weights 中的 F/C 权重，与 bias_G 保持一致
+    _ew = effective_weights(symbol, cfg)
+    bias_FC = round(_ew["F"] * F + _ew["C"] * C, 1)
 
     # 方向（P-B）：threshold 模式方向仍由 T_5m 决定；combined 模式 F/C 可翻转方向
     if direction_mode == "combined" and (dir_T_raw != 0 or abs(bias_G) >= bias_g_min):
@@ -1816,6 +2504,19 @@ def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thr
     # #4 fractional-Kelly：按 edge 缩放风险预算仓位（等风险占比基础之上再调）
     kelly_mult = compute_kelly_factor(symbol, cfg)
     N_risk = max(1, int(round(N_risk * kelly_mult))) if N_risk >= 1 else 0
+    # #5 组合权重调整（P4，2026-08-29）：portfolio.enabled=True 时按权重调整风险预算
+    #    高权重品种 → 仓位更大；低权重品种 → 仓位更小
+    #    关闭时 mult=1.0 不影响原逻辑
+    pf_mult = 1.0
+    if cfg.get("portfolio", {}).get("enabled", False):
+        try:
+            from portfolio_manager import portfolio_risk_mult
+
+            pf_mult = portfolio_risk_mult(symbol, cfg)
+        except Exception:
+            pf_mult = 1.0
+    if pf_mult != 1.0 and N_risk >= 1:
+        N_risk = max(1, int(round(N_risk * pf_mult)))
     margin_per = price * mv * margin_rate
     # 分品种保证金上限覆盖（回测结论 2026-08-16：JM/J 低胜率→单笔占比收紧）
     ac_margin_cap = cfg.get("per_symbol_risk", {}).get(symbol, {}).get("margin_cap_pct", ac["margin_cap_pct"])
@@ -1858,7 +2559,8 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
     for _k in ("stop_atr_mult", "rr_ratio"):
         if _k in cfg.get("per_symbol_risk", {}).get(symbol, {}):
             rg[_k] = cfg["per_symbol_risk"][symbol][_k]
-    rc = cfg["regime_coef"].get(regime, cfg["regime_coef"]["波动"])
+    rc_all = effective_regime_coef(symbol, cfg)
+    rc = rc_all.get(regime, rc_all["波动"])
     stop_mult = rg["stop_atr_mult"] * rc["stop"]
     stop_dist = stop_mult * atr_val
     if dir_T > 0:
@@ -2024,21 +2726,156 @@ def walk_forward_backtest(
     n = len(df)
     sp = cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
     mv, fee = sp["multiplier"], sp["fee"]
+
+    # 预提取 numpy 数组：循环内用索引访问代替 .iloc，省 ~15%
+    _open = df["open"].values
+    _high = df["high"].values
+    _low = df["low"].values
+    _close = df["close"].values
+    _months = df.index.month.values if isinstance(df.index, pd.DatetimeIndex) else None
+    # 预计算完整 ATR(14) 序列：O(n) 一次算出，循环内直接索引（代替每根 O(n) 重算）
+    _atr14_arr = _atr_array(_high, _low, _close, 14)
+
+    # 预计算收益率序列：O(n) 一次算出，s_seasonal 直接用切片，省逐次 np.diff
+    _rets_arr = np.empty(n)
+    _rets_arr[0] = np.nan
+    _rets_arr[1:] = np.diff(_close) / _close[:-1]
+
+    # 预计算 SMA5/20/60 完整序列（cumsum O(n)），循环内直接索引
+    # 省：compute_T(3次) + classify_regime(1次斜率) + s_dma(2次prev) 重复计算
+    from strategy_layer import _sma_array
+
+    _sma5_arr = _sma_array(_close, 5)
+    _sma20_arr = _sma_array(_close, 20)
+    _sma60_arr = _sma_array(_close, 60)
+
+    # 预计算 RSI(14) 完整序列（cumsum O(n)），循环内直接索引（省 _rsi_last 逐次计算）
+    _rsi14_arr = _rsi_array(_close, 14)
+
+    # 预计算 rolling std(20) 完整序列（cumsum O(n)），s_boll 直接用（省 _rolling_std_last）
+    _std20_arr = _rolling_std_array(_close, 20)
+
+    # 预计算季节性同月统计量（12 个月前缀和 O(n)），s_seasonal O(1) 查询
+    # 省：每次全量 mask + np.mean + np.std
+    _seas_cnt_arr, _seas_sum_arr, _seas_sumsq_arr = _seasonal_month_stats(_rets_arr, _months)
+
+    # 预计算 rolling max/min（唐奇安/海龟用）
+    _hh20_arr = _rolling_max_array(_high, 20)
+    _ll20_arr = _rolling_min_array(_low, 20)
+    _hh55_arr = _rolling_max_array(_high, 55)
+    _ll55_arr = _rolling_min_array(_low, 55)
+
+    # 预计算全部 8 个策略的信号数组（全向量化 O(n)），compute_T 直接索引
+    # 省：循环内 8 次策略函数调用 + dict 展开开销
+    _sig_arrays = precompute_signals(
+        _close,
+        _high,
+        _low,
+        _months,
+        _rets_arr,
+        _sma5_arr,
+        _sma20_arr,
+        _sma60_arr,
+        _rsi14_arr,
+        _std20_arr,
+        _hh20_arr,
+        _ll20_arr,
+        _hh55_arr,
+        _ll55_arr,
+        _seas_cnt_arr,
+        _seas_sum_arr,
+        _seas_sumsq_arr,
+    )
+
+    # 预计算 regime 分类数组（向量化 classify_regime）
+    # sma20_slope_prev = 4 根前的 SMA20（对应 classify_regime 的 ma20_prev）
+    _sma20_slope_prev_arr = np.concatenate([np.full(4, np.nan), _sma20_arr[:-4]])
+    _regime_rp = regime_params_for(symbol, cfg, feat_mgr=None)
+    _regime_codes_arr = classify_regime_array(_close, _atr14_arr, _sma20_arr, _sma20_slope_prev_arr, _regime_rp)
+
+    # 预计算完整 T 值数组（向量化簇投票 + 拥挤降权 + 反向阻尼 + 归一化）
+    # compute_T 最快路径直接索引返回，省掉循环内所有 Python 逻辑开销
+    _group = SYMBOLS.get(symbol, {}).get("group")
+    _T_arr = precompute_T_array(_sig_arrays, _regime_codes_arr, cfg, _group, feat_mgr=None)
+
+    # 预计算 F 分数数组：O(n) 一次算出，循环内直接索引（代替每根 bisect+load 重复查基本面）
+    import fundamental_feed as _ff
+
+    # 整数日期（YYYYMMDD）比 strftime 快 ~15×，双指针比较也更快
+    _date_ints = df.index.year.values * 10000 + df.index.month.values * 100 + df.index.day.values
+    _F_arr = _ff.precompute_F_array(symbol, date_ints=_date_ints, months=_months)
+
+    # 预计算 C 值数组（双指针 O(n)，整数日期省 strftime）
+    _C_arr = precompute_C_array(symbol, date_ints=_date_ints)
+
+    # 预计算触发信息（dir_T / triggered / bias_G 全向量化），循环内直接索引
+    # 非触发时跳过 pipeline 调用，省 ~20% 总耗时
+    _dir_T_arr, _triggered_arr, _bias_G_arr = precompute_trigger_info(
+        _T_arr, _F_arr, _C_arr, _regime_codes_arr, cfg, symbol
+    )
+
     trades = []
     roll_skipped = 0
     i = min_bars
     last_trade_i = -999
+    _df_index = df.index  # 预存引用，触发时按需 strftime
     while i < n - 1:
-        hist = df.iloc[: i + 1]
-        date_str = df.index[i].strftime("%Y%m%d")
+        # 预切片 numpy 数组 + 预计算指标值（compute_T/pipeline 直接用，省重复计算）
+        # 注意：df 传全量但策略函数走 numpy 路径时只看预切片，
+        #       省去循环内 df.iloc 切片开销（约占总耗时 15-20%）
+        _i = i + 1
+        # 快速路径：用预计算的 triggered/dir_T 直接判断，非触发时跳过 pipeline + _prec 构造
+        if not _triggered_arr[i] or _dir_T_arr[i] == 0 or (i - last_trade_i) < cooldown_bars:
+            i += 1
+            continue
+
+        # 触发时才生成日期字符串（500 根只需 12~19 次，省 ~0.8ms strftime）
+        date_str = _df_index[i].strftime("%Y%m%d")
+
+        _prec = {
+            "_c": _close[:_i],
+            "_h": _high[:_i],
+            "_l": _low[:_i],
+            "_m": _months[:_i] if _months is not None else None,
+            "_atr14": _atr14_arr[i],
+            "_rets": _rets_arr[:_i],
+            "_sma5": _sma5_arr[i],
+            "_sma20": _sma20_arr[i],
+            "_sma60": _sma60_arr[i],
+            # s_dma 用：前一根的 SMA5/SMA20
+            "_sma5_prev": _sma5_arr[i - 1] if i >= 1 else np.nan,
+            "_sma20_prev": _sma20_arr[i - 1] if i >= 1 else np.nan,
+            # classify_regime 用：4 根前的 SMA20（斜率计算基准）
+            "_sma20_slope_prev": _sma20_arr[i - 4] if i >= 4 else np.nan,
+            # s_rsi 用：当前 RSI(14) 值
+            "_rsi14": _rsi14_arr[i],
+            # s_boll 用：当前 rolling std(20) 值
+            "_std20": _std20_arr[i],
+            # s_seasonal 用：同月统计量（count, sum, sum_sq），O(1) 计算均值/标准差
+            "_seasonal_cnt": int(_seas_cnt_arr[i]),
+            "_seasonal_sum": float(_seas_sum_arr[i]),
+            "_seasonal_sumsq": float(_seas_sumsq_arr[i]),
+            # 预计算信号数组 + 当前索引（compute_T 直接索引，省 8 次函数调用）
+            "_signal_arrays": _sig_arrays,
+            "_sig_idx": i,
+            # 预计算 T 值 + regime code（compute_T 最快路径直接返回，省全部 Python 逻辑）
+            "_T_array": _T_arr,
+            "_regime_code": int(_regime_codes_arr[i]),
+            # 预计算 C 值（省 score_C 内 history 遍历查找）
+            "_C_val": float(_C_arr[i]),
+        }
+
         try:
-            pipe = pipeline(symbol, hist, None, cfg, date=date_str, ablate=ablate)
+            pipe = pipeline(
+                symbol, df, None, cfg, date=date_str, ablate=ablate, _precalc=_prec, F_override=float(_F_arr[i])
+            )
         except Exception:
             i += 1
             continue
         if pipe["triggered"] and pipe["dir_T"] != 0 and (i - last_trade_i) >= cooldown_bars:
-            entry = float(df["open"].iloc[i + 1])
-            atr_val = strat_atr(hist).iloc[-1]
+            entry = float(_open[i + 1])
+            # 预计算的 ATR（循环外一次性算出，O(1) 索引）
+            atr_val = _atr14_arr[i]
             if atr_val <= 0 or math.isnan(atr_val):
                 i += 1
                 continue
@@ -2053,13 +2890,13 @@ def walk_forward_backtest(
             exit_price, reason = None, ""
             tail_active, tail_stop = False, None
             for j in range(i + 1, n):
-                hi, lo = float(df["high"].iloc[j]), float(df["low"].iloc[j])
+                hi, lo = float(_high[j]), float(_low[j])
                 # ── 换月跳空识别（P0-2）──
                 # 入场根(j==i+1)的跳空是真实入場缺口，不跳過；
                 # 后续根若开盘相对前收出现超阈值跳变，视为展期/涨跌停缺口，跳过本根判定。
                 if j > i + 1:
-                    prev_close = float(df["close"].iloc[j - 1])
-                    gap = abs(float(df["open"].iloc[j]) - prev_close)
+                    prev_close = float(_close[j - 1])
+                    gap = abs(float(_open[j]) - prev_close)
                     if gap > max(ROLL_GAP_PCT * prev_close, ROLL_GAP_MULT * sd):
                         roll_skipped += 1
                         continue
@@ -2097,7 +2934,7 @@ def walk_forward_backtest(
                         exit_price, reason = ep["t2"], "止盈2R"
                         break
             if exit_price is None:
-                exit_price, reason = float(df["close"].iloc[-1]), "期末平"
+                exit_price, reason = float(_close[-1]), "期末平"
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
@@ -2206,6 +3043,16 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     n = len(df)
     sp = cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
     mv, fee = sp["multiplier"], sp["fee"]
+
+    # 预提取 numpy 数组：循环内用索引访问代替 .iloc
+    _open = df["open"].values
+    _high = df["high"].values
+    _low = df["low"].values
+    _close = df["close"].values
+    _months = df.index.month.values if isinstance(df.index, pd.DatetimeIndex) else None
+    # 预计算完整 ATR(14) 序列：O(n) 一次算出，循环内直接索引
+    _atr14_arr = _atr_array(_high, _low, _close, 14)
+
     trades = []
     roll_skipped = 0
     i = min_bars
@@ -2213,15 +3060,25 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     while i < n - 1:
         hist = df.iloc[: i + 1]
         date_str = df.index[i].strftime("%Y%m%d")
+        # 预切片 numpy 数组 + 当前 ATR 值
+        _i = i + 1
+        _prec = {
+            "_c": _close[:_i],
+            "_h": _high[:_i],
+            "_l": _low[:_i],
+            "_m": _months[:_i] if _months is not None else None,
+            "_atr14": _atr14_arr[i],
+        }
         try:
-            pipe = pipeline(symbol, hist, None, cfg, date=date_str, ablate=ablate)
+            pipe = pipeline(symbol, hist, None, cfg, date=date_str, ablate=ablate, _precalc=_prec)
         except Exception:
             i += 1
             continue
         if pipe["triggered"] and pipe["dir_T"] != 0 and (i - last_trade_i) >= cooldown_bars:
             entry_date = df.index[i + 1]
-            entry = float(df["open"].iloc[i + 1])
-            atr_val = strat_atr(hist).iloc[-1]
+            entry = float(_open[i + 1])
+            # 预计算的 ATR（循环外一次性算出，O(1) 索引）
+            atr_val = _atr14_arr[i]
             if atr_val <= 0 or math.isnan(atr_val):
                 i += 1
                 continue

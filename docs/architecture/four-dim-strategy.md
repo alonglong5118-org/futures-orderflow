@@ -320,19 +320,19 @@ T = copysign(min(100, |raw| / maxw * 100), raw)
 
 ```python
 result = pipeline(
-    symbol,           # 品种代码，如 "SA"
-    df_daily,         # 日线 DataFrame
-    df_5m=None,       # 5分钟K线（可选，用于 T_5m）
+    symbol,  # 品种代码，如 "SA"
+    df_daily,  # 日线 DataFrame
+    df_5m=None,  # 5分钟K线（可选，用于 T_5m）
     cfg=DEFAULT_CONFIG,  # 配置
-    date=None,        # 当前交易日（用于查 F/C 历史）
+    date=None,  # 当前交易日（用于查 F/C 历史）
     c_override=None,  # 实盘实时 C_flow 覆盖
     F_override=None,  # F 覆盖（调试/消融用）
-    ablate=None,      # 消融实验："F"/"C"/"T" 置中性
-    hmm_label=None,   # HMM 市场状态（实盘专属）
+    ablate=None,  # 消融实验："F"/"C"/"T" 置中性
+    hmm_label=None,  # HMM 市场状态（实盘专属）
     risk_state=None,  # 实时风控状态（实盘前置否决）
-    feat_mgr=None,    # 特性管理器
+    feat_mgr=None,  # 特性管理器
     sentiment_label=None,  # 情绪标签
-    sr_result=None,   # 支撑阻力结果
+    sr_result=None,  # 支撑阻力结果
 )
 ```
 

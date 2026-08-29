@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 成交记录器（真实成交 vs 引擎信号对比）
 ========================================================
 把用户在模拟盘按信号手动下单的真实成交记录下来，与 four_dim_signals.json
@@ -225,7 +224,7 @@ def _load():
                     import shutil as _su
 
                     _su.copy2(_bak, JOURNAL_FILE)
-                    print(f"[trade_journal] 已从 .bak 恢复主文件")
+                    print("[trade_journal] 已从 .bak 恢复主文件")
                 except Exception:
                     pass
                 return _res
@@ -738,7 +737,7 @@ def summary():
     _positions = {}
     if os.path.exists(_acct_file):
         try:
-            with open(_acct_file, "r") as _f:
+            with open(_acct_file) as _f:
                 _acct = json.load(_f)
                 _positions = _acct.get("positions", {})
         except Exception:
@@ -1340,7 +1339,7 @@ def _load_intraday():
     """加载日内采样数据。格式: {date: [{t: 'HH:MM', equity: float, floating: float}]"""
     try:
         if os.path.exists(INTRADAY_FILE):
-            with open(INTRADAY_FILE, "r") as f:
+            with open(INTRADAY_FILE) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -1747,7 +1746,7 @@ def current_loss_streak():
     reset_time = None
     try:
         if os.path.exists(ks_path):
-            with open(ks_path, "r", encoding="utf-8") as _f:
+            with open(ks_path, encoding="utf-8") as _f:
                 _ks = _json.load(_f)
             reset_time = _ks.get("reset_at")
     except Exception:
@@ -1773,22 +1772,22 @@ if __name__ == "__main__":
     print("四维策略 · 成交记录器 — 真实 papertrack 报告")
     print("=" * 60)
     s = summary()
-    print(f"\n📊 成交统计")
+    print("\n📊 成交统计")
     print(f"  已平仓: {s['total_trades']} 笔 | 未平仓: {s['open_trades']} 笔")
     print(f"  总盈亏: {s['total_pnl']:+,.0f} 元 | 胜率: {s['win_rate']:.1f}%")
     print(f"  平均盈利: {s['avg_win']:+,.0f} | 平均亏损: {s['avg_loss']:+,.0f} | 期望: {s['expect_pnl']:+,.0f}")
     print(f"  最大连胜: {s['max_win_streak']} | 最大连亏: {s['max_loss_streak']}")
     if s["by_symbol"]:
-        print(f"\n  按品种:")
+        print("\n  按品种:")
         for sym, b in s["by_symbol"].items():
             print(f"    {sym}: {b['count']}笔, 盈亏 {b['pnl']:+,.0f}, 胜率 {b['win_rate']:.1f}%")
 
     cmp = compare_to_papertrack()
-    print(f"\n🔗 信号采纳")
+    print("\n🔗 信号采纳")
     print(f"  总信号: {cmp['total_signals']} | 已采纳: {cmp['acted_on']} | 采纳率: {cmp['adoption_rate']}%")
     print(f"  匹配成交: {len(cmp['matched_trades'])} | 无匹配: {len(cmp['unmatched_trades'])}")
     if cmp["matched_trades"]:
-        print(f"\n  逐笔对比（成交 vs 信号建议）:")
+        print("\n  逐笔对比（成交 vs 信号建议）:")
         for m in cmp["matched_trades"]:
             print(
                 f"    {m['symbol']} {m['direction']}: 入{m['entry']}→出{m['exit']} "
@@ -1796,4 +1795,4 @@ if __name__ == "__main__":
                 f"({m['exit_reason']})"
             )
 
-    print(f"\n---\n*非投资建议，模拟盘验证数据。*")
+    print("\n---\n*非投资建议，模拟盘验证数据。*")

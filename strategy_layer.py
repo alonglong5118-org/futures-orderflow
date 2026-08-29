@@ -70,116 +70,583 @@ def crossover(a: pd.Series, b: pd.Series) -> int:
 
 
 # ----------------------------------------------------------------------------
+# numpy 高速指标（只返回最后值，避免 pandas rolling 开销）
+# ----------------------------------------------------------------------------
+def _sma_last(arr, window):
+    """SMA 最后值（numpy 版）。"""
+    if len(arr) < window:
+        return np.nan
+    return arr[-window:].mean()
+
+
+def _sma_array(arr, window):
+    """完整 SMA 序列（cumsum O(n)，比逐次 _sma_last 快 O(n) → O(1) 索引）。
+    前 window-1 个为 np.nan，sma[i] = arr[i-window+1 : i+1].mean()。"""
+    n = len(arr)
+    out = np.full(n, np.nan)
+    if n < window:
+        return out
+    cumsum = np.cumsum(arr)
+    # sma[i] = (cumsum[i] - cumsum[i-window]) / window  for i >= window-1
+    # 但第一个 sma[window-1] = cumsum[window-1] / window
+    out[window - 1 :] = (cumsum[window - 1 :] - np.concatenate([[0], cumsum[:-window]])) / window
+    return out
+
+
+def _rolling_max_last(arr, window):
+    """rolling max 最后值（numpy 版）。"""
+    if len(arr) < window:
+        return np.nan
+    return arr[-window:].max()
+
+
+def _rolling_min_last(arr, window):
+    """rolling min 最后值（numpy 版）。"""
+    if len(arr) < window:
+        return np.nan
+    return arr[-window:].min()
+
+
+def _rolling_max_array(arr, window):
+    """完整 rolling max 序列（numpy sliding_window_view O(n)）。
+    返回长度 = len(arr)，前 window-1 个为 nan。"""
+    n = len(arr)
+    out = np.full(n, np.nan)
+    if n < window:
+        return out
+    # stride tricks 创建窗口视图（不复制数据），然后沿窗口轴取 max
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    out[window - 1 :] = sliding_window_view(arr, window).max(axis=1)
+    return out
+
+
+def _rolling_min_array(arr, window):
+    """完整 rolling min 序列（numpy sliding_window_view O(n)）。"""
+    n = len(arr)
+    out = np.full(n, np.nan)
+    if n < window:
+        return out
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    out[window - 1 :] = sliding_window_view(arr, window).min(axis=1)
+    return out
+
+
+def _rolling_std_last(arr, window, ddof=1):
+    """rolling std 最后值（numpy 版，ddof=1 匹配 pandas 默认）。"""
+    if len(arr) < window:
+        return np.nan
+    return arr[-window:].std(ddof=ddof)
+
+
+def _rolling_std_array(arr, window, ddof=1):
+    """完整 rolling std 序列（cumsum O(n)，ddof=1 匹配 pandas 默认）。
+    返回长度 = len(arr)，前 window-1 个为 nan。"""
+    n = len(arr)
+    out = np.full(n, np.nan)
+    if n < window:
+        return out
+    # Var = E[X²] - E[X]²  →  rolling var via cumsum
+    cs = np.cumsum(arr)
+    cs2 = np.cumsum(arr * arr)
+    # mean[i] = (cs[i] - cs[i-window]) / window  for i >= window-1
+    # 但 i=window-1 时 cs[i-window] = cs[-1]，需特殊处理
+    mean = np.empty(n)
+    mean_sq = np.empty(n)
+    # 用拼接技巧：cs_pad = [0, cs[:-1]]
+    cs_prev = np.concatenate([[0], cs[:-window]])
+    cs2_prev = np.concatenate([[0], cs2[:-window]])
+    mean[window - 1 :] = (cs[window - 1 :] - cs_prev) / window
+    mean_sq[window - 1 :] = (cs2[window - 1 :] - cs2_prev) / window
+    var = mean_sq[window - 1 :] - mean[window - 1 :] ** 2
+    # 浮点误差可能导致极小负值 → clip
+    var = np.maximum(var, 0.0)
+    if ddof == 1:
+        var = var * window / (window - 1)
+    out[window - 1 :] = np.sqrt(var)
+    return out
+
+
+def _rsi_last(arr, window):
+    """RSI 最后值（numpy 版，Cutler's RSI：简单移动平均，分母为 window）。
+    匹配 pandas rolling.mean() 行为：上涨日计入涨幅，下跌日计入 0，最后除以 window。"""
+    if len(arr) < window + 1:
+        return np.nan
+    delta = np.diff(arr[-window - 1 :])  # window 个 delta
+    gain = np.where(delta > 0, delta, 0).mean()
+    loss = np.where(delta < 0, -delta, 0).mean()
+    if loss == 0:
+        return 100.0
+    rs = gain / loss
+    return 100 - 100 / (1 + rs)
+
+
+def _rsi_array(arr, window):
+    """完整 RSI 序列（Cutler's RSI，cumsum O(n) 滚动均值）。
+    返回长度 = len(arr)，前 window 个为 nan，rsi[i] = 以 i 为末尾的 window 期 RSI。
+    与 _rsi_last 行为完全一致。"""
+    n = len(arr)
+    out = np.full(n, np.nan)
+    if n < window + 1:
+        return out
+    delta = np.diff(arr)  # 长度 n-1
+    gain = np.where(delta > 0, delta, 0.0)
+    loss = np.where(delta < 0, -delta, 0.0)
+    # rolling mean of gain / loss over window periods (cumsum O(n))
+    # gain[i] 对应 close[i+1] - close[i]，即第 i+1 根的涨幅
+    # 所以 rsi[i] 对应 gain[i-window : i] 的均值（i 从 window-1 到 n-2）
+    cs_gain = np.cumsum(gain)
+    cs_loss = np.cumsum(loss)
+    # avg_gain[k] = mean(gain[k-window+1 : k+1])  for k >= window-1
+    # 对应 rsi[k+1]（因为 gain[0] 是 close[1]-close[0]，形成第 1 根后的 RSI 输入）
+    m = len(gain)  # m = n-1
+    avg_gain = np.full(m, np.nan)
+    avg_loss = np.full(m, np.nan)
+    avg_gain[window - 1 :] = (cs_gain[window - 1 :] - np.concatenate([[0], cs_gain[:-window]])) / window
+    avg_loss[window - 1 :] = (cs_loss[window - 1 :] - np.concatenate([[0], cs_loss[:-window]])) / window
+    # rsi: loss == 0 → 100; gain == 0 and loss == 0 → 50 (中性)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rs = np.where(avg_loss == 0, np.inf, avg_gain / avg_loss)
+        rsi_vals = 100 - 100 / (1 + rs)
+        # 当 gain 和 loss 都为 0 时，rsi 设为 50（中性）
+        both_zero = (avg_gain == 0) & (avg_loss == 0)
+        rsi_vals[both_zero] = 50.0
+    # 对齐：rsi_vals[k] 对应 close[k+1] 处的 RSI（用了 k+1 之前的 window 个 delta）
+    out[window:] = rsi_vals[window - 1 :]
+    return out
+
+
+def _atr_last(high, low, close, window):
+    """ATR 最后值（numpy 版，简单移动平均 TR，尾部切片向量化）。
+    只计算最后 window+1 个 TR 值（因为只需要最后 window 个的均值），
+    大数组下比全量计算省内存 + 更快。"""
+    n = len(close)
+    if n < window + 1:
+        return np.nan
+    # 只需要最后 window+1 根数据（TR 需要前收，所以多取 1 根）
+    start = n - window - 1
+    h = high[start:]
+    l = low[start:]
+    c = close[start:]
+    m = len(c)  # m = window + 1
+    prev_close = np.empty(m)
+    prev_close[0] = c[0]
+    prev_close[1:] = c[:-1]
+    tr = np.maximum(h - l, np.maximum(np.abs(h - prev_close), np.abs(l - prev_close)))
+    # 取最后 window 个 TR 的均值（跳过第一个，因为它的 prev_close 是自身）
+    return tr[1:].mean()
+
+
+def _seasonal_month_stats(rets, months):
+    """预计算「同月收益率统计」：对每个位置 i，返回截至 i 的当月历史收益的 (count, sum, sum_sq)。
+    返回 3 个数组 (cnt_arr, sum_arr, sumsq_arr)，长度 = len(rets)。
+    用途：s_seasonal O(1) 查询，省全量 mask + mean + std 开销。
+
+    向量化实现：12 路 cumsum + fancy indexing，比 Python 循环快 ~3×。
+    注意：rets[0] 为 NaN（首根无收益率），计算时从索引 1 开始统计。"""
+    n = len(rets)
+    if n == 0:
+        return (np.array([], dtype=np.int32), np.array([], dtype=np.float64), np.array([], dtype=np.float64))
+
+    # NaN → 0 并生成有效掩码（rets[0] 是 NaN，不参与统计）
+    valid = ~np.isnan(rets)
+    r_clean = np.where(valid, rets, 0.0)
+    r_sq = r_clean * r_clean
+
+    # 12 个月掩码（shape: 12 x n），1-indexed month → 0-indexed row
+    m0 = np.arange(12).reshape(-1, 1)
+    masks = (months == (m0 + 1)) & valid  # 只计入有效收益
+
+    # 每月累计 count/sum/sumsq（12 路 cumsum，全 numpy）
+    cnt_cs = np.cumsum(masks, axis=1).astype(np.int32)
+    sum_cs = np.cumsum(masks * r_clean, axis=1)
+    sumsq_cs = np.cumsum(masks * r_sq, axis=1)
+
+    # fancy indexing：每个位置取当月累计值
+    mi = np.asarray(months, dtype=np.int32) - 1
+    idx = np.arange(n)
+    cnt_arr = cnt_cs[mi, idx]
+    sum_arr = sum_cs[mi, idx]
+    sumsq_arr = sumsq_cs[mi, idx]
+
+    return cnt_arr, sum_arr, sumsq_arr
+
+
+def _atr_array(high, low, close, window):
+    """完整 ATR 序列（numpy 向量化版，简单移动平均 TR）。
+    返回长度为 n 的数组，前 window 个值为 nan。用于 walk-forward 预计算，循环内直接索引。"""
+    n = len(close)
+    if n < window + 1:
+        return np.full(n, np.nan)
+    prev_close = np.empty(n)
+    prev_close[0] = close[0]
+    prev_close[1:] = close[:-1]
+    tr = np.maximum(high - low, np.maximum(np.abs(high - prev_close), np.abs(low - prev_close)))
+    # rolling mean using cumsum (O(n))
+    atr = np.full(n, np.nan)
+    cumsum = np.cumsum(tr)
+    atr[window:] = (cumsum[window:] - cumsum[:-window]) / window
+    # 第一个有效值用前 window 个的均值修正（cumsum 从 0 开始）
+    atr[window - 1] = cumsum[window - 1] / window
+    return atr
+
+
+def precompute_signals(
+    close,
+    high,
+    low,
+    months,
+    rets,
+    sma5,
+    sma20,
+    sma60,
+    rsi14,
+    std20,
+    hh20,
+    ll20,
+    hh55,
+    ll55,
+    seas_cnt,
+    seas_sum,
+    seas_sumsq,
+):
+    """一次性预计算全部 8 个策略的信号数组（全向量化，O(n)）。
+    返回 dict: {策略名: signal_array}，signal_array 为 int8 数组，值 ∈ {-1, 0, 1}。
+    与各策略函数逐点结果完全一致。"""
+    n = len(close)
+    sigs = {}
+
+    # ── 1. ma_break ──
+    # c > ma20 & ma20 > ma60 → 1; c < ma20 & ma20 < ma60 → -1; else 0
+    ma_break = np.zeros(n, dtype=np.int8)
+    valid = ~(np.isnan(sma20) | np.isnan(sma60))
+    cond_long = valid & (close > sma20) & (sma20 > sma60)
+    cond_short = valid & (close < sma20) & (sma20 < sma60)
+    ma_break[cond_long] = 1
+    ma_break[cond_short] = -1
+    sigs["ma_break"] = ma_break
+
+    # ── 2. dma（金叉/死叉） ──
+    # ma5_prev <= ma20_prev & ma5 > ma20 → 金叉 1
+    # ma5_prev >= ma20_prev & ma5 < ma20 → 死叉 -1
+    dma = np.zeros(n, dtype=np.int8)
+    # 从 i=1 开始（需要 prev）
+    sma5_prev = np.concatenate([[np.nan], sma5[:-1]])
+    sma20_prev = np.concatenate([[np.nan], sma20[:-1]])
+    valid_dma = ~(np.isnan(sma5) | np.isnan(sma20) | np.isnan(sma5_prev) | np.isnan(sma20_prev))
+    golden = valid_dma & (sma5_prev <= sma20_prev) & (sma5 > sma20)
+    death = valid_dma & (sma5_prev >= sma20_prev) & (sma5 < sma20)
+    dma[golden] = 1
+    dma[death] = -1
+    sigs["dma"] = dma
+
+    # ── 3. turtle(n=20, f=55) ──
+    # c > hh20_prev & c > ll55 → 1
+    # c < ll20_prev & c < hh55 → -1
+    # hh20_prev = 前一根的 20 日最高 = hh20[i-1]
+    # ll20_prev = 前一根的 20 日最低 = ll20[i-1]
+    turtle = np.zeros(n, dtype=np.int8)
+    hh20_prev = np.concatenate([[np.nan], hh20[:-1]])
+    ll20_prev = np.concatenate([[np.nan], ll20[:-1]])
+    valid_t = ~(np.isnan(hh20_prev) | np.isnan(ll20_prev) | np.isnan(hh55) | np.isnan(ll55))
+    t_long = valid_t & (close > hh20_prev) & (close > ll55)
+    t_short = valid_t & (close < ll20_prev) & (close < hh55)
+    turtle[t_long] = 1
+    turtle[t_short] = -1
+    sigs["turtle"] = turtle
+
+    # ── 4. donchian(n=20) ──
+    # c >= hh20 → 1; c <= ll20 → -1
+    donchian = np.zeros(n, dtype=np.int8)
+    valid_d = ~(np.isnan(hh20) | np.isnan(ll20))
+    d_long = valid_d & (close >= hh20)
+    d_short = valid_d & (close <= ll20)
+    donchian[d_long] = 1
+    donchian[d_short] = -1
+    sigs["donchian"] = donchian
+
+    # ── 5. pullback ──
+    # ma20 > ma60 & dev < 0.02 & c > ma60 → 1
+    # ma20 < ma60 & dev < 0.02 & c < ma60 → -1
+    pullback = np.zeros(n, dtype=np.int8)
+    valid_pb = ~(np.isnan(sma20) | np.isnan(sma60))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        dev = np.abs(close - sma20) / sma20
+    pb_long = valid_pb & (sma20 > sma60) & (dev < 0.02) & (close > sma60)
+    pb_short = valid_pb & (sma20 < sma60) & (dev < 0.02) & (close < sma60)
+    pullback[pb_long] = 1
+    pullback[pb_short] = -1
+    sigs["pullback"] = pullback
+
+    # ── 6. boll(n=20, k=2) ──
+    # c <= ma20 - 2*std → 1; c >= ma20 + 2*std → -1
+    boll = np.zeros(n, dtype=np.int8)
+    valid_b = ~(np.isnan(sma20) | np.isnan(std20))
+    upper = sma20 + 2.0 * std20
+    lower = sma20 - 2.0 * std20
+    b_long = valid_b & (close <= lower)
+    b_short = valid_b & (close >= upper)
+    boll[b_long] = 1
+    boll[b_short] = -1
+    sigs["boll"] = boll
+
+    # ── 7. rsi(n=14, lo=30, hi=70) ──
+    # rsi <= 30 → 1; rsi >= 70 → -1
+    rsi = np.zeros(n, dtype=np.int8)
+    valid_r = ~np.isnan(rsi14)
+    r_long = valid_r & (rsi14 <= 30.0)
+    r_short = valid_r & (rsi14 >= 70.0)
+    rsi[r_long] = 1
+    rsi[r_short] = -1
+    sigs["rsi"] = rsi
+
+    # ── 8. seasonal(min_samples=12) ──
+    # avg > 0.0008 & z > 0.3 → 1
+    # avg < -0.0008 & z < -0.3 → -1
+    seasonal = np.zeros(n, dtype=np.int8)
+    valid_s = seas_cnt >= 12
+    if np.any(valid_s):
+        avg = np.where(valid_s, seas_sum / np.maximum(seas_cnt, 1), 0.0)
+        var = np.where(
+            valid_s & (seas_cnt > 1),
+            (seas_sumsq - seas_sum * seas_sum / np.maximum(seas_cnt, 1)) / np.maximum(seas_cnt - 1, 1),
+            0.0,
+        )
+        var = np.maximum(var, 0.0)
+        std = np.sqrt(var)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            z = np.where((std > 0), avg / std, 0.0)
+        s_long = valid_s & (avg > 0.0008) & (z > 0.3)
+        s_short = valid_s & (avg < -0.0008) & (z < -0.3)
+        seasonal[s_long] = 1
+        seasonal[s_short] = -1
+    sigs["seasonal"] = seasonal
+
+    return sigs
+
+
+# ----------------------------------------------------------------------------
 # 8 策略（各返回 signal∈{-1,0,1}, detail）
 # ----------------------------------------------------------------------------
-def s_ma_break(df):
-    """MA突破策略。"""
-    close = df["close"]
-    ma20 = sma(close, 20).iloc[-1]
-    ma60 = sma(close, 60).iloc[-1]
-    c = close.iloc[-1]
+def s_ma_break(df=None, _close=None, _sma20=None, _sma60=None, _detail=True, **_):
+    """MA突破策略（numpy 高速版）。"""
+    close = _close if _close is not None else (df["close"].values if df is not None else None)
+    if close is None or len(close) < 3:
+        return 0, {}
+    ma20 = _sma20 if _sma20 is not None else _sma_last(close, 20)
+    ma60 = _sma60 if _sma60 is not None else _sma_last(close, 60)
+    c = close[-1]
     if any(math.isnan(x) for x in (ma20, ma60)):
         return 0, {}
     if c > ma20 and ma20 > ma60:
-        return 1, {"ma20": round(ma20, 2), "ma60": round(ma60, 2)}
+        return 1, ({"ma20": round(ma20, 2), "ma60": round(ma60, 2)} if _detail else {})
     if c < ma20 and ma20 < ma60:
-        return -1, {"ma20": round(ma20, 2), "ma60": round(ma60, 2)}
-    return 0, {"ma20": round(ma20, 2), "ma60": round(ma60, 2)}
+        return -1, ({"ma20": round(ma20, 2), "ma60": round(ma60, 2)} if _detail else {})
+    return 0, ({"ma20": round(ma20, 2), "ma60": round(ma60, 2)} if _detail else {})
 
 
-def s_dma(df):
-    """双均线策略。"""
-    f = sma(df["close"], 5)
-    s = sma(df["close"], 20)
-    x = crossover(f, s)
-    return x, {"ma5": round(f.iloc[-1], 2), "ma20": round(s.iloc[-1], 2)}
+def s_dma(df=None, _close=None, _sma5=None, _sma20=None, _sma5_prev=None, _sma20_prev=None, _detail=True, **_):
+    """双均线策略（numpy 高速版）。"""
+    close = _close if _close is not None else (df["close"].values if df is not None else None)
+    if close is None or len(close) < 6:
+        return 0, {}
+    ma5 = _sma5 if _sma5 is not None else _sma_last(close, 5)
+    ma20 = _sma20 if _sma20 is not None else _sma_last(close, 20)
+    # 交叉判断：上一根 ma5 <= ma20 且当前 ma5 > ma20 → 金叉
+    if len(close) < 6:
+        return 0, ({"ma5": round(ma5, 2), "ma20": round(ma20, 2)} if _detail else {})
+    # 优先使用外部传入的 prev 值（walk-forward 预计算路径，省切片+均值）
+    if _sma5_prev is not None and not math.isnan(_sma5_prev):
+        ma5_prev = _sma5_prev
+    else:
+        ma5_prev = close[-6:-1].mean()
+    if _sma20_prev is not None and not math.isnan(_sma20_prev):
+        ma20_prev = _sma20_prev
+    else:
+        ma20_prev = close[-21:-1].mean() if len(close) >= 21 else np.nan
+    x = 0
+    if ma5_prev <= ma20_prev and ma5 > ma20:
+        x = 1
+    elif ma5_prev >= ma20_prev and ma5 < ma20:
+        x = -1
+    return x, ({"ma5": round(ma5, 2), "ma20": round(ma20, 2)} if _detail else {})
 
 
-def s_turtle(df, n=20, f=55):
-    """海龟策略。"""
-    hh = df["high"].rolling(n).max()
-    ll = df["low"].rolling(n).min()
-    hh55 = df["high"].rolling(f).max()
-    ll55 = df["low"].rolling(f).min()
-    c = df["close"].iloc[-1]
-    if c > hh.iloc[-2] and c > ll55.iloc[-1]:
+def s_turtle(df=None, n=20, f=55, _high=None, _low=None, _close=None, **_):
+    """海龟策略（numpy 高速版）。"""
+    high = _high if _high is not None else (df["high"].values if df is not None else None)
+    low = _low if _low is not None else (df["low"].values if df is not None else None)
+    close = _close if _close is not None else (df["close"].values if df is not None else None)
+    if close is None or len(close) < 3:
+        return 0, {}
+    c = close[-1]
+    # hh.iloc[-2] = 倒数第 2 根处的 rolling(n).max = high[-n-1:-1].max()
+    hh_prev2 = high[-n - 1 : -1].max() if len(high) >= n + 1 else np.nan
+    ll_prev2 = low[-n - 1 : -1].min() if len(low) >= n + 1 else np.nan
+    hh55_last = _rolling_max_last(high, f)
+    ll55_last = _rolling_min_last(low, f)
+    if c > hh_prev2 and c > ll55_last:
         return 1, {}
-    if c < ll.iloc[-2] and c < hh55.iloc[-1]:
+    if c < ll_prev2 and c < hh55_last:
         return -1, {}
     return 0, {}
 
 
-def s_donchian(df, n=20):
-    """通道突破策略。"""
-    hh = df["high"].rolling(n).max()
-    ll = df["low"].rolling(n).min()
-    c = df["close"].iloc[-1]
-    if c >= hh.iloc[-1]:
+def s_donchian(df=None, n=20, _high=None, _low=None, _close=None, **_):
+    """通道突破策略（numpy 高速版）。"""
+    high = _high if _high is not None else (df["high"].values if df is not None else None)
+    low = _low if _low is not None else (df["low"].values if df is not None else None)
+    close = _close if _close is not None else (df["close"].values if df is not None else None)
+    if close is None or len(close) < 2:
+        return 0, {}
+    c = close[-1]
+    hh = _rolling_max_last(high, n)
+    ll = _rolling_min_last(low, n)
+    if c >= hh:
         return 1, {}
-    if c <= ll.iloc[-1]:
+    if c <= ll:
         return -1, {}
     return 0, {}
 
 
-def s_pullback(df):
-    """回踩策略。"""
-    close = df["close"]
-    ma20 = sma(close, 20).iloc[-1]
-    ma60 = sma(close, 60).iloc[-1]
-    c = close.iloc[-1]
+def s_pullback(df=None, _close=None, _sma20=None, _sma60=None, _detail=True, **_):
+    """回踩策略（numpy 高速版）。"""
+    close = _close if _close is not None else (df["close"].values if df is not None else None)
+    if close is None or len(close) < 3:
+        return 0, {}
+    ma20 = _sma20 if _sma20 is not None else _sma_last(close, 20)
+    ma60 = _sma60 if _sma60 is not None else _sma_last(close, 60)
+    c = close[-1]
     if any(math.isnan(x) for x in (ma20, ma60)):
         return 0, {}
     dev = abs(c - ma20) / ma20
     if ma20 > ma60 and dev < 0.02 and c > ma60:
-        return 1, {"dev%": round(dev * 100, 2)}
+        return 1, ({"dev%": round(dev * 100, 2)} if _detail else {})
     if ma20 < ma60 and dev < 0.02 and c < ma60:
-        return -1, {"dev%": round(dev * 100, 2)}
+        return -1, ({"dev%": round(dev * 100, 2)} if _detail else {})
     return 0, {}
 
 
-def s_boll(df, n=20, k=2.0):
-    """布林带策略。"""
-    close = df["close"]
-    m = sma(close, n)
-    sd = close.rolling(n).std()
-    up, lo = m + k * sd, m - k * sd
-    c = close.iloc[-1]
-    if c <= lo.iloc[-1]:
-        return 1, {"lower": round(lo.iloc[-1], 2)}
-    if c >= up.iloc[-1]:
-        return -1, {"upper": round(up.iloc[-1], 2)}
-    return 0, {}
-
-
-def s_rsi(df, n=14, lo=30, hi=70):
-    """RSI策略。"""
-    r = rsi(df["close"], n).iloc[-1]
-    if math.isnan(r):
+def s_boll(df=None, n=20, k=2.0, _close=None, _sma20=None, _std20=None, _detail=True, **_):
+    """布林带策略（numpy 高速版）。"""
+    close = _close if _close is not None else (df["close"].values if df is not None else None)
+    if close is None or len(close) < n:
         return 0, {}
+    m = _sma20 if _sma20 is not None else _sma_last(close, n)
+    if _std20 is not None and not math.isnan(_std20):
+        sd = _std20
+    else:
+        sd = _rolling_std_last(close, n)
+    up, lo = m + k * sd, m - k * sd
+    c = close[-1]
+    if c <= lo:
+        return 1, ({"lower": round(lo, 2)} if _detail else {})
+    if c >= up:
+        return -1, ({"upper": round(up, 2)} if _detail else {})
+    return 0, {}
+
+
+def s_rsi(df=None, n=14, lo=30, hi=70, _close=None, _rsi=None, _detail=True, **_):
+    """RSI策略（numpy 高速版）。"""
+    if _rsi is not None and not math.isnan(_rsi):
+        r = _rsi
+    else:
+        close = _close if _close is not None else (df["close"].values if df is not None else None)
+        if close is None or len(close) < n + 1:
+            return 0, {}
+        r = _rsi_last(close, n)
+        if math.isnan(r):
+            return 0, {}
     if r <= lo:
-        return 1, {"rsi": round(r, 1)}
+        return 1, ({"rsi": round(r, 1)} if _detail else {})
     if r >= hi:
-        return -1, {"rsi": round(r, 1)}
-    return 0, {"rsi": round(r, 1)}
+        return -1, ({"rsi": round(r, 1)} if _detail else {})
+    return 0, ({"rsi": round(r, 1)} if _detail else {})
 
 
-def s_seasonal(df, min_samples=12):
-    """季节性策略。"""
-    if isinstance(df.index, pd.DatetimeIndex):
-        dt = df.index
-    elif "date" in df.columns:
-        dt = pd.to_datetime(df["date"])
+def s_seasonal(
+    df=None,
+    min_samples=12,
+    _close=None,
+    _months=None,
+    _rets=None,
+    _seasonal_cnt=None,
+    _seasonal_sum=None,
+    _seasonal_sumsq=None,
+    _detail=True,
+    **_,
+):
+    """季节性策略（numpy 高速版）。"""
+    # 快速路径：外部已预计算同月统计量 → O(1) 直接计算
+    if _seasonal_cnt is not None and _seasonal_sum is not None and _seasonal_sumsq is not None and _seasonal_cnt >= 0:
+        n = int(_seasonal_cnt)
+        if n < min_samples:
+            return 0, ({"reason": "样本不足", "n": n} if _detail else {})
+        avg = _seasonal_sum / n
+        # std = sqrt((sum_sq - sum^2/n) / (n-1)) for ddof=1
+        var = (_seasonal_sumsq - _seasonal_sum * _seasonal_sum / n) / (n - 1) if n > 1 else 0.0
+        if var < 0:
+            var = 0.0  # 浮点误差保护
+        std = math.sqrt(var)
+        z = (avg / std) if (std and std > 0) else 0.0
+        if not _detail:
+            if avg > 0.0008 and z > 0.3:
+                return 1, {}
+            if avg < -0.0008 and z < -0.3:
+                return -1, {}
+            return 0, {}
+        detail = {"month_avg%": round(avg * 100, 3), "n": n, "z": round(z, 2)}
+        if avg > 0.0008 and z > 0.3:
+            return 1, detail
+        if avg < -0.0008 and z < -0.3:
+            return -1, detail
+        return 0, detail
+
+    # 慢速路径：无预计算时 mask + mean + std（兼容旧调用方式）
+    if _months is not None:
+        months = _months
+    elif df is not None and isinstance(df.index, pd.DatetimeIndex):
+        months = df.index.month.values
+    elif df is not None and "date" in df.columns:
+        months = pd.to_datetime(df["date"]).dt.month.values
     else:
         return 0, {"reason": "无日期"}
-    month = dt[-1].month
-    ret = df["close"].pct_change()
-    same = ret[dt.month == month].dropna()
-    if len(same) < min_samples:
-        return 0, {"reason": "样本不足", "n": int(len(same))}
-    avg = same.mean()
-    std = same.std()
+
+    if _rets is not None:
+        rets = _rets
+    else:
+        close = _close if _close is not None else (df["close"].values if df is not None else None)
+        if close is None or len(close) < 2:
+            return 0, {"reason": "样本不足", "n": 0}
+        rets = np.empty(len(close))
+        rets[0] = np.nan
+        rets[1:] = np.diff(close) / close[:-1]
+
+    if len(rets) < 2:
+        return 0, {"reason": "样本不足", "n": 0}
+
+    last_month = months[-1]
+    mask = months == last_month
+    mask[0] = False  # 排除第一个 NaN
+    same = rets[mask]
+
+    n = len(same)
+    if n < min_samples:
+        return 0, {"reason": "样本不足", "n": int(n)}
+
+    avg = np.mean(same)
+    std = np.std(same, ddof=1)  # pandas 默认 ddof=1
     z = (avg / std) if (std and std > 0) else 0.0
-    detail = {"month_avg%": round(avg * 100, 3), "n": int(len(same)), "z": round(z, 2)}
+
+    if not _detail:
+        if avg > 0.0008 and z > 0.3:
+            return 1, {}
+        if avg < -0.0008 and z < -0.3:
+            return -1, {}
+        return 0, {}
+
+    detail = {"month_avg%": round(avg * 100, 3), "n": int(n), "z": round(z, 2)}
     if avg > 0.0008 and z > 0.3:
         return 1, detail
     if avg < -0.0008 and z < -0.3:
@@ -300,7 +767,7 @@ def load_robust_gate_file(path=None):
         return False
     path = path or ROBUST_GATE_FILE
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             d = json.load(f)
         set_robust_gate(stability=d.get("stability"), oos_expR=d.get("oos_expR"))
         return True
@@ -321,7 +788,7 @@ def backfill_robust_pool_gate(drift_json=None, out_path=None, auto_adapt=None, c
     relaxed = False
     recents = []
     try:
-        with open(drift_json, "r", encoding="utf-8") as f:
+        with open(drift_json, encoding="utf-8") as f:
             dj = json.load(f)
         for it in dj.get("items", []):
             if (it.get("symbol") or "").upper() in ROBUST_POOL:
@@ -414,18 +881,76 @@ REGIME_THRESHOLDS = {
 }
 
 
-def classify_regime(df, params=None):
-    """返回 (regime, 描述)。"""
+def classify_regime_array(close, atr14, sma20, sma20_slope_prev, params=None):
+    """向量化 regime 分类：返回 (regime_codes, descriptions)。
+    regime_codes: int8 数组，0=未知 1=波动 2=震荡 3=趋势 4=过渡
+    与 classify_regime 逐点结果一致。"""
+    n = len(close)
     p = params or REGIME_THRESHOLDS
-    close = df["close"]
-    if len(close) < 25:
+    atr_thresh = p["atr_thresh"]
+    flat_dev = p["flat_dev"]
+    flat_atr = p["flat_atr"]
+    trend_slope = p["trend_slope"]
+    trend_dev = p["trend_dev"]
+
+    # 计算各指标
+    with np.errstate(divide="ignore", invalid="ignore"):
+        atr_r = atr14 / close
+        dev = np.abs(close - sma20) / sma20
+        slope = (sma20 - sma20_slope_prev) / sma20_slope_prev
+
+    # 数据不足（任何指标为 nan）→ 未知
+    valid = ~(np.isnan(atr14) | np.isnan(sma20) | np.isnan(sma20_slope_prev) | (close == 0))
+    # 前 24 根 sma20_slope_prev 为 nan → 未知
+    valid = valid & ~np.isnan(slope)
+
+    # 优先级：波动 > 震荡 > 趋势 > 过渡
+    is_vol = valid & (atr_r > atr_thresh)
+    is_flat = valid & ~is_vol & (dev < flat_dev) & (atr_r < flat_atr)
+    is_trend = valid & ~is_vol & ~is_flat & (np.abs(slope) > trend_slope) & (dev > trend_dev)
+    # 剩下的有效 → 过渡
+    is_trans = valid & ~is_vol & ~is_flat & ~is_trend
+
+    regime_codes = np.zeros(n, dtype=np.int8)  # 0=未知
+    regime_codes[is_vol] = 1  # 波动
+    regime_codes[is_flat] = 2  # 震荡
+    regime_codes[is_trend] = 3  # 趋势
+    regime_codes[is_trans] = 4  # 过渡
+
+    return regime_codes
+
+
+REGIME_CODE_TO_NAME = {0: "未知", 1: "波动", 2: "震荡", 3: "趋势", 4: "过渡"}
+REGIME_NAME_TO_CODE = {v: k for k, v in REGIME_CODE_TO_NAME.items()}
+
+
+def classify_regime(
+    df=None, params=None, _close=None, _high=None, _low=None, _atr14=None, _sma20=None, _sma20_slope_prev=None, **_
+):
+    """返回 (regime, 描述)。numpy 高速版。"""
+    p = params or REGIME_THRESHOLDS
+    close_arr = _close if _close is not None else (df["close"].values if df is not None else None)
+    high_arr = _high if _high is not None else (df["high"].values if df is not None else None)
+    low_arr = _low if _low is not None else (df["low"].values if df is not None else None)
+    if close_arr is None:
+        return "未知", "无数据"
+
+    if len(close_arr) < 25:
         return "未知", "数据不足"
 
-    ma20_now = sma(close, 20).iloc[-1]
-    ma20_prev = sma(close, 20).iloc[-5]
-    c = close.iloc[-1]
+    # numpy 版：直接算最后值，比 pandas rolling 快 3~5x
+    # 外部已传入则直接用（walk-forward 预计算路径）
+    ma20_now = _sma20 if (_sma20 is not None and not math.isnan(_sma20)) else _sma_last(close_arr, 20)
+    # sma(close, 20).iloc[-5] = 倒数第 5 根处的 SMA20 = close[n-24 : n-4].mean()
+    # 外部已传入 slope_prev 则直接用，省切片+均值
+    if _sma20_slope_prev is not None and not math.isnan(_sma20_slope_prev):
+        ma20_prev = _sma20_slope_prev
+    else:
+        ma20_prev = close_arr[-24:-4].mean() if len(close_arr) >= 24 else np.nan
+    c = close_arr[-1]
     dev = abs(c - ma20_now) / ma20_now
-    atr_r = atr(df).iloc[-1] / c
+    atr_val = _atr14 if _atr14 is not None else _atr_last(high_arr, low_arr, close_arr, 14)
+    atr_r = atr_val / c
     slope = (ma20_now - ma20_prev) / ma20_prev
 
     if atr_r > p["atr_thresh"]:

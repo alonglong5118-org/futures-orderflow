@@ -183,6 +183,7 @@ from kelly_utils import kelly_fraction
 @dataclass
 class RiskGateConfig:
     """风险门禁配置。"""
+
     max_position: int = 10
     max_daily_loss_pct: float = 0.03
     max_drawdown_pct: float = 0.10

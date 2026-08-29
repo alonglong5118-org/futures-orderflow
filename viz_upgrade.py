@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """回测可视化增强（Viz Upgrade）
 =================================================================
 用 Plotly 生成交互式回测报告，替代纯 JSON 数据流。
@@ -49,7 +48,7 @@ def _load_report():
     """加载回测报告数据。"""
     try:
         if os.path.exists(REPORT_JSON):
-            with open(REPORT_JSON, "r", encoding="utf-8") as f:
+            with open(REPORT_JSON, encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass

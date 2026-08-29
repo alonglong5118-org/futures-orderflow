@@ -99,16 +99,16 @@ from t_score_utils import cluster_vote_and_consensus, crowd_penalty_factor
 
 # 1. 簇投票 + 一致度计算
 sig = {
-    "ma_break": 1,      # 均线突破：看多
-    "macd": 1,          # MACD：看多
-    "kdj": -1,          # KDJ：看空
-    "boll": 1,          # 布林带：看多
-    "rsi": -1,          # RSI：看空
+    "ma_break": 1,  # 均线突破：看多
+    "macd": 1,  # MACD：看多
+    "kdj": -1,  # KDJ：看空
+    "boll": 1,  # 布林带：看多
+    "rsi": -1,  # RSI：看空
 }
 
 clusters = {
-    "trend": ["ma_break", "macd", "boll"],   # 趋势簇（3 个策略）
-    "mean": ["kdj", "rsi"],                  # 均值回归簇（2 个策略）
+    "trend": ["ma_break", "macd", "boll"],  # 趋势簇（3 个策略）
+    "mean": ["kdj", "rsi"],  # 均值回归簇（2 个策略）
 }
 
 vote, consensus = cluster_vote_and_consensus(sig, clusters)

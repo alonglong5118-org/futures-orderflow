@@ -66,7 +66,7 @@ def main():
     default_w = {"T": 0.6, "F": 0.25, "C": 0.15}
 
     # 预加载所有数据
-    print(f"\n[1/3] 加载数据...")
+    print("\n[1/3] 加载数据...")
     sym_data = {}
     for sym in results:
         df_full = load_daily(sym)
@@ -81,7 +81,7 @@ def main():
     print(f"  有效品种: {len(sym_data)} 个")
 
     # 扫每个 alpha
-    print(f"\n[2/3] 扫描 alpha...")
+    print("\n[2/3] 扫描 alpha...")
     sweep_results = {}
     t_start = time.time()
 
@@ -119,7 +119,7 @@ def main():
 
     # 汇总
     print(f"\n{'=' * 70}")
-    print(f"[3/3] 汇总")
+    print("[3/3] 汇总")
     print(f"{'=' * 70}")
     print(f"{'alpha':>6} {'avg_expR':>10} {'变化(vs默认)':>14} {'正收益':>6} {'负收益':>6}")
     print("-" * 50)
@@ -151,7 +151,7 @@ def main():
     # 按板块最优 alpha
     from collections import defaultdict
 
-    print(f"\n--- 各板块最优 alpha ---")
+    print("\n--- 各板块最优 alpha ---")
     groups = defaultdict(list)
     for sym, data in sym_data.items():
         groups[data["group"]].append(sym)

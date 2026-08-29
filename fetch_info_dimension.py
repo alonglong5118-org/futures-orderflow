@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 信息维度采集器（#1 · 跑在系统 python3.9，自带 akshare）
 ========================================================================
 被 live runner 通过 info_dimension.refresh() 以 subprocess 调用（默认每 6h）。

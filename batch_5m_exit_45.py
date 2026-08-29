@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Phase C2：全市场 45+ 品种 5m 出场批量回测（日线定信号 + 5m 出场，验证 P-G 尾仓）。
 
 on  = make_cfg(True)  (整改后 DEFAULT_CONFIG, P-A~P-H 全开)

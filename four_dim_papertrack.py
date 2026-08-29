@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 four_dim_papertrack.py · 四维策略模拟盘「真实回测」复盘器
 =================================================================
@@ -52,7 +51,7 @@ ROLL_GAP_MULT = 1.0
 BARS_SNAPSHOT_MAX = 600  # 单笔快照最多保留的根数(覆盖绝大多数持仓周期)
 
 
-def bars_to_records(df: "pd.DataFrame") -> list:
+def bars_to_records(df: pd.DataFrame) -> list:
     """DataFrame(OHLCV, DatetimeIndex) → 可 JSON 序列化的 [[iso,o,h,l,c], ...]。"""
     if df is None or len(df) == 0:
         return []
@@ -70,7 +69,7 @@ def bars_to_records(df: "pd.DataFrame") -> list:
     return recs[:BARS_SNAPSHOT_MAX]
 
 
-def records_to_bars(recs: list) -> "pd.DataFrame | None":
+def records_to_bars(recs: list) -> pd.DataFrame | None:
     """[[iso,o,h,l,c], ...] → DatetimeIndex 的 OHLCV DataFrame，供重放。"""
     if not recs:
         return None
@@ -154,7 +153,7 @@ def _load_live_bars(symbol):
     live_bars 键大小写不统一（主品种大写 FG/SA/JM/J，jd/lh 小写），尝试多大小写变体。
     返回 DatetimeIndex 的 OHLCV DataFrame 或 None。"""
     try:
-        with open(os.path.join(HERE, "live_bars.json"), "r", encoding="utf-8") as f:
+        with open(os.path.join(HERE, "live_bars.json"), encoding="utf-8") as f:
             d = json.load(f)
         bars = None
         for cand in (symbol, symbol.upper(), symbol.lower()):
@@ -374,7 +373,7 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: 
     返回 {sym: {gated, n, win_rate, cum_R, last_time}}。
     门控是动态的：某品种近期转负自动暂停，恢复正数后下次调用自动解除。"""
     try:
-        with open(REPORT_JSON, "r", encoding="utf-8") as f:
+        with open(REPORT_JSON, encoding="utf-8") as f:
             report = json.load(f)
     except Exception:
         return {}
@@ -625,7 +624,7 @@ def attach_dim_votes(trades: list):
 
 def main():
     if os.path.exists(REPORT_JSON):
-        with open(REPORT_JSON, "r", encoding="utf-8") as f:
+        with open(REPORT_JSON, encoding="utf-8") as f:
             report = json.load(f)
     else:
         report = {"trades": [], "scored_ids": []}
@@ -633,7 +632,7 @@ def main():
     already = set(report.get("scored_ids", []))  # 仅记录已判定(done)的信号 id
     trades = list(report.get("trades", []))
 
-    with open(SIGNALS_JSON, "r", encoding="utf-8") as f:
+    with open(SIGNALS_JSON, encoding="utf-8") as f:
         signals = json.load(f)
 
     new_trades = []

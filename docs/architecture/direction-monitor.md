@@ -80,8 +80,8 @@ m = 1 if T_5m > 0 else (-1 if T_5m < 0 else 0)
 
 # 判断
 if d == 0 or m == 0:
-    return None    # 任一方无方向，跳过
-return d == m     # 同号 True，异号 False
+    return None  # 任一方无方向，跳过
+return d == m  # 同号 True，异号 False
 ```
 
 ---
@@ -149,12 +149,12 @@ tracker.update(symbol, T_D, T_5m)
 
 ```python
 {
-    "divergence_rate": 0.512,      # 全品种滚动分歧率（None=样本不足）
-    "baseline": 0.484,             # 回测基准分歧率
-    "level": "OK",                 # 告警级别：OK / WARN / HIGH
-    "sa_divergence_rate": 0.487,   # SA 专项分歧率（None=无SA样本）
-    "sa_sensitive": True,          # SA 是否为敏感品种
-    "n": 150,                      # 当前样本量
+    "divergence_rate": 0.512,  # 全品种滚动分歧率（None=样本不足）
+    "baseline": 0.484,  # 回测基准分歧率
+    "level": "OK",  # 告警级别：OK / WARN / HIGH
+    "sa_divergence_rate": 0.487,  # SA 专项分歧率（None=无SA样本）
+    "sa_sensitive": True,  # SA 是否为敏感品种
+    "n": 150,  # 当前样本量
 }
 ```
 

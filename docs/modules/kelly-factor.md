@@ -84,7 +84,7 @@ from kelly_utils import compute_kelly_factor
 
 # 场景 1：高 edge 品种，近景正期望
 mult = compute_kelly_factor(
-    edge=0.6,           # 历史 edge 60%
+    edge=0.6,  # 历史 edge 60%
     cur_full_expR=0.3,  # 近景期望收益 30%
 )
 # mult = 0.6 + (1.2 - 0.6) * min(0.6/0.5, 1.0)

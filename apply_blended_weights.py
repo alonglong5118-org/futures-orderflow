@@ -125,7 +125,7 @@ def main():
         else:
             group_stats[s["group"]]["removed"] += 1
 
-    print(f"\n--- 汇总 ---")
+    print("\n--- 汇总 ---")
     print(f"{'板块':<6} {'总数':>5} {'融合':>5} {'移除':>5} {'alpha':>6}")
     print("-" * 35)
     total_blend = 0
@@ -146,7 +146,7 @@ def main():
     print(f"合计   {len(summary):>5} {total_blend:>5} {total_remove:>5}")
 
     # 融合后的权重 vs 默认权重 vs GA 权重对比（top10）
-    print(f"\n--- 融合权重明细（按 alpha*GA影响排序）---")
+    print("\n--- 融合权重明细（按 alpha*GA影响排序）---")
     print(
         f"{'品种':<6} {'板块':<5} {'α':>4} "
         f"{'T_ga':>7} {'T_blend':>8} {'T_def':>7} "
@@ -180,9 +180,9 @@ def main():
             json.dump(new_cache, f, ensure_ascii=False, indent=2)
 
         print(f"已应用融合权重: {total_blend} 个保留（融合），{total_remove} 个移除（回退默认）")
-        print(f"→ live runner 会自动检测文件变化并重新加载（热更新）")
+        print("→ live runner 会自动检测文件变化并重新加载（热更新）")
     else:
-        print(f"\n预览模式，未修改文件。加 --apply 参数实际应用。")
+        print("\n预览模式，未修改文件。加 --apply 参数实际应用。")
 
 
 if __name__ == "__main__":

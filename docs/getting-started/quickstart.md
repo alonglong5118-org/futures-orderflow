@@ -90,10 +90,10 @@ from kelly_utils import kelly_position_size
 def main():
     # ── 1. 配置风险门禁 ──────────────────────────────
     config = RiskGateConfig(
-        max_position=5,           # 最大持仓 5 手
+        max_position=5,  # 最大持仓 5 手
         max_daily_loss_pct=0.02,  # 日最大亏损 2%
-        max_drawdown_pct=0.08,    # 最大回撤 8%
-        corr_threshold=0.6,       # 相关性阈值 0.6
+        max_drawdown_pct=0.08,  # 最大回撤 8%
+        corr_threshold=0.6,  # 相关性阈值 0.6
     )
     gate = RiskGate(config)
 
@@ -106,13 +106,13 @@ def main():
 
     portfolio = {
         "balance": 100_000,
-        "daily_pnl": -500,         # 当日盈亏 -500
+        "daily_pnl": -500,  # 当日盈亏 -500
         "max_drawdown_pct": 0.03,  # 当前回撤 3%
     }
 
     position = {
         "symbol": "SHFE.rb2501",
-        "volume": 2,               # 当前持仓 2 手
+        "volume": 2,  # 当前持仓 2 手
         "direction": "long",
     }
 
@@ -131,10 +131,10 @@ def main():
     # ── 4. 计算凯利仓位 ──────────────────────────────
     position_size = kelly_position_size(
         account_balance=portfolio["balance"],
-        win_rate=0.58,             # 历史胜率 58%
-        win_loss_ratio=1.6,        # 盈亏比 1.6:1
-        contract_value=50_000,     # 每手合约价值
-        kelly_multiplier=0.5,      # 半凯利（保守策略）
+        win_rate=0.58,  # 历史胜率 58%
+        win_loss_ratio=1.6,  # 盈亏比 1.6:1
+        contract_value=50_000,  # 每手合约价值
+        kelly_multiplier=0.5,  # 半凯利（保守策略）
     )
 
     print(f"✅ 信号通过风控检查")

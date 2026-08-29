@@ -110,7 +110,7 @@ def main():
                 group_results.append(r)
 
         if not group_results:
-            print(f"  无有效品种", flush=True)
+            print("  无有效品种", flush=True)
             continue
 
         # 板块汇总
@@ -125,7 +125,7 @@ def main():
 
         # 列出表现最好和最差的品种
         sorted_by_ret = sorted(group_results, key=lambda x: x["avg_aligned_rets"][5], reverse=True)
-        print(f"  最佳3品种 (5日对齐收益):", flush=True)
+        print("  最佳3品种 (5日对齐收益):", flush=True)
         for r in sorted_by_ret[:3]:
             print(
                 f"    {r['symbol']}: {r['avg_aligned_rets'][5]:+.3f}%  "
@@ -133,7 +133,7 @@ def main():
                 f"触发率 {r['nonzero_pct'] * 100:.1f}%",
                 flush=True,
             )
-        print(f"  最差3品种:", flush=True)
+        print("  最差3品种:", flush=True)
         for r in sorted_by_ret[-3:]:
             print(
                 f"    {r['symbol']}: {r['avg_aligned_rets'][5]:+.3f}%  "
@@ -163,7 +163,7 @@ def main():
     print(f"平均5日对齐收益: {np.mean(all_ret5):+.3f}%", flush=True)
     print(f"对齐收益 > 0 的品种比例: {sum(1 for r in all_ret5 if r > 0) / len(all_ret5) * 100:.1f}%", flush=True)
 
-    print(f"\n诊断结论:", flush=True)
+    print("\n诊断结论:", flush=True)
     mean_ret = np.mean(all_ret5)
     if mean_ret > 0.2:
         print(f"  ✅ 季节性因子有一定预测力（平均5日对齐收益 {mean_ret:+.3f}%）", flush=True)

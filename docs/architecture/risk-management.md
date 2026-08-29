@@ -62,13 +62,13 @@ combined_scale = min(rsm_scale, ddg_scale)
 ```python
 import risk_state_machine as rsm
 
-rsm.init_dual_track()                    # 启动时调用一次
+rsm.init_dual_track()  # 启动时调用一次
 scale_info = rsm.get_combined_risk_scale()  # 每轮开仓前调用
 
-if scale_info['locked']:
+if scale_info["locked"]:
     # 禁止开仓
     pass
-sig['lots'] = int(sig['lots'] * scale_info['combined'])
+sig["lots"] = int(sig["lots"] * scale_info["combined"])
 ```
 
 返回字段：

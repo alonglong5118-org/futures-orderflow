@@ -137,6 +137,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```python
 # 在代码中加入断点
 import debugpy
+
 debugpy.listen(("0.0.0.0", 5678))
 debugpy.wait_for_client()  # 阻塞直到调试器连接
 ```

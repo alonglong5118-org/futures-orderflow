@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 risk_gate + exit_plan 主入口 — 集成测试
 ===========================================

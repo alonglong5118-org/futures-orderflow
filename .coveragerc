@@ -4,16 +4,37 @@
 [run]
 source = .
 omit =
-    # 测试文件本身
+    # ============================================================
+    #  测试文件本身
+    # ============================================================
     tests/*
     test_*.py
     */__pycache__/*
     *.pyc
 
-    # 入口脚本
+    # ============================================================
+    #  入口脚本
+    # ============================================================
     run_tests.py
 
-    # 工具脚本（非核心库代码）
+    # ============================================================
+    #  备份文件
+    # ============================================================
+    *.bak_*
+
+    # ============================================================
+    #  临时 / 探针 / 诊断脚本（_ 开头）
+    # ============================================================
+    _*.py
+
+    # ============================================================
+    #  遗传算法优化脚本（一次性脚本，非库代码）
+    # ============================================================
+    ga_*.py
+
+    # ============================================================
+    #  工具脚本（非核心库代码）——按后缀模式
+    # ============================================================
     scripts/*
     verify_*.py
     *_backtest.py
@@ -23,13 +44,9 @@ omit =
     *upgrade*.py
     bump_version.py
 
-    # 临时 / 探针 / 诊断脚本（_ 开头）
-    _*.py
-
-    # 遗传算法优化脚本（一次性脚本，非库代码）
-    ga_*.py
-
-    # 回测 / 分析 / 报告类脚本（非库代码）
+    # ============================================================
+    #  回测 / 分析 / 报告类脚本（非库代码）——显式列出
+    # ============================================================
     regression_test.py
     perf_breakdown.py
     discipline_review.py
@@ -48,17 +65,27 @@ omit =
     backtest_viz.py
     diag_p02_gaps.py
     batch_5m_exit_45.py
-    _phase4_modules_ab.py
-    _merge_chunks.py
-    _analyze_all.py
-    _qa_*.py
-    _test_tq_*.py
     quant_dir_src_45.py
-    _quant_dir_src.py
-    _temp_import.py
     montecarlo.py
+    sentiment_backtest.py
+    sentiment_sr_combined_bt.py
+    sr_filter_backtest_compare.py
+    sr_filter_simulate.py
+    sr_exit_adjust_backtest.py
+    sr_widen_stop_backtest.py
+    sr_widen_sweep.py
+    unified_oos_compare.py
+    four_dim_oos_compare.py
+    four_dim_v51_backtest.py
+    four_dim_v51_compare.py
+    ga_oos_validation.py
+    ga_robust_oos_compare.py
+    ga_vs_default_compare.py
+    viz_upgrade.py
 
-    # 数据源 / 经纪商 / 实盘运行（依赖外部 API，不适合单元测试）
+    # ============================================================
+    #  数据源 / 经纪商 / 实盘运行（依赖外部 API，不适合单元测试）
+    # ============================================================
     minishare_live.py
     minishare_permission_check.py
     minishare_feed.py
@@ -93,10 +120,15 @@ omit =
     new_factor_explorer.py
     symbol_screener.py
     macro_context.py
-    sentiment_sr_combined_bt.py
     self_check.py
+    fix_cpos.py
+    patch_sym_picker.py
+    diagnose_t_seasonal.py
+    sentiment_engine.py
 
-    # 第三方代码
+    # ============================================================
+    #  第三方代码
+    # ============================================================
     ponytail/*
     node_modules/*
     .venv/*

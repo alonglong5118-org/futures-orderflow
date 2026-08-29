@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 基准回归测试（Baseline Regression Tests）
 ==============================================
@@ -77,7 +76,7 @@ def _assert_almost_equal(test_obj, actual, expected, name, places=6):
 def _load_baselines():
     """加载基准值。"""
     if os.path.exists(BASELINE_FILE):
-        with open(BASELINE_FILE, "r", encoding="utf-8") as f:
+        with open(BASELINE_FILE, encoding="utf-8") as f:
             return json.load(f)
     return {}
 

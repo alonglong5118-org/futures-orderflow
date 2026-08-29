@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 风控仓位计算 — 纯函数工具
 ============================
@@ -22,7 +21,7 @@
   - 2026-08-16：分品种保证金上限收紧（JM/J 低胜率品种）
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def calc_risk_lots(
@@ -183,8 +182,8 @@ def calc_position_plan(
     margin_cap_pct: float = 30.0,
     max_lots: int = 5,
     kelly_mult: float = 1.0,
-    t_strength: Optional[float] = None,
-    t_thresh: Optional[float] = None,
+    t_strength: float | None = None,
+    t_thresh: float | None = None,
     held_lots: int = 0,
     limit_pts: float = 0.0,
     limit_proximity: float = 0.9,

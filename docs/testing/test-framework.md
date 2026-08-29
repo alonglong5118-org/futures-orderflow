@@ -152,12 +152,16 @@ def test_compute_bias_FC_basic():
 ```python
 import pytest
 
-@pytest.mark.parametrize("F, C, expected", [
-    (60.0, 40.0, 21.0),
-    (0.0, 0.0, 0.0),
-    (-60.0, -40.0, -21.0),
-    (100.0, 100.0, 40.0),
-])
+
+@pytest.mark.parametrize(
+    "F, C, expected",
+    [
+        (60.0, 40.0, 21.0),
+        (0.0, 0.0, 0.0),
+        (-60.0, -40.0, -21.0),
+        (100.0, 100.0, 40.0),
+    ],
+)
 def test_compute_bias_FC_parametrized(F, C, expected):
     assert compute_bias_FC(F, C) == expected
 ```
@@ -196,6 +200,7 @@ def test_pc_hard_veto_threshold():
 ```python
 from hypothesis import given
 from hypothesis.strategies import floats, integers
+
 
 @given(
     equity=floats(min_value=1000, max_value=10_000_000),

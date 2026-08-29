@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 四维策略 OOS 对比脚本（整改后 on vs 整改前 off=v12）
 ====================================================
@@ -181,13 +180,13 @@ def main():
         fn_label = "walk_forward_backtest_5m_exit(1h)"
         backtest_fn = lambda s, c: fd.walk_forward_backtest_5m_exit(s, c, tf="1h")
         out_name = "oos_1h_result.json"
-        print("[1h 出场细化] 品种 {} 个（5m resample→1h，日线定信号 + 1h 出场，验证 P-G 尾仓）".format(len(targets)))
+        print(f"[1h 出场细化] 品种 {len(targets)} 个（5m resample→1h，日线定信号 + 1h 出场，验证 P-G 尾仓）")
     elif use_5m:
         targets = args if args else FIVE_M_TARGETS
         fn_label = fd.walk_forward_backtest_5m_exit.__name__
         backtest_fn = fd.walk_forward_backtest_5m_exit
         out_name = "oos_5m_result.json"
-        print("[5m 出场细化] 品种 {} 个（日线定信号 + 5m 出场，验证 P-G 尾仓）".format(len(targets)))
+        print(f"[5m 出场细化] 品种 {len(targets)} 个（日线定信号 + 5m 出场，验证 P-G 尾仓）")
     elif use_all:
         targets = discover_all()
         backtest_fn = fd.walk_forward_backtest

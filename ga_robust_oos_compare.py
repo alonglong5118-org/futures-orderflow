@@ -26,11 +26,11 @@ TEST_BARS = 200
 MIN_TRADES = 5
 
 # 加载稳健版权重
-with open(ROBUST_FILE, "r", encoding="utf-8") as f:
+with open(ROBUST_FILE, encoding="utf-8") as f:
     robust_results = json.load(f)
 
 # 加载无约束版 OOS 结果（用于对比）
-with open(NO_CONSTRAINT_FILE, "r", encoding="utf-8") as f:
+with open(NO_CONSTRAINT_FILE, encoding="utf-8") as f:
     noconst_results = json.load(f)
 
 
@@ -69,7 +69,7 @@ for group, r_robust in robust_results.items():
     # 加载数据并切分
     group_data = load_group_data(group, min_bars=TRAIN_BARS + TEST_BARS, tail=0)
     if len(group_data) < 3:
-        print(f"  跳过：有效品种不足", flush=True)
+        print("  跳过：有效品种不足", flush=True)
         continue
 
     train_data = {}

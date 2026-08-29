@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 性能测试（Performance Benchmarks）
 ==============================================
@@ -88,7 +87,7 @@ def _load_perf_baselines():
     import json
 
     if os.path.exists(PERF_BASELINE_FILE):
-        with open(PERF_BASELINE_FILE, "r") as f:
+        with open(PERF_BASELINE_FILE) as f:
             return json.load(f)
     return {}
 

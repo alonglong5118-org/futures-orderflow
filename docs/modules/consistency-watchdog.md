@@ -122,9 +122,9 @@ if not report.get("ok"):
 if report.get("divergences"):
     print(f"训练/服务偏离: {len(report['divergences'])} 个品种")
     for item in report["divergences"]:
-        print(f"  {item['symbol']}: 基线T={item['baseline_T']}, "
-              f"服务T={item['served_T']}, "
-              f"偏离={item['deviation_pct']}%")
+        print(
+            f"  {item['symbol']}: 基线T={item['baseline_T']}, 服务T={item['served_T']}, 偏离={item['deviation_pct']}%"
+        )
 
 if report.get("unvalidated"):
     print(f"未校验品种: {report['unvalidated']}")

@@ -152,7 +152,7 @@ def optimize_six_factor(symbol, df_daily=None, pop_size=SF_POP, n_gen=SF_GEN, ve
         if gen >= 5 and history[-5]["max"] >= record["max"] - 0.001:
             if all(h["max"] >= record["max"] - 0.001 for h in history[-5:]):
                 if verbose:
-                    print(f"  早停：连续 5 代无显著提升")
+                    print("  早停：连续 5 代无显著提升")
                 break
 
     best = hof[0]

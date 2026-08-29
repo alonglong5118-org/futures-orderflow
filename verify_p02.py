@@ -13,7 +13,7 @@ sys.path.insert(0, HERE)
 import four_dim_papertrack as fp
 
 REPORT = fp.REPORT_JSON
-with open(REPORT, "r", encoding="utf-8") as f:
+with open(REPORT, encoding="utf-8") as f:
     report = json.load(f)
 
 trades = [t for t in report.get("trades", []) if t.get("status") == "done"]

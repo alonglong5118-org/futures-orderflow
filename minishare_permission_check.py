@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """minishare 端点权限自检（随时可跑，token 换了就来验证）
 用法: python minishare_permission_check.py
 结论(2026-08-11, token CWIFB8... 4周不限次):

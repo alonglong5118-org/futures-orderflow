@@ -33,11 +33,11 @@ def check_gap_stop_triggered(ds, px, stop, entry_price) -> dict
 
 ```python
 {
-    "triggered": bool,    # 是否触发缺口击穿告警
-    "is_adverse": bool,   # 是否为不利方向
-    "oneR": float,        # 1R 风险（入场价到止损价的距离）
-    "pen": float,         # 当前价格到止损价的穿透距离
-    "pen_ratio": float    # 穿透比例（pen / oneR）
+    "triggered": bool,  # 是否触发缺口击穿告警
+    "is_adverse": bool,  # 是否为不利方向
+    "oneR": float,  # 1R 风险（入场价到止损价的距离）
+    "pen": float,  # 当前价格到止损价的穿透距离
+    "pen_ratio": float,  # 穿透比例（pen / oneR）
 }
 ```
 
@@ -85,9 +85,9 @@ from gap_stop_utils import check_gap_stop_triggered
 
 # 场景 1：多单，缺口击穿止损（触发）
 result = check_gap_stop_triggered(
-    ds=1,              # 多单
-    px=2450,           # 当前价格 2450
-    stop=2500,         # 止损价 2500
+    ds=1,  # 多单
+    px=2450,  # 当前价格 2450
+    stop=2500,  # 止损价 2500
     entry_price=2600,  # 入场价 2600
 )
 # oneR = |2600 - 2500| = 100
@@ -100,7 +100,7 @@ result = check_gap_stop_triggered(
 # 场景 2：多单，深度击穿（触发）
 result = check_gap_stop_triggered(
     ds=1,
-    px=2400,           # 当前价 2400，击穿更深
+    px=2400,  # 当前价 2400，击穿更深
     stop=2500,
     entry_price=2600,
 )
@@ -112,9 +112,9 @@ result = check_gap_stop_triggered(
 
 # 场景 3：空单，缺口向上击穿止损（触发）
 result = check_gap_stop_triggered(
-    ds=-1,             # 空单
-    px=3100,           # 当前价跳空上涨
-    stop=3000,         # 止损价 3000
+    ds=-1,  # 空单
+    px=3100,  # 当前价跳空上涨
+    stop=3000,  # 止损价 3000
     entry_price=2800,  # 入场价 2800
 )
 # oneR = |2800 - 3000| = 200
@@ -124,8 +124,8 @@ result = check_gap_stop_triggered(
 
 # 场景 4：有利方向穿越（不触发）
 result = check_gap_stop_triggered(
-    ds=1,              # 多单
-    px=2700,           # 价格上涨，有利方向
+    ds=1,  # 多单
+    px=2700,  # 价格上涨，有利方向
     stop=2500,
     entry_price=2600,
 )

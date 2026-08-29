@@ -186,7 +186,7 @@ def main():
         print(f"\n[{idx + 1}/{len(symbols)}] {sym} ", end="", flush=True)
         bt = walk_forward_backtest(sym, DEFAULT_CONFIG)
         if not bt or bt.get("trades", 0) == 0:
-            print(f"无交易")
+            print("无交易")
             continue
         trades_detail = bt.get("trades_detail", [])
         print(f"{bt['trades']}笔 expR={bt['expR']:.3f}...", end="", flush=True)
@@ -254,7 +254,7 @@ def main():
         diff = f_zones[f_near]["expR"] - f_zones[f_far]["expR"]
         print(f"    ✓ 靠近顺向位 expR 更高（+{diff:.4f}），顺向位有支撑/压力作用")
     else:
-        print(f"    ⚠ 靠近顺向位 expR 反而更低，顺向位作用不明显")
+        print("    ⚠ 靠近顺向位 expR 反而更低，顺向位作用不明显")
 
     # 逆向位分析：最近的逆向位 expR 低吗？
     h_zones = analyze_by_zone(all_trades, args.near, args.grey, "hostile")
@@ -267,10 +267,10 @@ def main():
         diff = h_zones[f_far]["expR"] - h_zones[f_near]["expR"]
         print(f"    ✓ 靠近逆向位 expR 更低（-{diff:.4f}），逆向位有压制/阻挡作用")
     else:
-        print(f"    ⚠ 靠近逆向位 expR 反而更高，逆向位作用不明显")
+        print("    ⚠ 靠近逆向位 expR 反而更高，逆向位作用不明显")
 
     # 最优阈值建议
-    print(f"\n  寻找最优阈值（基于细粒度数据）:")
+    print("\n  寻找最优阈值（基于细粒度数据）:")
     # 找顺向位里 expR 最高的近区间
     f_sorted = sorted(friendly_bins, key=lambda x: -x[2])
     print(f"    顺向位 expR 最高: {f_sorted[0][0]} (expR={f_sorted[0][2]:.4f}, {f_sorted[0][1]}笔)")
@@ -298,11 +298,11 @@ def _print_three_zones(trades, near, grey, mode, comp_near, comp_grey):
     f_expR = new_zones[far_key]["expR"]
 
     if g_expR < n_expR and g_expR < f_expR:
-        print(f"  ✓ 新阈值灰色地带是 expR 最低区间")
+        print("  ✓ 新阈值灰色地带是 expR 最低区间")
     elif g_expR > n_expR and g_expR > f_expR:
-        print(f"  ⚠ 新阈值灰色地带反而是 expR 最高区间")
+        print("  ⚠ 新阈值灰色地带反而是 expR 最高区间")
     else:
-        print(f"  ~ 新阈值灰色地带处于中间")
+        print("  ~ 新阈值灰色地带处于中间")
 
 
 def _print_zone_row(zones):

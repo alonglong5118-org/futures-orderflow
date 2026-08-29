@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 隐秘枢轴 Hidden Pivot — 单元测试
 =======================================

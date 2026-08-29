@@ -125,6 +125,7 @@ python run_tests.py advanced
 from hypothesis import given
 from hypothesis.strategies import floats, one_of, none
 
+
 @given(
     edge=one_of(floats(min_value=-1, max_value=2), none()),
     kelly_min=floats(min_value=0.1, max_value=1.0),

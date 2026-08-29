@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 RiskStateMachine 状态机 — 单元测试
 =========================================

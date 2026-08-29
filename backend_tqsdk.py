@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 backend_tqsdk.py — 天勤/快期真实 tick 订单流源（#3 接入层「生产者」）
 

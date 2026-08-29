@@ -41,12 +41,12 @@ def compute(snaps, pre_close_map=None, top_n=TOP_N) -> dict
 
 ```python
 {
-    "ok": bool,               # 是否成功（有有效数据）
-    "updated": str,           # 更新时间（HH:MM:SS）
-    "total": int,             # 有效品种数量
-    "by_symbol": dict,        # 按品种代码索引的详细数据
-    "top_up": list,           # 涨幅榜前 top_n
-    "top_down": list,         # 跌幅榜前 top_n
+    "ok": bool,  # 是否成功（有有效数据）
+    "updated": str,  # 更新时间（HH:MM:SS）
+    "total": int,  # 有效品种数量
+    "by_symbol": dict,  # 按品种代码索引的详细数据
+    "top_up": list,  # 涨幅榜前 top_n
+    "top_down": list,  # 跌幅榜前 top_n
 }
 ```
 
@@ -54,12 +54,12 @@ def compute(snaps, pre_close_map=None, top_n=TOP_N) -> dict
 
 ```python
 {
-    "symbol": str,     # 品种代码
-    "name": str,       # 品种名称
-    "close": float,    # 最新价
-    "pct": float,      # 涨跌幅（%）
-    "amp": float,      # 振幅（%）
-    "score": float,    # 异动评分
+    "symbol": str,  # 品种代码
+    "name": str,  # 品种名称
+    "close": float,  # 最新价
+    "pct": float,  # 涨跌幅（%）
+    "amp": float,  # 振幅（%）
+    "score": float,  # 异动评分
 }
 ```
 

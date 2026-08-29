@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """四维策略 · 绩效多维分解（#10）
 =====================================
 原来的绩效只有一个总数：总盈亏、总胜率、总期望 R。总数最大的问题是「把赚的和亏的
@@ -253,7 +252,7 @@ def print_report(rep=None):
         w = rep["worst"]
         print(f"❌ 最亏切片：{w['tag']}（{w['n']}笔 期望R {w['expR']:+.3f} 净{w['pnl']:.0f}）")
     if rep.get("cut"):
-        print(f"\n🔪 建议砍掉（样本≥5 且 期望R≤-0.15）：")
+        print("\n🔪 建议砍掉（样本≥5 且 期望R≤-0.15）：")
         for c in rep["cut"]:
             print(f"   · {c['tag']}：{c['n']}笔 胜率{c['win_rate']}% 期望R {c['expR']:+.3f} 净{c['pnl']:.0f}")
     else:
