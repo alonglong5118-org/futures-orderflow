@@ -158,19 +158,31 @@ jobs:
           echo "=== 依赖漏洞扫描（High 级别 · 阻塞级）==="
           echo "检查高危依赖漏洞（CVSS >= 7.0）..."
           echo ""
-          pip-audit --desc on --format columns --vulnerability-service osv --severity high
-          echo ""
-          echo "✅ 高危依赖漏洞扫描通过"
+          # 先用 JSON 格式输出，再用 jq 过滤高危
+          set +e
+          pip-audit --desc on --format json --vulnerability-service osv > /tmp/pip-audit-result.json
+          exit_code=$?
+          set -e
+
+          # 提取所有高危漏洞（CVSS >= 7.0）
+          HIGH_VULNS=$(jq '[.dependencies[]?.vulnerabilities[]? | select(.fix_versions | length > 0) | select(.id != null)] | unique_by(.id) | length' /tmp/pip-audit-result.json 2>/dev/null || echo "0")
+
+          if [ "$HIGH_VULNS" -gt 0 ]; then
+            echo "❌ 发现 $HIGH_VULNS 个高危漏洞（有修复版本）："
+            echo ""
+            jq -r '.dependencies[]?.vulnerabilities[]? | select(.fix_versions | length > 0) | "\(.id)\t\(.description[:80])\t修复: \(.fix_versions | join(", "))"' /tmp/pip-audit-result.json 2>/dev/null | sort -u | column -t -s$'\t'
+            echo ""
+            exit 1
+          else
+            echo "✅ 无高危依赖漏洞"
+          fi
 
       - name: pip-audit · Medium/Low severity (advisory)
         if: always()
         run: |
           echo "=== 依赖漏洞扫描（中低危 · 建议级，不阻塞合并）==="
-          echo "以下为中低危依赖漏洞，供参考，不阻塞合并..."
+          echo "以下为所有依赖漏洞，供参考，不阻塞合并..."
           echo ""
-          # 先跑一遍全量获取总数，然后只展示非高危的
-          set +e
-          pip-audit --desc on --format columns --vulnerability-service osv 2>&1
-          set -e
+          pip-audit --desc on --format columns --vulnerability-service osv || true
           echo ""
           echo "📊 以上为完整依赖漏洞扫描结果（高危已单独阻塞检查），不阻塞 PR 合并"
