@@ -119,7 +119,7 @@ jobs:
 
   # ── 单元测试（多平台 × 多 Python 版本） ─────────────────────────────────
   test:
-    name: "${{ matrix.os }} · Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
+    name: "Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     needs: detect-changes
