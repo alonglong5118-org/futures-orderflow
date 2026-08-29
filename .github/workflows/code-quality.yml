@@ -52,6 +52,46 @@ permissions:
   actions: write      # 缓存读写（Ruff cache）
 
 jobs:
+  # ── 路径变更检测 ────────────────────────────────────────────────────
+  #  智能判断哪些文件变更了，决定需要跑哪些检查
+  #  避免只改文档时跑完整的代码质量检查
+  # ========================================================================
+  detect-changes:
+    name: "Detect changes"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      python_or_workflow: ${{ steps.filter.outputs.python_or_workflow }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            python:
+              - '*.py'
+              - '**/*.py'
+              - 'pyproject.toml'
+              - '!ponytail/**'
+            workflows:
+              - '.github/workflows/code-quality.yml'
+              - '.github/workflows/*.yml'
+            python_or_workflow:
+              - '*.py'
+              - '**/*.py'
+              - 'pyproject.toml'
+              - '.github/workflows/code-quality.yml'
+              - '.github/workflows/*.yml'
+              - '!ponytail/**'
+
   # ── 快速检查（语法 + 命名规范 + 可发现性） ────────────────────────────────
   #  合并为一个 job，减少 runner 启动开销
   #  不需要安装 requirements-dev.txt，只用 Python 标准库
@@ -60,6 +100,8 @@ jobs:
     name: "Quick checks"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python_or_workflow == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
 
     steps:
       - name: Checkout code
@@ -182,6 +224,8 @@ jobs:
     name: "Ruff · lint + format"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
 
     steps:
       - name: Checkout code
@@ -223,8 +267,9 @@ jobs:
     name: "Ruff · Style lint (advisory)"
     runs-on: ubuntu-latest
     continue-on-error: true
-    # 草稿 PR 跳过建议级检查，节省 CI 时间
-    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: detect-changes
+    # 草稿 PR 跳过建议级检查，节省 CI 时间；无 Python 变更也跳过
+    if: (github.event_name == 'push' || github.event_name == 'merge_group' || github.event.pull_request.draft == false) && (needs.detect-changes.outputs.python == 'true' || github.event_name == 'push' || github.event_name == 'merge_group')
 
     steps:
       - name: Checkout code
@@ -259,8 +304,9 @@ jobs:
     name: "mypy · Type check (advisory)"
     runs-on: ubuntu-latest
     continue-on-error: true
-    # 草稿 PR 跳过建议级检查，节省 CI 时间
-    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: detect-changes
+    # 草稿 PR 跳过建议级检查，节省 CI 时间；无 Python 变更也跳过
+    if: (github.event_name == 'push' || github.event_name == 'merge_group' || github.event.pull_request.draft == false) && (needs.detect-changes.outputs.python == 'true' || github.event_name == 'push' || github.event_name == 'merge_group')
 
     steps:
       - name: Checkout code

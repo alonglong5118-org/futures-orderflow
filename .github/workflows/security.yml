@@ -44,9 +44,48 @@ permissions:
   security-events: write  # gitleaks 上报安全事件
 
 jobs:
+  # ── 路径变更检测 ────────────────────────────────────────────────────
+  #  智能判断哪些文件变更了，决定需要跑哪些安全扫描
+  #  避免不必要的扫描，加速 CI
+  # ========================================================================
+  detect-changes:
+    name: "Detect changes"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      dependencies: ${{ steps.filter.outputs.dependencies }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - '*.py'
+              - '**/*.py'
+              - '!ponytail/**'
+            dependencies:
+              - 'requirements*.txt'
+              - 'pyproject.toml'
+              - 'setup.py'
+              - 'setup.cfg'
+              - 'Pipfile*'
+              - 'poetry.lock'
+            workflows:
+              - '.github/workflows/security.yml'
+
   # ── 密钥泄露检测 ────────────────────────────────────────────────────
   #  最高优先级：防止 API Key、Token、密码等敏感信息被提交到代码库
   #  对于实盘交易系统，这是安全红线
+  #  注意：gitleaks 需要扫描历史，所以每次 PR 都跑（不依赖路径过滤）
   # ========================================================================
   gitleaks:
     name: "Secret scan (gitleaks)"
@@ -85,7 +124,9 @@ jobs:
     name: "Dependency review"
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event_name == 'pull_request'
+    needs: detect-changes
+    # PR 中且有依赖变更时才跑；workflow 本身变更也触发（验证配置正确性）
+    if: github.event_name == 'pull_request' && (needs.detect-changes.outputs.dependencies == 'true' || needs.detect-changes.outputs.workflows == 'true')
 
     steps:
       - name: Checkout code
@@ -114,6 +155,10 @@ jobs:
     name: "Python security scan"
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: detect-changes
+    # 有 Python 代码或依赖变更时才跑（bandit + pip-audit 都需要 Python 环境）
+    # push 到 main 和 merge group 时全跑
+    if: needs.detect-changes.outputs.code == 'true' || needs.detect-changes.outputs.dependencies == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
 
     steps:
       - name: Checkout code

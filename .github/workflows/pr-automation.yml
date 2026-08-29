@@ -27,119 +27,136 @@ permissions:
   issues: write       # 标签管理走 issues API
 
 jobs:
-  # ── PR 大小标签 ─────────────────────────────────────────────────────────
-  size-label:
-    name: "Size label"
+  # ── PR 自动化（合并为一个 job，减少 runner 启动开销） ──────────────────
+  #  · 自动给 PR 打 size 标签（XS/S/M/L/XL）
+  #  · 自动将 PR 分配给作者（仅 opened 时）
+  #  · PR 标题规范检查（Conventional Commits）
+  #  以上三个任务都很轻量（< 10s），合并到同一个 runner 中
+  # ========================================================================
+  pr-automation:
+    name: "PR automation"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.event_name == 'pull_request'
 
     steps:
-      - name: Calculate PR size
-        id: size
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
-            
-            const additions = pr.additions;
-            const deletions = pr.deletions;
-            const total = additions + deletions;
-            
-            let label;
-            if (total < 30) label = "size/XS";
-            else if (total < 100) label = "size/S";
-            else if (total < 500) label = "size/M";
-            else if (total < 2000) label = "size/L";
-            else label = "size/XL";
-            
-            console.log(`Total changes: +${additions} -${deletions} = ${total}`);
-            console.log(`Label: ${label}`);
-
-            // 获取现有标签，移除旧的 size 标签
-            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const oldSizeLabels = labels
-              .map(l => l.name)
-              .filter(name => name.startsWith('size/') && name !== label);
-
-            // 移除旧标签
-            for (const oldLabel of oldSizeLabels) {
-              try {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  name: oldLabel,
-                });
-              } catch (e) {
-                // 忽略移除失败（可能标签不存在）
-              }
-            }
-
-            // 添加新标签
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: [label],
-            });
-
-            return label;
-
-      - name: PR size summary
-        run: |
-          echo "### PR 大小：${{ steps.size.outputs.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| 级别 | 变更行数 |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| XS | < 30 行 |" >> $GITHUB_STEP_SUMMARY
-          echo "| S | 30 - 100 行 |" >> $GITHUB_STEP_SUMMARY
-          echo "| M | 100 - 500 行 |" >> $GITHUB_STEP_SUMMARY
-          echo "| L | 500 - 2000 行 |" >> $GITHUB_STEP_SUMMARY
-          echo "| XL | > 2000 行 |" >> $GITHUB_STEP_SUMMARY
-
-  # ── 自动分配 PR 给作者 ──────────────────────────────────────────────────
-  #  PR 创建时自动将 PR 分配给提交者，便于跟踪责任
-  # ========================================================================
-  auto-assign:
-    name: "Auto-assign"
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    if: github.event_name == 'pull_request' && github.event.action == 'opened'
-
-    permissions:
-      pull-requests: write  # 需要写权限来分配 PR
-
-    steps:
-      - name: Auto-assign PR to author
+      - name: Size label + Auto-assign + Title check
+        id: automation
         uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo, number } = context.issue;
-            const author = context.payload.pull_request.user.login;
+            const pr = context.payload.pull_request;
+            const author = pr.user.login;
+            const results = {};
 
-            // 分配给 PR 作者
-            await github.rest.issues.addAssignees({
-              owner,
-              repo,
-              issue_number: number,
-              assignees: [author],
+            // ── 1. Size label ──────────────────────────────────────
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            const total = additions + deletions;
+
+            let sizeLabel;
+            if (total < 30) sizeLabel = "size/XS";
+            else if (total < 100) sizeLabel = "size/S";
+            else if (total < 500) sizeLabel = "size/M";
+            else if (total < 2000) sizeLabel = "size/L";
+            else sizeLabel = "size/XL";
+
+            console.log(`📏 Size: +${additions} -${deletions} = ${total} → ${sizeLabel}`);
+
+            // 获取现有标签，移除旧的 size 标签
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner, repo, issue_number: number,
             });
 
-            console.log(`✅ PR #${number} 已分配给 @${author}`);
+            const oldSizeLabels = labels
+              .map(l => l.name)
+              .filter(name => name.startsWith('size/') && name !== sizeLabel);
+
+            for (const oldLabel of oldSizeLabels) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner, repo, issue_number: number, name: oldLabel,
+                });
+              } catch (e) { /* 忽略 */ }
+            }
+
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: number, labels: [sizeLabel],
+            });
+
+            results.size = sizeLabel;
+
+            // ── 2. Auto-assign（仅 opened 时） ────────────────────
+            if (context.payload.action === 'opened') {
+              await github.rest.issues.addAssignees({
+                owner, repo, issue_number: number, assignees: [author],
+              });
+              console.log(`👤 Assigned to @${author}`);
+              results.assigned = author;
+            } else {
+              results.assigned = null;
+            }
+
+            // ── 3. Title check ────────────────────────────────────
+            const title = pr.title.trim();
+            const allowedTypes = [
+              "feat", "fix", "perf", "refactor", "style",
+              "docs", "test", "ci", "build", "chore", "revert",
+            ];
+            const typePattern = new RegExp(
+              `^(${allowedTypes.join("|")})(\\([a-zA-Z0-9._-]+\\))?!?: .+`
+            );
+            const isValid = typePattern.test(title);
+            const maxLength = 72;
+            const isTooLong = title.length > maxLength;
+
+            let titleStatus, titleIcon, titleMessage;
+            if (isValid && !isTooLong) {
+              titleStatus = "pass";
+              titleIcon = "✅";
+              titleMessage = "标题符合规范";
+            } else if (isValid && isTooLong) {
+              titleStatus = "warn";
+              titleIcon = "⚠️";
+              titleMessage = `标题过长（${title.length}/${maxLength} 字符）`;
+            } else {
+              titleStatus = "fail";
+              titleIcon = "❌";
+              titleMessage = "标题不符合 Conventional Commits 规范";
+            }
+
+            console.log(`${titleIcon} Title: ${titleMessage}`);
+            results.titleStatus = titleStatus;
+            results.titleMessage = titleMessage;
+            results.titleIcon = titleIcon;
+            results.title = title;
+
+            // ── Summary ───────────────────────────────────────────
+            let summary = `### 🤖 PR 自动化\n\n`;
+            summary += `| 任务 | 结果 |\n|---|---|\n`;
+            summary += `| **Size 标签** | \`${sizeLabel}\` (+${additions} / -${deletions} = ${total} 行) |\n`;
+            if (results.assigned) {
+              summary += `| **自动分配** | @${author} |\n`;
+            }
+            summary += `| **标题检查** | ${titleIcon} ${titleMessage} |\n`;
+
+            if (!isValid) {
+              summary += `\n**规范格式**：\`type(scope): 描述\`\n\n`;
+              summary += `| 类型 | 说明 |\n|---|---|\n`;
+              summary += `| feat | 新功能 |\n| fix | Bug 修复 |\n| perf | 性能优化 |\n`;
+              summary += `| refactor | 代码重构 |\n| style | 代码风格 |\n| docs | 文档更新 |\n`;
+              summary += `| test | 测试补充 |\n| ci | CI/CD 配置 |\n| chore | 杂项 |\n\n`;
+              summary += `**示例**：\`feat(strategy): 新增四维策略止损逻辑\``;
+            }
+
+            core.summary.addRaw(summary);
+            return results;
 
   # ── PR 区域标签（根据改动文件自动打 area/* 标签） ───────────────────
   #  配置文件：.github/labeler.yml
   #  标签分类：strategy / risk / signal / execution / data / research / ...
+  #  需要 checkout 代码和完整 git 历史，所以单独一个 job
   # ========================================================================
   area-label:
     name: "Area label"
@@ -159,81 +176,3 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           configuration-path: .github/labeler.yml
           sync-labels: true  # 同步：文件不再改动时移除对应标签
-
-  # ── PR 标题规范检查 ──────────────────────────────────────────────────────
-  #  检查 PR 标题是否符合 Conventional Commits 规范
-  #  确保 squash merge 后的 commit message 也规范
-  #  不阻塞合并，只做提醒
-  # ========================================================================
-  title-check:
-    name: "Title check"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Validate PR title
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const title = context.payload.pull_request.title.trim();
-
-            // Conventional Commits 允许的 type
-            const allowedTypes = [
-              "feat", "fix", "perf", "refactor", "style",
-              "docs", "test", "ci", "build", "chore", "revert",
-            ];
-
-            const typePattern = new RegExp(
-              `^(${allowedTypes.join("|")})(\\([a-zA-Z0-9._-]+\\))?!?: .+`
-            );
-
-            const isValid = typePattern.test(title);
-            const maxLength = 72;
-            const isTooLong = title.length > maxLength;
-
-            let status, icon, message;
-            if (isValid && !isTooLong) {
-              status = "pass";
-              icon = "✅";
-              message = "标题符合规范";
-            } else if (isValid && isTooLong) {
-              status = "warn";
-              icon = "⚠️";
-              message = `标题过长（${title.length}/${maxLength} 字符）`;
-            } else {
-              status = "fail";
-              icon = "❌";
-              message = "标题不符合 Conventional Commits 规范";
-            }
-
-            // 写 summary
-            let summary = `### 📝 PR 标题检查：${icon} ${message}\n\n`;
-            summary += `> **当前标题**：\`${title}\`\n\n`;
-
-            if (!isValid) {
-              summary += `**规范格式**：\`type(scope): 描述\`\n\n`;
-              summary += `| 类型 | 说明 |\n|---|---|\n`;
-              summary += `| feat | 新功能 |\n`;
-              summary += `| fix | Bug 修复 |\n`;
-              summary += `| perf | 性能优化 |\n`;
-              summary += `| refactor | 代码重构 |\n`;
-              summary += `| style | 代码风格 |\n`;
-              summary += `| docs | 文档更新 |\n`;
-              summary += `| test | 测试补充 |\n`;
-              summary += `| ci | CI/CD 配置 |\n`;
-              summary += `| build | 构建/依赖 |\n`;
-              summary += `| chore | 杂项 |\n`;
-              summary += `| revert | 回滚 |\n\n`;
-              summary += `**示例**：\n`;
-              summary += `- ✅ \`feat(strategy): 新增四维策略止损逻辑\`\n`;
-              summary += `- ✅ \`fix(risk): 修复风控模块浮盈计算错误\`\n`;
-              summary += `- ✅ \`ci(coverage): 添加覆盖率门禁\`\n\n`;
-              summary += `> 💡 规范的 PR 标题确保 squash merge 后生成的 commit 信息清晰可读`;
-            }
-
-            core.summary.addRaw(summary);
-            console.log(`${icon} ${message}: ${title}`);
-
-            // 不阻塞，只做提醒（不抛出错误）
-            return status;

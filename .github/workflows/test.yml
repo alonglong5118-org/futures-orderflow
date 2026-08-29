@@ -64,11 +64,67 @@ permissions:
   pull-requests: write  # coverage-gate 评论 PR
 
 jobs:
+  # ── 路径变更检测 ────────────────────────────────────────────────────
+  #  智能判断哪些文件变更了，决定是否需要跑测试/覆盖率
+  #  纯文档/配置变更 → 跳过测试，加速 CI
+  # ========================================================================
+  detect-changes:
+    name: "Detect changes"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      python_code: ${{ steps.filter.outputs.python_code }}
+      tests: ${{ steps.filter.outputs.tests }}
+      dependencies: ${{ steps.filter.outputs.dependencies }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      any_relevant: ${{ steps.filter.outputs.any_relevant }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2  # 需要 base 对比
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            python_code:
+              - '*.py'
+              - '**/*.py'
+              - '!tests/**'
+              - '!ponytail/**'
+            tests:
+              - 'tests/**'
+              - 'run_tests.py'
+              - 'scripts/discover_tests.py'
+            dependencies:
+              - 'requirements*.txt'
+              - 'pyproject.toml'
+              - 'setup.py'
+              - 'setup.cfg'
+            workflows:
+              - '.github/workflows/test.yml'
+              - '.github/actions/setup-python-deps/**'
+            any_relevant:
+              - '*.py'
+              - '**/*.py'
+              - 'tests/**'
+              - 'requirements*.txt'
+              - 'pyproject.toml'
+              - '.github/workflows/test.yml'
+              - '.github/actions/setup-python-deps/**'
+              - '!ponytail/**'
+
   # ── 单元测试（多平台 × 多 Python 版本） ─────────────────────────────────
   test:
     name: "${{ matrix.os }} · Py ${{ matrix.python-version }} · ${{ matrix.scope }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    needs: detect-changes
+    # 相关文件变更或 workflow 本身变更时才跑
+    if: needs.detect-changes.outputs.any_relevant == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
     strategy:
       fail-fast: false
       max-parallel: 6
@@ -148,7 +204,8 @@ jobs:
     name: "Py 3.11 · integration"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    needs: detect-changes
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'merge_group'
 
     steps:
       - name: Checkout code
@@ -201,8 +258,8 @@ jobs:
     name: "Coverage report"
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    needs: test
+    needs: [detect-changes, test]
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'merge_group'
 
     steps:
       - name: Checkout code
@@ -249,8 +306,8 @@ jobs:
     name: "Coverage gate"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'pull_request'
-    needs: test
+    needs: [detect-changes, test]
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.any_relevant == 'true'
 
     steps:
       - name: Checkout code
@@ -344,13 +401,18 @@ jobs:
     name: "Test summary"
     runs-on: ubuntu-latest
     if: always()
-    needs: test
+    needs: [detect-changes, test]
 
     steps:
       - name: Check test status
         id: check
         run: |
-          if [ "${{ needs.test.result }}" = "success" ]; then
+          # 如果检测到无相关变更，标记为跳过
+          if [ "${{ needs.detect-changes.outputs.any_relevant }}" = "false" ] && [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "icon=⏭" >> $GITHUB_OUTPUT
+            echo "message=无相关代码变更，跳过测试" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.test.result }}" = "success" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "icon=✅" >> $GITHUB_OUTPUT
             echo "message=全部测试通过" >> $GITHUB_OUTPUT
