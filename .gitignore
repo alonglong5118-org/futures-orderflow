@@ -87,6 +87,8 @@ tq_config.json
 htmlcov/
 coverage-html/
 .coverage.*
+coverage.xml
+coverage.json
 
 # ---- 测试产物（不入库）----
 test-results/

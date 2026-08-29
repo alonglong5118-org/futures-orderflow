@@ -16,6 +16,7 @@
 #
 # ── 分析工具 ────────────────────────────────────────────────────────
 #   make coverage          # 覆盖率报告
+#   make coverage-xml      # 生成 Codecov XML 报告
 #   make coverage-check    # 覆盖率门禁检查（对比基线）
 #   make coverage-update-baseline  # 更新覆盖率基线
 #   make slow              # 列出慢测试（>500ms）
@@ -52,7 +53,7 @@
 #   make clean             # 清理缓存和临时文件
 
 .PHONY: help test smoke unit integration advanced perf all \
-        coverage coverage-check coverage-update-baseline \
+        coverage coverage-xml coverage-check coverage-update-baseline \
         slow junit random flake \
         lint lint-critical lint-style format format-check typecheck quality actionlint \
         secretscan bandit bandit-advisory depscan security \
@@ -83,6 +84,7 @@ help:
 	@echo ""
 	@echo "── 分析工具 ──────────────────────────────────────────────────"
 	@echo "  make coverage       生成覆盖率 HTML 报告"
+	@echo "  make coverage-xml   生成 Codecov XML 报告"
 	@echo "  make slow           列出慢测试（>500ms）"
 	@echo "  make junit          生成 JUnit XML 报告"
 	@echo "  make random         随机顺序运行（发现测试依赖）"
@@ -155,6 +157,12 @@ coverage-update-baseline:
 	@echo "=== 更新覆盖率基线 ==="
 	@$(PYTHON) run_tests.py --py-only --coverage > /dev/null
 	@$(PYTHON) scripts/check_coverage.py --baseline tests/_coverage_baseline.json --update
+
+coverage-xml:
+	@echo "=== 生成覆盖率 XML 报告（Codecov 格式）==="
+	@$(PYTHON) run_tests.py --py-only --coverage > /dev/null
+	@coverage xml -o coverage.xml
+	@echo "✅ 覆盖率 XML 已生成: coverage.xml"
 
 slow:
 	@$(PYTHON) run_tests.py --py-only --slow 500

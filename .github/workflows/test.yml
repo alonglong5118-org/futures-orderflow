@@ -211,6 +211,19 @@ jobs:
         run: |
           coverage html -d coverage-html
 
+      - name: Generate coverage XML (for Codecov)
+        run: |
+          coverage xml -o coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          flags: unit
+          name: codecov-unit
+          fail_ci_if_error: false  # Codecov 上传失败不阻塞主流程
+          token: ${{ secrets.CODECOV_TOKEN }}  # 私有仓库需要，公共仓库可省略
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
@@ -241,6 +254,19 @@ jobs:
       - name: Run tests with coverage
         run: |
           python run_tests.py unit --coverage
+
+      - name: Generate coverage XML (for Codecov)
+        run: |
+          python -m coverage xml -o coverage.xml
+
+      - name: Upload coverage to Codecov (PR)
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          flags: unit,pr
+          name: codecov-pr
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Check coverage gate
         run: |

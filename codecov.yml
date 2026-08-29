@@ -1,0 +1,68 @@
+# ==============================================================================
+#  Codecov 配置
+# ==============================================================================
+#  文档：https://docs.codecov.com/docs/codecov-yaml
+# ==============================================================================
+
+# ── 代码覆盖率目标 ──────────────────────────────────────────────────
+# 项目整体目标：当前基线约 23%，先设为 20% 作为安全底线
+coverage:
+  status:
+    # 项目整体覆盖率状态（PR 检查）
+    project:
+      default:
+        target: 20%          # 目标覆盖率
+        threshold: 0.5%      # 允许的下降幅度（容忍度）
+        base: auto
+        if_ci_failed: error   # CI 失败时如何处理
+        informational: false
+        only_pulls: false
+
+    # 变更行覆盖率（PR 中新/改代码的覆盖率）
+    patch:
+      default:
+        target: 60%          # 新增/修改代码的覆盖率目标
+        threshold: 0%
+        base: auto
+        if_ci_failed: error
+        only_pulls: true
+
+    # 单个文件变化（不阻塞，只做信息展示）
+    changes:
+      default:
+        target: auto
+        threshold: 0%
+        base: auto
+        if_ci_failed: success
+        only_pulls: true
+
+# ── 排除文件 ──────────────────────────────────────────────────────
+ignore:
+  - "tests/"              # 测试文件
+  - "scripts/"            # 工具脚本
+  - "ponytail/"           # 外部项目
+  - "ga_v4_*/"            # 回测结果
+  - "ga_v5_*/"            # 回测结果
+  - "setup.py"
+  - "**/__init__.py"
+  - "**/conftest.py"
+
+# ── 显示设置 ──────────────────────────────────────────────────────
+comment:
+  layout: "diff, flags, files"   # PR 评论布局
+  behavior: default              # 默认行为：更新已有评论
+  require_changes: false         # 即使覆盖率没变化也发评论
+  require_base: false            # 不需要 base 覆盖率
+  require_head: true             # 需要 head 覆盖率
+  hide_project_coverage: false   # 显示项目整体覆盖率
+  show_carryforward_flags: false
+
+# ── 拉取请求行为 ──────────────────────────────────────────────────
+github_checks:
+  annotations: true      # 在 GitHub Files changed 中显示未覆盖行
+
+# ── 标志（flags） ─────────────────────────────────────────────────
+# 可以按测试类型分组显示覆盖率
+flag_management:
+  default_rules:
+    carryforward: true    # 如果某个 flag 本次没跑，使用上次的结果
