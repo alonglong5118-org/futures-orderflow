@@ -1,0 +1,47 @@
+# ==============================================================================
+#  CI：Release Drafter
+# ==============================================================================
+#  触发时机：
+#    · PR 合并到 main → 更新 draft release
+#    · push 到 main → 更新 draft release
+#    · 手动触发
+#
+#  功能：
+#    · 自动根据 PR 分类生成发布日志
+#    · 维护一个 draft release，随时预览下个版本的内容
+#    · 版本号根据 breaking/feature/fix 自动递增
+# ==============================================================================
+
+name: Release Drafter
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+# 最小权限
+permissions:
+  contents: write    # 需要创建/更新 draft release
+  pull-requests: read  # 读取 PR 信息
+
+jobs:
+  update_release_draft:
+    name: "Update release draft"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Run release drafter
+        uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-name: release-drafter.yml
+          disable-autolabeler: true  # 不使用内置的 labeler（已有独立的 labeler）
