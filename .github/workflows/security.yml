@@ -101,12 +101,24 @@ jobs:
           echo ""
           echo "📊 以上为中危安全问题建议，不阻塞 PR 合并"
 
-      - name: pip-audit · Dependency audit (advisory)
+      - name: pip-audit · High severity (blocking)
+        run: |
+          echo "=== 依赖漏洞扫描（High 级别 · 阻塞级）==="
+          echo "检查高危依赖漏洞（CVSS >= 7.0）..."
+          echo ""
+          pip-audit --desc on --format columns --vulnerability-service osv --severity high
+          echo ""
+          echo "✅ 高危依赖漏洞扫描通过"
+
+      - name: pip-audit · Medium/Low severity (advisory)
         if: always()
         run: |
-          echo "=== 依赖漏洞扫描（建议级，不阻塞合并）==="
-          echo "检查依赖包是否有已知 CVE 漏洞..."
+          echo "=== 依赖漏洞扫描（中低危 · 建议级，不阻塞合并）==="
+          echo "以下为中低危依赖漏洞，供参考，不阻塞合并..."
           echo ""
-          pip-audit --desc on --format columns || true
+          # 先跑一遍全量获取总数，然后只展示非高危的
+          set +e
+          pip-audit --desc on --format columns --vulnerability-service osv 2>&1
+          set -e
           echo ""
-          echo "📊 以上为依赖漏洞扫描结果，不阻塞 PR 合并"
+          echo "📊 以上为完整依赖漏洞扫描结果（高危已单独阻塞检查），不阻塞 PR 合并"

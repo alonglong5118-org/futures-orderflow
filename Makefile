@@ -31,6 +31,7 @@
 #   make format-check      # 检查格式是否规范（不修改）
 #   make typecheck         # Mypy 静态类型检查
 #   make quality           # 一次性跑所有质量检查（lint + format + type）
+#   make actionlint        # 检查 GitHub Actions workflow 语法
 #
 # ── 安全扫描 ────────────────────────────────────────────────────────
 #   make secretscan        # 密钥泄露检测（gitleaks）
@@ -53,7 +54,7 @@
 .PHONY: help test smoke unit integration advanced perf all \
         coverage coverage-check coverage-update-baseline \
         slow junit random flake \
-        lint lint-critical lint-style format format-check typecheck quality \
+        lint lint-critical lint-style format format-check typecheck quality actionlint \
         secretscan bandit bandit-advisory depscan security \
         list discover watch hooks deps deps-update deps-outdated deps-check clean \
         bench bench-strict bench-update
@@ -213,6 +214,12 @@ quality: lint-critical format-check
 	@echo "══════════════════════════════════════════════════════════════"
 	@echo "  ✅  所有质量检查通过"
 	@echo "══════════════════════════════════════════════════════════════"
+
+actionlint:
+	@echo "=== GitHub Actions Workflow 语法检查 ==="
+	@which actionlint > /dev/null 2>&1 || (echo "❌ actionlint 未安装" && echo "   macOS: brew install actionlint" && echo "   Linux: go install github.com/rhysd/actionlint/cmd/actionlint@latest" && exit 1)
+	@actionlint -shellcheck=disable .github/workflows/*.yml
+	@echo "✅ Workflow 语法检查通过"
 
 # ── 安全扫描 ──────────────────────────────────────────────────────────
 

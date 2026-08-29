@@ -121,6 +121,15 @@ jobs:
           echo "💡 提示：如果新增了测试文件但忘记注册，运行："
           echo "   python scripts/discover_tests.py --update"
 
+      - name: Actionlint (workflow 语法检查)
+        uses: raven-actions/actionlint@v2
+        with:
+          path: .github/workflows/
+          fail_on_error: true
+          # 禁用 shellcheck 风格检查（workflow 中 ${{ }} 表达式是安全的）
+          # actionlint 核心价值：YAML 语法、action 引用、secrets 检查等
+          args: "-shellcheck=disable"
+
       - name: Quick checks summary
         if: always()
         run: |
