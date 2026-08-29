@@ -60,10 +60,11 @@ jobs:
           fetch-depth: 0  # 需要全量历史才能扫描
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
+        with:
+          config-path: .gitleaks.toml
 
   # ── 依赖变更审查（仅 PR） ────────────────────────────────────────────
   #  在 PR 中检查依赖变更，防止引入有已知漏洞的包
