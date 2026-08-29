@@ -83,7 +83,7 @@ jobs:
           fetch-depth: 1
 
       - name: Dependency review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # 高危漏洞阻塞，中低危只警告
           fail-on-severity: high
