@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Run release drafter
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -70,7 +70,7 @@ jobs:
           fetch-depth: 100  # 需要一些历史来生成变更日志
 
       - name: Publish release from draft
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@v7
         with:
           config-name: release-drafter.yml
           disable-autolabeler: true
