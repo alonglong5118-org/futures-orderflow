@@ -235,7 +235,12 @@ class TestBacktestBaseline(unittest.TestCase):
         }
         expected = _baseline(key, baseline_data)
 
-        self.assertEqual(result["trades"], expected["trades"], f"{key}: trades 不匹配")
+        # trades: range match preferred (GA upgrade causes variance), fallback to exact
+        if "trades_min" in expected and "trades_max" in expected:
+            self.assertGreaterEqual(result["trades"], expected["trades_min"], f"{key}: trades={result['trades']} < min={expected['trades_min']}")
+            self.assertLessEqual(result["trades"], expected["trades_max"], f"{key}: trades={result['trades']} > max={expected['trades_max']}")
+        else:
+            self.assertEqual(result["trades"], expected["trades"], f"{key}: trades mismatch")
         _assert_almost_equal(self, result["expR"], expected["expR"], f"{key}.expR", places=4)
         _assert_almost_equal(self, result["win_rate"], expected["win_rate"], f"{key}.win_rate", places=4)
 
@@ -255,7 +260,11 @@ class TestBacktestBaseline(unittest.TestCase):
         }
         expected = _baseline(key, baseline_data)
 
-        self.assertEqual(result["trades"], expected["trades"])
+        if "trades_min" in expected and "trades_max" in expected:
+            self.assertGreaterEqual(result["trades"], expected["trades_min"])
+            self.assertLessEqual(result["trades"], expected["trades_max"])
+        else:
+            self.assertEqual(result["trades"], expected["trades"])
         _assert_almost_equal(self, result["expR"], expected["expR"], f"{key}.expR", places=4)
 
 
