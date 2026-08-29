@@ -129,9 +129,9 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        # PR 只跑 Linux + 3.11（快速反馈），push 到 main 跑全矩阵
+        # PR 和 push 都跑全 Python 版本矩阵（Required checks 要求 3.10/3.11/3.12 全部通过）
         os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
-        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.11"]' || '["3.10", "3.11", "3.12"]') }}
+        python-version: ${{ fromJSON('["3.10", "3.11", "3.12"]') }}
         scope: ["unit"]
         exclude:
           # macOS 上只跑 3.11（减少资源消耗，macOS runner 贵）
