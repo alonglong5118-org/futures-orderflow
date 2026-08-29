@@ -1337,7 +1337,17 @@ def chat_feed_path(date_str=None):
     """按天落盘：signal_chat_feed_YYYY-MM-DD.jsonl。默认今天。"""
     if not date_str:
         date_str = datetime.now().strftime("%Y-%m-%d")
-    return os.path.join(HERE, f"signal_chat_feed_{date_str}.jsonl")
+    # Security: validate date_str to prevent path traversal injection
+    # Only allow strictly formatted YYYY-MM-DD strings, reject anything else
+    import re as _re
+    if not _re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(date_str)):
+        raise ValueError(f"Invalid date_str format: {date_str!r}, expected YYYY-MM-DD")
+    # Normalize and ensure resolved path stays within HERE directory
+    raw_path = os.path.join(HERE, f"signal_chat_feed_{date_str}.jsonl")
+    resolved = os.path.realpath(raw_path)
+    if not resolved.startswith(os.path.realpath(HERE) + os.sep):
+        raise ValueError(f"Path escape detected: {date_str!r}")
+    return raw_path
 
 
 def list_chat_days():
