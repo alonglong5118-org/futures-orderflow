@@ -2,16 +2,23 @@
 #  Dependabot 配置 —— 依赖自动更新
 # ==============================================================================
 #  策略：
-#    · 每周一检查（避免每天轰炸）
-#    · 按功能分组，同类依赖合并为一个 PR
-#    · 最多同时开 5 个 PR，避免堆积
-#    · 安全更新由 GitHub Security 单独处理（不受数量限制）
+#    · 每周一早 9 点（北京时间）统一检查，避免频繁打扰
+#    · 同类依赖分组升级，减少 PR 数量
+#    · 核心依赖主版本升级需人工评审，小版本/补丁自动 PR
+#    · GitHub Actions 单独跟踪
+#
+#  包含生态：
+#    · pip            — Python 依赖（requirements.txt + requirements-dev.txt）
+#    · github-actions — GitHub Actions 版本更新
 # ==============================================================================
 
 version: 2
 
 updates:
-  # ── Python 依赖：requirements.txt ──────────────────────────────────────
+  # ── Python 依赖 ──────────────────────────────────────────────────
+  #  Dependabot 会自动检测目录下的所有 requirements*.txt 文件
+  #  包括 requirements.txt 和 requirements-dev.txt
+  # ========================================================================
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -19,14 +26,27 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
+
+    # 最多同时开 5 个依赖 PR，避免堆积
     open-pull-requests-limit: 5
+
+    # 自动 rebase（有冲突时自动更新）
+    rebase-strategy: "auto"
+
+    # 版本范围：只升级次要版本和补丁，主版本需人工确认
+    # （可通过 ignore 规则对特定包进一步限制）
+    allow:
+      - dependency-type: "all"
+
     labels:
       - "dependencies"
+
+    # PR 提交信息
     commit-message:
       prefix: "deps"
       include: "scope"
 
-    # 分组策略：同类依赖合并 PR，减少噪音
+    # ── 分组策略：同类依赖合并 PR，减少噪音 ────────────────────────
     groups:
       # 核心数值计算依赖（一起升级，避免版本不兼容）
       core-numerical:
@@ -43,6 +63,8 @@ updates:
         patterns:
           - "hmmlearn"
           - "scikit-*"
+          - "xgboost"
+          - "lightgbm"
         update-types:
           - "minor"
           - "patch"
@@ -53,6 +75,20 @@ updates:
           - "plotly"
           - "matplotlib"
           - "seaborn"
+          - "kaleido"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 数据获取 / API
+      data-api:
+        patterns:
+          - "tqsdk"
+          - "akshare"
+          - "tushare"
+          - "baostock"
+          - "requests"
+          - "aiohttp"
         update-types:
           - "minor"
           - "patch"
@@ -64,13 +100,43 @@ updates:
           - "deap"
           - "pyyaml"
           - "click"
+          - "rich"
+          - "loguru"
+          - "python-dateutil"
+          - "pytz"
         update-types:
           - "minor"
           - "patch"
 
-    # 忽略规则：某些依赖不自动升级
+      # 代码质量工具（dev）
+      code-quality-tools:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "bandit"
+          - "pip-audit"
+          - "actionlint"
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 测试工具（dev）
+      testing-tools:
+        patterns:
+          - "coverage"
+          - "pytest"
+          - "pytest-*"
+          - "hypothesis"
+          - "pre-commit"
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # ── 忽略规则：某些依赖不自动升级 ────────────────────────────────
     ignore:
-      # 主版本升级需人工评审
+      # 核心数值库主版本升级需人工评审（破坏性大）
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "pandas"
@@ -78,46 +144,19 @@ updates:
       - dependency-name: "scipy"
         update-types: ["version-update:semver-major"]
 
-  # ── Python 开发依赖：requirements-dev.txt ──────────────────────────────
-  - package-ecosystem: "pip"
-    directory: "/"
-    # 指向 dev 依赖文件
-    # 注意：dependabot 会自动检测 requirements-dev.txt（因为它 -r requirements.txt）
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "dev-tools"
-    commit-message:
-      prefix: "deps-dev"
-      include: "scope"
+      # 行情 API 主版本需人工确认（接口可能变动）
+      - dependency-name: "tqsdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "akshare"
+        update-types: ["version-update:semver-major"]
 
-    groups:
-      # 代码质量工具
-      code-quality:
-        patterns:
-          - "ruff"
-          - "mypy"
-          - "bandit"
-          - "pip-audit"
-        update-types:
-          - "minor"
-          - "patch"
-
-      # 测试工具
-      testing-tools:
-        patterns:
-          - "coverage"
-          - "pytest*"
-        update-types:
-          - "minor"
-          - "patch"
+      # plotly 主版本通常有重大变更
+      - dependency-name: "plotly"
+        update-types: ["version-update:semver-major"]
 
   # ── GitHub Actions 更新 ────────────────────────────────────────────────
+  #  自动检查所有 workflow 中引用的 action 版本
+  # ========================================================================
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -125,19 +164,44 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 3
+
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+
     labels:
       - "dependencies"
       - "ci"
+
     commit-message:
       prefix: "deps-gha"
       include: "scope"
 
     groups:
-      # 官方 actions 一起升级
-      official-actions:
+      # GitHub 官方 actions 一起升级（通常稳定）
+      github-official:
         patterns:
           - "actions/*"
+          - "github/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 代码质量相关 actions
+      code-quality-actions:
+        patterns:
+          - "ruffle/*"
+          - "codecov/*"
+          - "gitleaks/*"
+          - "PyCQA/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # 安全相关 actions
+      security-actions:
+        patterns:
+          - "release-drafter/*"
+          - "actions/labeler"
         update-types:
           - "minor"
           - "patch"
