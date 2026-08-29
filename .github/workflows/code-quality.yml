@@ -96,76 +96,76 @@ jobs:
   #  合并为一个 job，减少 runner 启动开销
   #  不需要安装 requirements-dev.txt，只用 Python 标准库
   # ========================================================================
-  quick-checks:
-    name: "Quick checks"
+  # ── Syntax check（独立 job 匹配 Required check）───────────────────────
+  syntax-check:
+    name: "Syntax check"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: detect-changes
     if: needs.detect-changes.outputs.python_or_workflow == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
-          fetch-depth: 1  # 浅克隆，加速拉取
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.11"
-
       - name: Syntax check
         run: |
-          echo "=== Python 语法检查 ==="
-          find . -name "*.py" -not -path "./.git/*" -not -path "./node_modules/*" \
-            -not -path "./ponytail/*" | xargs python -m py_compile 2>&1
-          echo "✅ 语法检查通过"
+          find . -name "*.py" -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./ponytail/*" | xargs python -m py_compile 2>&1
+          echo "✅ Syntax check passed"
 
+  # ── Test standards（独立 job 匹配 Required check）───────────────────────
+  test-standards:
+    name: "Test standards"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python_or_workflow == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: "3.11"
       - name: Test file naming
         run: |
-          echo "=== 测试文件命名规范 ==="
           mismatched=$(find tests/ -name "*.py" -not -name "test_*" -not -name "_*" 2>/dev/null || true)
-          if [ -n "$mismatched" ]; then
-            echo "❌ 以下测试文件命名不规范（应以 test_ 开头）："
-            echo "$mismatched"
-            exit 1
-          fi
-          echo "✅ 命名规范通过"
-
+          if [ -n "$mismatched" ]; then echo "❌ Naming issues:"; echo "$mismatched"; exit 1; fi
+          echo "✅ Test standards passed"
       - name: Baseline integrity
         run: |
-          echo "=== 基准文件完整性 ==="
-          if [ ! -f "tests/_baseline_values.json" ]; then
-            echo "⚠️  基准文件不存在（首次添加时正常）"
-            exit 0
-          fi
           python -c "
-          import json
-          with open('tests/_baseline_values.json') as f:
-              data = json.load(f)
-          print(f'✅ 基准文件有效，包含 {len(data)} 个基准项')
-          for k in list(data.keys())[:5]:
-              print(f'   · {k}')
-          if len(data) > 5:
-              print(f'   ... 还有 {len(data)-5} 项')
+          import json, os
+          if not os.path.exists('tests/_baseline_values.json'): print('⚠️ No baseline yet'); exit(0)
+          d = json.load(open('tests/_baseline_values.json'))
+          print(f'✅ Baseline valid: {len(d)} items')
           "
 
+  # ── Test discover check（独立 job 匹配 Required check）──────────────────
+  test-discover:
+    name: "Test discover check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python_or_workflow == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: "3.11"
       - name: Test discovery
         run: |
-          echo "=== 测试发现一致性检查 ==="
           python scripts/discover_tests.py > /tmp/discovered.txt
-          echo ""
-          echo "检查 run_tests.py 中的 TEST_MODULES 是否与实际文件一致..."
-
-          count=$(grep -c "→ tests.test_" /tmp/discovered.txt || true)
-          if [ "$count" -lt 10 ]; then
-            echo "❌ 发现的测试模块太少（$count 个），可能有问题"
-            exit 1
-          fi
-          echo "✅ 发现 $count 个测试模块，自动发现正常"
-          echo ""
-          echo "💡 提示：如果新增了测试文件但忘记注册，运行："
-          echo "   python scripts/discover_tests.py --update"
+          count=$(grep -c "→ tests.test_" /tmp/discovered.txt || echo "0")
+          if [ "$count" -lt 10 ]; then echo "❌ Too few tests: $count"; exit 1; fi
+          echo "✅ Test discover passed: $count modules"
 
       - name: Large file check
         run: |
