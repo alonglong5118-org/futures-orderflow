@@ -4891,8 +4891,8 @@ async function renderCockpit(){
     const sarr = Array.isArray(sigs)? sigs : [];
     const active = sarr.filter(s=> !s.expired);
     ckSet('ckc-sig', active.length);
-    const up = (anom && Array.isArray(anom.up))? anom.up.length : 0;
-    const down = (anom && Array.isArray(anom.down))? anom.down.length : 0;
+    const up = (anom && Array.isArray(anom.top_up))? anom.top_up.length : 0;
+    const down = (anom && Array.isArray(anom.top_down))? anom.top_down.length : 0;
     ckSet('ckc-anom', (up+down)>0? (up+down) : '—');
     // 交易
     const summ = (jr && jr.summary)||{};
@@ -4909,7 +4909,7 @@ async function renderCockpit(){
     ckSet('ckc-pnl', pnlVal!=null? ((pnlVal>=0?'+':'')+fmt(pnlVal)) : '—');
     ckSet('ckc-win', perf.win_rate!=null? fmt(Number(perf.win_rate),1)+'%':'—');
     // 聚焦
-    const farr = Array.isArray(focus)? focus : [];
+    const farr = (focus && Array.isArray(focus.symbols))? focus.symbols : (Array.isArray(focus)? focus : []);
     ckSet('ckc-focusn', farr.length);
     const top = farr.reduce((m,f)=> Math.max(m, Number(f.score)||0), 0);
     ckSet('ckc-topscore', farr.length? top : '—');
