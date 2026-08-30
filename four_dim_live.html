@@ -3580,6 +3580,8 @@ async function refreshRules(){
     });
   }catch(e){console.error(e);}
 }
+// Playback 全局变量（2026-08-31 bugfix: 此前未声明导致 ReferenceError）
+let PB = null, pbIdx = 0, pbPlaying = false, pbTimer = null;
 async function refreshPlayback(){
   try{
     const j = await (await _smartFetch('/api/playback?force=1')).json();
@@ -3599,6 +3601,7 @@ async function refreshPlayback(){
   }catch(e){console.error(e);}
 }
 function pbRender(){
+  if(!PB || !PB.frames) return;
   const n = PB.frames.length;
   if(!n) return;
   if(pbIdx<0) pbIdx=0; if(pbIdx>n-1) pbIdx=n-1;
@@ -3638,10 +3641,11 @@ function pbRender(){
   pbSpark();
   pbKline();
 }
-function pbSlider(v){ pbIdx = parseInt(v)||0; pbRender(); }
-function pbStep(d){ pbIdx += d; if(pbIdx<0)pbIdx=0; if(pbIdx>=PB.frames.length)pbIdx=PB.frames.length-1; pbRender(); }
-function pbSeek(to){ pbIdx = (to<0) ? PB.frames.length-1 : 0; pbRender(); }
+function pbSlider(v){ if(!PB) return; pbIdx = parseInt(v)||0; pbRender(); }
+function pbStep(d){ if(!PB) return; pbIdx += d; if(pbIdx<0)pbIdx=0; if(pbIdx>=PB.frames.length)pbIdx=PB.frames.length-1; pbRender(); }
+function pbSeek(to){ if(!PB) return; pbIdx = (to<0) ? PB.frames.length-1 : 0; pbRender(); }
 function pbToggle(){
+  if(!PB) return;
   pbPlaying = !pbPlaying;
   document.getElementById('pb-play').textContent = pbPlaying ? '⏸ 暂停' : '▶ 播放';
   if(pbPlaying){
