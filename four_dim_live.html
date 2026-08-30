@@ -1110,6 +1110,76 @@
   
   console.log('[请求管理器 v5] 优先队列已启用, 并发=' + MAX_CONCURRENT + ', 高优先=' + _highPriorityQueue.length + ', 普通=' + _normalQueue.length + ', 跳过=' + _skipCount);
 })();
+
+// ================================================================
+// API Adapter Layer — 防御性映射层
+// 历史教训：后端字段名/类型变更导致前端渲染 "undefined" 或崩溃
+// 规范：所有新 fetch 消费点必须先用 API.adapt_xxx() 归一，再用归一后对象
+// 已验证的现有手动映射保持不变，此对象作为新代码规范入口
+// ================================================================
+window.API = (function(){
+  const safeParseInt = (v, def=0) => { const n = parseInt(v, 10); return isNaN(n) ? def : n; };
+  const safeParseFloat = (v, def=0) => { const n = parseFloat(v); return isNaN(n) ? def : n; };
+  const safeStr = (v, def="") => (v === null || v === undefined) ? def : String(v);
+  const getFirst = (obj, ...keys) => {
+    if(!obj || typeof obj !== "object") return undefined;
+    for(const k of keys){ if(obj[k] !== undefined && obj[k] !== null) return obj[k]; }
+    return undefined;
+  };
+  return {
+    adapt_journal_strategy(d){
+      const groups = (d && d.groups) || [];
+      return groups.map(g => ({
+        name:      safeStr(getFirst(g, "group", "name"), "未分类"),
+        trades:    safeParseInt(getFirst(g, "total", "trades"), 0),
+        wins:      safeParseInt(getFirst(g, "wins"), 0),
+        win_rate:  safeParseFloat(getFirst(g, "win_rate", "win_ratio"), 0),
+        pnl:       safeParseFloat(getFirst(g, "pnl", "net_pnl"), 0),
+        fee:       safeParseFloat(getFirst(g, "fee"), 0),
+        _raw: g,
+      }));
+    },
+    adapt_discipline_list(d){
+      const raw = d || {};
+      return {
+        daily:   Array.isArray(raw.daily)   ? raw.daily   : (Array.isArray(raw.records) ? raw.records : []),
+        weekly:  Array.isArray(raw.weekly)  ? raw.weekly  : (Array.isArray(raw.weeks)   ? raw.weeks   : []),
+        monthly: Array.isArray(raw.monthly) ? raw.monthly : (Array.isArray(raw.months)  ? raw.months  : []),
+        _raw: raw,
+      };
+    },
+    adapt_alerts(d){
+      const raw = d || {};
+      return {
+        items: Array.isArray(raw.items) ? raw.items : [],
+        total: safeParseInt(raw.total, 0),
+        shown: safeParseInt(raw.shown, 0),
+        kinds: raw.kinds || {},
+        all_kinds: Array.isArray(raw.all_kinds) ? raw.all_kinds : [],
+        _raw: raw,
+      };
+    },
+    adapt_focus_board(d){
+      if(!d) return [];
+      if(Array.isArray(d)) return d;
+      if(Array.isArray(d.symbols)) return d.symbols;
+      if(Array.isArray(d.items)) return d.items;
+      if(typeof d === "object") return Object.values(d);
+      return [];
+    },
+    adapt_json_list_vs_wrapper(raw, listKey){
+      if(Array.isArray(raw)) return raw;
+      if(raw && typeof raw === "object"){
+        if(listKey && Array.isArray(raw[listKey])) return raw[listKey];
+        for(const k of Object.keys(raw)){
+          if(Array.isArray(raw[k])) return raw[k];
+        }
+      }
+      return [];
+    },
+  };
+})();
+console.log("[API Adapter] 5 条防御性映射已就绪");
 </script>
 </head>
 <body>
