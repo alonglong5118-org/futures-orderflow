@@ -4,6 +4,7 @@
 
 # Git
 .git
+!.git
 .gitignore
 .github
 

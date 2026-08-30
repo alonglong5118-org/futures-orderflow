@@ -12,6 +12,9 @@
 ARG PYTHON_VERSION=3.11
 FROM python:${PYTHON_VERSION}-slim AS builder
 
+# 安装系统依赖（mkdocs-git 插件需要 git executable）
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /docs
 
 # 安装 MkDocs 依赖
