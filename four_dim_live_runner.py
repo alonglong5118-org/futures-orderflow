@@ -4962,7 +4962,10 @@ def _pb_load_events():
     except Exception:
         pass
     try:
-        for a in json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) or []:
+        _alerts_raw = json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) if os.path.exists(ALERT_HISTORY_FILE) else {}
+        _alerts = _alerts_raw.get("alerts", _alerts_raw) if isinstance(_alerts_raw, dict) else _alerts_raw
+        if not isinstance(_alerts, list): _alerts = []
+        for a in _alerts:
             at_ = _pb_parse_dt(a.get("time"))
             if at_:
                 evs.append(
@@ -5460,7 +5463,9 @@ def log_alert(kind, symbol=None, name=None, text="", extra=None):
 def load_alerts(kind=None, limit=120):
     """读取报警历史（C4）：可按类型过滤，并返回各类型计数供面板筛选。"""
     try:
-        arr = json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) or []
+        raw = json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) if os.path.exists(ALERT_HISTORY_FILE) else {}
+        arr = raw.get("alerts", raw) if isinstance(raw, dict) else raw
+        if not isinstance(arr, list): arr = []
     except Exception:
         arr = []
     kinds = {}
