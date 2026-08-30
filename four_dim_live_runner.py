@@ -43,7 +43,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.5.0"
+APP_VERSION = "v3.6.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -11108,6 +11108,15 @@ def start_dashboard(state):
                     self.send_response(403)
                     self.end_headers()
                     return
+                # 目录路径自动映射到 index.html
+                if os.path.isdir(_file_path):
+                    _index_path = os.path.join(_file_path, "index.html")
+                    if os.path.isfile(_index_path):
+                        _file_path = _index_path
+                    else:
+                        self.send_response(404)
+                        self.end_headers()
+                        return
                 if os.path.isfile(_file_path):
                     # 根据扩展名设置 Content-Type
                     _ext = os.path.splitext(_file_path)[1].lower()
