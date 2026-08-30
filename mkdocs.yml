@@ -94,6 +94,7 @@ plugins:
       enable_creation_date: true
       timezone: Asia/Shanghai
       locale: zh
+      fallback_to_build_date: true
 
 # ──────────────────────────────────────────────────────────
 #  Markdown 扩展
