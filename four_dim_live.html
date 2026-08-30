@@ -2775,11 +2775,21 @@ async function refreshStrategy(){
     const d=await r.json();
     const arr=d.groups||[];
     if(!arr.length){ box.innerHTML='<div class="stamp">暂无带标签的成交；开仓时选择策略/账户即可在此分组</div>'; return; }
-    const maxP=Math.max(1,...arr.map(g=>Math.abs(g.pnl||0)));
-    box.innerHTML=arr.map(g=>{
-      const pnl=g.pnl||0; const col=pnl>=0?'var(--red)':'var(--green)';
+    // API 返回 {group, total, closed, open, wins, win_rate, pnl, fee, net_pnl} — 全 string
+    const arr2=arr.map(g=>({
+      name: g.group || g.name || '未分类',
+      trades: parseInt(g.total||g.trades||'0')||0,
+      wins: parseInt(g.wins||'0')||0,
+      win_rate: parseFloat(g.win_rate||g.win_ratio||'0'),
+      pnl: parseFloat(g.pnl||g.net_pnl||'0'),
+      fee: parseFloat(g.fee||'0'),
+    }));
+    const maxP=Math.max(1,...arr2.map(g=>Math.abs(g.pnl)));
+    box.innerHTML=arr2.map(g=>{
+      const pnl=g.pnl; const col=pnl>=0?'var(--red)':'var(--green)';
       const w=Math.max(4,Math.round(Math.abs(pnl)/maxP*100));
-      const win=g.trades? (g.win_rate*100).toFixed(0)+'%' : '—';
+      const win=g.trades? g.win_rate.toFixed(0)+'%' : '—';
+      const losses = g.trades - g.wins;
       return `<div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <b style="font-size:14px">${g.name}</b>
@@ -2793,10 +2803,10 @@ async function refreshStrategy(){
         </div>
         <div style="display:flex;gap:14px;margin-top:5px;font-size:11px;color:var(--mut)">
           <span>笔数 <b style="color:var(--fg)">${g.trades}</b></span>
-          <span>胜 <b style="color:var(--fg)">${g.wins||0}</b></span>
-          <span>负 <b style="color:var(--fg)">${g.losses||0}</b></span>
-          <span>手续费 <b style="color:var(--fg)">${((g.fee||0)).toFixed(0)}</b></span>
-          <span>净盈亏 <b style="color:${col}">${((pnl||0)).toFixed(0)}</b></span>
+          <span>胜 <b style="color:var(--fg)">${g.wins}</b></span>
+          <span>负 <b style="color:var(--fg)">${losses}</b></span>
+          <span>手续费 <b style="color:var(--fg)">${(g.fee).toFixed(0)}</b></span>
+          <span>净盈亏 <b style="color:${col}">${(pnl).toFixed(0)}</b></span>
         </div>
       </div>`;
     }).join('');
@@ -4782,7 +4792,7 @@ function switchTab(name){
   // ★★ 2026-08-26: 按需刷新（替代之前的定时器轮询）
   if(name==='adv'){ if(typeof refreshAdv==='function') refreshAdv(); if(typeof refreshMetrics==='function') refreshMetrics(); }
   if(name==='cockpit'){ if(typeof renderCockpit==='function') renderCockpit(); }
-  if(name==='disc'){ if(typeof refreshStrategy==='function') refreshStrategy(); if(typeof refreshPlayback==='function') refreshPlayback(); }
+  if(name==='disc'){ if(typeof refreshStrategy==='function') refreshStrategy(); if(typeof refreshPlayback==='function') refreshPlayback(); if(typeof refreshJournalSession==='function') refreshJournalSession(); if(typeof refreshJournal==='function') refreshJournal(); }
   if(name==='paper'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
