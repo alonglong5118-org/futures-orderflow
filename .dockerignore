@@ -61,9 +61,8 @@ _*.json
 ponytail/
 node_modules/
 
-# 文档（运行时不需要）
-docs/
-mkdocs.yml
+# docs/ 和 mkdocs.yml 不在这里排除
+# Dockerfile.docs 需要它们构建文档站镜像
 
 # 图片/截图
 *.png

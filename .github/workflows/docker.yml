@@ -213,7 +213,7 @@ jobs:
     name: Trivy Vulnerability Scan
     runs-on: ubuntu-latest
     needs: build-main
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event.inputs.push != 'false' || github.event_name == 'push')
 
     steps:
       - name: Checkout
@@ -251,7 +251,7 @@ jobs:
     name: Generate SBOM
     runs-on: ubuntu-latest
     needs: build-main
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event.inputs.push != 'false' || github.event_name == 'push')
 
     steps:
       - name: 生成镜像 SBOM
