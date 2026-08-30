@@ -632,6 +632,8 @@ def list_records():
         records = {}
     out = []
     for dt, rec in records.items():
+        if not isinstance(rec, dict):  # 跳过 records/daily/weekly/monthly 等 list 条目
+            continue
         if not _after_cutoff(dt):
             continue
         out.append(
@@ -973,6 +975,8 @@ def list_weekly_records():
         records = {}
     out = []
     for fr, rec in records.items():
+        if not isinstance(rec, dict):
+            continue
         if not _after_cutoff(fr):
             continue
         out.append(
@@ -1000,6 +1004,8 @@ def list_monthly_records():
         records = {}
     out = []
     for mo, rec in records.items():
+        if not isinstance(rec, dict):
+            continue
         if not _after_cutoff(mo + "-01"):
             continue
         out.append(

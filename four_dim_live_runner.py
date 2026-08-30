@@ -12642,7 +12642,8 @@ def generate_report(kind="daily"):
 
     # 五、关注品种
     L.append("## 五、关注品种盯盘")
-    for f in (fb.get("symbols", []) or [])[:8]:
+    _fb_list = fb if isinstance(fb, list) else (fb.get("symbols", []) if isinstance(fb, dict) else [])
+    for f in (_fb_list or [])[:8]:
         L.append(
             f"- {f.get('name', f.get('symbol', ''))}（{f.get('symbol', '')}）：盯盘评分 {f.get('score', 0)} ｜ 当日盈亏 {f.get('pnl_day') if f.get('pnl_day') is not None else '—'} ｜ 信号 {f.get('signal_state', '—')}"
         )
