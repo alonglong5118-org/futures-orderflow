@@ -4778,7 +4778,7 @@ function switchTab(name){
   // ★★ 2026-08-26: 按需刷新（替代之前的定时器轮询）
   if(name==='adv'){ if(typeof refreshAdv==='function') refreshAdv(); if(typeof refreshMetrics==='function') refreshMetrics(); }
   if(name==='cockpit'){ if(typeof renderCockpit==='function') renderCockpit(); }
-  if(name==='disc'){ if(typeof refreshStrategy==='function') refreshStrategy(); }
+  if(name==='disc'){ if(typeof refreshStrategy==='function') refreshStrategy(); if(typeof refreshPlayback==='function') refreshPlayback(); }
   if(name==='paper'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }

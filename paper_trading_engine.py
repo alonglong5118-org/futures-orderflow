@@ -710,7 +710,7 @@ class PaperTradingEngine:
                     "default_lots": self.config["default_lots"],
                     "cooldown_minutes": self.config["cooldown_minutes"],
                     "enable_trailing": self.config["enable_trailing"],
-                    "trailing_lock_r": self.config["trailing_lock_R"],
+                    "trailing_lock_R": self.config["trailing_lock_R"],
                 },
                 "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }

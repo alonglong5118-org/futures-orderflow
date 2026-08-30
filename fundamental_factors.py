@@ -649,9 +649,92 @@ DEFAULT_FACTOR_WEIGHTS = {
     "profit_trend": 0.10,
 }
 
+# ======================================================================
+# 品种级因子权重配置（Phase 5 品种级精细化配置，2026-08-30）
+# 优先级：品种级 > 板块级 > 默认
+# 基于 IC 排序 + 走步法 OOS 验证，仅保留提升显著的品种
+# ======================================================================
+PER_VARIETY_FACTOR_WEIGHTS = {
+    # ---- 化工板块（板块级配置效果差，品种级提升显著）----
+    "SH": {  # 烧碱：Δ=+0.568，基差趋势主导
+        "basis_trend": 0.75,
+        "basis_rate": 0.25,
+    },
+    "UR": {  # 尿素：Δ=+0.190，基差率反向（Contango=利多）
+        "basis_rate": -0.77,
+        "basis_trend": -0.23,
+    },
+    "PF": {  # 短纤：Δ=+0.135，利润 + 基差反向
+        "profit_z": -0.38,
+        "basis_rate": -0.33,
+        "basis_trend": -0.30,
+    },
+    "SA": {  # 纯碱：Δ=+0.122，基差率正向 + 基差趋势反向
+        "basis_rate": 0.53,
+        "basis_trend": -0.47,
+    },
+    "PR": {  # 瓶片：Δ=+0.097，基差率反向主导
+        "basis_rate": -0.91,
+        "basis_trend": 0.09,
+    },
+    "PX": {  # 对二甲苯：Δ=+0.085，基差率反向 + 基差趋势反向
+        "basis_rate": -0.66,
+        "basis_trend": -0.34,
+    },
+    "MA": {  # 甲醇：Δ=+0.055，基差率正向主导
+        "basis_rate": 0.83,
+        "basis_trend": 0.17,
+    },
+    "eg": {  # 乙二醇：Δ=+0.025，基差趋势反向
+        "basis_trend": -0.75,
+        "basis_rate": 0.25,
+    },
+    # ---- 农产品 ----
+    "lh": {  # 生猪：Δ=+0.345，基差趋势极强正向
+        "basis_trend": 0.97,
+        "basis_rate": -0.03,
+    },
+    "a": {  # 豆一：Δ=+0.068，基差趋势反向
+        "basis_trend": -0.65,
+        "basis_rate": -0.35,
+    },
+    "SR": {  # 白糖：Δ=+0.029，基差率反向主导
+        "basis_rate": -0.65,
+        "basis_trend": -0.35,
+    },
+    # ---- 有色 ----
+    "lc": {  # 碳酸锂：Δ=+0.258，基差率正向 + 基差趋势反向
+        "basis_rate": 0.60,
+        "basis_trend": -0.40,
+    },
+    "si": {  # 工业硅：Δ=+0.132，基差率反向主导
+        "basis_rate": -0.70,
+        "basis_trend": -0.30,
+    },
+    "zn": {  # 沪锌：Δ=+0.035，基差率反向主导
+        "basis_rate": -0.63,
+        "basis_trend": -0.37,
+    },
+    # ---- 黑系（在板块级基础上进一步精细化）----
+    "rb": {  # 螺纹钢：Δ=+0.105，基差反向 + 利润反向
+        "basis_rate": -0.40,
+        "profit_trend": -0.34,
+        "profit_z": -0.26,
+    },
+    "hc": {  # 热卷：Δ=+0.045，基差率反向 + 基差趋势反向
+        "basis_rate": -0.57,
+        "basis_trend": -0.43,
+    },
+    # ---- 能源（pg验证不达预期，已移除）----
+    # "pg": {  # 液化气：优化时+0.077，但全量验证实际-0.069，移除
+    #     "basis_rate": -0.53,
+    #     "basis_trend": 0.47,
+    # },
+}
+
 
 def compute_enhanced_F(symbol, date_int, date_str=None, sector=None, df_cache=None):
-    """计算增强版 F 分数（分板块差异化权重）。
+    """计算增强版 F 分数（品种级 > 板块级 > 默认 三级权重）。
 
     参数:
       - symbol: 品种代码
@@ -662,14 +745,16 @@ def compute_enhanced_F(symbol, date_int, date_str=None, sector=None, df_cache=No
 
     返回: float, F 分数 [-100, +100]
     """
-    # 获取板块
-    if sector is None:
-        from four_dim_strategy import SYMBOLS
-
-        sector = SYMBOLS.get(symbol, {}).get("group", "其他")
-
-    # 获取权重配置
-    weights = SECTOR_FACTOR_WEIGHTS.get(sector, DEFAULT_FACTOR_WEIGHTS)
+    # 优先级 1：品种级定制权重
+    if symbol in PER_VARIETY_FACTOR_WEIGHTS:
+        weights = PER_VARIETY_FACTOR_WEIGHTS[symbol]
+    else:
+        # 获取板块
+        if sector is None:
+            from four_dim_strategy import SYMBOLS
+            sector = SYMBOLS.get(symbol, {}).get("group", "其他")
+        # 优先级 2：板块级权重
+        weights = SECTOR_FACTOR_WEIGHTS.get(sector, DEFAULT_FACTOR_WEIGHTS)
 
     # 计算所有子因子
     factors = compute_all_fund_factors(symbol, date_int, date_str=date_str, df_cache=df_cache)
@@ -697,6 +782,8 @@ def compute_enhanced_F(symbol, date_int, date_str=None, sector=None, df_cache=No
 def precompute_enhanced_F_array(symbol, date_ints=None, date_strs=None, sector=None):
     """批量预计算增强版 F 数组（O(n) 双指针加速）。
 
+    权重优先级：品种级 > 板块级 > 默认
+
     参数:
       - symbol: 品种代码
       - date_ints: numpy array of int (YYYYMMDD)，优先级高
@@ -711,13 +798,16 @@ def precompute_enhanced_F_array(symbol, date_ints=None, date_strs=None, sector=N
         precompute_profit_factors,
     )
 
-    # 获取板块
-    if sector is None:
-        from four_dim_strategy import SYMBOLS
-
-        sector = SYMBOLS.get(symbol, {}).get("group", "其他")
-
-    weights = SECTOR_FACTOR_WEIGHTS.get(sector, DEFAULT_FACTOR_WEIGHTS)
+    # 优先级 1：品种级定制权重
+    if symbol in PER_VARIETY_FACTOR_WEIGHTS:
+        weights = PER_VARIETY_FACTOR_WEIGHTS[symbol]
+    else:
+        # 获取板块
+        if sector is None:
+            from four_dim_strategy import SYMBOLS
+            sector = SYMBOLS.get(symbol, {}).get("group", "其他")
+        # 优先级 2：板块级权重
+        weights = SECTOR_FACTOR_WEIGHTS.get(sector, DEFAULT_FACTOR_WEIGHTS)
 
     # 确定日期数组
     if date_ints is not None:

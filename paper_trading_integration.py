@@ -178,7 +178,7 @@ def handle_api(handler) -> None:
             resp = {"ok": True, "msg": "账户已重置", "state": get_state()}
 
         elif action == "config":
-            # 更新配置
+            # 更新配置（支持两种格式：顶层字段或嵌套在 config 字段中）
             config_keys = [
                 "enabled",
                 "max_positions",
@@ -192,7 +192,9 @@ def handle_api(handler) -> None:
                 "cooldown_minutes",
                 "slippage_pts",
             ]
-            updates = {k: body_json[k] for k in config_keys if k in body_json}
+            # 优先从顶层读取，其次从 config 字段读取
+            source = body_json.get("config", body_json)
+            updates = {k: source[k] for k in config_keys if k in source}
             _engine.update_config(**updates)
             resp = {"ok": True, "config": _engine.config, "state": get_state()}
 

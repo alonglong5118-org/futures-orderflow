@@ -149,7 +149,7 @@
       default_lots: rawConfig.default_lots != null ? rawConfig.default_lots : 1,
       cooldown_minutes: rawConfig.cooldown_minutes != null ? rawConfig.cooldown_minutes : 30,
       enable_trailing: rawConfig.enable_trailing != null ? rawConfig.enable_trailing : true,
-      trailing_lock_r: rawConfig.trailing_lock_r != null ? rawConfig.trailing_lock_r : 0.5
+      trailing_lock_R: rawConfig.trailing_lock_R != null ? rawConfig.trailing_lock_R : 0.5
     };
 
     return {
@@ -613,7 +613,7 @@
       var t = el('cfg-trailing');
       if (cfg.enable_trailing) t.classList.add('active'); else t.classList.remove('active');
     }
-    if (cfg.trailing_lock_r != null) el('cfg-trailing-lock').value = cfg.trailing_lock_r;
+    if (cfg.trailing_lock_R != null) el('cfg-trailing-lock').value = cfg.trailing_lock_R;
   }
 
   // --- Toggle & Status ---
@@ -891,7 +891,7 @@
         default_lots: parseInt(document.getElementById('cfg-default-lots').value),
         cooldown_minutes: parseInt(document.getElementById('cfg-cooldown').value),
         enable_trailing: trailingEl.classList.contains('active'),
-        trailing_lock_r: parseFloat(document.getElementById('cfg-trailing-lock').value)
+        trailing_lock_R: parseFloat(document.getElementById('cfg-trailing-lock').value)
       };
 
       apiPost({ action: 'config', config: config }).then(function(result) {
@@ -954,7 +954,7 @@
         default_lots: 1,
         cooldown_minutes: 30,
         enable_trailing: true,
-        trailing_lock_r: 0.5
+        trailing_lock_R: 0.5
       },
       positions: {
         'IF2409': {

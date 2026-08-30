@@ -295,35 +295,41 @@ DEFAULT_CONFIG = {
     # 同时作用于 walk-forward 回测与 live 风控（risk_gate/exist_plan 一致口径）。
     "per_symbol_risk": {
         "AP": {"stop_atr_mult": 1.0, "rr_ratio": 2.0},
-        "CF": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
+        "CF": {"stop_atr_mult": 1.3, "rr_ratio": 3.5, "note": "P6: GA紧边界优化 (滚动OOS+0.039, 交易83%)"},
         "MA": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
-        "OI": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
+        "OI": {"stop_atr_mult": 1.5, "rr_ratio": 2.0, "note": "P6: GA紧边界优化 (滚动OOS+0.054, 交易82%)"},
         "PF": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
         "SH": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
         "TA": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
-        "al": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
+        "al": {"stop_atr_mult": 1.8, "rr_ratio": 2.5, "note": "P6: GA紧边界优化 (滚动OOS+0.186, 交易92%)"},
         "ao": {"stop_atr_mult": 1.5, "rr_ratio": 2.5},  # P1: rr 1.5→2.5 (OOS+0.808 胜率100%)
-        "c": {"stop_atr_mult": 2.0, "rr_ratio": 2.5},  # P1: rr 1.5→2.5 (OOS+0.223 胜率60%)
+        "c": {"stop_atr_mult": 1.7, "rr_ratio": 3.0, "note": "P6: GA紧边界优化 (滚动OOS+0.179, 交易103%)"},  # P1→P6升级
         "eb": {"stop_atr_mult": 1.5, "rr_ratio": 3.0},
         "fu": {"stop_atr_mult": 1.0, "rr_ratio": 2.5},
         "jd": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
         "lc": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
         "ni": {"stop_atr_mult": 1.5, "rr_ratio": 2.5},  # P1: rr 1.5→2.5 (OOS+0.647 胜率60%)
         "p": {"stop_atr_mult": 1.0, "rr_ratio": 3.0},
-        "pp": {"stop_atr_mult": 2.0, "rr_ratio": 2.0},
+        "pp": {"stop_atr_mult": 2.3, "rr_ratio": 1.5, "note": "P6: GA紧边界优化 (滚动OOS+0.217, 交易85%)"},
         "sp": {"stop_atr_mult": 1.5, "rr_ratio": 2.5},
         "v": {"stop_atr_mult": 2.0, "rr_ratio": 1.5},
-        "y": {"stop_atr_mult": 1.5, "rr_ratio": 1.5},
-        "zn": {"stop_atr_mult": 1.0, "rr_ratio": 2.0},
+        "y": {"stop_atr_mult": 1.2, "rr_ratio": 2.0, "note": "P6: GA紧边界优化 (滚动OOS+0.118, 交易112%)"},
+        "zn": {"stop_atr_mult": 0.7, "rr_ratio": 2.0, "note": "P6: GA紧边界优化 (滚动OOS+0.334, 交易106%)"},
         # P1 新增：OOS 验证 rr 提升稳健的品种
         "rb": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P1: rr=2.5 (OOS+0.492 胜率60%)"},
         "ru": {"stop_atr_mult": 1.5, "rr_ratio": 3.0, "note": "P1: rr=3.0 (OOS+0.304 胜率80%)"},
-        "ss": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P1: rr=2.5 (OOS+0.199 胜率80%)"},
+        "ss": {"stop_atr_mult": 1.8, "rr_ratio": 3.0, "note": "P6: GA紧边界优化 (滚动OOS+0.065, 交易86%)"},  # P1→P6升级
         "hc": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P1: rr=2.5 (OOS+0.179 胜率80%)"},
         # 低胜率品种专项（回测结论 2026-08-16）：单笔保证金占比收紧至 18%，
         # 与 risk_state_machine.PER_SYMBOL_RISK 同步（账户级状态机 + 信号级手数双重约束）。
         "JM": {"margin_cap_pct": 18, "note": "焦煤低胜率(27%)：单笔占比≤18%"},
         "J": {"margin_cap_pct": 18, "note": "焦炭低胜率(34%)：单笔占比≤18%"},
+        # P6 GA 紧边界优化新增（2026-08-30，嵌套滚动OOS验证通过）
+        # 方法：基线±4/±0.3/±0.5 网格搜索，每年重优化，仅保留 OOS Δ≥0.03 且交易数70%~140%
+        "RM": {"stop_atr_mult": 1.2, "rr_ratio": 1.5, "note": "P6: GA优化 (滚动OOS+0.069, 交易106%)"},
+        "au": {"stop_atr_mult": 1.8, "rr_ratio": 1.5, "note": "P6: GA优化 (滚动OOS+0.064, 交易82%)"},
+        "l": {"stop_atr_mult": 1.8, "rr_ratio": 1.5, "note": "P6: GA优化 (滚动OOS+0.089, 交易100%)"},
+        "cs": {"stop_atr_mult": 1.5, "rr_ratio": 2.5, "note": "P6: GA优化 (滚动OOS+0.123, 交易72%)"},
     },
     # 逐品种 regime 风控系数覆盖（P2，2026-08-29）
     # 解决弱品种在特定 regime 下大亏问题：对差表现 regime 调整 T 阈值和止损系数。
@@ -496,8 +502,35 @@ DEFAULT_CONFIG = {
         "贵金属": {"T": 0.55, "F": 0.30, "C": 0.15},  # ✅ 增强F+中权重
         "化工": {"T": 0.60, "F": 0.25, "C": 0.15},  # ❌ 旧版F，保持原权重
         "能源": {"T": 0.60, "F": 0.25, "C": 0.15},  # ❌ 旧版F，保持原权重
-        "航运": {"T": 0.60, "F": 0.25, "C": 0.15},  # 无数据影响
+        "航运": {"T": 0.60, "F": 0.25, "C": 0.15},
         "其他": {"T": 0.60, "F": 0.25, "C": 0.15},
+    },
+    # 品种级合成权重（Phase 5 品种级精细化配置，2026-08-30）
+    # 优先级：thresholds_by_symbol 内的 combine_weights > 本配置 > 板块级 > 全局默认
+    # 仅对 OOS 走步法验证提升显著（ΔexpR > 0.02）的品种启用
+    "per_symbol_combine_weights": {
+        # ── 化工（板块级F=0.25，这些品种提升后调权）──
+        "SH": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.568
+        "UR": {"T": 0.60, "F": 0.25, "C": 0.15},  # Δ=+0.190
+        "PF": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.135
+        "SA": {"T": 0.55, "F": 0.30, "C": 0.15},  # Δ=+0.122
+        "PR": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.097（减亏）
+        "PX": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.085
+        "MA": {"T": 0.55, "F": 0.30, "C": 0.15},  # Δ=+0.055
+        "eg": {"T": 0.55, "F": 0.30, "C": 0.15},  # Δ=+0.025
+        # ── 农产品（板块级F=0.35，这些品种调整）──
+        "lh": {"T": 0.60, "F": 0.25, "C": 0.15},  # Δ=+0.345
+        "a": {"T": 0.60, "F": 0.25, "C": 0.15},   # Δ=+0.068（减亏）
+        "SR": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.029
+        # ── 有色（板块级F=0.30，这些品种调整）──
+        "lc": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.258
+        "si": {"T": 0.45, "F": 0.40, "C": 0.15},  # Δ=+0.132
+        "zn": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.035
+        # ── 黑系（板块级F=0.35，这些品种调整）──
+        "rb": {"T": 0.55, "F": 0.30, "C": 0.15},  # Δ=+0.105
+        "hc": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.045
+        # ── 能源（pg验证不达预期，已移除）──
+        # "pg": {"T": 0.50, "F": 0.35, "C": 0.15},  # 已移除（验证不达预期）
     },
     # 技术面 T 去相关（P-A，2026-08-14）：8 策略共线性 → 簇坍缩 + 趋势簇拥挤降权 + 趋势/均值背离阻尼。
     #   解决"趋势市5策略共线=5次投同一方向、T顶满、趋势末端追高杀低"问题。
@@ -619,9 +652,9 @@ DEFAULT_CONFIG = {
         # ── 上期所 SHFE ──
         "cu": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.195 胜42%
         "al": {
-            "T_thresh": 12,
+            "T_thresh": 16,
             "bias_hard_base": 50,
-        },  # 🔧2026-08-13重校准: 28→12 放宽后样本充足且正期望(+0.26/胜40%)→解除门控
+        },  # P6: 12→16 GA紧边界优化 (滚动OOS+0.186, 交易92%)
         "zn": {
             "T_thresh": 34,
             "bias_hard_base": 50,
@@ -633,18 +666,18 @@ DEFAULT_CONFIG = {
         },  # ✅ OOS+0.229 胜45% | P0: F权重OOS+0.134
         # sn: 交易数不足(锡) → 沿用 group 有色
         # ao: 交易数不足(氧化铝) → 沿用 group 有色
-        "au": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.302(无稳健)
+        "au": {"T_thresh": 26, "bias_hard_base": 50},  # P6: 22→26 GA优化 (滚动OOS+0.064, 交易82%)
         "ag": {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.059(无稳健)
         "rb": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.123 胜41%
         "hc": {
-            "T_thresh": 14,
+            "T_thresh": 12,
             "bias_hard_base": 50,
-        },  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.62)，模型实盘双确认衰减→维持门控/建议剔除
+        },  # P6: 14→12 GA优化 (滚动OOS+0.114, 交易96%)
         "ss": {
-            "T_thresh": 14,
+            "T_thresh": 12,
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
-        },  # ⚠️ OOS−0.100(无稳健) | P0: F权重OOS+0.133
+        },  # P6: 14→12 GA优化 (滚动OOS+0.065, 交易86%) | P0: F权重OOS+0.133
         "bu": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.008(无稳健)
         "fu": {"T_thresh": 14, "bias_hard_base": 50},  # ✅ OOS+0.149 胜41%
         "ru": {
@@ -669,17 +702,17 @@ DEFAULT_CONFIG = {
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
         },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控 | P0: F权重OOS+0.276
         "eg": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.180(无稳健)
-        "l": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.064 胜38%
-        "pp": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.029 胜37%
+        "l": {"T_thresh": 26, "bias_hard_base": 50},  # P6: 22→26 GA优化 (滚动OOS+0.089, 交易100%)
+        "pp": {"T_thresh": 30, "bias_hard_base": 50},  # P6: 28→30 GA优化 (滚动OOS+0.217, 交易85%)
         "v": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.189 胜42%
         # pg: 交易数不足(液化气) → 沿用 group 能源
         "m": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.029(无稳健)
-        "y": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.154 胜41%
+        "y": {"T_thresh": 14, "bias_hard_base": 50},  # P6: 12→14 GA优化 (滚动OOS+0.118, 交易112%)
         "a": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.084(无稳健)
         "b": {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.099(无稳健)
         "p": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.089 胜40%
-        "c": {"T_thresh": 26, "bias_hard_base": 50},  # ✅ OOS+0.226 胜45%
-        "cs": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.145 胜41%
+        "c": {"T_thresh": 24, "bias_hard_base": 50},  # P6: 26→24 GA优化 (滚动OOS+0.179, 交易103%)
+        "cs": {"T_thresh": 14, "bias_hard_base": 50},  # P6: 12→14 GA优化 (滚动OOS+0.123, 交易72%)
         "jd": {"T_thresh": 30, "bias_hard_base": 50},  # ✅ OOS+0.066 胜39%
         # lh: 交易数不足(生猪) → 沿用 group 农产品
         "rr": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.261(无稳健)
@@ -708,7 +741,8 @@ DEFAULT_CONFIG = {
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
         },  # ⚠️ OOS−0.073(无稳健) | P0: F权重OOS+0.084
-        "OI": {"T_thresh": 20, "bias_hard_base": 50},  # ✅ OOS+0.073 胜38%
+        "OI": {"T_thresh": 18, "bias_hard_base": 50},  # P6: 20→18 GA优化 (滚动OOS+0.054, 交易82%)
+        "RM": {"T_thresh": 24, "bias_hard_base": 50},  # P6: GA优化新增 (滚动OOS+0.069, 交易106%)
         # PK: 交易数不足(花生) → 沿用 group 农产品
         "AP": {"T_thresh": 14, "bias_hard_base": 50},  # ✅ OOS+0.080 胜40%
         # ── 广期所 GFEX ──
@@ -1730,24 +1764,40 @@ def effective_params(symbol, cfg=DEFAULT_CONFIG):
 
 def effective_weights(symbol, cfg=DEFAULT_CONFIG):
     """解析某品种生效的 F/T/C 合成权重。
-    优先级：品种覆盖 > 分板块 > 全局默认。
-    返回 dict: {"T", "F", "C"}，三者之和 = 1.0。"""
+
+    优先级（从高到低）：
+      1. thresholds_by_symbol[symbol].combine_weights（GA/人工覆盖）
+      2. per_symbol_combine_weights[symbol]（品种级精细化配置）
+      3. sector_combine_weights[sector]（分板块配置）
+      4. combine_weights（全局默认）
+
+    返回 dict: {"T", "F", "C"}，三者之和 = 1.0。
+    """
     default = cfg.get("combine_weights", {"T": 0.6, "F": 0.25, "C": 0.15})
+
+    # 优先级 1：thresholds_by_symbol 内的品种覆盖（最高，如 GA 优化结果）
     sym = cfg.get("thresholds_by_symbol", {}).get(symbol, {})
     override = sym.get("combine_weights")
     if override:
-        # 归一化确保和为 1
         t = float(override.get("T", default["T"]))
         f = float(override.get("F", default["F"]))
         c = float(override.get("C", default["C"]))
         s = t + f + c
         if s > 0:
             return {"T": t / s, "F": f / s, "C": c / s}
-    # 分板块权重
+
+    # 优先级 2：per_symbol_combine_weights（品种级精细化配置）
+    per_sym_w = cfg.get("per_symbol_combine_weights", {}).get(symbol)
+    if per_sym_w:
+        return {"T": float(per_sym_w["T"]), "F": float(per_sym_w["F"]), "C": float(per_sym_w["C"])}
+
+    # 优先级 3：分板块权重
     sector = SYMBOLS.get(symbol, {}).get("group", "其他")
     sector_w = cfg.get("sector_combine_weights", {}).get(sector)
     if sector_w:
         return {"T": float(sector_w["T"]), "F": float(sector_w["F"]), "C": float(sector_w["C"])}
+
+    # 优先级 4：全局默认
     return {"T": float(default["T"]), "F": float(default["F"]), "C": float(default["C"])}
 
 

@@ -5142,13 +5142,13 @@ def playback_kline(symbol, asof=None):
             "asof": asof,
             "bars": bars,
             "marks": marks,
-            "events": _pb_load_events(symbol, asof),
+            "events": _pb_load_symbol_events(symbol, asof),
         }
     except Exception as e:
         return {"ok": False, "reason": repr(e)[:80]}
 
 
-def _pb_load_events(symbol, asof, state=None):
+def _pb_load_symbol_events(symbol, asof, state=None):
     """F7 事件驱动标记：聚合与某品种相关的事件（消息流 / 异动 / 信号）按日对齐 K 线。
     best-effort，单项缺数据不崩。返回 [{date, symbol, type, label, detail}]。"""
     events = []
