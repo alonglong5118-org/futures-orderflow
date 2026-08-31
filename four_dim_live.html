@@ -747,6 +747,18 @@
   .chat-msg.suppressed .chat-bubble{border-color:rgba(245,158,11,.35);opacity:0.9}
   .chat-msg.suppressed .chat-body{color:#f59e0b}
   .chat-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:4px}
+  .chat-quick-open{
+    display:inline-flex;align-items:center;gap:4px;
+    background:linear-gradient(135deg,#d4af37,#b8952e);
+    color:#1a1a1a!important;font-weight:600;font-size:12px;
+    padding:4px 10px;border-radius:4px;border:none;cursor:pointer;
+    margin-left:8px;transition:transform .15s,box-shadow .15s;
+    letter-spacing:.5px;
+  }
+  .chat-quick-open:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(212,175,55,.35)}
+  .chat-quick-open:active{transform:translateY(0)}
+  .chat-msg.suppressed .chat-quick-open{display:none}
+  .chat-msg.alert .chat-quick-open{background:linear-gradient(135deg,#22c55e,#16a34a)}
   .chat-head b{font-size:13.5px;color:#f0ecdf}
   .chat-time{font-size:10.5px;color:var(--mut2)}
   .chat-body{font-size:13px;color:#d9d3c4;line-height:1.5}
@@ -5112,6 +5124,50 @@ async function renderCockpit(){
       return `<div class="ck-li" style="cursor:pointer" onclick="switchTab('focus')"><span class="ck-li-name">${f.name||f.symbol}${c ? ' <span class="ccode">'+c+'</span>' :''}</span><b style="color:${col}">${f.score}</b><span class="ck-li-sub">${f.dir||'—'} · ${(f.pnl_day!=null?((Number(f.pnl_day)>=0?'+':'')+fmt(Number(f.pnl_day))):'—')}</span></div>`;
     }).join('') || '<div class="stamp">无关注品种</div>';
   }catch(e){console.error(e);}
+
+// ★ 2026-08-31: 推送→开仓联动
+// 从消息推送卡片点击「📤 开仓」→ 自动跳 💹 持仓下单 tab → 选中品种和方向
+function quickOpenPosition(sym, dir){
+  if(!sym){ console.warn('[quickOpenPosition] 无品种代码'); return; }
+  console.log('[quickOpenPosition] →', sym, dir);
+  // 1. 切换到 💹 持仓下单 tab
+  switchTab('position');
+  // 2. 等 tab 切换完成后填充
+  setTimeout(() => {
+    // 品种选择器
+    if(typeof _symPicker !== 'undefined' && _symPicker.setValue){
+      _symPicker.setValue('t-sym', sym);
+      console.log('  ✅ 品种已选中:', sym);
+    } else {
+      // fallback: 直接填 input + hidden
+      const hidden = document.getElementById('t-sym');
+      const input = document.getElementById('t-sym-input');
+      if(hidden) hidden.value = sym;
+      if(input) input.value = sym;
+      console.log('  ⚠️ symPicker 不可用，直接填值');
+    }
+    // 方向选择器
+    const dirSel = document.getElementById('t-dir');
+    if(dirSel && dir){
+      const d = dir === '多' ? '多' : (dir === '空' ? '空' : dir);
+      dirSel.value = d;
+      console.log('  ✅ 方向已设置:', d);
+    }
+    // 动作：确保是「开仓」
+    const actSel = document.getElementById('t-act');
+    if(actSel) actSel.value = 'open';
+    // 给品种选择器加个闪一下的效果提示用户
+    const picker = document.getElementById('t-sym-picker');
+    if(picker){
+      picker.style.transition = 'box-shadow .4s';
+      picker.style.boxShadow = '0 0 0 3px rgba(212,175,55,.5)';
+      setTimeout(() => { picker.style.boxShadow = ''; }, 1200);
+    }
+    // 滚动到下单面板
+    const pane = document.getElementById('pane-trade2');
+    if(pane) pane.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 400);
+}
 }
 function ckSet(id,v,color){ const el=document.getElementById(id); if(!el) return; el.textContent=v; if(color!=null) el.style.color=color; }
 
@@ -6491,6 +6547,12 @@ function renderChatFeed(chat){
     }
     const suppBadge=isSuppressed?`<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">🔕 ${suppReason||'已抑制'}</span>`:'';
     const head=isAlert? (m.name + (mcode ? ' <span class="ccode">'+mcode+'</span>' : '') + ' ' + m.direction + ' ' + m.alert_type + suppBadge) : (m.name + (mcode ? ' <span class="ccode">'+mcode+'</span>' : '') + ' ' + m.direction + ' ' + (m.signal_type||'信号') + holdBadge + suppBadge);
+    // ★ 2026-08-31: 推送→开仓联动按钮
+    const _qoSym = m.symbol || mcode || m.contract || '';
+    const _qoDir = m.direction || '';
+    const quickOpenBtn = (!isSuppressed && _qoSym)
+      ? `<button class="chat-quick-open" onclick="quickOpenPosition('${_qoSym}','${_qoDir}')" title="点击跳转到持仓下单，自动选中品种和方向">📤 开仓</button>`
+      : '';
     const body=isAlert
       ? `持仓 ${m.lots}手，实盘价 ${fmt(m.price)} 触及你的${m.alert_label}位 ${fmt(m.alert_level||m.stop||m.target)}`
       : (isSuppressed
@@ -6530,7 +6592,7 @@ if(!isAlert && m.action_advice){
     return `<div class="chat-msg ${isAlert?'alert':'signal'}${isSuppressed?' suppressed':''}" data-sym="${chatSym}" data-dir="${chatDir}" data-time="${chatTime}">
       <div class="chat-av">${isAlert?'⚠️':'📡'}</div>
       <div class="chat-bubble">
-        <div class="chat-head"><b>${head}</b><span class="chat-time">${m.time}</span></div>
+        <div class="chat-head"><b>${head}</b><span class="chat-time">${m.time}</span>${quickOpenBtn}</div>
         <div class="chat-body">${body}</div>
         ${adviceHtml}
         ${execPlanHtml(m.exec_plan)}
