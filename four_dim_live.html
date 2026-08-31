@@ -1418,45 +1418,16 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
   <!-- ===== 分类侧边导航 ===== -->
   <div class="shell">
   <aside class="sidenav">
-    <div class="nav-group cat-overview">
-      <div class="nav-cat">总览</div>
-      <button class="tab active" data-tab="cockpit"><span class="ic">🚀</span><span class="lbl">总览驾驶舱</span></button>
-      <button class="tab" data-tab="account"><span class="ic">📊</span><span class="lbl">账户总览</span></button>
-    </div>
-    <div class="nav-group cat-research">
-      <div class="nav-cat">行情研判</div>
-      <button class="tab" data-tab="signals"><span class="ic">📡</span><span class="lbl">信号</span><span class="badge" id="tab-badge-sig">—</span></button>
-      <button class="tab" data-tab="seat"><span class="ic">🏛</span><span class="lbl">席位态度</span><span class="badge" id="tab-badge-seat">—</span></button>
-      <button class="tab" data-tab="anomaly"><span class="ic">⚡</span><span class="lbl">异动</span></button>
-    </div>
-    <div class="nav-group cat-risk">
-      <div class="nav-cat">风险预警</div>
-      <button class="tab" data-tab="alerts"><span class="ic">🛡</span><span class="lbl">预警监控</span><span class="badge" id="tab-badge-alert">—</span></button>
-      <button class="tab" data-tab="adv"><span class="ic">🩺</span><span class="lbl">健康</span><span class="badge" id="tab-badge-adv">—</span></button>
-    </div>
-    <div class="nav-group cat-trade">
-      <div class="nav-cat">交易执行</div>
-      <button class="tab" data-tab="trade"><span class="ic">📝</span><span class="lbl">交易记录</span></button>
-      <button class="tab" data-tab="paper"><span class="ic">🧪</span><span class="lbl">模拟盘</span></button>
-      <button class="tab" data-tab="chat"><span class="ic">💬</span><span class="lbl">消息</span><span class="badge" id="tab-badge-chat">—</span></button>
-    </div>
-    <div class="nav-group cat-perf">
-      <div class="nav-cat">复盘绩效</div>
-      <button class="tab" data-tab="disc"><span class="ic">🧠</span><span class="lbl">复盘</span></button>
-      <button class="tab" data-tab="perf"><span class="ic">📈</span><span class="lbl">绩效</span></button>
-    </div>
-    <div class="nav-group cat-focus">
-      <div class="nav-cat">我的聚焦</div>
-      <button class="tab" data-tab="metrics"><span class="ic">📐</span><span class="lbl">利润·价差·比价</span></button>
-      <button class="tab" data-tab="focus"><span class="ic">⭐</span><span class="lbl">我的品种</span></button>
-    </div>
-    <div class="nav-group cat-system">
-      <div class="nav-cat">系统管理</div>
-      <button class="tab" data-tab="features"><span class="ic">🎛</span><span class="lbl">特性开关</span></button>
-    </div>
+    <div class="nav-brand">四维策略</div>
+    <button class="tab active" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
+    <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span></button>
+    <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
+    <button class="tab" data-tab="account"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
+    <button class="tab" data-tab="analyze"><span class="ic">📈</span><span class="lbl">复盘分析</span></button>
+    <button class="tab" data-tab="tools"><span class="ic">⚙️</span><span class="lbl">工具配置</span></button>
     <div class="nav-foot">
-      <div class="nf-line"><span>四维策略模型</span><b id="navver">v3.6.0 (CI/CD Pipeline 全面加固: Ruleset 7 条硬规则 + 9 Required Checks + 14 Workflow 零浮动 tag + Action Pin Hash 安全加固)</b></div>
-      <div class="nf-sub">端口 8741 · 14 书签 · 55 品种</div>
+      <div class="nf-line"><b id="navver">v3.6.1 (tab 重组: 6 大工作流)</b></div>
+      <div class="nf-sub">端口 8741 · 15 pane · 55 品种</div>
     </div>
   </aside>
   <div class="content">
@@ -1469,9 +1440,13 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
   </div>
 
   <main>
-    <!-- ================= 账户总览 ================= -->
-    <!-- ================= 总览驾驶舱（首页） ================= -->
-    <section class="pane active" id="pane-cockpit">
+    <!-- ===== pane-group: overview ===== -->
+    <div class="pane-group active" id="group-overview">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">overview</span>
+      </div>
+      <section class="pane" id="pane-cockpit">
       <div class="cockpit">
         <div class="cockpit-status" id="ck-status">
           <div class="ck-stat"><b id="ck-feed">—</b><i>行情</i></div>
@@ -1488,6 +1463,18 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 .ckc-kpi.clickable { cursor: pointer; transition: all 0.2s; }
 .ckc-kpi.clickable:hover { transform: scale(1.05); background: rgba(255,255,255,0.08); }
 .ckc-kpi.clickable b { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+  /* ===== pane-group 分组容器 ===== */
+  .pane-group{display:none;animation:fade .35s ease}
+  .pane-group.active{display:block}
+  .pane-group .pane{display:block;animation:none;margin-bottom:16px}
+  .pane-group .pane:last-child{margin-bottom:0}
+  .pane-group-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:16px}
+  
+  /* 侧边栏简化 */
+  .sidenav .nav-brand{padding:16px 16px 8px;font-size:13px;font-weight:700;color:var(--mut);letter-spacing:1px;text-transform:uppercase}
+  .sidenav .tab{margin:2px 8px;border-radius:8px}
+  .sidenav .tab .lbl{font-size:13px}
 </style>
 
         <div class="cockpit-grid">
@@ -1560,7 +1547,255 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
     </section>
 
-    <section class="pane" id="pane-account">
+    
+    </div>
+
+    <!-- ===== pane-group: scan ===== -->
+    <div class="pane-group" id="group-scan">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">scan</span>
+      </div>
+      <section class="pane" id="pane-signals">
+      <div class="group-head gh-blue"><span class="gh-num">①</span><span class="gh-title">信号卡片 · 四维 F→T→C 合成</span><span class="gh-sub">实时扫描 · 点品种名跳席位榜 / 持仓跳账户</span></div>
+      <div class="sig-head">
+        <input class="sig-filter" id="sig-filter" placeholder="🔍 搜索品种 / 代码（如 玻璃、FG、SA01）" oninput="filterSignals()">
+        <div class="legend">
+          <i><span class="lg-fire"></span>触发信号</i>
+          <i><span class="lg-link">品种名↩</span> 跳席位榜</i>
+          <i><span class="lg-link">持仓↘</span> 跳账户</i>
+        </div>
+      </div>
+      <div class="heat-wrap">
+        <div id="sector-heat"></div>
+        <div class="card" id="sig-history-card">
+          <h2>当日触发历史 <span class="price" id="sig-hist-sub"></span></h2>
+          <div id="sig-history"><div class="logitem stamp">加载中…</div></div>
+        </div>
+      </div>
+      <div id="cards"></div>
+    </section>
+
+    <!-- ================= 席位态度 ================= -->
+    
+<section class="pane" id="pane-seat">
+      <div class="group-head gh-blue"><span class="gh-num">①</span><span class="gh-title">席位态度榜 · 龙虎榜</span><span class="gh-sub">按 C_score 排名多空席位</span></div>
+      <div class="card" id="cpos-rank" style="margin-bottom:12px">
+        <h2>席位态度榜 · 龙虎榜 <span class="price" id="cpr-sub"></span></h2>
+        <div style="margin:4px 0 10px;font-size:12.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <label style="color:var(--mut)">历史交易日：</label>
+          <select id="cpr-date" onchange="onCprDateChange()"><option value="">最新</option></select>
+          <span class="stamp" id="cpr-sel-note"></span>
+          <span class="stamp" style="margin-left:auto">榜单↔卡片 可互点定位</span>
+        </div>
+        <div class="anom-cols">
+          <div><div class="ccol-title"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red)"></span>席位偏多（C_score 高→低）</div>
+               <ul id="cpr-up"></ul></div>
+          <div><div class="ccol-title"><span class="dot" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>席位偏空（C_score 低→高）</div>
+               <ul id="cpr-down"></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 交易记录 ================= -->
+    
+<section class="pane" id="pane-anomaly">
+      <div class="group-head gh-blue"><span class="gh-num">①</span><span class="gh-title">异动扫描 · 领涨领跌</span><span class="gh-sub">全市场涨跌幅异动</span></div>
+      <div class="card anom" id="anom">
+        <h2>异动扫描 <span class="price" id="anom-sub"></span></h2>
+        <div class="anom-cols">
+          <div><div class="ccol-title"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red)"></span>领涨</div>
+               <ul id="anom-up"></ul></div>
+          <div><div class="ccol-title"><span class="dot" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>领跌</div>
+               <ul id="anom-down"></ul></div>
+        </div>
+      </div>
+      <div class="group-head gh-blue"><span class="gh-num">②</span><span class="gh-title">近期信号（限时有效）</span><span class="gh-sub">默认 120 分钟 · 超时灰显</span></div>
+      <div class="card">
+        <h2>近期信号</h2>
+        <div class="stamp" style="margin-bottom:6px">信号生成后限时有效（默认 120 分钟，可在 trade_config.json 的 signal_ttl_minutes 调整）；超时自动灰显「已过期」，仅供参考、不建议直接跟单。</div>
+        <div id="signals"><div class="logitem stamp">暂无</div></div>
+      </div>
+    </section>
+
+    <!-- ================= 预警监控 ================= -->
+    
+    </div>
+
+    <!-- ===== pane-group: risk ===== -->
+    <div class="pane-group" id="group-risk">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">risk</span>
+      </div>
+      <section class="pane" id="pane-alerts">
+
+      <!-- #132 组合预警规则引擎 -->
+      <div class="group-head gh-red"><span class="gh-num">①</span><span class="gh-title">组合预警规则引擎</span><span class="gh-sub">#132 分级告警 + 动作建议</span></div>
+      <div class="card" id="rules-card" style="margin-bottom:14px">
+        <h2>组合预警规则引擎 <span class="price">#132</span> <span class="price" id="rules-grade"></span> <span class="price" id="rules-sub"></span></h2>
+        <div class="stamp" style="margin-bottom:8px">把风险热度 / 状态机 / 回撤 / 硬熔断 / 日亏 / 连亏 / 集中度 / 持仓数 统一收口为「一套可配置规则」：分级告警 + 动作建议。规则可在 trade_config.json 的 risk_rules 段覆盖（非投资建议）。</div>
+        <div id="rules-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+        <div id="rules-topaction" style="font-size:12px;color:var(--fg);background:#11161d;border:0.5px solid var(--border);border-radius:8px;padding:8px 11px;margin-bottom:10px;display:none"></div>
+        <div id="rules-rows" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+
+      <!-- B1 自选到价提醒 -->
+      <div class="group-head gh-red"><span class="gh-num">②</span><span class="gh-title">条件触发提醒</span><span class="gh-sub">B1 到价 / B2 换月 / B3 跳空</span></div>
+      <div class="card" id="alerts-watch" style="margin-bottom:14px">
+        <h2>自选到价提醒 <span class="price">B1</span> <span class="price" id="watch-sub"></span></h2>
+        <div class="trade" style="margin-bottom:10px">
+          <select id="w-sym"></select>
+          <select id="w-op">
+            <option value="above">上破 ≥</option>
+            <option value="below">下破 ≤</option>
+          </select>
+          <input id="w-price" type="number" step="0.1" placeholder="目标价位" style="width:104px" title="触发价：达到该价即提醒">
+          <input id="w-note" placeholder="备注(可选)" style="width:130px" title="备注，最多40字">
+          <button class="amber" onclick="addWatch()">添加提醒</button>
+          <span class="stamp" id="w-msg"></span>
+        </div>
+        <div class="stamp" style="margin-bottom:8px">非持仓品种也能挂条件，触发即弹窗+语音+消息；非该品种交易时段不误报。最多 60 条。</div>
+        <div id="watch-box"><div class="stamp">加载中…</div></div>
+      </div>
+
+      <!-- B2 换月预警 -->
+      <div class="card" id="alerts-rollover" style="margin-bottom:14px">
+        <h2>换月预警 <span class="price">B2</span> <span class="price" id="roll-sub"></span></h2>
+        <div id="roll-box"><div class="stamp">加载中…</div></div>
+      </div>
+
+      <!-- B3 跳空风险预警 -->
+      <div class="card" id="alerts-gap" style="margin-bottom:14px">
+        <h2>跳空风险预警 <span class="price">B3</span> <span class="price" id="gap-sub"></span></h2>
+        <div id="gap-box"><div class="stamp">加载中…</div></div>
+      </div>
+
+      <!-- C2/C3 分品种 Edge + 波动率 Regime -->
+      <div class="group-head gh-red"><span class="gh-num">③</span><span class="gh-title">分品种 Edge / 波动率 Regime</span><span class="gh-sub">C2/C3 品种风险监控</span></div>
+      <div class="card" id="alerts-edge">
+        <h2>分品种 Edge + 波动率 Regime <span class="price">C2/C3</span> <span class="price" id="edge-sub"></span></h2>
+        <div id="edge-box"><div class="stamp">加载中…</div></div>
+      </div>
+
+      <!-- C4 报警历史 -->
+      <div class="group-head gh-red"><span class="gh-num">④</span><span class="gh-title">报警历史</span><span class="gh-sub">C4 触价/移动止损/风险超标</span></div>
+      <div class="card" id="alerts-history">
+        <h2>报警历史 <span class="price">C4</span> <span class="price" id="hist-sub"></span></h2>
+        <div class="trade" style="margin-bottom:8px">
+          <label class="chat-date-label" style="font-size:12px;color:var(--mut)">类型</label>
+          <select id="hist-kind" onchange="refreshAlertHistory()">
+            <option value="">全部</option>
+            <option value="触价">触价</option>
+            <option value="移动止损">移动止损</option>
+            <option value="自选到价">自选到价</option>
+            <option value="跳空风险">跳空风险</option>
+            <option value="风险超标">风险超标</option>
+          </select>
+          <button class="amber" onclick="refreshAlertHistory()">刷新</button>
+        </div>
+        <div id="hist-box"><div class="stamp">加载中…</div></div>
+      </div>
+
+    </section>
+
+    <!-- ================= 复盘 ================= -->
+    
+<section class="pane" id="pane-adv">
+      <div class="group-head gh-red"><span class="gh-num">①</span><span class="gh-title">盘前作战清单</span><span class="gh-sub">#125 动态权益/风险/关键价位</span></div>
+      <div class="card" id="adv-premkt" style="margin-bottom:12px">
+        <h2>📋 盘前作战清单 <span class="price">#125</span> <span class="price" id="premkt-phase"></span> <span class="price" id="premkt-time"></span></h2>
+        <div class="row"><span>动态权益</span><span id="premkt-equity" class="mv">—</span></div>
+        <div class="row"><span>风险热度 / 回撤水位线</span><span id="premkt-risk" class="mv">—</span></div>
+        <div class="row"><span>硬熔断 / 状态机</span><span id="premkt-fsm" class="mv">—</span></div>
+        <div id="premkt-checks" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+        <div class="stamp" style="margin-top:8px" id="premkt-drift"></div>
+        <h3 style="margin:12px 0 4px;font-size:13px;color:var(--mut)">关注品种 · 关键价位</h3>
+        <div id="premkt-focus" style="display:flex;flex-direction:column;gap:5px"></div>
+        <div class="stamp" style="margin-top:8px" id="premkt-src"></div>
+      </div>
+
+      <div class="group-head gh-red"><span class="gh-num">②</span><span class="gh-title">数据交叉校验 · 质量</span><span class="gh-sub">#126/#14 多源校验/健康度</span></div>
+      <div class="card" id="adv-xs" style="margin-bottom:12px">
+        <h2>多源数据交叉校验 <span class="price">#126</span> <span class="price" id="xs-sub"></span></h2>
+        <div class="row"><span>时段</span><span id="xs-phase" class="mv">—</span></div>
+        <div class="row"><span>校验覆盖</span><span id="xs-cover" class="mv">—</span></div>
+        <div class="row"><span>结论</span><span id="xs-summary" class="mv">—</span></div>
+        <div id="xs-worst" style="margin-top:6px"></div>
+        <div id="xs-table" style="margin-top:8px;font-size:12px"></div>
+      </div>
+
+      <div class="card" id="adv-dq" style="margin-bottom:12px">
+        <h2>数据质量监控 <span class="price">#14</span> <span class="price" id="dq-sub"></span></h2>
+        <div class="row"><span>整体健康度</span><span id="dq-health" class="mv">—</span></div>
+        <div class="row"><span>异常分布</span><span id="dq-counts">—</span></div>
+        <div id="dq-worst" style="margin-top:6px"></div>
+      </div>
+
+      <div class="group-head gh-red"><span class="gh-num">③</span><span class="gh-title">事件日历 · 纪律体检</span><span class="gh-sub">#13 闸门 / #12 自动体检</span></div>
+      <div class="card" id="adv-cal" style="margin-bottom:12px">
+        <h2>事件 / 数据日历闸门 <span class="price">#13</span> <span class="price" id="cal-sub"></span></h2>
+        <div class="row"><span>闸门建议</span><span id="cal-gate" class="stamp">—</span></div>
+        <div id="cal-list" style="margin-top:6px"></div>
+      </div>
+
+      <div class="card" id="adv-blunder" style="margin-bottom:12px">
+        <h2>纪律自动体检 <span class="price">#12</span> <span class="price" id="blunder-sub"></span></h2>
+        <div class="row"><span>评分 / 等级</span><span id="blunder-score" class="mv">—</span></div>
+        <div class="row"><span>违规分布</span><span id="blunder-counts">—</span></div>
+        <div id="blunder-list" style="margin-top:6px"></div>
+      </div>
+
+      <div class="group-head gh-red"><span class="gh-num">④</span><span class="gh-title">蒙特卡洛 · 回测可视化</span><span class="gh-sub">#11/#17 置信区间/水下曲线</span></div>
+      <div class="card" id="adv-mc" style="margin-bottom:12px">
+        <h2>蒙特卡洛 · 权益曲线置信区间 <span class="price">#11</span> <span class="price" id="mc-sub"></span></h2>
+        <div class="row"><span>终值区间(p5/p50/p95)</span><span id="mc-terminal">—</span></div>
+        <div class="row"><span>最大回撤(中位/95分位)</span><span id="mc-maxdd">—</span></div>
+        <div class="row"><span>盈利概率 / 破产概率</span><span id="mc-prob">—</span></div>
+        <div style="position:relative;width:100%;height:240px"><canvas id="mcChart"></canvas></div>
+      </div>
+
+      <div class="card" id="adv-viz" style="margin-bottom:12px">
+        <h2>回测可视化 · 水下曲线 & 逐笔散点 <span class="price">#17</span> <span class="price" id="viz-sub"></span></h2>
+        <div class="row"><span>胜率 / 期望R / 累计R</span><span id="viz-sum">—</span></div>
+        <div style="position:relative;width:100%;height:220px"><canvas id="vizUnderwater"></canvas></div>
+        <div style="position:relative;width:100%;height:180px;margin-top:8px"><canvas id="vizScatter"></canvas></div>
+      </div>
+
+      <div class="group-head gh-red"><span class="gh-num">⑤</span><span class="gh-title">推送 · 工具箱</span><span class="gh-sub">#15/#121 Telegram/Bark/CLI</span></div>
+      <div class="card" id="adv-push" style="margin-bottom:12px">
+        <h2>手机推送 <span class="price">#15</span> <span class="price" id="push-sub"></span></h2>
+        <div class="row"><span>Telegram / Bark / 企业微信</span><span id="push-status">—</span></div>
+        <div class="stamp" style="margin-top:6px">配置方式：在项目目录 push_config.json 填写 token/key，或点下面测试已启用通道。</div>
+        <div class="trade" style="margin-top:8px">
+          <button onclick="pushTest()">📲 发送测试推送</button>
+          <span id="push-msg" class="stamp"></span>
+        </div>
+      </div>
+
+      <div class="card" id="adv-tools" style="margin-bottom:12px">
+        <h2>工具箱 · 已接入 CLI <span class="price">#121</span> <span class="price" id="tools-sub"></span></h2>
+        <div class="stamp" style="margin-bottom:8px">把原本「纯命令行、面板无入口」的校准/漂移/可视化工具接到面板，后台运行不阻塞面板</div>
+        <div class="trade" style="margin-bottom:8px">
+          <button onclick="runTool('calibrate')">🔧 真重校准扫描</button>
+          <button onclick="runTool('recalibrate')">🔧 校准漂移检测</button>
+          <button onclick="runTool('papertrack_html')">🔧 生成回测HTML</button>
+        </div>
+        <div id="tools-out" class="stamp" style="white-space:pre-wrap;max-height:180px;overflow:auto;background:var(--bg);border:0.5px solid var(--border);border-radius:6px;padding:8px;font-size:11px"></div>
+      </div>
+    </section>
+
+    <!-- ================= 利润·价差·比价（G1） ================= -->
+    
+    </div>
+
+    <!-- ===== pane-group: account ===== -->
+    <div class="pane-group" id="group-account">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">account</span>
+      </div>
+      <section class="pane" id="pane-account">
       <div class="group-head gh-gold"><span class="gh-num">①</span><span class="gh-title">风控闸门 · 回撤水位</span><span class="gh-sub">4 道硬约束 · 5% 停机线</span></div>
       <div class="risk-strip">
         <span id="risk-state2" class="risk-state rs-NORMAL">风控 NORMAL</span>
@@ -1768,48 +2003,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
 
     <!-- ================= 信号 ================= -->
-    <section class="pane" id="pane-signals">
-      <div class="group-head gh-blue"><span class="gh-num">①</span><span class="gh-title">信号卡片 · 四维 F→T→C 合成</span><span class="gh-sub">实时扫描 · 点品种名跳席位榜 / 持仓跳账户</span></div>
-      <div class="sig-head">
-        <input class="sig-filter" id="sig-filter" placeholder="🔍 搜索品种 / 代码（如 玻璃、FG、SA01）" oninput="filterSignals()">
-        <div class="legend">
-          <i><span class="lg-fire"></span>触发信号</i>
-          <i><span class="lg-link">品种名↩</span> 跳席位榜</i>
-          <i><span class="lg-link">持仓↘</span> 跳账户</i>
-        </div>
-      </div>
-      <div class="heat-wrap">
-        <div id="sector-heat"></div>
-        <div class="card" id="sig-history-card">
-          <h2>当日触发历史 <span class="price" id="sig-hist-sub"></span></h2>
-          <div id="sig-history"><div class="logitem stamp">加载中…</div></div>
-        </div>
-      </div>
-      <div id="cards"></div>
-    </section>
-
-    <!-- ================= 席位态度 ================= -->
-    <section class="pane" id="pane-seat">
-      <div class="group-head gh-blue"><span class="gh-num">①</span><span class="gh-title">席位态度榜 · 龙虎榜</span><span class="gh-sub">按 C_score 排名多空席位</span></div>
-      <div class="card" id="cpos-rank" style="margin-bottom:12px">
-        <h2>席位态度榜 · 龙虎榜 <span class="price" id="cpr-sub"></span></h2>
-        <div style="margin:4px 0 10px;font-size:12.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <label style="color:var(--mut)">历史交易日：</label>
-          <select id="cpr-date" onchange="onCprDateChange()"><option value="">最新</option></select>
-          <span class="stamp" id="cpr-sel-note"></span>
-          <span class="stamp" style="margin-left:auto">榜单↔卡片 可互点定位</span>
-        </div>
-        <div class="anom-cols">
-          <div><div class="ccol-title"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red)"></span>席位偏多（C_score 高→低）</div>
-               <ul id="cpr-up"></ul></div>
-          <div><div class="ccol-title"><span class="dot" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>席位偏空（C_score 低→高）</div>
-               <ul id="cpr-down"></ul></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= 交易记录 ================= -->
-    <section class="pane" id="pane-trade">
+    
+<section class="pane" id="pane-trade">
       <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">成交记录 · 跟单分析</span><span class="gh-sub">开/平仓 · 跟单率/采纳率/胜率</span></div>
       <div class="card" id="journal" style="margin-bottom:12px">
         <h2>成交记录器 <span class="price" id="j-sub"></span></h2>
@@ -1886,7 +2081,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
 
     <!-- ================= 模拟盘（F8 沙盒） ================= -->
-    <section class="pane" id="pane-paper">
+    
+<section class="pane" id="pane-paper">
       <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-sub">F8 虚拟资金 · 不碰真实账户</span></div>
       <div class="card" id="paper-card" style="margin-bottom:12px">
         <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
@@ -1921,7 +2117,183 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
 
     <!-- ================= 绩效 ================= -->
-    <section class="pane" id="pane-perf">
+    
+<section class="pane" id="pane-chat">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
+      <div class="chat-wrap">
+        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
+        <div class="chat-toolbar">
+          <label class="chat-date-label">复盘日期</label>
+          <select id="chat-date" class="chat-date-select">
+            <option value="__today__">今天（实时）</option>
+          </select>
+          <span id="chat-date-count" class="chat-date-count"></span>
+          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
+        </div>
+        <div id="chat-feed"></div>
+      </div>
+    </section>
+
+    <!-- ================= 系统健康 & 高级工具 (#11-#17) ================= -->
+    
+    </div>
+
+    <!-- ===== pane-group: analyze ===== -->
+    <div class="pane-group" id="group-analyze">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">analyze</span>
+      </div>
+      <section class="pane" id="pane-disc">
+      <!-- #133 交互式历史回放（时间机器） -->
+      <div class="group-head gh-green"><span class="gh-num">①</span><span class="gh-title">交互式历史回放</span><span class="gh-sub">#133 时间机器 · K线+事件</span></div>
+      <div class="card" id="playback" style="margin-bottom:12px">
+        <h2>🎬 交互式历史回放 <span class="price">#133</span></h2>
+
+        <!-- 播放控制工具栏 -->
+        <div class="pb-toolbar">
+          <button class="pb-btn" onclick="pbSeek(0)" title="首日">⏮</button>
+          <button class="pb-btn" onclick="pbStep(-1)" title="上一天">◀</button>
+          <button class="pb-btn primary" id="pb-play" onclick="pbToggle()">▶ 播放</button>
+          <button class="pb-btn" onclick="pbStep(1)" title="下一天">▶</button>
+          <button class="pb-btn" onclick="pbSeek(-1)" title="最新">⏭</button>
+          <div class="pb-display">
+            <span id="pb-date" class="pb-date">—</span>
+            <span id="pb-range" class="price"></span>
+          </div>
+        </div>
+
+        <!-- 时间轴 -->
+        <input id="pb-slider" type="range" min="0" max="0" value="0" oninput="pbSlider(this.value)" class="pb-range">
+
+        <!-- 四维 KPI -->
+        <div class="pb-kpi-grid">
+          <div class="pb-kpi">
+            <div class="pb-kpi-head"><span class="pb-kpi-label">累计已实现盈亏</span><span class="pb-kpi-icon">💰</span></div>
+            <div id="pb-realized" class="pb-kpi-val">—</div>
+            <div class="pb-kpi-sub">到选定日期的已平仓盈亏</div>
+          </div>
+          <div class="pb-kpi">
+            <div class="pb-kpi-head"><span class="pb-kpi-label">估算权益</span><span class="pb-kpi-icon">🏦</span></div>
+            <div id="pb-equity" class="pb-kpi-val">—</div>
+            <div class="pb-kpi-sub">按当前价估算的账户权益</div>
+          </div>
+          <div class="pb-kpi">
+            <div class="pb-kpi-head"><span class="pb-kpi-label">持仓市值浮盈</span><span class="pb-kpi-icon">📊</span></div>
+            <div id="pb-mtm" class="pb-kpi-val">—</div>
+            <div class="pb-kpi-sub">当日收盘持仓浮动盈亏</div>
+          </div>
+          <div class="pb-kpi">
+            <div class="pb-kpi-head"><span class="pb-kpi-label">当日未平仓</span><span class="pb-kpi-icon">🎯</span></div>
+            <div id="pb-open" class="pb-kpi-val">—</div>
+            <div class="pb-kpi-sub">收盘时仍持有的头寸数</div>
+          </div>
+        </div>
+
+        <!-- 持仓 / 事件 双栏 -->
+        <div class="pb-split">
+          <div class="pb-col-card">
+            <h3>当日持仓 <span id="pb-pos-n" class="count">(0)</span></h3>
+            <div id="pb-positions" class="pb-list"><div class="pb-li"><div style="font-size:16px">−</div><div class="pb-li-main">暂无持仓</div><div></div></div></div>
+          </div>
+          <div class="pb-col-card">
+            <h3>当日事件 <span id="pb-ev-n" class="count">(0)</span></h3>
+            <div id="pb-events" class="pb-list"><div class="pb-li"><div style="font-size:16px">−</div><div class="pb-li-main">暂无事件</div><div></div></div></div>
+          </div>
+        </div>
+
+        <!-- K线 -->
+        <div class="pb-chart-card">
+          <div class="pb-chart-head">
+            <span class="pb-chart-title">K线 · 截至当日 · 含开平仓标记</span>
+            <select id="pb-sym" onchange="pbKline()" class="pb-select"></select>
+          </div>
+          <div class="pb-canvas-wrap"><canvas id="pb-kline" width="640" height="200"></canvas></div>
+          <div id="pb-events-legend" class="pb-events-legend"></div>
+        </div>
+
+        <!-- 累计盈亏曲线 -->
+        <div class="pb-chart-card">
+          <div class="pb-chart-head">
+            <span class="pb-chart-title">累计盈亏曲线 · 当前</span>
+            <span class="pb-chart-note">每日收盘累计已实现 + 浮动</span>
+          </div>
+          <div class="pb-canvas-wrap"><canvas id="pb-spark" width="640" height="90"></canvas></div>
+        </div>
+      </div>
+      <div class="group-head gh-green"><span class="gh-num">②</span><span class="gh-title">管住手 · 复盘体检</span><span class="gh-sub">日/周/月 · 纪律评分</span></div>
+      <div class="card disc" id="discipline">
+        <h2>管住手 · 复盘 <span class="price" id="disc-sub"></span></h2>
+        <div class="disc-nav">
+          <button class="dnav on" data-kind="daily" onclick="switchDisc('daily')">📅 每日复盘</button>
+          <button class="dnav" data-kind="weekly" onclick="switchDisc('weekly')">🗓 每周复盘</button>
+          <button class="dnav" data-kind="monthly" onclick="switchDisc('monthly')">📆 每月复盘</button>
+        </div>
+
+        <div class="disc-sel" id="sel-daily">
+          <span class="dl">复盘日</span>
+          <select id="disc-date" onchange="onDiscDateChange()"></select>
+          <span class="rec-tag" id="disc-rec-tag"></span>
+        </div>
+        <div class="disc-sel" id="sel-weekly" style="display:none">
+          <span class="dl">交易周（周五）</span>
+          <select id="disc-week" onchange="onDiscWeekChange()"></select>
+          <span class="rec-tag" id="disc-week-tag"></span>
+        </div>
+        <div class="disc-sel" id="sel-monthly" style="display:none">
+          <span class="dl">月份</span>
+          <select id="disc-month" onchange="onDiscMonthChange()"></select>
+          <span class="rec-tag" id="disc-month-tag"></span>
+        </div>
+
+        <div class="score">
+          <div class="ring" id="disc-ring">—</div>
+          <div>
+            <div class="grade" id="disc-grade"></div>
+            <div class="price" id="disc-period"></div>
+          </div>
+        </div>
+        <div class="row"><span>开仓 / 跟信号 / 手动 / 锁违</span><span id="disc-summary">—</span></div>
+        <div class="row"><span>采纳率 / 区间盈亏 / 胜率</span><span id="disc-extra">—</span></div>
+        <div class="mini-scores" id="disc-mini"></div>
+        <ul class="checks" id="disc-checks"></ul>
+        <div id="disc-positions"></div>
+        <ul class="notes" id="disc-notes"></ul>
+        <div id="disc-ops" class="disc-ops" style="display:none"></div>
+      </div>
+
+      <!-- F1 多策略 / 多账户表现 -->
+      <div class="group-head gh-green"><span class="gh-num">③</span><span class="gh-title">多策略 · 多账户表现</span><span class="gh-sub">F1 按策略/账户拆分盈亏·胜率·手续费</span></div>
+      <div class="card" id="strat-card">
+        <h2>🧩 多策略 · 多账户表现 <span class="price">F1</span></h2>
+        <div class="trade" style="margin-bottom:10px">
+          <label style="font-size:12px;color:var(--mut)">分组维度</label>
+          <select id="strat-group" onchange="refreshStrategy()">
+            <option value="strategy">按策略</option>
+            <option value="account">按账户</option>
+          </select>
+          <button class="amber" onclick="refreshStrategy()">刷新</button>
+        </div>
+        <div class="stamp" style="margin-bottom:8px">每笔成交可打策略/账户标签（开仓表单选择）。此处按维度对比各组的笔数·胜率·盈亏·手续费，定位最赚钱/最拉胯的策略。</div>
+        <div id="strat-body" style="display:flex;flex-direction:column;gap:8px">加载中…</div>
+      </div>
+
+      <!-- F3 自动化日报 / 周报 -->
+      <div class="group-head gh-green"><span class="gh-num">④</span><span class="gh-title">自动化日报 · 周报</span><span class="gh-sub">F3 一键生成复盘 Markdown</span></div>
+      <div class="card" id="report-card">
+        <h2>📝 自动化日报 · 周报 <span class="price">F3</span></h2>
+        <div class="trade" style="margin-bottom:8px">
+          <button class="amber" onclick="openReport('daily')">📄 生成日报</button>
+          <button class="amber" onclick="openReport('weekly')">📅 生成周报</button>
+          <span id="rep-status" class="stamp" style="margin:0 4px"></span>
+        </div>
+        <div class="stamp">基于账户/交易/风控/纪律/聚焦数据自动合成 Markdown 复盘报告；可在弹窗内复制或下载 .md。</div>
+      </div>
+    </section>
+
+    <!-- ================= 消息推送（聊天式） ================= -->
+    
+<section class="pane" id="pane-perf">
       <!-- #134 参数鲁棒性敏感性地图 -->
       <div class="group-head gh-green"><span class="gh-num">①</span><span class="gh-title">参数鲁棒性诊断</span><span class="gh-sub">#134 滑点/阈值敏感性地图</span></div>
       <div class="card" id="sens" style="margin-bottom:12px">
@@ -2096,349 +2468,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
 
     <!-- ================= 异动 ================= -->
-    <section class="pane" id="pane-anomaly">
-      <div class="group-head gh-blue"><span class="gh-num">①</span><span class="gh-title">异动扫描 · 领涨领跌</span><span class="gh-sub">全市场涨跌幅异动</span></div>
-      <div class="card anom" id="anom">
-        <h2>异动扫描 <span class="price" id="anom-sub"></span></h2>
-        <div class="anom-cols">
-          <div><div class="ccol-title"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red)"></span>领涨</div>
-               <ul id="anom-up"></ul></div>
-          <div><div class="ccol-title"><span class="dot" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>领跌</div>
-               <ul id="anom-down"></ul></div>
-        </div>
-      </div>
-      <div class="group-head gh-blue"><span class="gh-num">②</span><span class="gh-title">近期信号（限时有效）</span><span class="gh-sub">默认 120 分钟 · 超时灰显</span></div>
-      <div class="card">
-        <h2>近期信号</h2>
-        <div class="stamp" style="margin-bottom:6px">信号生成后限时有效（默认 120 分钟，可在 trade_config.json 的 signal_ttl_minutes 调整）；超时自动灰显「已过期」，仅供参考、不建议直接跟单。</div>
-        <div id="signals"><div class="logitem stamp">暂无</div></div>
-      </div>
-    </section>
-
-    <!-- ================= 预警监控 ================= -->
-    <section class="pane" id="pane-alerts">
-
-      <!-- #132 组合预警规则引擎 -->
-      <div class="group-head gh-red"><span class="gh-num">①</span><span class="gh-title">组合预警规则引擎</span><span class="gh-sub">#132 分级告警 + 动作建议</span></div>
-      <div class="card" id="rules-card" style="margin-bottom:14px">
-        <h2>组合预警规则引擎 <span class="price">#132</span> <span class="price" id="rules-grade"></span> <span class="price" id="rules-sub"></span></h2>
-        <div class="stamp" style="margin-bottom:8px">把风险热度 / 状态机 / 回撤 / 硬熔断 / 日亏 / 连亏 / 集中度 / 持仓数 统一收口为「一套可配置规则」：分级告警 + 动作建议。规则可在 trade_config.json 的 risk_rules 段覆盖（非投资建议）。</div>
-        <div id="rules-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
-        <div id="rules-topaction" style="font-size:12px;color:var(--fg);background:#11161d;border:0.5px solid var(--border);border-radius:8px;padding:8px 11px;margin-bottom:10px;display:none"></div>
-        <div id="rules-rows" style="display:flex;flex-direction:column;gap:4px"></div>
-      </div>
-
-      <!-- B1 自选到价提醒 -->
-      <div class="group-head gh-red"><span class="gh-num">②</span><span class="gh-title">条件触发提醒</span><span class="gh-sub">B1 到价 / B2 换月 / B3 跳空</span></div>
-      <div class="card" id="alerts-watch" style="margin-bottom:14px">
-        <h2>自选到价提醒 <span class="price">B1</span> <span class="price" id="watch-sub"></span></h2>
-        <div class="trade" style="margin-bottom:10px">
-          <select id="w-sym"></select>
-          <select id="w-op">
-            <option value="above">上破 ≥</option>
-            <option value="below">下破 ≤</option>
-          </select>
-          <input id="w-price" type="number" step="0.1" placeholder="目标价位" style="width:104px" title="触发价：达到该价即提醒">
-          <input id="w-note" placeholder="备注(可选)" style="width:130px" title="备注，最多40字">
-          <button class="amber" onclick="addWatch()">添加提醒</button>
-          <span class="stamp" id="w-msg"></span>
-        </div>
-        <div class="stamp" style="margin-bottom:8px">非持仓品种也能挂条件，触发即弹窗+语音+消息；非该品种交易时段不误报。最多 60 条。</div>
-        <div id="watch-box"><div class="stamp">加载中…</div></div>
-      </div>
-
-      <!-- B2 换月预警 -->
-      <div class="card" id="alerts-rollover" style="margin-bottom:14px">
-        <h2>换月预警 <span class="price">B2</span> <span class="price" id="roll-sub"></span></h2>
-        <div id="roll-box"><div class="stamp">加载中…</div></div>
-      </div>
-
-      <!-- B3 跳空风险预警 -->
-      <div class="card" id="alerts-gap" style="margin-bottom:14px">
-        <h2>跳空风险预警 <span class="price">B3</span> <span class="price" id="gap-sub"></span></h2>
-        <div id="gap-box"><div class="stamp">加载中…</div></div>
-      </div>
-
-      <!-- C2/C3 分品种 Edge + 波动率 Regime -->
-      <div class="group-head gh-red"><span class="gh-num">③</span><span class="gh-title">分品种 Edge / 波动率 Regime</span><span class="gh-sub">C2/C3 品种风险监控</span></div>
-      <div class="card" id="alerts-edge">
-        <h2>分品种 Edge + 波动率 Regime <span class="price">C2/C3</span> <span class="price" id="edge-sub"></span></h2>
-        <div id="edge-box"><div class="stamp">加载中…</div></div>
-      </div>
-
-      <!-- C4 报警历史 -->
-      <div class="group-head gh-red"><span class="gh-num">④</span><span class="gh-title">报警历史</span><span class="gh-sub">C4 触价/移动止损/风险超标</span></div>
-      <div class="card" id="alerts-history">
-        <h2>报警历史 <span class="price">C4</span> <span class="price" id="hist-sub"></span></h2>
-        <div class="trade" style="margin-bottom:8px">
-          <label class="chat-date-label" style="font-size:12px;color:var(--mut)">类型</label>
-          <select id="hist-kind" onchange="refreshAlertHistory()">
-            <option value="">全部</option>
-            <option value="触价">触价</option>
-            <option value="移动止损">移动止损</option>
-            <option value="自选到价">自选到价</option>
-            <option value="跳空风险">跳空风险</option>
-            <option value="风险超标">风险超标</option>
-          </select>
-          <button class="amber" onclick="refreshAlertHistory()">刷新</button>
-        </div>
-        <div id="hist-box"><div class="stamp">加载中…</div></div>
-      </div>
-
-    </section>
-
-    <!-- ================= 复盘 ================= -->
-    <section class="pane" id="pane-disc">
-      <!-- #133 交互式历史回放（时间机器） -->
-      <div class="group-head gh-green"><span class="gh-num">①</span><span class="gh-title">交互式历史回放</span><span class="gh-sub">#133 时间机器 · K线+事件</span></div>
-      <div class="card" id="playback" style="margin-bottom:12px">
-        <h2>🎬 交互式历史回放 <span class="price">#133</span></h2>
-
-        <!-- 播放控制工具栏 -->
-        <div class="pb-toolbar">
-          <button class="pb-btn" onclick="pbSeek(0)" title="首日">⏮</button>
-          <button class="pb-btn" onclick="pbStep(-1)" title="上一天">◀</button>
-          <button class="pb-btn primary" id="pb-play" onclick="pbToggle()">▶ 播放</button>
-          <button class="pb-btn" onclick="pbStep(1)" title="下一天">▶</button>
-          <button class="pb-btn" onclick="pbSeek(-1)" title="最新">⏭</button>
-          <div class="pb-display">
-            <span id="pb-date" class="pb-date">—</span>
-            <span id="pb-range" class="price"></span>
-          </div>
-        </div>
-
-        <!-- 时间轴 -->
-        <input id="pb-slider" type="range" min="0" max="0" value="0" oninput="pbSlider(this.value)" class="pb-range">
-
-        <!-- 四维 KPI -->
-        <div class="pb-kpi-grid">
-          <div class="pb-kpi">
-            <div class="pb-kpi-head"><span class="pb-kpi-label">累计已实现盈亏</span><span class="pb-kpi-icon">💰</span></div>
-            <div id="pb-realized" class="pb-kpi-val">—</div>
-            <div class="pb-kpi-sub">到选定日期的已平仓盈亏</div>
-          </div>
-          <div class="pb-kpi">
-            <div class="pb-kpi-head"><span class="pb-kpi-label">估算权益</span><span class="pb-kpi-icon">🏦</span></div>
-            <div id="pb-equity" class="pb-kpi-val">—</div>
-            <div class="pb-kpi-sub">按当前价估算的账户权益</div>
-          </div>
-          <div class="pb-kpi">
-            <div class="pb-kpi-head"><span class="pb-kpi-label">持仓市值浮盈</span><span class="pb-kpi-icon">📊</span></div>
-            <div id="pb-mtm" class="pb-kpi-val">—</div>
-            <div class="pb-kpi-sub">当日收盘持仓浮动盈亏</div>
-          </div>
-          <div class="pb-kpi">
-            <div class="pb-kpi-head"><span class="pb-kpi-label">当日未平仓</span><span class="pb-kpi-icon">🎯</span></div>
-            <div id="pb-open" class="pb-kpi-val">—</div>
-            <div class="pb-kpi-sub">收盘时仍持有的头寸数</div>
-          </div>
-        </div>
-
-        <!-- 持仓 / 事件 双栏 -->
-        <div class="pb-split">
-          <div class="pb-col-card">
-            <h3>当日持仓 <span id="pb-pos-n" class="count">(0)</span></h3>
-            <div id="pb-positions" class="pb-list"><div class="pb-li"><div style="font-size:16px">−</div><div class="pb-li-main">暂无持仓</div><div></div></div></div>
-          </div>
-          <div class="pb-col-card">
-            <h3>当日事件 <span id="pb-ev-n" class="count">(0)</span></h3>
-            <div id="pb-events" class="pb-list"><div class="pb-li"><div style="font-size:16px">−</div><div class="pb-li-main">暂无事件</div><div></div></div></div>
-          </div>
-        </div>
-
-        <!-- K线 -->
-        <div class="pb-chart-card">
-          <div class="pb-chart-head">
-            <span class="pb-chart-title">K线 · 截至当日 · 含开平仓标记</span>
-            <select id="pb-sym" onchange="pbKline()" class="pb-select"></select>
-          </div>
-          <div class="pb-canvas-wrap"><canvas id="pb-kline" width="640" height="200"></canvas></div>
-          <div id="pb-events-legend" class="pb-events-legend"></div>
-        </div>
-
-        <!-- 累计盈亏曲线 -->
-        <div class="pb-chart-card">
-          <div class="pb-chart-head">
-            <span class="pb-chart-title">累计盈亏曲线 · 当前</span>
-            <span class="pb-chart-note">每日收盘累计已实现 + 浮动</span>
-          </div>
-          <div class="pb-canvas-wrap"><canvas id="pb-spark" width="640" height="90"></canvas></div>
-        </div>
-      </div>
-      <div class="group-head gh-green"><span class="gh-num">②</span><span class="gh-title">管住手 · 复盘体检</span><span class="gh-sub">日/周/月 · 纪律评分</span></div>
-      <div class="card disc" id="discipline">
-        <h2>管住手 · 复盘 <span class="price" id="disc-sub"></span></h2>
-        <div class="disc-nav">
-          <button class="dnav on" data-kind="daily" onclick="switchDisc('daily')">📅 每日复盘</button>
-          <button class="dnav" data-kind="weekly" onclick="switchDisc('weekly')">🗓 每周复盘</button>
-          <button class="dnav" data-kind="monthly" onclick="switchDisc('monthly')">📆 每月复盘</button>
-        </div>
-
-        <div class="disc-sel" id="sel-daily">
-          <span class="dl">复盘日</span>
-          <select id="disc-date" onchange="onDiscDateChange()"></select>
-          <span class="rec-tag" id="disc-rec-tag"></span>
-        </div>
-        <div class="disc-sel" id="sel-weekly" style="display:none">
-          <span class="dl">交易周（周五）</span>
-          <select id="disc-week" onchange="onDiscWeekChange()"></select>
-          <span class="rec-tag" id="disc-week-tag"></span>
-        </div>
-        <div class="disc-sel" id="sel-monthly" style="display:none">
-          <span class="dl">月份</span>
-          <select id="disc-month" onchange="onDiscMonthChange()"></select>
-          <span class="rec-tag" id="disc-month-tag"></span>
-        </div>
-
-        <div class="score">
-          <div class="ring" id="disc-ring">—</div>
-          <div>
-            <div class="grade" id="disc-grade"></div>
-            <div class="price" id="disc-period"></div>
-          </div>
-        </div>
-        <div class="row"><span>开仓 / 跟信号 / 手动 / 锁违</span><span id="disc-summary">—</span></div>
-        <div class="row"><span>采纳率 / 区间盈亏 / 胜率</span><span id="disc-extra">—</span></div>
-        <div class="mini-scores" id="disc-mini"></div>
-        <ul class="checks" id="disc-checks"></ul>
-        <div id="disc-positions"></div>
-        <ul class="notes" id="disc-notes"></ul>
-        <div id="disc-ops" class="disc-ops" style="display:none"></div>
-      </div>
-
-      <!-- F1 多策略 / 多账户表现 -->
-      <div class="group-head gh-green"><span class="gh-num">③</span><span class="gh-title">多策略 · 多账户表现</span><span class="gh-sub">F1 按策略/账户拆分盈亏·胜率·手续费</span></div>
-      <div class="card" id="strat-card">
-        <h2>🧩 多策略 · 多账户表现 <span class="price">F1</span></h2>
-        <div class="trade" style="margin-bottom:10px">
-          <label style="font-size:12px;color:var(--mut)">分组维度</label>
-          <select id="strat-group" onchange="refreshStrategy()">
-            <option value="strategy">按策略</option>
-            <option value="account">按账户</option>
-          </select>
-          <button class="amber" onclick="refreshStrategy()">刷新</button>
-        </div>
-        <div class="stamp" style="margin-bottom:8px">每笔成交可打策略/账户标签（开仓表单选择）。此处按维度对比各组的笔数·胜率·盈亏·手续费，定位最赚钱/最拉胯的策略。</div>
-        <div id="strat-body" style="display:flex;flex-direction:column;gap:8px">加载中…</div>
-      </div>
-
-      <!-- F3 自动化日报 / 周报 -->
-      <div class="group-head gh-green"><span class="gh-num">④</span><span class="gh-title">自动化日报 · 周报</span><span class="gh-sub">F3 一键生成复盘 Markdown</span></div>
-      <div class="card" id="report-card">
-        <h2>📝 自动化日报 · 周报 <span class="price">F3</span></h2>
-        <div class="trade" style="margin-bottom:8px">
-          <button class="amber" onclick="openReport('daily')">📄 生成日报</button>
-          <button class="amber" onclick="openReport('weekly')">📅 生成周报</button>
-          <span id="rep-status" class="stamp" style="margin:0 4px"></span>
-        </div>
-        <div class="stamp">基于账户/交易/风控/纪律/聚焦数据自动合成 Markdown 复盘报告；可在弹窗内复制或下载 .md。</div>
-      </div>
-    </section>
-
-    <!-- ================= 消息推送（聊天式） ================= -->
-    <section class="pane" id="pane-chat">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
-      <div class="chat-wrap">
-        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
-        <div class="chat-toolbar">
-          <label class="chat-date-label">复盘日期</label>
-          <select id="chat-date" class="chat-date-select">
-            <option value="__today__">今天（实时）</option>
-          </select>
-          <span id="chat-date-count" class="chat-date-count"></span>
-          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
-        </div>
-        <div id="chat-feed"></div>
-      </div>
-    </section>
-
-    <!-- ================= 系统健康 & 高级工具 (#11-#17) ================= -->
-    <section class="pane" id="pane-adv">
-      <div class="group-head gh-red"><span class="gh-num">①</span><span class="gh-title">盘前作战清单</span><span class="gh-sub">#125 动态权益/风险/关键价位</span></div>
-      <div class="card" id="adv-premkt" style="margin-bottom:12px">
-        <h2>📋 盘前作战清单 <span class="price">#125</span> <span class="price" id="premkt-phase"></span> <span class="price" id="premkt-time"></span></h2>
-        <div class="row"><span>动态权益</span><span id="premkt-equity" class="mv">—</span></div>
-        <div class="row"><span>风险热度 / 回撤水位线</span><span id="premkt-risk" class="mv">—</span></div>
-        <div class="row"><span>硬熔断 / 状态机</span><span id="premkt-fsm" class="mv">—</span></div>
-        <div id="premkt-checks" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
-        <div class="stamp" style="margin-top:8px" id="premkt-drift"></div>
-        <h3 style="margin:12px 0 4px;font-size:13px;color:var(--mut)">关注品种 · 关键价位</h3>
-        <div id="premkt-focus" style="display:flex;flex-direction:column;gap:5px"></div>
-        <div class="stamp" style="margin-top:8px" id="premkt-src"></div>
-      </div>
-
-      <div class="group-head gh-red"><span class="gh-num">②</span><span class="gh-title">数据交叉校验 · 质量</span><span class="gh-sub">#126/#14 多源校验/健康度</span></div>
-      <div class="card" id="adv-xs" style="margin-bottom:12px">
-        <h2>多源数据交叉校验 <span class="price">#126</span> <span class="price" id="xs-sub"></span></h2>
-        <div class="row"><span>时段</span><span id="xs-phase" class="mv">—</span></div>
-        <div class="row"><span>校验覆盖</span><span id="xs-cover" class="mv">—</span></div>
-        <div class="row"><span>结论</span><span id="xs-summary" class="mv">—</span></div>
-        <div id="xs-worst" style="margin-top:6px"></div>
-        <div id="xs-table" style="margin-top:8px;font-size:12px"></div>
-      </div>
-
-      <div class="card" id="adv-dq" style="margin-bottom:12px">
-        <h2>数据质量监控 <span class="price">#14</span> <span class="price" id="dq-sub"></span></h2>
-        <div class="row"><span>整体健康度</span><span id="dq-health" class="mv">—</span></div>
-        <div class="row"><span>异常分布</span><span id="dq-counts">—</span></div>
-        <div id="dq-worst" style="margin-top:6px"></div>
-      </div>
-
-      <div class="group-head gh-red"><span class="gh-num">③</span><span class="gh-title">事件日历 · 纪律体检</span><span class="gh-sub">#13 闸门 / #12 自动体检</span></div>
-      <div class="card" id="adv-cal" style="margin-bottom:12px">
-        <h2>事件 / 数据日历闸门 <span class="price">#13</span> <span class="price" id="cal-sub"></span></h2>
-        <div class="row"><span>闸门建议</span><span id="cal-gate" class="stamp">—</span></div>
-        <div id="cal-list" style="margin-top:6px"></div>
-      </div>
-
-      <div class="card" id="adv-blunder" style="margin-bottom:12px">
-        <h2>纪律自动体检 <span class="price">#12</span> <span class="price" id="blunder-sub"></span></h2>
-        <div class="row"><span>评分 / 等级</span><span id="blunder-score" class="mv">—</span></div>
-        <div class="row"><span>违规分布</span><span id="blunder-counts">—</span></div>
-        <div id="blunder-list" style="margin-top:6px"></div>
-      </div>
-
-      <div class="group-head gh-red"><span class="gh-num">④</span><span class="gh-title">蒙特卡洛 · 回测可视化</span><span class="gh-sub">#11/#17 置信区间/水下曲线</span></div>
-      <div class="card" id="adv-mc" style="margin-bottom:12px">
-        <h2>蒙特卡洛 · 权益曲线置信区间 <span class="price">#11</span> <span class="price" id="mc-sub"></span></h2>
-        <div class="row"><span>终值区间(p5/p50/p95)</span><span id="mc-terminal">—</span></div>
-        <div class="row"><span>最大回撤(中位/95分位)</span><span id="mc-maxdd">—</span></div>
-        <div class="row"><span>盈利概率 / 破产概率</span><span id="mc-prob">—</span></div>
-        <div style="position:relative;width:100%;height:240px"><canvas id="mcChart"></canvas></div>
-      </div>
-
-      <div class="card" id="adv-viz" style="margin-bottom:12px">
-        <h2>回测可视化 · 水下曲线 & 逐笔散点 <span class="price">#17</span> <span class="price" id="viz-sub"></span></h2>
-        <div class="row"><span>胜率 / 期望R / 累计R</span><span id="viz-sum">—</span></div>
-        <div style="position:relative;width:100%;height:220px"><canvas id="vizUnderwater"></canvas></div>
-        <div style="position:relative;width:100%;height:180px;margin-top:8px"><canvas id="vizScatter"></canvas></div>
-      </div>
-
-      <div class="group-head gh-red"><span class="gh-num">⑤</span><span class="gh-title">推送 · 工具箱</span><span class="gh-sub">#15/#121 Telegram/Bark/CLI</span></div>
-      <div class="card" id="adv-push" style="margin-bottom:12px">
-        <h2>手机推送 <span class="price">#15</span> <span class="price" id="push-sub"></span></h2>
-        <div class="row"><span>Telegram / Bark / 企业微信</span><span id="push-status">—</span></div>
-        <div class="stamp" style="margin-top:6px">配置方式：在项目目录 push_config.json 填写 token/key，或点下面测试已启用通道。</div>
-        <div class="trade" style="margin-top:8px">
-          <button onclick="pushTest()">📲 发送测试推送</button>
-          <span id="push-msg" class="stamp"></span>
-        </div>
-      </div>
-
-      <div class="card" id="adv-tools" style="margin-bottom:12px">
-        <h2>工具箱 · 已接入 CLI <span class="price">#121</span> <span class="price" id="tools-sub"></span></h2>
-        <div class="stamp" style="margin-bottom:8px">把原本「纯命令行、面板无入口」的校准/漂移/可视化工具接到面板，后台运行不阻塞面板</div>
-        <div class="trade" style="margin-bottom:8px">
-          <button onclick="runTool('calibrate')">🔧 真重校准扫描</button>
-          <button onclick="runTool('recalibrate')">🔧 校准漂移检测</button>
-          <button onclick="runTool('papertrack_html')">🔧 生成回测HTML</button>
-        </div>
-        <div id="tools-out" class="stamp" style="white-space:pre-wrap;max-height:180px;overflow:auto;background:var(--bg);border:0.5px solid var(--border);border-radius:6px;padding:8px;font-size:11px"></div>
-      </div>
-    </section>
-
-    <!-- ================= 利润·价差·比价（G1） ================= -->
-    <section class="pane" id="pane-metrics">
+    
+<section class="pane" id="pane-metrics">
       <div class="group-head gh-violet"><span class="gh-num">①</span><span class="gh-title">利润 · 价差 · 比价</span><span class="gh-sub">G1 加工利润/比价/价差 z 偏离</span></div>
       <div class="card">
         <h2>📐 利润 · 价差 · 比价监控 <span class="price">G1</span> <span class="price" id="fm-updated"></span></h2>
@@ -2448,7 +2479,16 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
 
     <!-- ================= 我的品种盯盘板（G5） ================= -->
-    <section class="pane" id="pane-focus">
+    
+    </div>
+
+    <!-- ===== pane-group: tools ===== -->
+    <div class="pane-group" id="group-tools">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">tools</span>
+      </div>
+      <section class="pane" id="pane-focus">
       <div class="group-head gh-violet"><span class="gh-num">①</span><span class="gh-title">我的品种盯盘板</span><span class="gh-sub">G5 关注度 = 信号+波动+持仓+价差+热度</span></div>
       <div class="card">
         <h2>⭐ 我的品种盯盘板 <span class="price">G5</span> <span class="price" id="focus-updated"></span></h2>
@@ -2456,7 +2496,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="focus-body" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </section>
-    <section class="pane" id="pane-features">
+    
+<section class="pane" id="pane-features">
       <div class="group-head gh-violet"><span class="gh-num">①</span><span class="gh-title">🎛 特性开关管理</span><span class="gh-sub">所有功能开关集中管理 · 运行时可切换 · 变更有日志</span></div>
       <div class="card" id="feat-card">
         <h2>特性开关总览 <span class="price" id="feat-updated"></span></h2>
@@ -2478,6 +2519,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
 
 
+  
+    </div>
   </main>
   </div>
   </div>
@@ -4852,32 +4895,70 @@ setInterval(() => {
 
 /* ===== 标签切换 ===== */
 function switchTab(name){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active', p.id==='pane-'+name));
-  // ★ 2026-08-26: 用户交互锁激活时，只切换UI标签，不触发数据刷新
+  // ===== 分组映射：tab名 -> 包含的 pane 列表 =====
+  const GROUP_OF = {
+    overview: ['cockpit'],
+    scan:     ['signals','seat','anomaly'],
+    risk:     ['alerts','adv'],
+    account:  ['account','trade','paper','chat'],
+    analyze:  ['disc','perf','metrics'],
+    tools:    ['focus','features'],
+  };
+  // 反向映射：pane -> group
+  const PANE_TO_GROUP = {};
+  for(const [g, panes] of Object.entries(GROUP_OF)){
+    for(const p of panes) PANE_TO_GROUP[p] = g;
+  }
+  // 判断 name 是 group 还是 pane
+  const isGroup = name in GROUP_OF;
+  const activeGroup = isGroup ? name : (PANE_TO_GROUP[name] || 'overview');
+  
+  // 1. 切换侧边栏按钮
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===activeGroup));
+  
+  // 2. 切换 pane-group 容器显示
+  document.querySelectorAll('.pane-group').forEach(g=>g.classList.toggle('active', g.id==='group-'+activeGroup));
+  
+  // 3. 单 pane 调用（cockpit 里的 "进入 →" 按钮还在用）：激活该 pane
+  if(!isGroup && PANE_TO_GROUP[name]){
+    // 隐藏同组内其他 pane？不，都显示，因为已经嵌套在 group 里了
+    // 但要确保目标 pane 的 active class
+    document.querySelectorAll('.pane').forEach(p=>{
+      p.classList.toggle('active', p.id==='pane-'+name);
+    });
+  } else {
+    // group 模式：该 group 内所有 pane 都 active，其他隐藏
+    const groupPanes = GROUP_OF[activeGroup] || [];
+    document.querySelectorAll('.pane').forEach(p=>{
+      const pid = p.id.replace('pane-','');
+      p.classList.toggle('active', groupPanes.includes(pid));
+    });
+  }
+
+  // ★ 用户交互锁激活时，只切换UI标签，不触发数据刷新
   if(_userActionInProgress){
     console.log('[switchTab] 用户交互中，跳过数据刷新');
     return;
   }
-  // ★★ 2026-08-26: 按需刷新（替代之前的定时器轮询）
+  // ★ 按需刷新（保持原有 refresh 调用，不删不增）
   if(name==='adv'){ if(typeof refreshAdv==='function') refreshAdv(); if(typeof refreshMetrics==='function') refreshMetrics(); }
   if(name==='cockpit'){ if(typeof renderCockpit==='function') renderCockpit(); }
   if(name==='disc'){ if(typeof refreshStrategy==='function') refreshStrategy(); if(typeof refreshPlayback==='function') refreshPlayback(); if(typeof refreshJournalSession==='function') refreshJournalSession(); if(typeof refreshJournal==='function') refreshJournal(); }
   if(name==='paper'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
-  if(name==='trade'){ 
-    if(typeof refreshJournalList==='function') refreshJournalList(true); 
+  if(name==='trade'){
+    if(typeof refreshJournalList==='function') refreshJournalList(true);
     if(typeof refreshJournalSession==='function') refreshJournalSession();
     if(typeof refreshJournal==='function') refreshJournal();
   }
-  if(name==='account'){ 
-    if(typeof refreshAccount==='function') refreshAccount(); 
+  if(name==='account'){
+    if(typeof refreshAccount==='function') refreshAccount();
     if(typeof refreshAccountSync==='function') refreshAccountSync();
     if(typeof refreshSentiment==='function') refreshSentiment();
   }
-  if(name==='alerts'){ 
-    if(typeof refreshAlerts==='function') refreshAlerts(); 
+  if(name==='alerts'){
+    if(typeof refreshAlerts==='function') refreshAlerts();
     if(typeof refreshAlertHistory==='function') refreshAlertHistory();
     if(typeof refreshRisk==='function') refreshRisk();
     if(typeof refreshDrawdown==='function') refreshDrawdown();
@@ -4906,6 +4987,15 @@ function switchTab(name){
     if(typeof refreshCorrStress==='function') refreshCorrStress();
     if(typeof refreshGbm==='function') refreshGbm();
     if(typeof refreshPlayback==='function') refreshPlayback();
+  }
+  // ===== group 模式下：同时刷新该组内所有 pane =====
+  if(isGroup){
+    for(const pid of GROUP_OF[name]){
+      // 调一次单 pane 的刷新逻辑
+      if(pid==='cockpit') renderCockpit && renderCockpit();
+      if(pid==='adv'){ refreshAdv && refreshAdv(); refreshMetrics && refreshMetrics(); }
+      // 其他走原有的单 pane 刷新（上面已经调过的会重复，但没关系，幂等）
+    }
   }
 }
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
