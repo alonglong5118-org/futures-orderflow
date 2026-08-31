@@ -1421,6 +1421,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
   <aside class="sidenav">
     <div class="nav-brand">四维策略</div>
     <button class="tab active" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
+    <button class="tab" data-tab="account"><span class="ic">💼</span><span class="lbl">账户</span></button>
     <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span></button>
     <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
     <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
@@ -1548,6 +1549,16 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
     </section>
       <!-- 账户总览：提升到总览 tab，高频可见 -->
+      
+
+    
+    </div>
+
+    <!-- ===== pane-group: scan ===== -->
+    
+    <!-- ===== pane-group: account (独立 tab) ===== -->
+    <div class="pane-group" id="group-account">
+      <div class="group-label"><span class="gl-dot"></span><span class="gl-text">账户</span></div>
       <section class="pane" id="pane-account">
       <div class="group-head gh-gold"><span class="gh-num">①</span><span class="gh-title">风控闸门 · 回撤水位</span><span class="gh-sub">4 道硬约束 · 5% 停机线</span></div>
       <div class="risk-strip">
@@ -1754,12 +1765,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="sync-consist" style="margin-top:6px"></div>
       </div>
     </section>
-
-    
-    </div>
-
-    <!-- ===== pane-group: scan ===== -->
-    <div class="pane-group" id="group-scan">
+    </div><div class="pane-group" id="group-scan">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">scan</span>
@@ -4900,7 +4906,8 @@ setInterval(() => {
 function switchTab(name){
   // ===== 分组映射：tab名 -> 包含的 pane 列表 =====
   const GROUP_OF = {
-    overview: ['cockpit','account'],
+    overview: ['cockpit'],
+    account:  ['account'],
     scan:     ['signals','seat','anomaly'],
     risk:     ['alerts','adv'],
     execution:['trade','paper','chat'],
