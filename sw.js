@@ -1,5 +1,5 @@
 // 四维策略面板 Service Worker（F5 PWA 离线壳）
-const CACHE = "four-dim-v81";
+const CACHE = "four-dim-v82";
 const ASSETS = [
   "./",
   "./four_dim_live.html",
