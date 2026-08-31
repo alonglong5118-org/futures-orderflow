@@ -462,6 +462,21 @@
   .postab th:first-child,.postab td:first-child{text-align:left}
   .postab tbody tr{transition:background .15s}
   .postab tbody tr:hover{background:rgba(212,175,55,.08)}
+  .postab tfoot tr.pos-total{
+    background:linear-gradient(180deg, rgba(212,175,55,.10), rgba(212,175,55,.03));
+    border-top:2px solid var(--gold);
+    font-weight:700;
+    font-size:13px;
+    color:#e8d5a0;
+  }
+  .postab tfoot tr.pos-total td{
+    padding:10px 8px;
+    border-bottom:none;
+  }
+  .postab tfoot tr.pos-total td:first-child{
+    color:var(--gold);
+    letter-spacing:3px;
+  }
 
   /* v6.0 分级止盈进度条 */
   .tp-bar{display:inline-flex;align-items:center;gap:0;margin:0;padding:0;vertical-align:middle}
@@ -1702,6 +1717,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <table class="postab">
           <thead><tr><th>品种</th><th>方向</th><th>手数</th><th>均价</th><th>现价</th><th>浮盈亏</th><th>止损</th><th colspan="3">分级止盈 (T1→T2→T3)</th><th>移动止损</th><th>占用%</th><th>距上限</th></tr></thead>
           <tbody id="postab"></tbody>
+        <tfoot><tr class="pos-total" id="pos-total-row"><td>合计</td><td>—</td><td id="total-lots">0</td><td>—</td><td>—</td><td id="total-pnl" class="pos">+0</td><td>—</td><td colspan="3">—</td><td>—</td><td id="total-pct">0.00%</td><td id="total-dist">0</td></tr></tfoot>
         </table>
         <div class="trade">
           <div class="sym-picker" id="t-sym-picker" data-target="t-sym">
@@ -5485,9 +5501,13 @@ async function refreshAccount(force){
       `单品≤${a.margin_cap_pct}% · 组合≤${a.portfolio_margin_cap_pct}% · 单品种≤${a.max_lots}手 · 风险${a.risk_pct}%`;
     const tb=document.getElementById('postab');tb.innerHTML='';
     let shown=0;
+    let _tLots=0, _tPnl=0, _tPnlHas=false, _tMarginPct=0;
     for(const p of a.positions){
       if(!(Number(p.lots)>0)) continue;   // 仅显示有持仓的品种，无持仓的不显示
       shown++;
+      _tLots += Number(p.lots)||0;
+      if(p.float_pnl!=null){ _tPnl += Number(p.float_pnl); _tPnlHas=true; }
+      if(p.margin_pct!=null) _tMarginPct += Number(p.margin_pct);
       const cls=p.float_pnl==null?'':(p.float_pnl>=0?'pos':'neg');
       const fp=p.float_pnl==null?'—':((p.float_pnl>=0?'+':'')+fmt(p.float_pnl));
       // 触价检测：实盘价触及 止损/t1/t2 或移动止损已触发时高亮该行（与触价报警同源逻辑，仅前端可视化）
@@ -5530,6 +5550,22 @@ async function refreshAccount(force){
         `<td colspan="3">${tpProgressBar(p)}</td>`+
         `<td>${trailCell(p.trail_state)}</td>`+
         `<td>${fmt(p.margin_pct)}%</td><td>${fmt(p.dist_to_cap,0)}</td></tr>`);
+    }
+    // === 合计行写入 tfoot ===
+    const _tRow = document.getElementById('pos-total-row');
+    if(_tRow){
+      const _pnlTd = _tRow.querySelector('#total-pnl');
+      if(_tPnlHas){
+        _pnlTd.textContent = (_tPnl>=0?'+':'') + fmt(_tPnl);
+        _pnlTd.className = _tPnl>=0 ? 'pos' : 'neg';
+      }else{ _pnlTd.textContent='—'; _pnlTd.className=''; }
+      _tRow.querySelector('#total-lots').textContent = _tLots;
+      _tRow.querySelector('#total-pct').textContent = fmt(_tMarginPct) + '%';
+      // 距上限取最紧的那个（min dist_to_cap）
+      let _minDist = Infinity;
+      for(const p of a.positions){ if(Number(p.lots)>0 && p.dist_to_cap!=null) _minDist = Math.min(_minDist, Number(p.dist_to_cap)); }
+      _tRow.querySelector('#total-dist').textContent = isFinite(_minDist) ? fmt(_minDist,0) : '—';
+      _tRow.children[1].textContent = shown + ' 个';
     }
     if(shown===0){ tb.insertAdjacentHTML('beforeend','<tr><td colspan="12" style="text-align:center;color:var(--mut);padding:14px">当前无持仓</td></tr>'); }
     refreshAccountSync();
