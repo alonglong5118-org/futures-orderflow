@@ -1425,6 +1425,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span><span class="badge" id="tab-badge-seat" style="background:rgba(72,219,251,.18);color:#48dbfb;border-color:rgba(72,219,251,.35)">—</span></button>
     <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
     <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
+    <button class="tab" data-tab="position"><span class="ic">💹</span><span class="lbl">持仓下单</span></button>
     <button class="tab" data-tab="analyze"><span class="ic">📈</span><span class="lbl">复盘分析</span></button>
     <button class="tab" data-tab="tools"><span class="ic">⚙️</span><span class="lbl">工具配置</span></button>
     <div class="nav-foot">
@@ -1941,16 +1942,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </div>
 
     <!-- ===== pane-group: account ===== -->
-    <div class="pane-group" id="group-execution">
-      <div class="group-label">
-        <span class="gl-dot"></span>
-        <span class="gl-text">account</span>
-      </div>
-      
-
-    <!-- ================= 信号 ================= -->
-    
-<section class="pane" id="pane-trade">
+        <div class="pane-group" id="group-execution">
+      <section class="pane" id="pane-trade">
       <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">成交记录 · 跟单分析</span><span class="gh-sub">开/平仓 · 跟单率/采纳率/胜率</span></div>
       <div class="card" id="journal" style="margin-bottom:12px">
         <h2>成交记录器 <span class="price" id="j-sub"></span></h2>
@@ -2025,7 +2018,56 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="journal-list" style="max-height:320px;overflow:auto"></div><div id="global-errors" style="margin-top:6px;max-height:80px;overflow:auto"></div>
       </div>
     </section>
-      <!-- 持仓·下单·批量指令：从账户 tab 独立出来 -->
+      <section class="pane" id="pane-paper">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-sub">F8 虚拟资金 · 不碰真实账户</span></div>
+      <div class="card" id="paper-card" style="margin-bottom:12px">
+        <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
+        <div class="stamp" style="margin-bottom:10px">初始虚拟资金 1,000,000，可手动或一键按当前信号模拟开平仓，独立核算盈亏。仅供策略验证，与真实账户隔离。</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px">
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">虚拟权益</div><b id="pp-eq" class="mv" style="font-size:20px">—</b></div>
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">可用资金</div><b id="pp-cash" class="mv" style="font-size:20px">—</b></div>
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">已实现盈亏</div><b id="pp-real" class="mv" style="font-size:20px">—</b></div>
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">浮动盈亏</div><b id="pp-mtm" class="mv" style="font-size:20px">—</b></div>
+        </div>
+        <div class="trade" style="margin-bottom:8px">
+          <span style="font-size:11px;color:var(--amber)">模拟开仓：</span>
+          <div class="sym-picker" id="pp-sym-picker" data-target="pp-sym" data-onchange="(typeof window.refreshPaperSyms==='function'?window.refreshPaperSyms():null)">
+            <input type="text" id="pp-sym-input" placeholder="🔍 品种/代码" autocomplete="off">
+            <div class="sym-dropdown" id="pp-sym-dropdown"></div>
+          </div>
+          <input type="hidden" id="pp-sym" value="">
+          <select id="pp-dir"><option value="多">多</option><option value="空">空</option></select>
+          <input id="pp-lots" type="number" min="1" value="1" style="width:42px" title="手数">
+          <input id="pp-price" type="number" step="0.1" placeholder="价格" style="width:70px">
+          <button class="amber" onclick="ppOpen()">模拟开仓</button>
+        </div>
+        <div class="stamp" id="pp-msg"></div>
+      </div>
+      <div class="group-head gh-amber"><span class="gh-num">②</span><span class="gh-title">模拟持仓 · 成交</span><span class="gh-sub">逐合约虚拟持仓与流水</span></div>
+      <div class="card">
+        <h2>模拟持仓</h2>
+        <div id="pp-positions" style="max-height:200px;overflow:auto;margin-bottom:10px">加载中…</div>
+        <h2>模拟成交流水</h2>
+        <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
+      </div>
+    </section>
+      <section class="pane" id="pane-chat">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
+      <div class="chat-wrap">
+        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
+        <div class="chat-toolbar">
+          <label class="chat-date-label">复盘日期</label>
+          <select id="chat-date" class="chat-date-select">
+            <option value="__today__">今天（实时）</option>
+          </select>
+          <span id="chat-date-count" class="chat-date-count"></span>
+          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
+        </div>
+        <div id="chat-feed"></div>
+      </div>
+    </section>
+    </div>
+    <div class="pane-group" id="group-position">
       <section class="pane" id="pane-trade2"><div class="group-head gh-gold"><span class="gh-num">②</span><span class="gh-title">持仓 · 下单 · 批量指令</span><span class="gh-sub">实时推算权益 · 一键全平/反手</span></div>
       <div class="card" id="account">
         <h2>我的账户 <span class="price" id="acc-sub"></span></h2>
@@ -2090,68 +2132,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="broker-box" class="batch-box"></div>
         <div class="stamp" id="t-msg"></div>
       </div></section>
-
-
-    <!-- ================= 模拟盘（F8 沙盒） ================= -->
-    
-<section class="pane" id="pane-paper">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-sub">F8 虚拟资金 · 不碰真实账户</span></div>
-      <div class="card" id="paper-card" style="margin-bottom:12px">
-        <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
-        <div class="stamp" style="margin-bottom:10px">初始虚拟资金 1,000,000，可手动或一键按当前信号模拟开平仓，独立核算盈亏。仅供策略验证，与真实账户隔离。</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px">
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">虚拟权益</div><b id="pp-eq" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">可用资金</div><b id="pp-cash" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">已实现盈亏</div><b id="pp-real" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">浮动盈亏</div><b id="pp-mtm" class="mv" style="font-size:20px">—</b></div>
-        </div>
-        <div class="trade" style="margin-bottom:8px">
-          <span style="font-size:11px;color:var(--amber)">模拟开仓：</span>
-          <div class="sym-picker" id="pp-sym-picker" data-target="pp-sym" data-onchange="(typeof window.refreshPaperSyms==='function'?window.refreshPaperSyms():null)">
-            <input type="text" id="pp-sym-input" placeholder="🔍 品种/代码" autocomplete="off">
-            <div class="sym-dropdown" id="pp-sym-dropdown"></div>
-          </div>
-          <input type="hidden" id="pp-sym" value="">
-          <select id="pp-dir"><option value="多">多</option><option value="空">空</option></select>
-          <input id="pp-lots" type="number" min="1" value="1" style="width:42px" title="手数">
-          <input id="pp-price" type="number" step="0.1" placeholder="价格" style="width:70px">
-          <button class="amber" onclick="ppOpen()">模拟开仓</button>
-        </div>
-        <div class="stamp" id="pp-msg"></div>
-      </div>
-      <div class="group-head gh-amber"><span class="gh-num">②</span><span class="gh-title">模拟持仓 · 成交</span><span class="gh-sub">逐合约虚拟持仓与流水</span></div>
-      <div class="card">
-        <h2>模拟持仓</h2>
-        <div id="pp-positions" style="max-height:200px;overflow:auto;margin-bottom:10px">加载中…</div>
-        <h2>模拟成交流水</h2>
-        <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
-      </div>
-    </section>
-
-    <!-- ================= 绩效 ================= -->
-    
-<section class="pane" id="pane-chat">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
-      <div class="chat-wrap">
-        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
-        <div class="chat-toolbar">
-          <label class="chat-date-label">复盘日期</label>
-          <select id="chat-date" class="chat-date-select">
-            <option value="__today__">今天（实时）</option>
-          </select>
-          <span id="chat-date-count" class="chat-date-count"></span>
-          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
-        </div>
-        <div id="chat-feed"></div>
-      </div>
-    </section>
-
-    <!-- ================= 系统健康 & 高级工具 (#11-#17) ================= -->
-    
     </div>
-
-    <!-- ===== pane-group: analyze ===== -->
-    <div class="pane-group" id="group-analyze">
+<div class="pane-group" id="group-analyze">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">analyze</span>
@@ -4917,7 +4899,8 @@ function switchTab(name){
     account:  ['account'],
     scan:     ['signals','seat','anomaly'],
     risk:     ['alerts','adv'],
-    execution:['trade','trade2','paper','chat'],
+    execution:['trade','paper','chat'],
+    position:['trade2'],
     analyze:  ['disc','perf','metrics'],
     tools:    ['focus','features'],
   };
