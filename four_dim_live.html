@@ -1422,7 +1422,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     <div class="nav-brand">四维策略</div>
     <button class="tab active" data-tab="account"><span class="ic">💼</span><span class="lbl">账户</span></button>
     <button class="tab" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
-    <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span></button>
+    <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span><span class="badge" id="tab-badge-seat" style="background:rgba(72,219,251,.18);color:#48dbfb;border-color:rgba(72,219,251,.35)">—</span></button>
     <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
     <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
     <button class="tab" data-tab="analyze"><span class="ic">📈</span><span class="lbl">复盘分析</span></button>
@@ -4245,9 +4245,13 @@ async function refreshCposRank(){
     if(!d.is_today){
       _csub += (d.stale_days!=null) ? ` · ⚠️ 数据${d.stale_days}天前(每日收盘更新)` : ' · ⚠️ 非当日数据';
     }
-    document.getElementById('cpr-sub').textContent = _csub;
-    document.getElementById('cpr-sel-note').textContent = cposSelDate ? ('已选 '+cposSelDate) : '';
-    document.getElementById('tab-badge-seat').textContent = (d.total||'—');
+    const _cprSub = document.getElementById('cpr-sub'); if(_cprSub) _cprSub.textContent = _csub;
+    const _cprSelNote = document.getElementById('cpr-sel-note'); if(_cprSelNote) _cprSelNote.textContent = cposSelDate ? ('已选 '+cposSelDate) : '';
+    const _tabBadgeSeat = document.getElementById('tab-badge-seat'); if(_tabBadgeSeat) _tabBadgeSeat.textContent = (d.total||'—');
+    // seat 合并到 scan tab，额外更新 scan 的 badge
+    const _tabBadgeSig = document.getElementById('tab-badge-sig'); if(_tabBadgeSig && !_tabBadgeSig.dataset.seatInit){
+      _tabBadgeSig.dataset.seatInit = '1'; // 避免多次合并
+    }
     const up=document.getElementById('cpr-up');up.innerHTML='';
     (d.bullish||[]).forEach((x,i)=>{
       const ccls=x.c_score>0?'pos':(x.c_score<0?'neg':'');
@@ -6268,7 +6272,7 @@ async function refresh(){
     }
     // 标签徽标
     document.getElementById('tab-badge-sig').textContent = s.order?s.order.length:'—';
-    document.getElementById('tab-badge-seat').textContent = (cposData.total||'—');
+    const _tbs2 = document.getElementById('tab-badge-seat'); if(_tbs2) _tbs2.textContent = (cposData.total||'—');
     if(document.getElementById('sig-filter').value.trim()) filterSignals();
     voiceScanSignals(s);   // F4 语音播报新触发信号
     if(chatViewDate==="__today__") renderChatFeed(LAST_CHAT);   // 实时跟随；历史日视图保持静态
