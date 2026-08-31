@@ -1420,8 +1420,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
   <div class="shell">
   <aside class="sidenav">
     <div class="nav-brand">四维策略</div>
-    <button class="tab active" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
-    <button class="tab" data-tab="account"><span class="ic">💼</span><span class="lbl">账户</span></button>
+    <button class="tab active" data-tab="account"><span class="ic">💼</span><span class="lbl">账户</span></button>
+    <button class="tab" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
     <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span></button>
     <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
     <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
@@ -1443,121 +1443,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
   <main>
     <!-- ===== pane-group: overview ===== -->
-    <div class="pane-group active" id="group-overview">
-      <div class="group-label">
-        <span class="gl-dot"></span>
-        <span class="gl-text">overview</span>
-      </div>
-      <section class="pane" id="pane-cockpit">
-      <div class="cockpit">
-        <div class="cockpit-status" id="ck-status">
-          <div class="ck-stat"><b id="ck-feed">—</b><i>行情</i></div>
-          <div class="ck-stat"><b id="ck-sys">—</b><i>系统</i></div>
-          <div class="ck-stat"><b id="ck-grade" style="color:var(--green)">—</b><i>风控等级</i></div>
-          <div class="ck-stat"><b id="ck-eq">—</b><i>权益</i></div>
-          <div class="ck-stat"><b id="ck-float">—</b><i>浮动盈亏</i></div>
-          <div class="ck-stat"><b id="ck-pos">—</b><i>持仓数</i></div>
-          <div class="ck-stat"><b id="ck-xs" style="color:var(--green)">校验中</b><i>数据一致性</i></div>
-        </div>
-
-        
-<style>
-.ckc-kpi.clickable { cursor: pointer; transition: all 0.2s; }
-.ckc-kpi.clickable:hover { transform: scale(1.05); background: rgba(255,255,255,0.08); }
-.ckc-kpi.clickable b { text-decoration: underline dotted; text-underline-offset: 3px; }
-
-  /* ===== pane-group 分组容器 ===== */
-  .pane-group{display:none;animation:fade .35s ease;width:100%;min-width:0}
-  .pane-group.active{display:block}
-  .pane-group .pane{display:block;animation:none;margin-bottom:16px}
-  .pane-group .pane:last-child{margin-bottom:0}
-  .pane-group-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:16px}
-  
-  /* 侧边栏简化 */
-  .sidenav .nav-brand{padding:16px 16px 8px;font-size:13px;font-weight:700;color:var(--mut);letter-spacing:1px;text-transform:uppercase}
-  .sidenav .tab{margin:2px 8px;border-radius:8px}
-  .sidenav .tab .lbl{font-size:13px}
-</style>
-
-        <div class="cockpit-grid">
-          <div class="ck-card ck-gold">
-            <div class="ckc-head"><span class="gh-num">总</span><span class="ckc-title">账户 · 风控总览</span><button class="ckc-go" onclick="switchTab('account')">进入 →</button></div>
-            <div class="ckc-body">
-              <div class="ckc-kpi clickable" onclick="switchTab('account')"><b id="ckc-eq">—</b><i>权益</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-float">—</b><i>浮动盈亏</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('account')"><b id="ckc-pos">—</b><i>持仓数</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-grade2">—</b><i>风控等级</i></div>
-            </div>
-          </div>
-
-          <div class="ck-card ck-blue">
-            <div class="ckc-head"><span class="gh-num">研</span><span class="ckc-title">行情研判</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
-            <div class="ckc-body">
-              <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b id="ckc-sig">—</b><i>活跃信号</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('seat')"><b>龙虎榜</b><i>席位态度</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b>领涨领跌</b><i>异动扫描</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b id="ckc-anom">—</b><i>异动数</i></div>
-            </div>
-          </div>
-
-          <div class="ck-card ck-red">
-            <div class="ckc-head"><span class="gh-num">警</span><span class="ckc-title">风险预警</span><button class="ckc-go" onclick="switchTab('alerts')">进入 →</button></div>
-            <div class="ckc-body">
-              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-ntr">—</b><i>触发规则</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-dl">—</b><i>日亏%</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-dd">—</b><i>回撤%</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-fsm">—</b><i>状态机</i></div>
-            </div>
-          </div>
-
-          <div class="ck-card ck-amber">
-            <div class="ckc-head"><span class="gh-num">易</span><span class="ckc-title">交易执行</span><button class="ckc-go" onclick="switchTab('trade')">进入 →</button></div>
-            <div class="ckc-body">
-              <div class="ckc-kpi clickable" onclick="switchTab('trade')"><b id="ckc-trades">—</b><i>今日成交</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-real">—</b><i>已实现盈亏</i></div>
-            </div>
-          </div>
-
-          <div class="ck-card ck-green">
-            <div class="ckc-head"><span class="gh-num">绩</span><span class="ckc-title">复盘绩效</span><button class="ckc-go" onclick="switchTab('perf')">进入 →</button></div>
-            <div class="ckc-body">
-              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-pnl">—</b><i>总盈亏</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-win">—</b><i>胜率</i></div>
-            </div>
-          </div>
-
-          <div class="ck-card ck-violet">
-            <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">我的聚焦</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
-            <div class="ckc-body">
-              <div class="ckc-kpi clickable" onclick="switchTab('focus')"><b id="ckc-focusn">—</b><i>关注品种</i></div>
-              <div class="ckc-kpi clickable" onclick="switchTab('focus')"><b id="ckc-topscore">—</b><i>最高关注分</i></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="cockpit-cols">
-          <div class="ck-list-card ck-blue">
-            <div class="ckc-head"><span class="gh-num">信</span><span class="ckc-title">信号速览</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
-            <div id="ck-signals" class="ck-list"></div>
-          </div>
-          <div class="ck-list-card ck-violet">
-            <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">关注品种盯盘</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
-            <div id="ck-focus" class="ck-list"></div>
-          </div>
-        </div>
-        <div class="stamp" style="margin-top:14px;text-align:center">总览驾驶舱聚合自各功能域实时接口 · 点击「进入 →」直达对应书签页（非投资建议）</div>
-      </div>
-    </section>
-      <!-- 账户总览：提升到总览 tab，高频可见 -->
-      
-
-    
-    </div>
-
-    <!-- ===== pane-group: scan ===== -->
-    
-    <!-- ===== pane-group: account (独立 tab) ===== -->
-    <div class="pane-group" id="group-account">
+    <div class="pane-group" class="pane-group active" id="group-account">
       <div class="group-label"><span class="gl-dot"></span><span class="gl-text">账户</span></div>
       <section class="pane" id="pane-account">
       <div class="group-head gh-gold"><span class="gh-num">①</span><span class="gh-title">风控闸门 · 回撤水位</span><span class="gh-sub">4 道硬约束 · 5% 停机线</span></div>
@@ -1765,7 +1651,122 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="sync-consist" style="margin-top:6px"></div>
       </div>
     </section>
-    </div><div class="pane-group" id="group-scan">
+    </div>
+<div class="pane-group" id="group-overview">
+      <div class="group-label">
+        <span class="gl-dot"></span>
+        <span class="gl-text">overview</span>
+      </div>
+      <section class="pane" id="pane-cockpit">
+      <div class="cockpit">
+        <div class="cockpit-status" id="ck-status">
+          <div class="ck-stat"><b id="ck-feed">—</b><i>行情</i></div>
+          <div class="ck-stat"><b id="ck-sys">—</b><i>系统</i></div>
+          <div class="ck-stat"><b id="ck-grade" style="color:var(--green)">—</b><i>风控等级</i></div>
+          <div class="ck-stat"><b id="ck-eq">—</b><i>权益</i></div>
+          <div class="ck-stat"><b id="ck-float">—</b><i>浮动盈亏</i></div>
+          <div class="ck-stat"><b id="ck-pos">—</b><i>持仓数</i></div>
+          <div class="ck-stat"><b id="ck-xs" style="color:var(--green)">校验中</b><i>数据一致性</i></div>
+        </div>
+
+        
+<style>
+.ckc-kpi.clickable { cursor: pointer; transition: all 0.2s; }
+.ckc-kpi.clickable:hover { transform: scale(1.05); background: rgba(255,255,255,0.08); }
+.ckc-kpi.clickable b { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+  /* ===== pane-group 分组容器 ===== */
+  .pane-group{display:none;animation:fade .35s ease;width:100%;min-width:0}
+  .pane-group.active{display:block}
+  .pane-group .pane{display:block;animation:none;margin-bottom:16px}
+  .pane-group .pane:last-child{margin-bottom:0}
+  .pane-group-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:16px}
+  
+  /* 侧边栏简化 */
+  .sidenav .nav-brand{padding:16px 16px 8px;font-size:13px;font-weight:700;color:var(--mut);letter-spacing:1px;text-transform:uppercase}
+  .sidenav .tab{margin:2px 8px;border-radius:8px}
+  .sidenav .tab .lbl{font-size:13px}
+</style>
+
+        <div class="cockpit-grid">
+          <div class="ck-card ck-gold">
+            <div class="ckc-head"><span class="gh-num">总</span><span class="ckc-title">账户 · 风控总览</span><button class="ckc-go" onclick="switchTab('account')">进入 →</button></div>
+            <div class="ckc-body">
+              <div class="ckc-kpi clickable" onclick="switchTab('account')"><b id="ckc-eq">—</b><i>权益</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-float">—</b><i>浮动盈亏</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('account')"><b id="ckc-pos">—</b><i>持仓数</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-grade2">—</b><i>风控等级</i></div>
+            </div>
+          </div>
+
+          <div class="ck-card ck-blue">
+            <div class="ckc-head"><span class="gh-num">研</span><span class="ckc-title">行情研判</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
+            <div class="ckc-body">
+              <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b id="ckc-sig">—</b><i>活跃信号</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('seat')"><b>龙虎榜</b><i>席位态度</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b>领涨领跌</b><i>异动扫描</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b id="ckc-anom">—</b><i>异动数</i></div>
+            </div>
+          </div>
+
+          <div class="ck-card ck-red">
+            <div class="ckc-head"><span class="gh-num">警</span><span class="ckc-title">风险预警</span><button class="ckc-go" onclick="switchTab('alerts')">进入 →</button></div>
+            <div class="ckc-body">
+              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-ntr">—</b><i>触发规则</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-dl">—</b><i>日亏%</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-dd">—</b><i>回撤%</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-fsm">—</b><i>状态机</i></div>
+            </div>
+          </div>
+
+          <div class="ck-card ck-amber">
+            <div class="ckc-head"><span class="gh-num">易</span><span class="ckc-title">交易执行</span><button class="ckc-go" onclick="switchTab('trade')">进入 →</button></div>
+            <div class="ckc-body">
+              <div class="ckc-kpi clickable" onclick="switchTab('trade')"><b id="ckc-trades">—</b><i>今日成交</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-real">—</b><i>已实现盈亏</i></div>
+            </div>
+          </div>
+
+          <div class="ck-card ck-green">
+            <div class="ckc-head"><span class="gh-num">绩</span><span class="ckc-title">复盘绩效</span><button class="ckc-go" onclick="switchTab('perf')">进入 →</button></div>
+            <div class="ckc-body">
+              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-pnl">—</b><i>总盈亏</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-win">—</b><i>胜率</i></div>
+            </div>
+          </div>
+
+          <div class="ck-card ck-violet">
+            <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">我的聚焦</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
+            <div class="ckc-body">
+              <div class="ckc-kpi clickable" onclick="switchTab('focus')"><b id="ckc-focusn">—</b><i>关注品种</i></div>
+              <div class="ckc-kpi clickable" onclick="switchTab('focus')"><b id="ckc-topscore">—</b><i>最高关注分</i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cockpit-cols">
+          <div class="ck-list-card ck-blue">
+            <div class="ckc-head"><span class="gh-num">信</span><span class="ckc-title">信号速览</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
+            <div id="ck-signals" class="ck-list"></div>
+          </div>
+          <div class="ck-list-card ck-violet">
+            <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">关注品种盯盘</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
+            <div id="ck-focus" class="ck-list"></div>
+          </div>
+        </div>
+        <div class="stamp" style="margin-top:14px;text-align:center">总览驾驶舱聚合自各功能域实时接口 · 点击「进入 →」直达对应书签页（非投资建议）</div>
+      </div>
+    </section>
+      <!-- 账户总览：提升到总览 tab，高频可见 -->
+      
+
+    
+    </div>
+
+    <!-- ===== pane-group: scan ===== -->
+    
+    <!-- ===== pane-group: account (独立 tab) ===== -->
+    <div class="pane-group" id="group-scan">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">scan</span>
