@@ -5021,6 +5021,53 @@ function switchTab(name){
     }
   }
 }
+
+
+// ★ 2026-08-31: 推送→开仓联动
+// 从消息推送卡片点击「📤 开仓」→ 自动跳 💹 持仓下单 tab → 选中品种和方向
+function quickOpenPosition(sym, dir){
+  if(!sym){ console.warn('[quickOpenPosition] 无品种代码'); return; }
+  console.log('[quickOpenPosition] →', sym, dir);
+  // 1. 切换到 💹 持仓下单 tab
+  switchTab('position');
+  // 2. 等 tab 切换完成后填充
+  setTimeout(() => {
+    // 品种选择器
+    if(typeof _symPicker !== 'undefined' && _symPicker.setValue){
+      _symPicker.setValue('t-sym', sym);
+      console.log('  ✅ 品种已选中:', sym);
+    } else {
+      // fallback: 直接填 input + hidden
+      const hidden = document.getElementById('t-sym');
+      const input = document.getElementById('t-sym-input');
+      if(hidden) hidden.value = sym;
+      if(input) input.value = sym;
+      console.log('  ⚠️ symPicker 不可用，直接填值');
+    }
+    // 方向选择器
+    const dirSel = document.getElementById('t-dir');
+    if(dirSel && dir){
+      const d = dir === '多' ? '多' : (dir === '空' ? '空' : dir);
+      dirSel.value = d;
+      console.log('  ✅ 方向已设置:', d);
+    }
+    // 动作：确保是「开仓」
+    const actSel = document.getElementById('t-act');
+    if(actSel) actSel.value = 'open';
+    // 给品种选择器加个闪一下的效果提示用户
+    const picker = document.getElementById('t-sym-picker');
+    if(picker){
+      picker.style.transition = 'box-shadow .4s';
+      picker.style.boxShadow = '0 0 0 3px rgba(212,175,55,.5)';
+      setTimeout(() => { picker.style.boxShadow = ''; }, 1200);
+    }
+    // 滚动到下单面板
+    const pane = document.getElementById('pane-trade2');
+    if(pane) pane.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 400);
+}
+
+
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 // 页面从隐藏切回前台：立即刷新核心数据（typeof 守卫）
 document.addEventListener('visibilitychange',function(){
@@ -5123,52 +5170,7 @@ async function renderCockpit(){
       const col = (Number(f.score)||0)>=60?'var(--green)':((Number(f.score)||0)>=30?'var(--amber)':'var(--red)');
       return `<div class="ck-li" style="cursor:pointer" onclick="switchTab('focus')"><span class="ck-li-name">${f.name||f.symbol}${c ? ' <span class="ccode">'+c+'</span>' :''}</span><b style="color:${col}">${f.score}</b><span class="ck-li-sub">${f.dir||'—'} · ${(f.pnl_day!=null?((Number(f.pnl_day)>=0?'+':'')+fmt(Number(f.pnl_day))):'—')}</span></div>`;
     }).join('') || '<div class="stamp">无关注品种</div>';
-  }catch(e){console.error(e);}
-
-// ★ 2026-08-31: 推送→开仓联动
-// 从消息推送卡片点击「📤 开仓」→ 自动跳 💹 持仓下单 tab → 选中品种和方向
-function quickOpenPosition(sym, dir){
-  if(!sym){ console.warn('[quickOpenPosition] 无品种代码'); return; }
-  console.log('[quickOpenPosition] →', sym, dir);
-  // 1. 切换到 💹 持仓下单 tab
-  switchTab('position');
-  // 2. 等 tab 切换完成后填充
-  setTimeout(() => {
-    // 品种选择器
-    if(typeof _symPicker !== 'undefined' && _symPicker.setValue){
-      _symPicker.setValue('t-sym', sym);
-      console.log('  ✅ 品种已选中:', sym);
-    } else {
-      // fallback: 直接填 input + hidden
-      const hidden = document.getElementById('t-sym');
-      const input = document.getElementById('t-sym-input');
-      if(hidden) hidden.value = sym;
-      if(input) input.value = sym;
-      console.log('  ⚠️ symPicker 不可用，直接填值');
-    }
-    // 方向选择器
-    const dirSel = document.getElementById('t-dir');
-    if(dirSel && dir){
-      const d = dir === '多' ? '多' : (dir === '空' ? '空' : dir);
-      dirSel.value = d;
-      console.log('  ✅ 方向已设置:', d);
-    }
-    // 动作：确保是「开仓」
-    const actSel = document.getElementById('t-act');
-    if(actSel) actSel.value = 'open';
-    // 给品种选择器加个闪一下的效果提示用户
-    const picker = document.getElementById('t-sym-picker');
-    if(picker){
-      picker.style.transition = 'box-shadow .4s';
-      picker.style.boxShadow = '0 0 0 3px rgba(212,175,55,.5)';
-      setTimeout(() => { picker.style.boxShadow = ''; }, 1200);
-    }
-    // 滚动到下单面板
-    const pane = document.getElementById('pane-trade2');
-    if(pane) pane.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 400);
-}
-}
+  }catch(e){console.error(e);}}
 function ckSet(id,v,color){ const el=document.getElementById(id); if(!el) return; el.textContent=v; if(color!=null) el.style.color=color; }
 
 /* ===== 系统健康 & 高级工具 (#11-#17) ===== */
