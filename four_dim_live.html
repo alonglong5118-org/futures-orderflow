@@ -14,6 +14,7 @@
   :root{
     /* 黑金工业玻璃 · 高端暗色 */
     --bg:#050505; --bg2:#0a0a0a;
+    --nav-w:200px;
     --surface:#0c0c0c;
     --card:rgba(13,13,13,0.82);
     --line:rgba(212,175,55,0.20);
@@ -163,7 +164,7 @@
   .topbar{height:56px}
   .shell{display:flex;align-items:stretch;min-height:calc(100vh - 56px)}
   .sidenav{
-    width:222px;flex:0 0 222px;align-self:flex-start;
+    width:var(--nav-w,200px);min-width:160px;flex:0 0 var(--nav-w,200px);align-self:flex-start;
     position:sticky;top:56px;height:calc(100vh - 56px);
     overflow-y:auto;scrollbar-width:thin;
     padding:8px 10px 20px;
@@ -227,7 +228,7 @@
   .voice-btn:hover{color:var(--fg)}
 
   /* ===== 通用面板 ===== */
-  main{padding:18px 22px 60px;max-width:1320px;margin:0 auto}
+  main{padding:18px 22px 60px;max-width:none;margin:0 auto}
   .pane{display:none;animation:fade .35s ease}
   .pane.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -342,14 +343,14 @@
   .pb-canvas-wrap canvas{display:block;width:100%}
 
   /* ===== 总览驾驶舱（首页） ===== */
-  .cockpit{max-width:1280px;margin:0 auto;padding:8px 4px 30px}
+  .cockpit{max-width:none;margin:0 auto;padding:8px 4px 30px}
   .cockpit-status{display:flex;gap:8px;flex-wrap:nowrap;margin:6px 0 18px;
     background:linear-gradient(90deg,rgba(212,175,55,.08),transparent);
     border:1px solid var(--line);border-radius:14px;padding:14px 18px}
   .ck-stat{display:flex;flex-direction:column;align-items:flex-start;flex:1 1 0;min-width:0;overflow:hidden;padding:2px 4px}
   .ck-stat b{display:block;font-size:18px;font-weight:700;color:var(--fg);font-variant-numeric:tabular-nums;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   .ck-stat i{display:block;font-style:normal;font-size:11px;color:var(--mut);margin-top:3px;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-  .cockpit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:14px}
+  .cockpit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
   .ck-card{border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:16px;
     padding:14px 16px;background:var(--card);box-shadow:0 10px 30px rgba(0,0,0,.4)}
   .ckc-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -363,7 +364,7 @@
     padding:10px 12px;display:flex;flex-direction:column;gap:3px}
   .ckc-kpi b{font-size:18px;font-weight:700;color:var(--fg);font-variant-numeric:tabular-nums}
   .ckc-kpi i{font-style:normal;font-size:11px;color:var(--mut)}
-  .cockpit-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  .cockpit-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:16px}
   @media(max-width:760px){.cockpit-cols{grid-template-columns:1fr}}
   .ck-list-card{border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:16px;
     padding:14px 16px;background:var(--card)}
