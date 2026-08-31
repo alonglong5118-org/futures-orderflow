@@ -1420,12 +1420,12 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
   <div class="shell">
   <aside class="sidenav">
     <div class="nav-brand">四维策略</div>
-    <button class="tab active" data-tab="account"><span class="ic">💼</span><span class="lbl">账户</span></button>
-    <button class="tab" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
-    <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span><span class="badge" id="tab-badge-seat" style="background:rgba(72,219,251,.18);color:#48dbfb;border-color:rgba(72,219,251,.35)">—</span></button>
-    <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
+    <button class="tab active" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
     <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
     <button class="tab" data-tab="position"><span class="ic">💹</span><span class="lbl">持仓下单</span></button>
+    <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span><span class="badge" id="tab-badge-seat" style="background:rgba(72,219,251,.18);color:#48dbfb;border-color:rgba(72,219,251,.35)">—</span></button>
+    <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
+    <button class="tab" data-tab="account"><span class="ic">📊</span><span class="lbl">市场洞察</span></button>
     <button class="tab" data-tab="analyze"><span class="ic">📈</span><span class="lbl">复盘分析</span></button>
     <button class="tab" data-tab="tools"><span class="ic">⚙️</span><span class="lbl">工具配置</span></button>
     <div class="nav-foot">
@@ -1444,152 +1444,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
   <main>
     <!-- ===== pane-group: overview ===== -->
-    <div class="pane-group" class="pane-group active" id="group-account">
-      <div class="group-label"><span class="gl-dot"></span><span class="gl-text">账户</span></div>
-      <section class="pane" id="pane-account">
-      <div class="group-head gh-gold"><span class="gh-num">①</span><span class="gh-title">风控闸门 · 回撤水位</span><span class="gh-sub">4 道硬约束 · 5% 停机线</span></div>
-      <div class="risk-strip">
-        <span id="risk-state2" class="risk-state rs-NORMAL">风控 NORMAL</span>
-        <span id="risk-info" class="price"></span>
-      </div>
-      <div class="dd-bar-wrap">
-        <div class="dd-bar-head"><span>今日日亏</span><span id="dd-pct">0.0%</span><span class="dd-limit">/ 5% 停机线（达线全市场冻结）</span></div>
-        <div class="dd-bar"><div id="dd-fill" class="dd-fill"></div></div>
-      </div>
-      <div class="card" id="dd-water" style="margin-top:12px">
-        <h2>回撤水位线 <span class="price" id="ddw-sub" style="font-size:12px;font-weight:400"></span></h2>
-        <div class="row"><span>当前回撤（自峰值）</span><span id="ddw-dd">—</span></div>
-        <div class="row"><span>当前档位</span><span id="ddw-tier">—</span></div>
-        <div class="row"><span>新开仓降险系数</span><span id="ddw-scale">—</span></div>
-        <div id="ddw-ladder" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
-      </div>
-      <div class="group-head gh-amber"><span class="gh-num">⑧</span><span class="gh-title">市场情绪指数</span><span class="gh-sub">7因子加权 · 极端事件模式</span></div>
-      <div class="card" id="sent-card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span id="sent-score-big" style="font-size:28px;font-weight:800;color:var(--txt);line-height:1">—</span>
-          <span id="sent-label-big" class="sent-chip sent-neutral">中性</span>
-        </div>
-        <div class="sent-gauge-bar" style="margin-top:12px">
-          <div id="sent-marker" class="sent-gauge-marker" style="left:50%"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--mut2);letter-spacing:.2px">
-          <span>极度恐惧</span><span>恐惧</span><span>中性</span><span>贪婪</span><span>极度贪婪</span>
-        </div>
-        <div class="sent-factors">
-          <div class="sent-factor"><b id="sent-f-breadth">—</b><i>市场广度</i></div>
-          <div class="sent-factor"><b id="sent-f-momentum">—</b><i>动量共识</i></div>
-          <div class="sent-factor"><b id="sent-f-activity">—</b><i>资金活跃</i></div>
-          <div class="sent-factor"><b id="sent-f-volatility">—</b><i>波动率</i></div>
-          <div class="sent-factor"><b id="sent-f-divergence">—</b><i>板块分歧</i></div>
-          <div class="sent-factor"><b id="sent-f-amplitude">—</b><i>涨跌幅度</i></div>
-          <div class="sent-factor"><b id="sent-f-trend_conc">—</b><i>趋势集中</i></div>
-        </div>
-        <div id="sent-extreme-banner" class="extreme-banner" style="display:none"></div>
-        <div id="sent-hard-filter" class="hard-filter-bar">
-          <div class="hf-icon">○</div>
-          <div class="hf-text">
-            <b>硬过滤：无限制</b>
-            <span>情绪正常，多空均可开仓</span>
-          </div>
-        </div>
-        <div style="margin-top:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:11px;color:var(--mut2);letter-spacing:.2px">情绪走势 · 近30周期</span>
-            <span id="sent-hist-range" style="font-size:10px;color:var(--mut3)">—</span>
-          </div>
-          <div class="sent-hist-wrap">
-            <canvas id="sentHistoryChart" width="280" height="70"></canvas>
-          </div>
-        </div>
-        <div class="row" style="margin-top:12px"><span>仓位缩放系数</span><span id="sent-scale">—</span></div>
-        <div class="row"><span>T阈值乘数(多/空)</span><span id="sent-thr-mult">—</span></div>
-      </div>
-
-      <div class="group-head gh-gold"><span class="gh-num">⑨</span><span class="gh-title">支撑压力位</span><span class="gh-sub">三重验证 · 灰色地带过滤</span></div>
-      <div class="card" id="sr-card">
-        <div class="sr-summary" style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
-          <span>近位 <b id="sr-near-count" style="color:var(--green)">—</b></span>
-          <span>灰色 <b id="sr-grey-count" style="color:var(--amber)">—</b></span>
-          <span>远位 <b id="sr-far-count" style="color:var(--mut)">—</b></span>
-          <span>总计 <b id="sr-total-count" style="color:var(--txt)">—</b></span>
-        </div>
-        <div class="sr-dist-wrap">
-          <div class="sr-dist-bar" id="srDistBar">
-            <div class="sd-seg sd-near" style="width:0%" title="近位区 (<0.8%)"></div>
-            <div class="sd-seg sd-grey" style="width:0%" title="灰色地带 (0.8~1.5%)"></div>
-            <div class="sd-seg sd-far" style="width:100%" title="远位区 (>1.5%)"></div>
-          </div>
-          <div class="sr-dist-labels">
-            <span>0%</span><span>0.8%</span><span>1.5%</span><span>5%+</span>
-          </div>
-        </div>
-        <div id="sr-box" class="sr-list"><div class="muted-empty"><span class="dot"></span>等待 SR 数据...</div></div>
-      </div>
-
-      <div class="group-head gh-purple"><span class="gh-num">⑩</span><span class="gh-title">板块热力图</span><span class="gh-sub">风险调整强度 · 轮动象限</span></div>
-      <div class="card" id="sector-card">
-        <div class="sector-summary">
-          <span>上涨 <b id="sec-breadth">—</b></span>
-          <span>领涨 <b id="sec-leading">—</b></span>
-          <span>领跌 <b id="sec-lagging">—</b></span>
-          <span>板块 <b id="sec-count">—</b></span>
-        </div>
-        <div id="sector-heatmap" class="sector-heatmap">
-          <div class="muted-empty"><span class="dot"></span>加载中...</div>
-        </div>
-        <div class="sector-legend">
-          <span class="sl-weak">领跌</span>
-          <span class="sl-mid">筑底</span>
-          <span class="sl-mid2">钝化</span>
-          <span class="sl-strong">领涨</span>
-        </div>
-      </div>
-
-      <div class="group-head gh-blue"><span class="gh-num">⑪</span><span class="gh-title">全市场扫描</span><span class="gh-sub">并行扫描 · 信号强度排序</span></div>
-      <div class="card" id="scan-card">
-        <div class="scan-summary">
-          <span>上涨 <b id="scan-up">—</b></span>
-          <span>下跌 <b id="scan-down">—</b></span>
-          <span>中性 <b id="scan-mid">—</b></span>
-          <span>耗时 <b id="scan-time">—</b></span>
-        </div>
-        <div id="scan-box" class="scan-list"><div class="muted-empty"><span class="dot"></span>扫描中...</div></div>
-      </div>
-
-      <div class="group-head gh-green"><span class="gh-num">⑫</span><span class="gh-title">品种筛选</span><span class="gh-sub">5维条件 · 加权评分</span></div>
-      <div class="card" id="screener-card">
-        <div class="screener-summary">
-          <span>通过 <b id="scr-pass">—</b> / <span id="scr-total">—</span></span>
-          <span>通过率 <b id="scr-rate">—</b></span>
-        </div>
-        <div id="screener-box" class="screener-list"><div class="muted-empty"><span class="dot"></span>等待筛选...</div></div>
-      </div>
-      <div class="group-head gh-amber"><span class="gh-num">⑬</span><span class="gh-title">信号瀑布流</span><span class="gh-sub">实时信号时间线 · 增量刷新</span></div>
-      <div class="card" id="feed-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <span class="stamp" id="feed-count">加载中…</span>
-          <span class="stamp" id="feed-time">—</span>
-        </div>
-        <div id="feed-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
-          <div class="muted-empty"><span class="dot"></span>等待信号…</div>
-        </div>
-      </div>
-      <div class="group-head gh-gold"><span class="gh-num">③</span><span class="gh-title">账户只读同步</span><span class="gh-sub">minishare 盯市 · 不接券商 API</span></div>
-      <div class="card" id="accountsync">
-        <h2>账户只读同步 <span class="price" id="sync-ro">只读·不代下单</span></h2>
-        <div class="stamp" id="sync-sub">minishare 实时盯市 · 只读视图（不接券商 API）</div>
-        <div class="row"><span>数据时效</span><span id="sync-age" class="stamp">—</span></div>
-        <div class="row"><span>只读动态权益</span><span id="sync-equity">—</span></div>
-        <div class="row"><span>浮动盈亏合计</span><span id="sync-float">—</span></div>
-        <div class="row"><span>资金使用率</span><span id="sync-usage">—</span></div>
-        <div class="row"><span>盯市覆盖</span><span id="sync-cover">—</span></div>
-        <div id="sync-pos" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
-        <div id="sync-drift" style="margin-top:8px"></div>
-        <div id="sync-consist" style="margin-top:6px"></div>
-      </div>
-    </section>
-    </div>
-<div class="pane-group" id="group-overview">
+    <div class="pane-group active" id="group-overview">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">overview</span>
@@ -1703,6 +1558,200 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     <!-- ===== pane-group: scan ===== -->
     
     <!-- ===== pane-group: account (独立 tab) ===== -->
+    
+    <div class="pane-group" id="group-execution">
+      <section class="pane" id="pane-trade">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">成交记录 · 跟单分析</span><span class="gh-sub">开/平仓 · 跟单率/采纳率/胜率</span></div>
+      <div class="card" id="journal" style="margin-bottom:12px">
+        <h2>成交记录器 <span class="price" id="j-sub"></span></h2>
+        <div class="trade" style="margin-bottom:8px">
+          <span style="font-size:11px;color:var(--amber)">开仓：</span>
+          <div class="sym-picker" id="j-sym-picker" data-target="j-sym" style="min-width:110px" data-onchange="refreshSignalOptions()">
+            <input type="text" id="j-sym-input" placeholder="🔍 品种/代码" style="width:110px" autocomplete="off">
+            <div class="sym-dropdown" id="j-sym-dropdown"></div>
+          </div>
+          <input type="hidden" id="j-sym" value="">
+          <select id="j-dir" onchange="refreshSignalOptions()" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
+          <input id="j-lots" type="number" min="1" value="1" style="width:110px" title="手数">
+          <input id="j-price" type="number" step="any" placeholder="价格" style="width:110px">
+          <select id="j-sig" style="width:100px"><option value="manual">📝 手动记录（非冲动开仓）</option></select>
+          <select id="j-strat" title="策略标签">
+            <option value="">策略(未分类)</option>
+            <option value="趋势">趋势</option>
+            <option value="波段">波段</option>
+            <option value="日内">日内</option>
+            <option value="套利">套利</option>
+            <option value="反转">反转</option>
+            <option value="手动">手动</option>
+          </select>
+          <select id="j-acct" title="账户标签">
+            <option value="主账户">主账户</option>
+            <option value="子账户A">子账户A</option>
+            <option value="子账户B">子账户B</option>
+          </select>
+          <button type="button" class="amber" onclick="doJournalEntry()">开仓</button>
+        </div>
+        <div class="trade">
+          <span style="font-size:11px;color:var(--green)">平仓：</span>
+          <div class="sym-picker" id="j2-sym-picker" data-target="j2-sym" style="min-width:110px">
+            <input type="text" id="j2-sym-input" placeholder="🔍 品种/代码" style="width:110px" autocomplete="off">
+            <div class="sym-dropdown" id="j2-sym-dropdown"></div>
+          </div>
+          <input type="hidden" id="j2-sym" value="">
+          <select id="j2-dir" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
+          <input id="j2-lots" type="number" min="1" value="1" style="width:110px" title="手数">
+          <input id="j2-price" type="number" step="any" placeholder="价格" style="width:110px">
+          <select id="j2-reason" style="width:100px">
+            <option value="止盈">止盈</option><option value="止损">止损</option><option value="手动">手动</option>
+          </select>
+          <button type="button" class="green" onclick="doJournalExit()">平仓</button>
+        </div>
+        <div style="margin-top:10px;font-size:11.5px;color:var(--mut)" id="j-summary">加载中…</div>
+        <div id="j-compare" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;font-size:11.5px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+            <span>跟单率 <b id="jc-follow" style="color:var(--amber)">—</b></span>
+            <span>信号采纳率 <b id="jc-adoption">—</b></span>
+            <span>跟单胜率 <b id="jc-mwin">—</b></span>
+            <span>跟单盈亏 <b id="jc-mpnl">—</b></span>
+          </div>
+          <div id="jc-fq" style="margin:6px 0;padding:6px 8px;background:var(--code-bg);border-radius:6px;font-size:11px;line-height:1.6"></div>
+          <details>
+            <summary style="cursor:pointer;color:var(--mut)">成交 vs 信号明细（跟单 <span id="jc-n">0</span> 笔 / 未跟 <span id="jc-u">0</span> 笔）</summary>
+            <div id="jc-table" style="margin-top:8px;max-height:260px;overflow:auto"></div>
+          </details>
+        </div>
+          <div class="stamp" id="j-msg"></div>
+          <div class="trade" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px">
+            <span style="font-size:11px;color:var(--amber)">导入：</span>
+            <input id="j-import-file" type="file" accept=".csv,text/csv" style="font-size:11px;color:var(--mut);max-width:220px">
+            <button class="amber" onclick="doJournalImport()">导入CSV</button>
+            <span id="j-import-msg" class="stamp" style="margin:0 4px"></span>
+          </div>
+        </div>
+      <div class="group-head gh-amber"><span class="gh-num">②</span><span class="gh-title">成交明细 · 备注</span><span class="gh-sub">点击备注写离场逻辑/复盘要点</span></div>
+      <div class="card" id="jlist-card">
+        <h2>成交明细 · 备注 <span class="price">G2</span></h2>
+        <div class="stamp" style="margin-bottom:8px">点击「备注」可给该笔成交写文字标注（如离场逻辑/复盘要点）；数据存于 trade_journal.json</div>
+        <div id="journal-list" style="max-height:320px;overflow:auto"></div><div id="global-errors" style="margin-top:6px;max-height:80px;overflow:auto"></div>
+      </div>
+    </section>
+      <section class="pane" id="pane-paper">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-sub">F8 虚拟资金 · 不碰真实账户</span></div>
+      <div class="card" id="paper-card" style="margin-bottom:12px">
+        <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
+        <div class="stamp" style="margin-bottom:10px">初始虚拟资金 1,000,000，可手动或一键按当前信号模拟开平仓，独立核算盈亏。仅供策略验证，与真实账户隔离。</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px">
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">虚拟权益</div><b id="pp-eq" class="mv" style="font-size:20px">—</b></div>
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">可用资金</div><b id="pp-cash" class="mv" style="font-size:20px">—</b></div>
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">已实现盈亏</div><b id="pp-real" class="mv" style="font-size:20px">—</b></div>
+          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">浮动盈亏</div><b id="pp-mtm" class="mv" style="font-size:20px">—</b></div>
+        </div>
+        <div class="trade" style="margin-bottom:8px">
+          <span style="font-size:11px;color:var(--amber)">模拟开仓：</span>
+          <div class="sym-picker" id="pp-sym-picker" data-target="pp-sym" data-onchange="(typeof window.refreshPaperSyms==='function'?window.refreshPaperSyms():null)">
+            <input type="text" id="pp-sym-input" placeholder="🔍 品种/代码" autocomplete="off">
+            <div class="sym-dropdown" id="pp-sym-dropdown"></div>
+          </div>
+          <input type="hidden" id="pp-sym" value="">
+          <select id="pp-dir"><option value="多">多</option><option value="空">空</option></select>
+          <input id="pp-lots" type="number" min="1" value="1" style="width:42px" title="手数">
+          <input id="pp-price" type="number" step="0.1" placeholder="价格" style="width:70px">
+          <button class="amber" onclick="ppOpen()">模拟开仓</button>
+        </div>
+        <div class="stamp" id="pp-msg"></div>
+      </div>
+      <div class="group-head gh-amber"><span class="gh-num">②</span><span class="gh-title">模拟持仓 · 成交</span><span class="gh-sub">逐合约虚拟持仓与流水</span></div>
+      <div class="card">
+        <h2>模拟持仓</h2>
+        <div id="pp-positions" style="max-height:200px;overflow:auto;margin-bottom:10px">加载中…</div>
+        <h2>模拟成交流水</h2>
+        <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
+      </div>
+    </section>
+      <section class="pane" id="pane-chat">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
+      <div class="chat-wrap">
+        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
+        <div class="chat-toolbar">
+          <label class="chat-date-label">复盘日期</label>
+          <select id="chat-date" class="chat-date-select">
+            <option value="__today__">今天（实时）</option>
+          </select>
+          <span id="chat-date-count" class="chat-date-count"></span>
+          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
+        </div>
+        <div id="chat-feed"></div>
+      </div>
+    </section>
+    </div>
+    
+    <div class="pane-group" id="group-position">
+      <section class="pane" id="pane-trade2"><div class="group-head gh-gold"><span class="gh-num">②</span><span class="gh-title">持仓 · 下单 · 批量指令</span><span class="gh-sub">实时推算权益 · 一键全平/反手</span></div>
+      <div class="card" id="account">
+        <h2>我的账户 <span class="price" id="acc-sub"></span></h2>
+        <div class="row"><span>账户权益（实时推算）</span><span id="a-equity">—</span></div>
+        <div class="row"><span>资金使用率</span><span id="a-usage">—</span></div>
+        <div class="row"><span>持仓保证金</span><span id="a-margin">—</span></div>
+        <div class="row"><span>距组合上限</span><span id="a-dist">—</span></div>
+        <div class="row"><span>浮动盈亏合计</span><span id="a-float">—</span></div>
+        <div class="row"><span>已实现盈亏</span><span id="a-realized">—</span></div>
+        <div class="row"><span>累计手续费</span><span id="a-fee">—</span></div>
+        <div class="row"><span>权益同步基准</span><span id="a-synced" class="stamp">—</span></div>
+        <div class="row"><span>数据源状态</span><span id="a-datasource" class="stamp">—</span></div>
+        <div class="row"><span>CTP真实余额</span><span id="a-ctp-balance" class="stamp">—</span></div>
+        <div class="row"><span>行情状态</span><span id="a-feed" class="stamp">—</span></div>
+        <div class="row"><span>系统自检</span><span id="a-selfcheck" class="stamp">检查中...</span></div>
+        <div class="row"><span>组合风险热度</span><span id="a-heat" class="stamp">—</span></div>
+        <table class="postab">
+          <thead><tr><th>品种</th><th>方向</th><th>手数</th><th>均价</th><th>现价</th><th>浮盈亏</th><th>止损</th><th colspan="3">分级止盈 (T1→T2→T3)</th><th>移动止损</th><th>占用%</th><th>距上限</th></tr></thead>
+          <tbody id="postab"></tbody>
+        </table>
+        <div class="trade">
+          <div class="sym-picker" id="t-sym-picker" data-target="t-sym">
+            <input type="text" id="t-sym-input" placeholder="🔍 品种/代码" autocomplete="off">
+            <div class="sym-dropdown" id="t-sym-dropdown"></div>
+          </div>
+          <input type="hidden" id="t-sym" value="">
+          <select id="t-act">
+            <option value="open">开仓</option><option value="add">加仓</option>
+            <option value="reduce">减仓</option><option value="close">平仓</option>
+          </select>
+          <select id="t-dir" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
+          <input id="t-lots" type="number" min="1" value="1" style="width:110px">
+          <input id="t-price" type="number" step="0.1" placeholder="价格(留空=实时价)" style="width:110px" title="开仓价；留空则由实时价自动填入">
+          <select id="t-sig" style="width:100px"><option value="manual">📝 手动记录</option></select>
+          <select id="t-strat" title="策略标签">
+            <option value="手动">手动</option>
+            <option value="趋势">趋势</option>
+            <option value="波段">波段</option>
+            <option value="日内">日内</option>
+            <option value="套利">套利</option>
+            <option value="反转">反转</option>
+          </select>
+          <select id="t-acct" title="账户标签">
+            <option value="主账户">主账户</option>
+            <option value="子账户A">子账户A</option>
+            <option value="子账户B">子账户B</option>
+          </select>
+          <button onclick="doTrade()">记录</button>
+          <button onclick="syncEquity()">同步权益</button>
+          <input id="t-eq" type="number" step="1" placeholder="真实权益" style="width:90px">
+        </div>
+        <div class="trade batch-bar">
+          <span class="bb-label">批量指令（只生成清单，不代下单）</span>
+          <button class="bb-flat" onclick="batchOrders('flatten')">🧹 一键全平</button>
+          <button class="bb-rev" onclick="batchOrders('reverse')">🔄 一键反手</button>
+        </div>
+        <div id="batch-box" class="batch-box"></div>
+        <div class="trade batch-bar">
+          <span class="bb-label">经纪商成交回灌（把客户端导出的成交明细自动记账）</span>
+          <button onclick="brokerScan()">📥 扫描成交单 <span id="broker-badge" class="bb-badge"></span></button>
+        </div>
+        <div id="broker-box" class="batch-box"></div>
+        <div class="stamp" id="t-msg"></div>
+      </div></section>
+    </div>
+
     <div class="pane-group" id="group-scan">
       <div class="group-label">
         <span class="gl-dot"></span>
@@ -1775,6 +1824,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </div>
 
     <!-- ===== pane-group: risk ===== -->
+    
     <div class="pane-group" id="group-risk">
       <div class="group-label">
         <span class="gl-dot"></span>
@@ -1942,198 +1992,154 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </div>
 
     <!-- ===== pane-group: account ===== -->
-        <div class="pane-group" id="group-execution">
-      <section class="pane" id="pane-trade">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">成交记录 · 跟单分析</span><span class="gh-sub">开/平仓 · 跟单率/采纳率/胜率</span></div>
-      <div class="card" id="journal" style="margin-bottom:12px">
-        <h2>成交记录器 <span class="price" id="j-sub"></span></h2>
-        <div class="trade" style="margin-bottom:8px">
-          <span style="font-size:11px;color:var(--amber)">开仓：</span>
-          <div class="sym-picker" id="j-sym-picker" data-target="j-sym" style="min-width:110px" data-onchange="refreshSignalOptions()">
-            <input type="text" id="j-sym-input" placeholder="🔍 品种/代码" style="width:110px" autocomplete="off">
-            <div class="sym-dropdown" id="j-sym-dropdown"></div>
-          </div>
-          <input type="hidden" id="j-sym" value="">
-          <select id="j-dir" onchange="refreshSignalOptions()" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
-          <input id="j-lots" type="number" min="1" value="1" style="width:110px" title="手数">
-          <input id="j-price" type="number" step="any" placeholder="价格" style="width:110px">
-          <select id="j-sig" style="width:100px"><option value="manual">📝 手动记录（非冲动开仓）</option></select>
-          <select id="j-strat" title="策略标签">
-            <option value="">策略(未分类)</option>
-            <option value="趋势">趋势</option>
-            <option value="波段">波段</option>
-            <option value="日内">日内</option>
-            <option value="套利">套利</option>
-            <option value="反转">反转</option>
-            <option value="手动">手动</option>
-          </select>
-          <select id="j-acct" title="账户标签">
-            <option value="主账户">主账户</option>
-            <option value="子账户A">子账户A</option>
-            <option value="子账户B">子账户B</option>
-          </select>
-          <button type="button" class="amber" onclick="doJournalEntry()">开仓</button>
-        </div>
-        <div class="trade">
-          <span style="font-size:11px;color:var(--green)">平仓：</span>
-          <div class="sym-picker" id="j2-sym-picker" data-target="j2-sym" style="min-width:110px">
-            <input type="text" id="j2-sym-input" placeholder="🔍 品种/代码" style="width:110px" autocomplete="off">
-            <div class="sym-dropdown" id="j2-sym-dropdown"></div>
-          </div>
-          <input type="hidden" id="j2-sym" value="">
-          <select id="j2-dir" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
-          <input id="j2-lots" type="number" min="1" value="1" style="width:110px" title="手数">
-          <input id="j2-price" type="number" step="any" placeholder="价格" style="width:110px">
-          <select id="j2-reason" style="width:100px">
-            <option value="止盈">止盈</option><option value="止损">止损</option><option value="手动">手动</option>
-          </select>
-          <button type="button" class="green" onclick="doJournalExit()">平仓</button>
-        </div>
-        <div style="margin-top:10px;font-size:11.5px;color:var(--mut)" id="j-summary">加载中…</div>
-        <div id="j-compare" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;font-size:11.5px">
-          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px">
-            <span>跟单率 <b id="jc-follow" style="color:var(--amber)">—</b></span>
-            <span>信号采纳率 <b id="jc-adoption">—</b></span>
-            <span>跟单胜率 <b id="jc-mwin">—</b></span>
-            <span>跟单盈亏 <b id="jc-mpnl">—</b></span>
-          </div>
-          <div id="jc-fq" style="margin:6px 0;padding:6px 8px;background:var(--code-bg);border-radius:6px;font-size:11px;line-height:1.6"></div>
-          <details>
-            <summary style="cursor:pointer;color:var(--mut)">成交 vs 信号明细（跟单 <span id="jc-n">0</span> 笔 / 未跟 <span id="jc-u">0</span> 笔）</summary>
-            <div id="jc-table" style="margin-top:8px;max-height:260px;overflow:auto"></div>
-          </details>
-        </div>
-          <div class="stamp" id="j-msg"></div>
-          <div class="trade" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px">
-            <span style="font-size:11px;color:var(--amber)">导入：</span>
-            <input id="j-import-file" type="file" accept=".csv,text/csv" style="font-size:11px;color:var(--mut);max-width:220px">
-            <button class="amber" onclick="doJournalImport()">导入CSV</button>
-            <span id="j-import-msg" class="stamp" style="margin:0 4px"></span>
-          </div>
-        </div>
-      <div class="group-head gh-amber"><span class="gh-num">②</span><span class="gh-title">成交明细 · 备注</span><span class="gh-sub">点击备注写离场逻辑/复盘要点</span></div>
-      <div class="card" id="jlist-card">
-        <h2>成交明细 · 备注 <span class="price">G2</span></h2>
-        <div class="stamp" style="margin-bottom:8px">点击「备注」可给该笔成交写文字标注（如离场逻辑/复盘要点）；数据存于 trade_journal.json</div>
-        <div id="journal-list" style="max-height:320px;overflow:auto"></div><div id="global-errors" style="margin-top:6px;max-height:80px;overflow:auto"></div>
+        
+    <div class="pane-group" id="group-account">
+      <div class="group-label"><span class="gl-dot"></span><span class="gl-text">账户</span></div>
+      <section class="pane" id="pane-account">
+      <div class="group-head gh-gold"><span class="gh-num">①</span><span class="gh-title">风控闸门 · 回撤水位</span><span class="gh-sub">4 道硬约束 · 5% 停机线</span></div>
+      <div class="risk-strip">
+        <span id="risk-state2" class="risk-state rs-NORMAL">风控 NORMAL</span>
+        <span id="risk-info" class="price"></span>
       </div>
-    </section>
-      <section class="pane" id="pane-paper">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-sub">F8 虚拟资金 · 不碰真实账户</span></div>
-      <div class="card" id="paper-card" style="margin-bottom:12px">
-        <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
-        <div class="stamp" style="margin-bottom:10px">初始虚拟资金 1,000,000，可手动或一键按当前信号模拟开平仓，独立核算盈亏。仅供策略验证，与真实账户隔离。</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px">
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">虚拟权益</div><b id="pp-eq" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">可用资金</div><b id="pp-cash" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">已实现盈亏</div><b id="pp-real" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">浮动盈亏</div><b id="pp-mtm" class="mv" style="font-size:20px">—</b></div>
+      <div class="dd-bar-wrap">
+        <div class="dd-bar-head"><span>今日日亏</span><span id="dd-pct">0.0%</span><span class="dd-limit">/ 5% 停机线（达线全市场冻结）</span></div>
+        <div class="dd-bar"><div id="dd-fill" class="dd-fill"></div></div>
+      </div>
+      <div class="card" id="dd-water" style="margin-top:12px">
+        <h2>回撤水位线 <span class="price" id="ddw-sub" style="font-size:12px;font-weight:400"></span></h2>
+        <div class="row"><span>当前回撤（自峰值）</span><span id="ddw-dd">—</span></div>
+        <div class="row"><span>当前档位</span><span id="ddw-tier">—</span></div>
+        <div class="row"><span>新开仓降险系数</span><span id="ddw-scale">—</span></div>
+        <div id="ddw-ladder" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+      <div class="group-head gh-amber"><span class="gh-num">⑧</span><span class="gh-title">市场情绪指数</span><span class="gh-sub">7因子加权 · 极端事件模式</span></div>
+      <div class="card" id="sent-card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span id="sent-score-big" style="font-size:28px;font-weight:800;color:var(--txt);line-height:1">—</span>
+          <span id="sent-label-big" class="sent-chip sent-neutral">中性</span>
         </div>
-        <div class="trade" style="margin-bottom:8px">
-          <span style="font-size:11px;color:var(--amber)">模拟开仓：</span>
-          <div class="sym-picker" id="pp-sym-picker" data-target="pp-sym" data-onchange="(typeof window.refreshPaperSyms==='function'?window.refreshPaperSyms():null)">
-            <input type="text" id="pp-sym-input" placeholder="🔍 品种/代码" autocomplete="off">
-            <div class="sym-dropdown" id="pp-sym-dropdown"></div>
+        <div class="sent-gauge-bar" style="margin-top:12px">
+          <div id="sent-marker" class="sent-gauge-marker" style="left:50%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--mut2);letter-spacing:.2px">
+          <span>极度恐惧</span><span>恐惧</span><span>中性</span><span>贪婪</span><span>极度贪婪</span>
+        </div>
+        <div class="sent-factors">
+          <div class="sent-factor"><b id="sent-f-breadth">—</b><i>市场广度</i></div>
+          <div class="sent-factor"><b id="sent-f-momentum">—</b><i>动量共识</i></div>
+          <div class="sent-factor"><b id="sent-f-activity">—</b><i>资金活跃</i></div>
+          <div class="sent-factor"><b id="sent-f-volatility">—</b><i>波动率</i></div>
+          <div class="sent-factor"><b id="sent-f-divergence">—</b><i>板块分歧</i></div>
+          <div class="sent-factor"><b id="sent-f-amplitude">—</b><i>涨跌幅度</i></div>
+          <div class="sent-factor"><b id="sent-f-trend_conc">—</b><i>趋势集中</i></div>
+        </div>
+        <div id="sent-extreme-banner" class="extreme-banner" style="display:none"></div>
+        <div id="sent-hard-filter" class="hard-filter-bar">
+          <div class="hf-icon">○</div>
+          <div class="hf-text">
+            <b>硬过滤：无限制</b>
+            <span>情绪正常，多空均可开仓</span>
           </div>
-          <input type="hidden" id="pp-sym" value="">
-          <select id="pp-dir"><option value="多">多</option><option value="空">空</option></select>
-          <input id="pp-lots" type="number" min="1" value="1" style="width:42px" title="手数">
-          <input id="pp-price" type="number" step="0.1" placeholder="价格" style="width:70px">
-          <button class="amber" onclick="ppOpen()">模拟开仓</button>
         </div>
-        <div class="stamp" id="pp-msg"></div>
-      </div>
-      <div class="group-head gh-amber"><span class="gh-num">②</span><span class="gh-title">模拟持仓 · 成交</span><span class="gh-sub">逐合约虚拟持仓与流水</span></div>
-      <div class="card">
-        <h2>模拟持仓</h2>
-        <div id="pp-positions" style="max-height:200px;overflow:auto;margin-bottom:10px">加载中…</div>
-        <h2>模拟成交流水</h2>
-        <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
-      </div>
-    </section>
-      <section class="pane" id="pane-chat">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
-      <div class="chat-wrap">
-        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
-        <div class="chat-toolbar">
-          <label class="chat-date-label">复盘日期</label>
-          <select id="chat-date" class="chat-date-select">
-            <option value="__today__">今天（实时）</option>
-          </select>
-          <span id="chat-date-count" class="chat-date-count"></span>
-          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--mut2);letter-spacing:.2px">情绪走势 · 近30周期</span>
+            <span id="sent-hist-range" style="font-size:10px;color:var(--mut3)">—</span>
+          </div>
+          <div class="sent-hist-wrap">
+            <canvas id="sentHistoryChart" width="280" height="70"></canvas>
+          </div>
         </div>
-        <div id="chat-feed"></div>
+        <div class="row" style="margin-top:12px"><span>仓位缩放系数</span><span id="sent-scale">—</span></div>
+        <div class="row"><span>T阈值乘数(多/空)</span><span id="sent-thr-mult">—</span></div>
+      </div>
+
+      <div class="group-head gh-gold"><span class="gh-num">⑨</span><span class="gh-title">支撑压力位</span><span class="gh-sub">三重验证 · 灰色地带过滤</span></div>
+      <div class="card" id="sr-card">
+        <div class="sr-summary" style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
+          <span>近位 <b id="sr-near-count" style="color:var(--green)">—</b></span>
+          <span>灰色 <b id="sr-grey-count" style="color:var(--amber)">—</b></span>
+          <span>远位 <b id="sr-far-count" style="color:var(--mut)">—</b></span>
+          <span>总计 <b id="sr-total-count" style="color:var(--txt)">—</b></span>
+        </div>
+        <div class="sr-dist-wrap">
+          <div class="sr-dist-bar" id="srDistBar">
+            <div class="sd-seg sd-near" style="width:0%" title="近位区 (<0.8%)"></div>
+            <div class="sd-seg sd-grey" style="width:0%" title="灰色地带 (0.8~1.5%)"></div>
+            <div class="sd-seg sd-far" style="width:100%" title="远位区 (>1.5%)"></div>
+          </div>
+          <div class="sr-dist-labels">
+            <span>0%</span><span>0.8%</span><span>1.5%</span><span>5%+</span>
+          </div>
+        </div>
+        <div id="sr-box" class="sr-list"><div class="muted-empty"><span class="dot"></span>等待 SR 数据...</div></div>
+      </div>
+
+      <div class="group-head gh-purple"><span class="gh-num">⑩</span><span class="gh-title">板块热力图</span><span class="gh-sub">风险调整强度 · 轮动象限</span></div>
+      <div class="card" id="sector-card">
+        <div class="sector-summary">
+          <span>上涨 <b id="sec-breadth">—</b></span>
+          <span>领涨 <b id="sec-leading">—</b></span>
+          <span>领跌 <b id="sec-lagging">—</b></span>
+          <span>板块 <b id="sec-count">—</b></span>
+        </div>
+        <div id="sector-heatmap" class="sector-heatmap">
+          <div class="muted-empty"><span class="dot"></span>加载中...</div>
+        </div>
+        <div class="sector-legend">
+          <span class="sl-weak">领跌</span>
+          <span class="sl-mid">筑底</span>
+          <span class="sl-mid2">钝化</span>
+          <span class="sl-strong">领涨</span>
+        </div>
+      </div>
+
+      <div class="group-head gh-blue"><span class="gh-num">⑪</span><span class="gh-title">全市场扫描</span><span class="gh-sub">并行扫描 · 信号强度排序</span></div>
+      <div class="card" id="scan-card">
+        <div class="scan-summary">
+          <span>上涨 <b id="scan-up">—</b></span>
+          <span>下跌 <b id="scan-down">—</b></span>
+          <span>中性 <b id="scan-mid">—</b></span>
+          <span>耗时 <b id="scan-time">—</b></span>
+        </div>
+        <div id="scan-box" class="scan-list"><div class="muted-empty"><span class="dot"></span>扫描中...</div></div>
+      </div>
+
+      <div class="group-head gh-green"><span class="gh-num">⑫</span><span class="gh-title">品种筛选</span><span class="gh-sub">5维条件 · 加权评分</span></div>
+      <div class="card" id="screener-card">
+        <div class="screener-summary">
+          <span>通过 <b id="scr-pass">—</b> / <span id="scr-total">—</span></span>
+          <span>通过率 <b id="scr-rate">—</b></span>
+        </div>
+        <div id="screener-box" class="screener-list"><div class="muted-empty"><span class="dot"></span>等待筛选...</div></div>
+      </div>
+      <div class="group-head gh-amber"><span class="gh-num">⑬</span><span class="gh-title">信号瀑布流</span><span class="gh-sub">实时信号时间线 · 增量刷新</span></div>
+      <div class="card" id="feed-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span class="stamp" id="feed-count">加载中…</span>
+          <span class="stamp" id="feed-time">—</span>
+        </div>
+        <div id="feed-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+          <div class="muted-empty"><span class="dot"></span>等待信号…</div>
+        </div>
+      </div>
+      <div class="group-head gh-gold"><span class="gh-num">③</span><span class="gh-title">账户只读同步</span><span class="gh-sub">minishare 盯市 · 不接券商 API</span></div>
+      <div class="card" id="accountsync">
+        <h2>账户只读同步 <span class="price" id="sync-ro">只读·不代下单</span></h2>
+        <div class="stamp" id="sync-sub">minishare 实时盯市 · 只读视图（不接券商 API）</div>
+        <div class="row"><span>数据时效</span><span id="sync-age" class="stamp">—</span></div>
+        <div class="row"><span>只读动态权益</span><span id="sync-equity">—</span></div>
+        <div class="row"><span>浮动盈亏合计</span><span id="sync-float">—</span></div>
+        <div class="row"><span>资金使用率</span><span id="sync-usage">—</span></div>
+        <div class="row"><span>盯市覆盖</span><span id="sync-cover">—</span></div>
+        <div id="sync-pos" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+        <div id="sync-drift" style="margin-top:8px"></div>
+        <div id="sync-consist" style="margin-top:6px"></div>
       </div>
     </section>
     </div>
-    <div class="pane-group" id="group-position">
-      <section class="pane" id="pane-trade2"><div class="group-head gh-gold"><span class="gh-num">②</span><span class="gh-title">持仓 · 下单 · 批量指令</span><span class="gh-sub">实时推算权益 · 一键全平/反手</span></div>
-      <div class="card" id="account">
-        <h2>我的账户 <span class="price" id="acc-sub"></span></h2>
-        <div class="row"><span>账户权益（实时推算）</span><span id="a-equity">—</span></div>
-        <div class="row"><span>资金使用率</span><span id="a-usage">—</span></div>
-        <div class="row"><span>持仓保证金</span><span id="a-margin">—</span></div>
-        <div class="row"><span>距组合上限</span><span id="a-dist">—</span></div>
-        <div class="row"><span>浮动盈亏合计</span><span id="a-float">—</span></div>
-        <div class="row"><span>已实现盈亏</span><span id="a-realized">—</span></div>
-        <div class="row"><span>累计手续费</span><span id="a-fee">—</span></div>
-        <div class="row"><span>权益同步基准</span><span id="a-synced" class="stamp">—</span></div>
-        <div class="row"><span>数据源状态</span><span id="a-datasource" class="stamp">—</span></div>
-        <div class="row"><span>CTP真实余额</span><span id="a-ctp-balance" class="stamp">—</span></div>
-        <div class="row"><span>行情状态</span><span id="a-feed" class="stamp">—</span></div>
-        <div class="row"><span>系统自检</span><span id="a-selfcheck" class="stamp">检查中...</span></div>
-        <div class="row"><span>组合风险热度</span><span id="a-heat" class="stamp">—</span></div>
-        <table class="postab">
-          <thead><tr><th>品种</th><th>方向</th><th>手数</th><th>均价</th><th>现价</th><th>浮盈亏</th><th>止损</th><th colspan="3">分级止盈 (T1→T2→T3)</th><th>移动止损</th><th>占用%</th><th>距上限</th></tr></thead>
-          <tbody id="postab"></tbody>
-        </table>
-        <div class="trade">
-          <div class="sym-picker" id="t-sym-picker" data-target="t-sym">
-            <input type="text" id="t-sym-input" placeholder="🔍 品种/代码" autocomplete="off">
-            <div class="sym-dropdown" id="t-sym-dropdown"></div>
-          </div>
-          <input type="hidden" id="t-sym" value="">
-          <select id="t-act">
-            <option value="open">开仓</option><option value="add">加仓</option>
-            <option value="reduce">减仓</option><option value="close">平仓</option>
-          </select>
-          <select id="t-dir" style="width:80px"><option value="空">空</option><option value="多">多</option></select>
-          <input id="t-lots" type="number" min="1" value="1" style="width:110px">
-          <input id="t-price" type="number" step="0.1" placeholder="价格(留空=实时价)" style="width:110px" title="开仓价；留空则由实时价自动填入">
-          <select id="t-sig" style="width:100px"><option value="manual">📝 手动记录</option></select>
-          <select id="t-strat" title="策略标签">
-            <option value="手动">手动</option>
-            <option value="趋势">趋势</option>
-            <option value="波段">波段</option>
-            <option value="日内">日内</option>
-            <option value="套利">套利</option>
-            <option value="反转">反转</option>
-          </select>
-          <select id="t-acct" title="账户标签">
-            <option value="主账户">主账户</option>
-            <option value="子账户A">子账户A</option>
-            <option value="子账户B">子账户B</option>
-          </select>
-          <button onclick="doTrade()">记录</button>
-          <button onclick="syncEquity()">同步权益</button>
-          <input id="t-eq" type="number" step="1" placeholder="真实权益" style="width:90px">
-        </div>
-        <div class="trade batch-bar">
-          <span class="bb-label">批量指令（只生成清单，不代下单）</span>
-          <button class="bb-flat" onclick="batchOrders('flatten')">🧹 一键全平</button>
-          <button class="bb-rev" onclick="batchOrders('reverse')">🔄 一键反手</button>
-        </div>
-        <div id="batch-box" class="batch-box"></div>
-        <div class="trade batch-bar">
-          <span class="bb-label">经纪商成交回灌（把客户端导出的成交明细自动记账）</span>
-          <button onclick="brokerScan()">📥 扫描成交单 <span id="broker-badge" class="bb-badge"></span></button>
-        </div>
-        <div id="broker-box" class="batch-box"></div>
-        <div class="stamp" id="t-msg"></div>
-      </div></section>
-    </div>
-<div class="pane-group" id="group-analyze">
+
+    <div class="pane-group" id="group-analyze">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">analyze</span>
@@ -2477,6 +2483,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </div>
 
     <!-- ===== pane-group: tools ===== -->
+    
     <div class="pane-group" id="group-tools">
       <div class="group-label">
         <span class="gl-dot"></span>
@@ -2515,7 +2522,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
   
     </div>
-  </main>
+  
+    </main>
   </div>
   </div>
 
