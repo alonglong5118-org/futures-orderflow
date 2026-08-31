@@ -1421,8 +1421,9 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
   <aside class="sidenav">
     <div class="nav-brand">四维策略</div>
     <button class="tab active" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
-    <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
+    <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span></button>
     <button class="tab" data-tab="position"><span class="ic">💹</span><span class="lbl">持仓下单</span></button>
+    <button class="tab" data-tab="chat"><span class="ic">📢</span><span class="lbl">消息推送</span><span class="badge" id="tab-badge-chat">—</span></button>
     <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span><span class="badge" id="tab-badge-seat" style="background:rgba(72,219,251,.18);color:#48dbfb;border-color:rgba(72,219,251,.35)">—</span></button>
     <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
     <button class="tab" data-tab="account"><span class="ic">📊</span><span class="lbl">市场洞察</span></button>
@@ -1667,23 +1668,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <h2>模拟成交流水</h2>
         <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
       </div>
-    </section>
-      <section class="pane" id="pane-chat">
-      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
-      <div class="chat-wrap">
-        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
-        <div class="chat-toolbar">
-          <label class="chat-date-label">复盘日期</label>
-          <select id="chat-date" class="chat-date-select">
-            <option value="__today__">今天（实时）</option>
-          </select>
-          <span id="chat-date-count" class="chat-date-count"></span>
-          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
-        </div>
-        <div id="chat-feed"></div>
-      </div>
-    </section>
-    </div>
+    </section></div>
     
     <div class="pane-group" id="group-position">
       <section class="pane" id="pane-trade2"><div class="group-head gh-gold"><span class="gh-num">②</span><span class="gh-title">持仓 · 下单 · 批量指令</span><span class="gh-sub">实时推算权益 · 一键全平/反手</span></div>
@@ -1752,7 +1737,24 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div></section>
     </div>
 
-    <div class="pane-group" id="group-scan">
+    
+    <div class="pane-group" id="group-chat">
+      <section class="pane" id="pane-chat">
+      <div class="group-head gh-amber"><span class="gh-num">①</span><span class="gh-title">消息推送 · 信号 / 持仓触价</span><span class="gh-sub">对话式 · 非阻塞 · 可回看</span></div>
+      <div class="chat-wrap">
+        <div class="chat-headbar"><h2>💬 消息推送</h2><span class="sub">信号 / 持仓触价以对话形式推送 · 非阻塞 · 可回看自行分析</span></div>
+        <div class="chat-toolbar">
+          <label class="chat-date-label">复盘日期</label>
+          <select id="chat-date" class="chat-date-select">
+            <option value="__today__">今天（实时）</option>
+          </select>
+          <span id="chat-date-count" class="chat-date-count"></span>
+          <span class="chat-hint">按天归类保存，选历史日期可完整回看当日所有推送</span>
+        </div>
+        <div id="chat-feed"></div>
+      </div>
+    </section>
+    </div><div class="pane-group" id="group-scan">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">scan</span>
@@ -4907,8 +4909,9 @@ function switchTab(name){
     account:  ['account'],
     scan:     ['signals','seat','anomaly'],
     risk:     ['alerts','adv'],
-    execution:['trade','paper','chat'],
+    execution:['trade','paper'],
     position:['trade2'],
+    chat:    ['chat'],
     analyze:  ['disc','perf','metrics'],
     tools:    ['focus','features'],
   };
