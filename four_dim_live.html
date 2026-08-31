@@ -1423,7 +1423,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     <button class="tab active" data-tab="overview"><span class="ic">🚀</span><span class="lbl">总览</span></button>
     <button class="tab" data-tab="scan"><span class="ic">📡</span><span class="lbl">市场扫描</span><span class="badge" id="tab-badge-sig">—</span></button>
     <button class="tab" data-tab="risk"><span class="ic">🛡</span><span class="lbl">风控监控</span><span class="badge" id="tab-badge-alert">—</span></button>
-    <button class="tab" data-tab="account"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
+    <button class="tab" data-tab="execution"><span class="ic">💰</span><span class="lbl">账户交易</span><span class="badge" id="tab-badge-chat">—</span></button>
     <button class="tab" data-tab="analyze"><span class="ic">📈</span><span class="lbl">复盘分析</span></button>
     <button class="tab" data-tab="tools"><span class="ic">⚙️</span><span class="lbl">工具配置</span></button>
     <div class="nav-foot">
@@ -1998,7 +1998,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </div>
 
     <!-- ===== pane-group: account ===== -->
-    <div class="pane-group" id="group-account">
+    <div class="pane-group" id="group-execution">
       <div class="group-label">
         <span class="gl-dot"></span>
         <span class="gl-text">account</span>
@@ -4903,7 +4903,7 @@ function switchTab(name){
     overview: ['cockpit','account'],
     scan:     ['signals','seat','anomaly'],
     risk:     ['alerts','adv'],
-    account:  ['trade','paper','chat'],
+    execution:['trade','paper','chat'],
     analyze:  ['disc','perf','metrics'],
     tools:    ['focus','features'],
   };
