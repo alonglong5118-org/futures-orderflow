@@ -35,7 +35,7 @@
     --glass:rgba(8,8,8,0.92);
   }
   *{box-sizing:border-box}
-  html,body{margin:0;max-width:100vw;overflow-x:hidden}
+  html,body{margin:0;max-width:100vw;width:100%;overflow-x:hidden}
   body{
     background:
       radial-gradient(1200px 600px at 85% -12%, rgba(212,175,55,.13), transparent 58%),
@@ -162,7 +162,7 @@
 
   /* ===== 布局：顶栏 + 分类侧边导航 + 内容 ===== */
   .topbar{height:56px}
-  .shell{display:flex;align-items:stretch;min-height:calc(100vh - 56px);max-width:100vw;overflow-x:hidden}
+  .shell{display:flex;align-items:stretch;min-height:calc(100vh - 56px);width:100%;max-width:100vw;overflow:hidden}
   .sidenav{
     width:var(--nav-w,200px);min-width:160px;flex:0 0 var(--nav-w,200px);align-self:flex-start;
     position:sticky;top:56px;height:calc(100vh - 56px);
@@ -173,7 +173,7 @@
   }
   .sidenav::-webkit-scrollbar{width:6px}
   .sidenav::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-  .content{flex:1;min-width:0;display:flex;flex-direction:column}
+  .content{flex:1;min-width:0;width:0;display:flex;flex-direction:column;max-width:100%}
 
   /* 分类导航 */
   .nav-group{--cat:var(--gold);margin:2px 0 9px}
@@ -228,7 +228,7 @@
   .voice-btn:hover{color:var(--fg)}
 
   /* ===== 通用面板 ===== */
-  main{padding:18px 22px 60px;max-width:none;margin:0 auto}
+  main{padding:18px 22px 60px;max-width:100%;width:100%;margin:0 auto;min-width:0;box-sizing:border-box}
   .pane{display:none;animation:fade .35s ease}
   .pane.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -1466,7 +1466,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 .ckc-kpi.clickable b { text-decoration: underline dotted; text-underline-offset: 3px; }
 
   /* ===== pane-group 分组容器 ===== */
-  .pane-group{display:none;animation:fade .35s ease}
+  .pane-group{display:none;animation:fade .35s ease;width:100%;min-width:0}
   .pane-group.active{display:block}
   .pane-group .pane{display:block;animation:none;margin-bottom:16px}
   .pane-group .pane:last-child{margin-bottom:0}
