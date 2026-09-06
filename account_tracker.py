@@ -48,6 +48,8 @@ except ImportError:
 # minishare 价格缓存（主数据源，rt_fut_k 快照）
 _MS_PRICE_CACHE = {}
 _MS_PRICE_TS = 0.0
+_MS_PRE_CLOSE_CACHE = {}
+_MS_PRE_CLOSE_TS = 0.0
 _MS_CACHE_LOCK = threading.Lock()
 
 # minishare feed 实例（单例，避免重复创建）
@@ -136,6 +138,36 @@ def _get_ms_price(sym):
                     _MS_PRICE_CACHE[sym_lower] = px
                     _MS_PRICE_TS = time.time()
                 return px
+    except Exception:
+        pass
+    return None
+
+
+def _get_ms_pre_close(sym):
+    """从 minishare rt_fut_k 获取昨结价（pre_close）。
+    CTP 用昨结价算保证金，所以优先用昨结价保证口径一致。
+    """
+    global _MS_PRE_CLOSE_CACHE, _MS_PRE_CLOSE_TS, _MS_CACHE_LOCK
+    if not _MS_AVAILABLE or _ml is None:
+        return None
+    sym_lower = sym.lower()
+    # 先查缓存（60秒TTL，昨结价一天内不变）
+    with _MS_CACHE_LOCK:
+        if _MS_PRE_CLOSE_TS > 0 and (time.time() - _MS_PRE_CLOSE_TS) < 60:
+            if sym_lower in _MS_PRE_CLOSE_CACHE and _MS_PRE_CLOSE_CACHE[sym_lower] > 0:
+                return _MS_PRE_CLOSE_CACHE[sym_lower]
+    try:
+        _feed = _get_ms_feed()
+        if _feed and hasattr(_feed, 'last_snap'):
+            snap = _feed.last_snap
+            if isinstance(snap, dict):
+                snap_data = snap.get(sym_lower) or snap.get(sym) or {}
+                pre = snap_data.get("pre_close") or snap_data.get("pre_settle")
+                if pre and pre > 0:
+                    with _MS_CACHE_LOCK:
+                        _MS_PRE_CLOSE_CACHE[sym_lower] = pre
+                        _MS_PRE_CLOSE_TS = time.time()
+                    return pre
     except Exception:
         pass
     return None
@@ -259,9 +291,131 @@ def stop_ak_poller():
 # 在服务器启动时调用 start_ak_poller() 即可
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(HERE, "trade_config.json")
-STATE_FILE = os.path.join(HERE, "account_state.json")
 OVERRIDE_FILE = os.path.join(HERE, "main_overrides.json")  # 主力合约权威源（v2.5.0+）
 _LOCK = threading.Lock()
+
+# ===== 多账户支持（v3.9.1）=====
+# 使用线程局部存储，确保并发请求下账户上下文互不干扰
+# 默认账户：default（原模拟/实盘主账户）
+# 新增账户：live（三感参谋实盘跟踪账户）
+_tls = threading.local()  # 线程局部存储
+
+def get_account():
+    """获取当前线程的账户 ID。"""
+    return getattr(_tls, 'current_account', 'default')
+
+def set_account(account_id):
+    """设置当前线程的账户 ID。返回旧的账户 ID。"""
+    old = get_account()
+    _tls.current_account = account_id
+    return old
+
+def state_file_for(account_id=None):
+    """获取指定账户的 state 文件路径。不传则用当前线程账户。"""
+    if account_id is None:
+        account_id = get_account()
+    if account_id == "default":
+        return os.path.join(HERE, "account_state.json")
+    return os.path.join(HERE, f"account_state_{account_id}.json")
+
+def list_accounts():
+    """列出所有已知账户（通过扫描 state 文件发现）。"""
+    accounts = ["default"]
+    for fn in os.listdir(HERE):
+        if fn.startswith("account_state_") and fn.endswith(".json") and not fn.endswith(".bak") and not fn.endswith(".tmp"):
+            aid = fn[len("account_state_"):-len(".json")]
+            if aid not in accounts:
+                accounts.append(aid)
+    return accounts
+
+class account_context:
+    """上下文管理器：临时切换当前线程的账户，退出时恢复。"""
+    def __init__(self, account_id):
+        self.account_id = account_id
+        self._old = None
+    
+    def __enter__(self):
+        self._old = set_account(self.account_id)
+        return self
+    
+    def __exit__(self, *args):
+        set_account(self._old)
+        return False
+
+
+# ===== 多账户：killswitch + drawdown_guard + risk_fsm 工厂（v3.9.1）=====
+_ks_instances = {}
+_dd_instances = {}
+_fsm_instances = {}
+_ks_dd_lock = threading.RLock()
+
+
+def killswitch_file_for(account_id=None):
+    """获取指定账户的 killswitch 状态文件路径。"""
+    if account_id is None:
+        account_id = get_account()
+    if account_id == "default":
+        return os.path.join(HERE, "killswitch_state.json")
+    return os.path.join(HERE, f"killswitch_state_{account_id}.json")
+
+
+def drawdown_file_for(account_id=None):
+    """获取指定账户的 drawdown 状态文件路径。"""
+    if account_id is None:
+        account_id = get_account()
+    if account_id == "default":
+        return os.path.join(HERE, "drawdown_state.json")
+    return os.path.join(HERE, f"drawdown_state_{account_id}.json")
+
+
+def get_killswitch(account_id=None):
+    """获取指定账户的 KillSwitch 实例（懒加载，线程安全）。
+    default 账户复用 rsm.KILL 全局单例，保证与主循环一致。"""
+    if account_id is None:
+        account_id = get_account()
+    with _ks_dd_lock:
+        if account_id not in _ks_instances:
+            import risk_state_machine as rsm
+            if account_id == "default":
+                # default 账户复用全局单例，与主循环保持一致
+                _ks_instances[account_id] = rsm.KILL
+            else:
+                path = killswitch_file_for(account_id)
+                _ks_instances[account_id] = rsm.KillSwitch(path=path)
+        return _ks_instances[account_id]
+
+
+def get_drawdown_guard(account_id=None):
+    """获取指定账户的 DrawdownGuard 实例（懒加载，线程安全）。
+    default 账户复用 ddg 全局实例，保证与主循环一致。"""
+    if account_id is None:
+        account_id = get_account()
+    with _ks_dd_lock:
+        if account_id not in _dd_instances:
+            import drawdown_guard as ddg
+            if account_id == "default":
+                # default 账户复用全局实例，与主循环保持一致
+                _dd_instances[account_id] = ddg._default_guard
+            else:
+                path = drawdown_file_for(account_id)
+                _dd_instances[account_id] = ddg.DrawdownGuard(path)
+        return _dd_instances[account_id]
+
+
+def get_risk_fsm(account_id=None):
+    """获取指定账户的 RiskStateMachine 实例（懒加载，线程安全）。
+    default 账户复用 rsm.RISK_FSM 全局单例，保证与主循环一致。"""
+    if account_id is None:
+        account_id = get_account()
+    with _ks_dd_lock:
+        if account_id not in _fsm_instances:
+            import risk_state_machine as rsm
+            if account_id == "default":
+                # default 账户复用全局单例，与主循环保持一致
+                _fsm_instances[account_id] = rsm.RISK_FSM
+            else:
+                _fsm_instances[account_id] = rsm.RiskStateMachine()
+        return _fsm_instances[account_id]
 
 
 def _authoritative_contract(sym, fallback):
@@ -287,10 +441,10 @@ def load_state():
     """读取账户状态。文件不存在/为空/解析失败均返回安全默认，不抛异常（防止 /api/account 500）。
     若当前文件损坏，尝试从 .bak 恢复上一份好状态。"""
     default = {"equity": 0, "realized_pnl": 0.0, "positions": {}, "updated": "", "equity_synced": ""}
-    if not os.path.exists(STATE_FILE):
+    if not os.path.exists(state_file_for()):
         return default
     try:
-        with open(STATE_FILE, encoding="utf-8") as f:
+        with open(state_file_for(), encoding="utf-8") as f:
             text = f.read().strip()
     except OSError as e:
         sys.stderr.write("[account_tracker] load_state 读文件失败，返回默认: %s\n" % e)
@@ -306,7 +460,7 @@ def load_state():
 
 def _load_state_from_bak(default):
     """从 .bak 恢复上一份好状态；不存在或损坏则返回 default。"""
-    bak = STATE_FILE + ".bak"
+    bak = state_file_for() + ".bak"
     if not os.path.exists(bak):
         return default
     try:
@@ -323,23 +477,32 @@ def save_state(st):
     """原子写盘：先写临时文件再 os.replace，消除「半写空文件」竞态窗口（修复 /api/account 偶发 500）。
     写入前把当前好状态备份为 .bak，供 load_state 失败时恢复。"""
     # 备份当前好状态（若存在且非空）
-    if os.path.exists(STATE_FILE):
+    if os.path.exists(state_file_for()):
         try:
-            with open(STATE_FILE, encoding="utf-8") as f:
+            with open(state_file_for(), encoding="utf-8") as f:
                 cur = f.read()
             if cur.strip():
-                with open(STATE_FILE + ".bak", "w", encoding="utf-8") as f:
+                with open(state_file_for() + ".bak", "w", encoding="utf-8") as f:
                     f.write(cur)
         except OSError:
             pass
-    # 原子写：temp 与 STATE_FILE 同目录（保证 os.replace 同 fs）
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(STATE_FILE), suffix=".tmp")
+    # 清理零持仓垃圾条目（CTP 同步可能产生 lots=0 的残留）
+    if isinstance(st, dict) and isinstance(st.get("positions"), dict):
+        _before = len(st["positions"])
+        st["positions"] = {k: v for k, v in st["positions"].items()
+                            if isinstance(v, dict) and v.get("lots", 0) > 0}
+        if _before != len(st["positions"]):
+            import os as _os
+            print("[save_state] 清理 %s: %d → %d 持仓" % (_os.path.basename(state_file_for()), _before, len(st["positions"])))
+
+    # 原子写：temp 与 state_file_for() 同目录（保证 os.replace 同 fs）
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(state_file_for()), suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, STATE_FILE)
+        os.replace(tmp, state_file_for())
     except Exception:
         try:
             os.remove(tmp)
@@ -679,6 +842,42 @@ def _auto_tp_targets(sym, pos):
         return None
 
 
+def _auto_stop_levels(sym, pos, _cfg=None):
+    """为无 stop/t1/t2 的持仓自动生成止损止盈位（ATR 规则）。
+    规则（与 runner _auto_levels 口径一致）:
+      atr = abs(stop - avg) if stop else avg * 0.02  (2% ATR 近似)
+      stop = avg - dir * atr          (ATR × 1 止损)
+      t1   = avg + dir * atr * 3.0    (ATR × 3 第一目标)
+      t2   = avg + dir * atr * 5.0    (ATR × 5 第二目标)
+    返回 (stop, t1, t2) 或 (None, None, None)。"""
+    try:
+        avg = float(pos.get("avg", 0))
+        if avg <= 0:
+            return None, None, None
+        direction = pos.get("direction", "多")
+        ds = 1 if direction in ("多", "long") else -1
+        # 已有 stop 用它反推 ATR
+        atr_val = 0.0
+        if pos.get("stop"):
+            atr_val = abs(float(pos["stop"]) - avg)
+        if atr_val <= 0:
+            # 用 stop_dist 如果有
+            if _cfg and _cfg.get("stop_dist"):
+                atr_val = abs(float(_cfg["stop_dist"]))
+        if atr_val <= 0:
+            # 兜底：2% 近似 ATR
+            atr_val = avg * 0.02
+        if atr_val <= 0:
+            return None, None, None
+        # ATR × 1 止损（多单止损在下方，空单止损在上方）
+        stop = round(avg - ds * atr_val, 2)
+        t1   = round(avg + ds * atr_val * 3.0, 2)
+        t2   = round(avg + ds * atr_val * 5.0, 2)
+        return stop, t1, t2
+    except Exception:
+        return None, None, None
+
+
 def _heal_position_levels(sym, pos, jlv, changes):
     """根据 journal 记录和 exit_plan 规则修正持仓的 stop/t1/t2。
     若持仓已设置 _user_set_stop=True，则跳过所有自动修正。"""
@@ -868,6 +1067,27 @@ def heal_from_journal():
                 pos["avg"] = round(je, 2)
             # 修正止损止盈位，防止方向错误/移动止损污染
             _heal_position_levels(sym, pos, jlevels.get(k), changes)
+            # ★ 2026-08-31: 兜底补算 —— 若 _heal_position_levels 没能生成 stop/t1/t2（journal 无 stop_dist）
+            # 则用 _auto_stop_levels 纯数学生成（ATR × 1 止损 / × 3 T1 / × 5 T2）
+            # 情况 A: 全缺 → 全补
+            # 情况 B: 有 t1/t2 但缺 stop → 用 t1 反推 stop
+            _fs, _ft1, _ft2 = _auto_stop_levels(sym, pos)
+            if _fs is not None:
+                _changed = False
+                if pos.get("stop") is None:
+                    pos["stop"] = _fs; _changed = True
+                if pos.get("t1") is None:
+                    pos["t1"] = _ft1; _changed = True
+                if pos.get("t2") is None:
+                    pos["t2"] = _ft2; _changed = True
+                if _changed:
+                    _ftp = _auto_tp_targets(sym, pos)
+                    if _ftp:
+                        pos["tp_targets"] = [
+                            {"level": "t1", "price": round(_ftp["t1_price"], 2), "ratio": 0.5, "lots": 0.5},
+                            {"level": "t2", "price": round(_ftp["t2_price"], 2), "ratio": 1.0, "lots": 0.5},
+                        ]
+                    changes.append(f"兜底补算: {sym} {pos.get('direction')} → stop={pos.get('stop')} t1={pos.get('t1')} t2={pos.get('t2')}")
             # 补齐 tp_targets（分级止盈目标价）：journal 有 stop/stop_dist → 反推；无则用 2% ATR 默认
             if (pos.get("lots") or 0) > 0 and pos.get("tp_targets") is None and pos.get("avg"):
                 _tp_tgt = _auto_tp_targets(sym, pos)
@@ -973,11 +1193,21 @@ def snapshot(prices=None):
                 px = pos["price"]
             if px is None:
                 px = (prices or {}).get(sym)
-        if pos:
+        if pos and pos.get("lots", 0) > 0:
             lots = pos["lots"]
             avg = pos["avg"]
             ds = _dir_sign(pos["direction"])
-            margin_used = lots * avg * mult * mrate
+            # 保证金价格优先级：昨结价 > 现价 > 开仓均价
+            # 西南期货 CTP 盘中固定用昨结价算保证金，不随现价浮动
+            pre_close_px = _get_ms_pre_close(sym) if lots and lots > 0 else None
+            if pre_close_px and pre_close_px > 0:
+                margin_px = pre_close_px
+            elif px and px > 0:
+                margin_px = px
+            else:
+                margin_px = avg
+            _broker_margin_mult = float(st.get("margin_rate_broker") or st.get("margin_rate") or 1.0)
+            margin_used = lots * margin_px * mult * mrate * _broker_margin_mult
             total_margin += margin_used
             float_pnl = None
             if px is not None:
@@ -1024,15 +1254,34 @@ def snapshot(prices=None):
                     "dist_to_cap": round(equity_synced * margin_cap_pct / 100, 2) if equity_synced > 0 else 0.0,
                 }
             )
+    # ★ 所有账户：state 里有 CTP 真实保证金就用真实值覆盖（实盘/模拟盘通用）
+    _acc_id = get_account()
+    if st.get("margin_used"):
+        total_margin = float(st["margin_used"])
     # 动态权益：让账户总览与持仓实时行情保持同步
-    # ★ 2026-08-28: 已实现盈亏采用反推法（权益 - 初始资金 - 浮动盈亏）
-    #   确保各板块数据自洽，不依赖可能不完整的交易记录
+    # ★★ 2026-08-31 v2: 正确公式 — 以 st.equity（用户同步基准）为锚
+    #   equity = st.equity + (journal已实现增量) + (当前浮动 - 上次浮动)
+    #   既覆盖手动入金/出金，又跟随行情实时波动
     INIT_CAPITAL = 1000000.0
-    realized_pnl = round(equity_synced - INIT_CAPITAL - float_total, 2)
-    realized_pnl_at_sync = st.get("realized_pnl_at_sync", realized_pnl)
-    delta_realized = realized_pnl - realized_pnl_at_sync
-    float_at_sync = st.get("float_at_sync", 0.0)
-    dynamic_equity = equity_synced + delta_realized + float_total - float_at_sync
+    if get_account() == "live":
+        realized_pnl = float(st.get("realized_pnl", st.get("realized_pnl_at_sync", 0)) or 0)
+    else:
+        try:
+            import trade_journal as _tj
+            realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
+        except Exception:
+            realized_pnl = st.get("realized_pnl_at_sync", 0) or 0
+    float_at_sync = st.get("float_at_sync", 0.0) or 0.0
+    realized_at_sync = st.get("realized_pnl_at_sync", realized_pnl) or 0.0
+    equity_anchor = st.get("equity", INIT_CAPITAL) or INIT_CAPITAL
+    # journal 已实现增量（从上次 snapshot 到现在）
+    delta_realized = realized_pnl - realized_at_sync
+    # 浮动盈亏变化（从上次 snapshot 到现在）
+    delta_float = float_total - float_at_sync
+    dynamic_equity = round(equity_anchor + delta_realized + delta_float, 2)
+    # ★ 所有账户：state 里有 CTP 真实权益就用真实值
+    if st.get("equity"):
+        dynamic_equity = float(st["equity"])
     if dynamic_equity <= 0:
         dynamic_equity = 1  # 防除零
     # 基于动态权益重新计算占用率 / 距上限（使上下板块同步）
@@ -1048,35 +1297,35 @@ def snapshot(prices=None):
     #   动态权益仅用于前端显示，不回写到基准权益，避免漂移
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _LOCK:
-        # 只更新同步时间戳和快照值，不修改基准权益
+        # ★★ 2026-08-31 v2: 把 dynamic_equity 回写到 st.equity 作为下次 anchor
+        # 这样权益像滚动快照一样推进，永不漂移
+        st["equity"] = round(dynamic_equity, 2)
         st["equity_synced"] = now_str
         st["realized_pnl_at_sync"] = realized_pnl
         st["float_at_sync"] = round(float_total, 2)
         st["updated"] = now_str
-        # 计算动态权益后回写（但不改变用户的同步基准）
-        dynamic_eq = round(dynamic_equity, 2)
         save_state(st)
 
-    available = round(dynamic_equity - total_margin, 2)
+    # ★ 所有账户：state 里有 CTP 真实可用资金就直接用
+    if st.get("cash"):
+        available = float(st["cash"])
+    else:
+        available = round(dynamic_equity - total_margin, 2)
     # ★ 2026-08-28: 使用用户设定的同步权益作为基准，动态权益仅用于显示
     base_equity = equity_synced  # 用户/同步时设定的基准权益
 
-    # ★★ 2026-08-28: 数据自洽验证（确保各板块数据一致）
-    # 基本恒等式：权益 = 初始资金 + 已实现盈亏 + 浮动盈亏
-    INIT_CAPITAL = 1000000.0
+    # ★★ 2026-08-31 v2: 自洽验证
+    # 恒等式：dynamic_equity = anchor + delta_realized + delta_float
     self_check_ok = True
     self_check_msg = ""
-
-    # 反向计算已实现盈亏，确保自洽
-    computed_realized = round(dynamic_equity - INIT_CAPITAL - float_total, 2)
-
-    # 自洽检查
-    expected_total = round(computed_realized + float_total, 2)
-    actual_total = round(dynamic_equity - INIT_CAPITAL, 2)
-    if abs(expected_total - actual_total) > 0.01:
-        self_check_ok = False
-        self_check_msg = f"[自检失败] 盈亏不平衡: {expected_total} != {actual_total}"
+    self_check_ok = abs(dynamic_equity - (equity_anchor + delta_realized + delta_float)) < 0.5
+    if not self_check_ok:
+        self_check_msg = f"[自检失败] equity={dynamic_equity} != anchor={equity_anchor}+dR={delta_realized}+dF={delta_float}"
         print(f"[SELF_CHECK] {self_check_msg}")
+    # return 里引用的变量（从新公式语义填充）
+    computed_realized = realized_pnl  # journal 真实值
+    float_computed = float_total
+    total_verified = round(dynamic_equity - equity_anchor, 2)  # 相对 anchor 的变化
 
     # 防负值保护
     if available < 0:
@@ -1091,8 +1340,11 @@ def snapshot(prices=None):
         "equity": round(dynamic_equity, 2),
         "equity_synced_raw": round(dynamic_equity, 2),
         "available": available,
-        "realized_pnl": realized_pnl,
-        "realized_pnl_at_sync": realized_pnl,
+        "cash": st.get("cash"),
+        "fee_total": st.get("fee_total"),
+        "total_pnl": round(st.get("total_pnl", realized_pnl), 2),
+        "realized_pnl": round(realized_pnl, 2),
+        "realized_pnl_at_sync": round(realized_pnl, 2),
         "float_total": round(float_total, 2),
         "total_margin": round(total_margin, 2),
         "usage_rate": usage_rate,
@@ -1113,7 +1365,7 @@ def snapshot(prices=None):
             "equity_verified": round(dynamic_equity, 2),
             "realized_computed": computed_realized,
             "float_computed": round(float_total, 2),
-            "total_verified": round(dynamic_equity - INIT_CAPITAL, 2),
+            "total_verified": total_verified,
         },
     }
 

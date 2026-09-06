@@ -233,30 +233,152 @@ def _build_llm_prompt(sig, p, bullets):
     )
 
 
+def _load_dotenv():
+    """ponytail: 全项目此前从未加载 .env，导致 .env 里的 OLLAMA_MODEL/LLM_* 永远进不了
+    os.environ，增强层形同虚设。这里在 import 时把同目录 .env 的缺失键补进 os.environ
+    （setdefault：不覆盖已显式设置的环境变量），保证无论怎么启动都能读到配置。
+    纯标准库解析，零第三方依赖。"""
+    try:
+        _env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+        if not os.path.exists(_env):
+            return
+        with open(_env, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line or _line.startswith("#") or "=" not in _line:
+                    continue
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+    except Exception:
+        pass
+
+
+_load_dotenv()
+
+def llm_enabled():
+    """本地 Ollama 或云端 LLM_* 任一可用即 True。
+    runner 用它决定是否异步补推 AI 解读——取代原先硬编码的 DEEPSEEK_API_KEY 检查
+    （该检查与 .env 的 LLM_* 命名不一致，导致增强层从未真正触发）。
+    ponytail: LLM_ENABLED=0 是硬总开关，必须先判——否则配了 OLLAMA_MODEL 就关不掉 LLM。"""
+    if os.environ.get("LLM_ENABLED", "1") == "0":
+        return False
+    if os.environ.get("OLLAMA_MODEL"):
+        return True
+    return bool(os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY"))
+
+
+def _timeout():
+    return float(os.environ.get("LLM_TIMEOUT", 8))
+
+
 def llm_explain(prompt):
-    """可选 LLM 增强层：仅当配置 DEEPSEEK_API_KEY(+可选 DEEPSEEK_BASE_URL/MODEL) 时调用。
-    任何失败一律返回 None（主流程回退确定性解释）。"""
-    key = os.environ.get("DEEPSEEK_API_KEY")
-    if not key:
+    """可选 LLM 增强层：云端 LLM_* 优先（快/零维护，与 M2 一致），本地 Ollama 次之（离线灾备）。
+    任何失败一律返回 None（主流程回退确定性解释），永不拖累信号主流程。"""
+    return _cloud_explain(prompt) or _ollama_explain(prompt)
+
+
+def _ollama_explain(prompt):
+    """本地后端：需设置 OLLAMA_MODEL 才启用（如 deepseek-r1:14b）。
+    ponytail: 本地默认 60s、云端默认 8s——实测 14B 冷启约 17s，沿用云端 8s 会让本地
+    增强层永远超时回退 None；两条路径耗时量级不同，超时必须分开。"""
+    model = os.environ.get("OLLAMA_MODEL")
+    # LLM_ENABLED=0 为硬总开关：与 llm_enabled()/_cloud_explain 保持同一语义
+    if not model or os.environ.get("LLM_ENABLED", "1") == "0":
         return None
-    base = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-    url = base + "/chat/completions"
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    # keep_alive: Ollama 的 /api/generate 拒绝字符串 "-1"（400 Bad Request），
+    # 只接受整数 -1 或时长字符串（"5m"/"-1m"）。这里把纯数字/带负号数字 coerce 成 int。
+    _ka = os.environ.get("OLLAMA_KEEP_ALIVE", "5m")
+    try:
+        _ka = int(_ka)
+    except ValueError:
+        pass
     try:
         import urllib.request
 
         payload = json.dumps(
             {
-                "model": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "keep_alive": _ka,
+                "options": {
+                    "temperature": 0.3,
+                    "num_predict": int(os.environ.get("OLLAMA_NUM_PREDICT", 800)),
+                },
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            host + "/api/generate", data=payload, headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=float(os.environ.get("OLLAMA_TIMEOUT", 60))) as r:
+            data = json.loads(r.read())
+        resp = (data.get("response") or "").strip()
+        # 推理模型(R1)的 <think> 链会吃掉大半预算，并让推送消息变成几百字流水账；默认剥离，留结论。
+        if resp and os.environ.get("OLLAMA_STRIP_THINK", "1") != "0":
+            import re as _re
+
+            resp = _re.sub(r"<think>.*?</think>", "", resp, flags=_re.S).strip()
+        return resp or None
+    except Exception:
+        return None
+
+
+def _cloud_explain(prompt):
+    """云端 OpenAI 兼容后端：优先 .env 的 LLM_* 约定，兼容旧 DEEPSEEK_*。"""
+    key = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+    if not key or os.environ.get("LLM_ENABLED", "1") == "0":
+        return None
+    base = (
+        os.environ.get("LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com/v1"
+    ).rstrip("/")
+    try:
+        import urllib.request
+
+        payload = json.dumps(
+            {
+                "model": os.environ.get("LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 200,
                 "temperature": 0.3,
             }
         ).encode("utf-8")
         req = urllib.request.Request(
-            url, data=payload, headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+            base + "/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
         )
-        with urllib.request.urlopen(req, timeout=8) as r:
+        with urllib.request.urlopen(req, timeout=_timeout()) as r:
             data = json.loads(r.read())
         return data["choices"][0]["message"]["content"].strip()
     except Exception:
         return None
+
+
+if __name__ == "__main__":
+    # 自检：① 确定性路径零依赖可用；② 无后端时 LLM 层安全回退 None
+    _sig = {
+        "symbol": "FG",
+        "name": "玻璃",
+        "direction": "多",
+        "lots": 2,
+        "stop_dist": 18,
+        "pipeline": {
+            "T_5m": 0.62,
+            "regime": "trend",
+            "bias_G": 45,
+            "conv": "放行",
+            "F_bias": 0.2,
+            "C_score": 0.1,
+        },
+        "risk_gate": {"pass": True, "kelly_mult": 0.5},
+    }
+    _out = explain_signal(_sig)
+    assert _out.get("summary") and _out.get("bullets"), _out
+    for _k in ("OLLAMA_MODEL", "LLM_API_KEY", "DEEPSEEK_API_KEY"):
+        os.environ.pop(_k, None)
+    assert llm_explain("ping") is None, "无后端时 llm_explain 必须返回 None"
+    print("OK 确定性解释可用；LLM 层未配置时安全回退 None")
+    print("summary:", _out["summary"])
+    for _b in _out["bullets"]:
+        print("  -", _b)

@@ -49,6 +49,33 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
     return tr.rolling(n, min_periods=n).mean()
 
 
+def dual_range_vol(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    """双差值波动估计 DR(N)/√N（Dual Thrust range，OOS 采纳 2026-08-31）。
+
+    Range = max(滚动HH−滚动LC, 滚动HC−滚动LL)：
+    HH−LC 含向上跳空、HC−LL 含向下跳空，取大者对跳空方向不偏不倚，
+    比 ATR 更适合中国期货夜盘/长假频繁跳空场景。
+    √N 缩放：随机游走下 E[range_N]/E[TR]=√N，归一到 ATR 量级，零拟合参数。
+    仅用于止损/止盈通道（行情分类保持 ATR）。
+    """
+    h, l, c = df["high"], df["low"], df["close"]
+    hh = h.rolling(n, min_periods=n).max()
+    ll = l.rolling(n, min_periods=n).min()
+    hc = c.rolling(n, min_periods=n).max()
+    lc = c.rolling(n, min_periods=n).min()
+    dr = pd.concat([hh - lc, hc - ll], axis=1).max(axis=1)
+    return dr / math.sqrt(n)
+
+
+def _dual_range_array(high, low, close, window):
+    """双差值波动估计 numpy 数组版（回测引擎用，与 dual_range_vol 同口径）。"""
+    hh = pd.Series(high).rolling(window).max().values
+    ll = pd.Series(low).rolling(window).min().values
+    hc = pd.Series(close).rolling(window).max().values
+    lc = pd.Series(close).rolling(window).min().values
+    return np.maximum(hh - lc, hc - ll) / np.sqrt(window)
+
+
 def rsi(s: pd.Series, n: int = 14) -> pd.Series:
     """相对强弱指数。"""
     d = s.diff()

@@ -43,7 +43,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.6.0"
+APP_VERSION = "v3.8.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -224,6 +224,7 @@ for _blk in (
     "seasonal_boost",
     "regime_params",
     "trailing_tail",
+    "per_symbol_tail",  # P0-3/P0-6 分品种尾仓参数覆盖
     "account",
     "risk_gate",
     "contract_specs",
@@ -235,6 +236,7 @@ for _blk in (
         _STRAT_CFG[_blk] = {**DEFAULT_CONFIG.get(_blk, {}), **_tc_blk}
 import strategy_layer
 from strategy_layer import atr as strat_atr
+from strategy_layer import dual_range_vol as strat_dual_range
 
 # P-H (2026-08-14): 启动注入稳健池回灌配置 + 读回灌文件(enabled 时生效)
 try:
@@ -271,6 +273,7 @@ import discipline_review as dr
 import drawdown_guard as ddg  # #119 回撤水位线自动降险（渐变 + 持久化）
 import event_calendar as ec  # #13 事件/数据日历闸门
 import execution_planner as exp  # #7 大单拆分/冰山/TWAP 执行建议
+import pyramid_addon as pyr  # P2 金字塔加仓影子模式（三重门+保守阶梯，只推荐不执行）
 import feature_manager as fmg  # 特性开关管理器（热加载/切换/日志）
 import four_dim_calibrate as fdc  # #121 已接入 CLI：真重校准扫描
 import four_dim_recalibrate as fdr  # #121 已接入 CLI：校准漂移检测
@@ -283,6 +286,7 @@ import macro_context as mctx  # #6 跨资产宏观语境(live 专属，回测 ma
 import market_scanner as mscan  # #11 全市场批量扫描(并行)
 import montecarlo as mc  # #11 蒙特卡洛权益曲线置信区间
 import paper_trading_integration as pti  # 自动模拟交易引擎集成
+import trisense_replay_integration as tri  # 三感参谋实盘跟踪账户（第二账户）
 import push_notify as pn  # #15 手机推送(Telegram/Bark/企业微信)
 import regime_hmm as rhmm  # #7 HMM 市场状态识别(live 专属，回测不要调用)
 import sentiment_engine as senteng  # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
@@ -743,6 +747,42 @@ PERF_WEIGHT_WINRATE = 30
 PERF_WEIGHT_PROFIT_FACTOR = 30
 PERF_WEIGHT_STREAK = 20
 PERF_WEIGHT_RECENT_R = 20
+
+# ── 胜率反馈分桶（P2，2026-08-31）──
+# 各策略标签的胜率/盈亏比基线：来自 4498 笔回测标签数据（walk_forward 全样本）。
+# 结构性事实：趋势单天然低胜率高盈亏比，均值单相反——混桶统计会错杀趋势信号。
+# 计分改为"相对自身基线的偏离"：桶内胜率=基线 → 50 分（中性），偏离 ±10pp → 75/25 分。
+# 验收标准：趋势策略基线表现（WR 33.5% / PF 1.33 / 含正常连亏）→ level 不得为 poor。
+# 注：只归一胜率不够——PF/连亏组件同样按绝对标准惩罚低胜率结构（tools_verify 实测），
+#     故四个组件全部基线归一（R 组件期望为正、无结构偏见，保留绝对计分）。
+PERF_WINRATE_BASELINE_BY_LABEL = {
+    "趋势": 33.5,
+    "均值回归": 34.1,
+    "背离": 33.8,
+    "季节性": 32.5,
+    "手动": 34.0,
+}
+PERF_PF_BASELINE_BY_LABEL = {
+    "趋势": 1.33,
+    "均值回归": 1.09,
+    "背离": 1.43,
+    "季节性": 1.27,
+    "手动": 1.20,
+}
+PERF_WINRATE_BASELINE_DEFAULT = 34.0  # 无标签/样本不足桶的全局基线
+PERF_PF_BASELINE_DEFAULT = 1.20
+PERF_BUCKET_MIN_TRADES = 3            # 桶内样本 <3 笔时并入无标签桶
+
+# 连亏惊奇度分带：p = 当前连亏长度在基线胜率下的出现概率（越小越异常）
+# p ≥ 0.25 完全正常(50) → p < 0.01 极端异常(0)。盈利连击镜像（60→100）。
+PERF_STREAK_SURPRISE_BANDS = [
+    (0.25, 50.0, 60.0),
+    (0.12, 40.0, 70.0),
+    (0.06, 30.0, 80.0),
+    (0.03, 20.0, 90.0),
+    (0.01, 10.0, 95.0),
+    (0.00, 0.0, 100.0),
+]
 
 # ── 状态判定阈值（技术面得分 0-100） ──
 TECH_SCORE_TREND_EARLY_MIN = 55
@@ -1469,6 +1509,27 @@ def _resample_30m(df_5m):
         return None
 
 
+def _stop_vol_daily(sym, df_daily):
+    """止损通道日线波动估计：白名单品种用双差值 DR(14)/√14，其余 ATR(14)。
+
+    2026-08-31 OOS 采纳（tools_oos_dual_range_final.py）：RM/m/p/FG/ru 止损/止盈通道
+    换 Dual Thrust 双差值估计（对跳空方向鲁棒），行情分类（regime）保持 ATR 不变。
+    DR 数据不足（<14 根）或异常时自动回退 ATR。"""
+    if df_daily is None or not len(df_daily):
+        return None
+    if sym in _STRAT_CFG.get("dual_range_stop_symbols", ()):
+        try:
+            v = strat_dual_range(df_daily).iloc[-1]
+            if v is not None and not pd.isna(v) and v > 0:
+                return float(v)
+        except Exception:
+            pass
+    v = strat_atr(df_daily).iloc[-1]
+    if v is None or pd.isna(v):
+        return None
+    return float(v)
+
+
 def _compute_stop_atr(sym, df_5m, atr_daily, now=None):
     """止损基准 ATR 计算（与信号口径一致）：
     - 日盘(09-15) & 非夜盘时段：用日线 ATR（含隔夜跳空，偏粗）
@@ -1545,7 +1606,7 @@ def _auto_levels(sym, direction, price):
         used_price = price
     try:
         df_daily = load_daily_refreshed(sym)
-        atr_daily = strat_atr(df_daily).iloc[-1] if (df_daily is not None and len(df_daily)) else None
+        atr_daily = _stop_vol_daily(sym, df_daily)
         if atr_daily is None or pd.isna(atr_daily) or atr_daily <= 0:
             return None, None, None, None, used_price, False
         df_5m = FEED.get_5m(sym, n_bars=120)
@@ -1867,14 +1928,14 @@ def build_batch_orders(mode="flatten", symbol=None):
             new_lots = lots
             try:
                 df = load_daily_refreshed(sym)
-                atrd = float(strat_atr(df).iloc[-1]) if df is not None and len(df) else None
+                atrd = _stop_vol_daily(sym, df)
                 if atrd and px:
                     rg = risk_gate(sym, px, atrd, _STRAT_CFG)
                     if rg.get("passed") and rg.get("lots"):
                         new_lots = int(rg["lots"])
                     ev_gate = ec.gate(lookahead_hours=4)
                     ev_scale = ec.scale_factor(ev_gate)
-                    scale = rsm.RISK_FSM.scale()
+                    scale = rsm.get_fsm(at.get_account()).scale()
                     dd_scale = ddg.scale_factor()  # #119 回撤水位线渐变降险
                     _combined = round(
                         min(scale, dd_scale, ev_scale), 3
@@ -1900,7 +1961,7 @@ def build_batch_orders(mode="flatten", symbol=None):
                 pass
             rows.append(ritem)
     blocked = ""
-    if mode == "reverse" and rsm.is_locked():
+    if mode == "reverse" and rsm.is_locked(at.get_account()):
         blocked = "风控锁定/熔断中：反手的「开仓腿」被禁止，清单里的平仓腿照做、开仓腿先别打"
     txt = (
         "\n".join(
@@ -1937,7 +1998,7 @@ def apply_batch_orders(mode="flatten", symbol=None):
             if r["step"] == "平仓":
                 ok, msg, _ = at.record_trade(sym, "close", r["direction"], r["lots"], px)
             else:
-                if rsm.is_locked():
+                if rsm.is_locked(at.get_account()):
                     errs.append(f"{sym} 风控锁定，反手开仓腿未记账")
                     continue
                 ok, msg, _ = at.record_trade(sym, "open", r["direction"], r["lots"], px)
@@ -2465,8 +2526,33 @@ def check_position_alerts(positions):
         target = p.get("target")
         t1 = p.get("t1")
         t2 = p.get("t2")
+        # ★ 2026-08-31: 缺 levels 自动补算（ATR 规则）—— 所有持仓都应有止损止盈
         if stop is None and t1 is None and t2 is None:
-            continue
+            try:
+                _lv = _auto_levels(sym, p["direction"], p.get("avg"))
+                if _lv and _lv[0] is not None:
+                    nstop, nt1, nt2 = _lv[0], _lv[1], _lv[2]
+                    p["stop"] = nstop
+                    p["t1"] = nt1
+                    p["t2"] = nt2
+                    try:
+                        at.set_levels(sym, stop=nstop, t1=nt1, t2=nt2)
+                    except Exception:
+                        pass
+                    # 同时自动算 tp_targets（分级止盈落盘）
+                    if nt1 and nt2 and nstop:
+                        _atr_est = abs(float(nstop) - float(p.get("avg", 0))) or float(p.get("avg", 0)) * 0.02
+                        p["tp_targets"] = [
+                            {"level": "t1", "price": round(nt1, 2), "ratio": 0.5, "lots": 0.5},
+                            {"level": "t2", "price": round(nt2, 2), "ratio": 1.0, "lots": 0.5},
+                        ]
+                    print(f"[auto-levels] {sym} {p['direction']} x{p['lots']}: stop={nstop} t1={nt1} t2={nt2}")
+            except Exception:
+                pass
+            # 补算后再检查，如果还是没有才跳过
+            if p.get("stop") is None and p.get("t1") is None and p.get("t2") is None:
+                continue
+            stop, t1, t2 = p.get("stop"), p.get("t1"), p.get("t2")
         px = p.get("price")
         if px is None:
             continue
@@ -3873,7 +3959,16 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
 def _fire_trail_alert(sym, pos, px, state, new_stop):
     """移动止损状态切换时通知（保本/跟踪/达t2/尾仓），与触价报警同款弹窗+语音+聊天流。"""
     # P-G：尾仓提示文案动态引用配置(tail_pct/min_profit_R/tail_trail_R)，让"平X%留Y%尾仓"真实反映参数
-    tt = _STRAT_CFG.get("trailing_tail", {})
+    # 分品种参数覆盖（与 manage_trailing_stops / exit_plan 保持一致）
+    tt = dict(_STRAT_CFG.get("trailing_tail", {}))
+    sym_tail = _STRAT_CFG.get("per_symbol_tail", {}).get(sym, {})
+    for _k in ("tail_pct", "tail_trail_R", "min_profit_R", "tail_breakeven_R",
+               "partial_take_R", "partial_take_pct",
+               "partial_take2_R", "partial_take2_pct",
+               "tail_tighten_R", "tail_tighten_pct",
+               "tail_max_bars"):
+        if _k in sym_tail:
+            tt[_k] = sym_tail[_k]
     tail_pct = float(tt.get("tail_pct", 0.25))
     close_pct = int(round((1 - tail_pct) * 100))
     keep_pct = int(round(tail_pct * 100))
@@ -3918,6 +4013,77 @@ def _fire_trail_alert(sym, pos, px, state, new_stop):
     append_chat(sig)
     # C4 报警历史：移动止损状态切换统一落盘
     log_alert("移动止损", sym, sig["name"], sig["reason"], {"state": state, "new_stop": new_stop, "price": px})
+
+
+def _fire_partial_take_alert(sym, pos, px, take_R, take_pct, oneR, cur_stop):
+    """P0-6 分批止盈提示：尾仓态下达到 take_R 时，提示用户平掉 take_pct 的尾仓。"""
+    take_pct_int = int(round(take_pct * 100))
+    remain_pct = 100 - take_pct_int
+    sig = {
+        "name": pos.get("name", sym),
+        "direction": pos["direction"],
+        "lots": pos["lots"],
+        "symbol": sym,
+        "price": px,
+        "stop": cur_stop,
+        "t1": pos.get("t1"),
+        "t2": pos.get("t2"),
+        "alert_type": "尾仓·分批止盈",
+        "alert_label": "分批止盈",
+        "reason": (
+            f"{pos.get('name', sym)} {pos['direction']} {pos['lots']}手："
+            f"尾仓已盈利 {take_R:.1f}R，建议主动平掉尾仓的 {take_pct_int}%（落袋为安），"
+            f"剩余 {remain_pct}% 尾仓继续用宽跟踪止损跟出。"
+            f"（当前止损 {_fmt_price(cur_stop)}，现价 {_fmt_price(px)}）"
+        ),
+    }
+    if not sig.get("contract") and sig.get("symbol"):
+        try:
+            _auth = ml._authoritative_contracts()
+            _code = _auth.get(sig["symbol"])
+            if _code:
+                sig["contract"] = ml.normalize_contract_code(_code)
+        except Exception:
+            pass
+    notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
+    sig["kind"] = "alert"
+    append_chat(sig)
+    log_alert("分批止盈", sym, sig["name"], sig["reason"], {"take_R": take_R, "take_pct": take_pct, "price": px})
+
+
+def _fire_partial_take2_alert(sym, pos, px, take2_R, take2_pct, oneR, cur_stop):
+    """P0-7 二级分级止盈提示：尾仓态下达到 take2_R 时，提示再平掉剩余尾仓的 take2_pct。"""
+    take2_pct_int = int(round(take2_pct * 100))
+    sig = {
+        "name": pos.get("name", sym),
+        "direction": pos["direction"],
+        "lots": pos["lots"],
+        "symbol": sym,
+        "price": px,
+        "stop": cur_stop,
+        "t1": pos.get("t1"),
+        "t2": pos.get("t2"),
+        "alert_type": "尾仓·二级止盈",
+        "alert_label": "二级止盈",
+        "reason": (
+            f"{pos.get('name', sym)} {pos['direction']} {pos['lots']}手："
+            f"尾仓已盈利 {take2_R:.1f}R，建议再平掉剩余尾仓的 {take2_pct_int}%（二级止盈），"
+            f"保留底仓继续用跟踪止损跟出。"
+            f"（当前止损 {_fmt_price(cur_stop)}，现价 {_fmt_price(px)}）"
+        ),
+    }
+    if not sig.get("contract") and sig.get("symbol"):
+        try:
+            _auth = ml._authoritative_contracts()
+            _code = _auth.get(sig["symbol"])
+            if _code:
+                sig["contract"] = ml.normalize_contract_code(_code)
+        except Exception:
+            pass
+    notify(sig, voice=not getattr(ARGS, "no_voice", False), banner=True)
+    sig["kind"] = "alert"
+    append_chat(sig)
+    log_alert("二级止盈", sym, sig["name"], sig["reason"], {"take2_R": take2_R, "take2_pct": take2_pct, "price": px})
 
 
 def calc_tiered_stop_loss(position, entry_price, atr, sigma_stop_price):
@@ -4288,7 +4454,16 @@ def manage_trailing_stops():
         if profit_R < 1:
             continue  # 未达 t1：保持初始止损不动
         # ── P-G 尾仓（trailing_tail）：参数统一从 _STRAT_CFG 读取；min_profit_R 驱动入尾仓阈值 ──
-        tt = _STRAT_CFG.get("trailing_tail", {})
+        tt = dict(_STRAT_CFG.get("trailing_tail", {}))
+        # 分品种参数覆盖（优先级高于全局，与 exit_plan / 回测逻辑对齐）
+        sym_tail = _STRAT_CFG.get("per_symbol_tail", {}).get(sym, {})
+        for _k in ("tail_pct", "tail_trail_R", "min_profit_R", "tail_breakeven_R",
+                   "partial_take_R", "partial_take_pct",
+                   "partial_take2_R", "partial_take2_pct",
+                   "tail_tighten_R", "tail_tighten_pct",
+                   "tail_max_bars"):
+            if _k in sym_tail:
+                tt[_k] = sym_tail[_k]
         # 开关优先级：特性开关 > 旧配置 > 默认关闭
         _tail_sw = None
         try:
@@ -4300,14 +4475,40 @@ def manage_trailing_stops():
         tail_enabled_cfg = bool(_tail_sw)
         tail_trail_R = float(tt.get("tail_trail_R", 2.0))
         min_profit_R = float(tt.get("min_profit_R", 2.0))
+        tail_breakeven_R = float(tt.get("tail_breakeven_R", 0.0))  # P0-5：尾仓保本阈值
+        partial_take_R = float(tt.get("partial_take_R", 0.0))  # P0-6：分批止盈阈值
+        partial_take_pct = float(tt.get("partial_take_pct", 0.0))  # P0-6：分批止盈比例
+        partial_take2_R = float(tt.get("partial_take2_R", 0.0))  # P0-7：二级止盈阈值
+        partial_take2_pct = float(tt.get("partial_take2_pct", 0.5))  # P0-7：二级止盈比例
+        tail_tighten_R = float(tt.get("tail_tighten_R", 0.0))  # P0-8：跟踪收紧阈值
+        tail_tighten_pct = float(tt.get("tail_tighten_pct", 0.3))  # P0-8：收紧比例
         if cur_state == "尾仓":
-            # 已达 t2，用更宽(tail_trail_R×1R)移动止损跟出，回撤触新止损即离场
-            tail_stop_dist = tail_trail_R * oneR
+            # 已达 min_profit_R，用更宽(tail_trail_R×1R)移动止损跟出，回撤触新止损即离场
+            # P0-8：跟踪收紧棘轮——尾仓盈利达到 tail_tighten_R 后，跟踪距离收紧 (1-tighten_pct) 倍
+            # 注意：tail_tighten_R 是相对尾仓入场价的 R（与回测 _sim_exit_5m 一致）
+            tail_profit_R = profit_R - min_profit_R  # 相对尾仓入场价的盈利 R
+            base_trail_dist = tail_trail_R * oneR
+            if tail_tighten_R > 0 and tail_profit_R >= tail_tighten_R:
+                tail_stop_dist = base_trail_dist * (1.0 - tail_tighten_pct)
+            else:
+                tail_stop_dist = base_trail_dist
+            # 尾仓入场价（相对 entry 的 min_profit_R 位置）
+            tail_entry_price = entry + ds * min_profit_R * oneR
             if ds > 0:
-                cand = max(entry, px - tail_stop_dist)  # 不低于开仓价(保本底)
+                cand = px - tail_stop_dist
+                # P0-5：尾仓保本——尾仓盈利达 tail_breakeven_R 时，止损底抬高至尾仓入场价（保本 min_profit_R）
+                # 注意：tail_breakeven_R 是相对尾仓入场价的 R（与回测一致）
+                if tail_breakeven_R > 0 and tail_profit_R >= tail_breakeven_R:
+                    cand = max(tail_entry_price, cand)
+                else:
+                    cand = max(entry, cand)
                 new_stop = cand if cand > stop else stop
             else:
-                cand = min(entry, px + tail_stop_dist)
+                cand = px + tail_stop_dist
+                if tail_breakeven_R > 0 and tail_profit_R >= tail_breakeven_R:
+                    cand = min(tail_entry_price, cand)
+                else:
+                    cand = min(entry, cand)
                 new_stop = cand if cand < stop else stop
             new_state = "尾仓"
         elif cur_state in (None, "", "初始"):
@@ -4316,7 +4517,14 @@ def manage_trailing_stops():
             new_state = "保本"
         elif profit_R >= min_profit_R and t2 is not None and bool(pos.get("tail_enabled")) and tail_enabled_cfg:
             # P-G：进入尾仓态——平掉 (1-tail_pct) 锁 min_profit_R×R，留 tail_pct 用宽 trail 跟出（不锁全平）
-            tail_stop_dist = tail_trail_R * oneR
+            # P0-8：进入时检查是否已达收紧阈值（极端情况价格一跳到位）
+            # 注意：tail_tighten_R 是相对尾仓入场价的 R（与回测一致）
+            tail_profit_R = profit_R - min_profit_R
+            base_trail_dist = tail_trail_R * oneR
+            if tail_tighten_R > 0 and tail_profit_R >= tail_tighten_R:
+                tail_stop_dist = base_trail_dist * (1.0 - tail_tighten_pct)
+            else:
+                tail_stop_dist = base_trail_dist
             if ds > 0:
                 base = t2 - tail_stop_dist
                 new_stop = base if base > stop else stop  # 尾仓基线比 t2 宽松（允许回撤）
@@ -4344,6 +4552,42 @@ def manage_trailing_stops():
                 cand = min(entry, px + oneR)
                 new_stop = cand if cand < stop else stop
             new_state = "跟踪"
+        # ── P0-6 分批止盈检测（尾仓态下达到 partial_take_R 时提示）──
+        # 仅状态变化时触发一次提示（避免刷屏）；不修改止损，仅用于提示用户主动减仓
+        # 注意：partial_take_R 是相对尾仓入场价的 R（与回测 _sim_exit_5m 一致）
+        tail_profit_R_for_alert = profit_R - min_profit_R if new_state == "尾仓" else 0
+        if (new_state == "尾仓" and partial_take_R > 0 and partial_take_pct > 0
+                and tail_profit_R_for_alert >= partial_take_R
+                and pos.get("partial_take_fired") != partial_take_R):
+            # 标记已触发（通过 advance_trailing 的扩展字段持久化）
+            try:
+                at.set_position_field(sym, "partial_take_fired", partial_take_R)
+            except Exception:
+                pass  # 旧版 at 无此方法则跳过
+            _fire_partial_take_alert(sym, pos, px, partial_take_R, partial_take_pct, oneR, new_stop)
+        # ── P0-7 二级止盈检测（尾仓态下达到 partial_take2_R 时再提示减仓）──
+        # 在 P0-6 之后，更高盈利阈值时触发，平掉剩余尾仓的一部分
+        # 注意：partial_take2_R 是相对尾仓入场价的 R（与回测一致）
+        if (new_state == "尾仓" and partial_take2_R > 0 and partial_take2_pct > 0
+                and tail_profit_R_for_alert >= partial_take2_R
+                and pos.get("partial_take2_fired") != partial_take2_R):
+            try:
+                at.set_position_field(sym, "partial_take2_fired", partial_take2_R)
+            except Exception:
+                pass
+            _fire_partial_take2_alert(sym, pos, px, partial_take2_R, partial_take2_pct, oneR, new_stop)
+        # ── P0-8 跟踪收紧触发提示（尾仓盈利刚达 tail_tighten_R 时提示跟踪距离已收紧）──
+        if (new_state == "尾仓" and tail_tighten_R > 0
+                and tail_profit_R_for_alert >= tail_tighten_R
+                and pos.get("tail_tighten_fired") != tail_tighten_R):
+            try:
+                at.set_position_field(sym, "tail_tighten_fired", tail_tighten_R)
+            except Exception:
+                pass
+            # 跟踪收紧不单独发推送（修改止损本身会触发状态告警），仅记录
+            log_alert("跟踪收紧", sym, pos.get("name", sym),
+                      f"尾仓盈利达 {tail_tighten_R:.1f}R，跟踪止损距离收紧 {int(tail_tighten_pct*100)}%",
+                      {"tail_tighten_R": tail_tighten_R, "tail_tighten_pct": tail_tighten_pct, "price": px})
         changed = False
         if (stop is None and new_stop is not None) or (stop is not None and abs(new_stop - stop) > 1e-6):
             changed = True
@@ -4772,7 +5016,7 @@ def _risk_rule_context(prices=None):
     ctx["heat_pct"] = h.get("heat_pct")
     ctx["heat_status"] = h.get("status")
     try:
-        fsm = rsm.RISK_FSM.summary()
+        fsm = rsm.get_fsm(at.get_account()).summary()
     except Exception:
         fsm = {}
     ctx["fsm_state"] = fsm.get("state")
@@ -4786,7 +5030,7 @@ def _risk_rule_context(prices=None):
     ctx["dd_pct"] = dd.get("dd_pct")
     ctx["dd_tier"] = dd.get("tier")
     try:
-        ks = rsm.KILL.summary()
+        ks = rsm.get_kill(at.get_account()).summary()
     except Exception:
         ks = {}
     ctx["halted"] = bool(ks.get("halted"))
@@ -5688,8 +5932,81 @@ def _parse_contract_month(code):
     return 2000 + yy, mm
 
 
+def _next_contract_for_roll(sym, cur_code):
+    """移仓目标合约：优先取权威映射的次主力（HOT_CACHE 按持仓量排序）；
+    若次主力与当前合约相同（品种只有一张活跃合约），尝试同品种下一个交割月份合约代码；
+    都取不到返回 None。"""
+    try:
+        hc = ml.HOT_CACHE.get(sym) or {}
+        cand = hc.get("secondary") or ""
+        cand = ml.normalize_contract_code(cand)
+        if cand and cand.upper() != str(cur_code).upper():
+            return cand
+    except Exception:
+        pass
+    # 兜底：当前合约月份 +1/3/5（对应商品期货 1/3/5/7/9/11 或 2/4/6/8/10/12 的月份节奏）
+    ym = _parse_contract_month(cur_code)
+    if not ym:
+        return None
+    y, m = ym
+    prefix = re.sub(r"[^A-Za-z]", "", str(cur_code))
+    for step in (1, 2, 3, 4, 6):
+        mm = m + step
+        yy = y + (mm - 1) // 12
+        mm = (mm - 1) % 12 + 1
+        cand = f"{prefix}{yy % 100:02d}{mm:02d}"
+        if cand.upper() != str(cur_code).upper():
+            return cand
+    return None
+
+
+_ROLL_SPREAD_CACHE = {}  # (sym, old_code, new_code) -> (ts, px_old, px_new)
+
+
+def _roll_spread(sym, old_code, new_code, ttl=300):
+    """新旧合约实时价差（新 − 旧）。用 rt_fut_k 全表里捞两张合约的最新价，
+    缓存 5 分钟（价差只用于展示，无需逐秒刷新）。取不到返回 None。"""
+    if not new_code:
+        return None
+    key = (sym, str(old_code).upper(), str(new_code).upper())
+    now = time.time()
+    hit = _ROLL_SPREAD_CACHE.get(key)
+    if hit and now - hit[0] < ttl:
+        return {"px_old": hit[1], "px_new": hit[2], "diff": round(hit[2] - hit[1], 2)}
+    px_old = px_new = None
+    try:
+        pro = ml._api()
+        if pro is not None:
+            df = pro.query("rt_fut_k", ts_code="*")
+            if df is not None and not getattr(df, "empty", True):
+                want = {re.sub(r"[^A-Z0-9]", "", str(old_code).upper()): "old",
+                        re.sub(r"[^A-Z0-9]", "", str(new_code).upper()): "new"}
+                for _, r in df.iterrows():
+                    code = re.sub(r"[^A-Z0-9]", "", str(r.get("ts_code", "")).upper())
+                    # rt_fut_k 可能给 3 位缩略码（FG609），补成 4 位再比对
+                    if len(code) >= 3 and code not in want:
+                        m3 = re.match(r"^([A-Z]+)(\d{3})$", code)
+                        if m3:
+                            code = m3.group(1) + "2" + m3.group(2)
+                    tag = want.get(code)
+                    if tag == "old" and px_old is None:
+                        px_old = float(r["close"])
+                    elif tag == "new" and px_new is None:
+                        px_new = float(r["close"])
+                    if px_old is not None and px_new is not None:
+                        break
+    except Exception:
+        return None
+    if px_old is None or px_new is None:
+        return None
+    _ROLL_SPREAD_CACHE[key] = (now, px_old, px_new)
+    return {"px_old": px_old, "px_new": px_new, "diff": round(px_new - px_old, 2)}
+
+
 def rollover_info(sym, contract=None):
-    """换月预警（B2）：算持仓合约距交割月首日的天数，临近则提示换主力合约。"""
+    """换月预警（B2）：算持仓合约距交割月首日的天数，临近则提示换主力合约。
+    2026-08-31 起升级「移仓护卫」v1：附移仓目标合约 + 新旧合约实时价差，
+    数据仅供参考，不做基差方向预测。"""
     code = ml.normalize_contract_code(contract or CONTRACT_MAP.get(sym) or sym)
     ym = _parse_contract_month(code)
     if not ym:
@@ -5708,7 +6025,62 @@ def rollover_info(sym, contract=None):
         level, msg = "warn", f"{code} 距交割月 {days} 天，建议开始留意换到下一主力"
     else:
         level, msg = "ok", f"{code} 距交割月 {days} 天，无需换月"
-    return {"contract": code, "delivery": f"{y}-{m:02d}", "days_left": days, "level": level, "msg": msg}
+    out = {"contract": code, "delivery": f"{y}-{m:02d}", "days_left": days, "level": level, "msg": msg}
+    # 移仓目标 + 价差：warn/urgent 才算（ok 级别无意义，省一次全表拉取）
+    if level in ("warn", "urgent"):
+        tgt = _next_contract_for_roll(sym, code)
+        if tgt:
+            out["target"] = tgt
+            sp = _roll_spread(sym, code, tgt)
+            if sp:
+                out["px_old"] = sp["px_old"]
+                out["px_new"] = sp["px_new"]
+                out["spread"] = sp["diff"]
+                out["spread_note"] = f"移仓 {code}→{tgt} 价差 {sp['diff']:+.1f} 点（新−旧，含跨期结构，仅供参考）"
+    return out
+
+
+def rollover_exec_advice(sym, contract=None):
+    """移仓护卫组合执行建议（B2 v2）：warn/urgent 时给出「平旧仓 + 开新仓」两段式
+    人话建议，复用 execution_planner 的拆片/冰山逻辑。只建议、不执行。
+    平旧仓 = 止损离场同款 urgency=fast（换月别拖，流动性在流失）；
+    开新仓 = patient（挂被动价，不急这一时半刻）。"""
+    info = rollover_info(sym, contract)
+    if not info or info.get("level") not in ("warn", "urgent"):
+        return None
+    st = at.load_state()
+    p = (st.get("positions") or {}).get(sym) or {}
+    lots = int(p.get("lots") or 0)
+    if lots <= 0:
+        return None
+    d = p.get("direction") or "多"
+    tgt = info.get("target")
+    px_old = info.get("px_old")
+    px_new = info.get("px_new")
+    close_leg = exp.plan_exit(sym, lots, px_old, d, panic=(info["level"] == "urgent"))
+    open_leg = exp.plan_execution(sym, lots, px_new, d, urgency="patient")
+    advice = {
+        "symbol": sym,
+        "contract": info["contract"],
+        "target": tgt,
+        "level": info["level"],
+        "days_left": info.get("days_left"),
+        "lots": lots,
+        "direction": d,
+        "close_leg": close_leg,
+        "open_leg": open_leg,
+        "spread": info.get("spread"),
+        "spread_note": info.get("spread_note"),
+    }
+    seq_close = "+".join(str(s) for s in (close_leg.get("slice_lots") or []))
+    seq_open = "+".join(str(s) for s in (open_leg.get("slice_lots") or []))
+    advice["headline"] = (
+        f"移仓 {info['contract']}→{tgt or '下一主力'}：先平旧 {lots} 手（{close_leg.get('style')}，"
+        f"{seq_close}），再开新 {lots} 手（{open_leg.get('style')}，{seq_open}）——"
+        + (f"价差 {info.get('spread', 0):+.1f} 点，" if info.get("spread") is not None else "")
+        + "两腿间隔几分钟，避开同一时点双边冲击"
+    )
+    return advice
 
 
 def rollover_overview():
@@ -5732,6 +6104,16 @@ def rollover_overview():
     rows.sort(key=lambda r: r.get("days_left") if r.get("days_left") is not None else 999)
     urgent = [r for r in rows if r.get("level") == "urgent"]
     warn = [r for r in rows if r.get("level") == "warn"]
+    # 移仓护卫组合执行建议（warn/urgent 持仓各生成一条）
+    advices = []
+    for r in rows:
+        if r.get("level") in ("warn", "urgent"):
+            try:
+                adv = rollover_exec_advice(r["symbol"], r.get("contract"))
+                if adv:
+                    advices.append(adv)
+            except Exception:
+                pass
     mm = {}
     try:
         mm = rollover_mismatch_check()
@@ -5742,11 +6124,164 @@ def rollover_overview():
         "urgent": len(urgent),
         "warn": len(warn),
         "note": f"距交割月 <{ROLL_URGENT_DAYS} 天须换月 · <{ROLL_WARN_DAYS} 天开始留意",
+        "advices": advices,
         "mismatches": mm.get("mismatches", []),
         "mm_count": mm.get("count", 0),
         "ak_checked_at": mm.get("checked_at"),
         "ak_error": mm.get("error"),
     }
+
+
+# —— 持仓策略参谋（v3.9.0，2026-08-31）：行情判定 + 金字塔四重门 + 止盈阶段 ——
+_POS_STRAT_CACHE = {"ts": 0.0, "data": {}}  # 60s 缓存（classify_regime 需算日线，省每轮重算）
+_POS_STRAT_TTL = 60.0
+_LAYER0_NAMES = {
+    "trend_early": "趋势初", "trend_mid": "趋势中", "trend_late": "趋势末", "sideways": "震荡",
+}
+
+
+def _latest_signal_label(sym, direction):
+    """从信号日志取该品种最近一次同向信号的策略标签（金字塔标签门输入）。
+    无匹配信号返回 None（门按无标签处理，如实展示）。"""
+    try:
+        with open(SIGNAL_LOG, encoding="utf-8") as f:
+            sigs = json.load(f)
+        if isinstance(sigs, dict):
+            sigs = sigs.get("signals", [])
+        d = "多" if str(direction) in ("多", "1", "long") else "空"
+        for s in sigs:
+            if s.get("symbol") == sym and s.get("direction") == d:
+                lab = s.get("strategy")
+                if lab and lab != "手动":
+                    return lab
+                return None
+        return None
+    except Exception:
+        return None
+
+
+def pos_strategy_payload():
+    """持仓策略参谋：每个持仓实时输出三块分析（只读，不产生任何委托）。
+
+    ① regime  行情判定：Layer0 状态引擎（趋势初/中/末/震荡 + 置信度 + 方向）
+               × 经典 classify_regime（波动/震荡/趋势/过渡）× 止损通道波动率（DR/√N 或 ATR）
+    ② pyramid 金字塔四重门逐门状态（行情/品种/标签/换月），全过附保守阶梯计划（影子模式）
+    ③ tp      止盈阶段：TP 状态机档位 + 当前浮盈 R + 距 T1/T2 的 R 倍数
+    """
+    now = time.time()
+    if now - _POS_STRAT_CACHE["ts"] < _POS_STRAT_TTL:
+        return _POS_STRAT_CACHE["data"]
+    st = at.load_state()
+    rows = {}
+    for sym, p in (st.get("positions") or {}).items():
+        lots = p.get("lots") or 0
+        if not lots:
+            continue
+        avg = p.get("avg")
+        stop = p.get("stop")
+        t1, t2 = p.get("t1"), p.get("t2")
+        px = None
+        try:
+            px = FEED.price(sym) if FEED else None
+        except Exception:
+            px = None
+        if not px or px <= 0:
+            px = p.get("price")
+        ds = 1 if p.get("direction") == "多" else -1
+
+        # ① 行情判定
+        ms = market_state_cache.get(sym) or {}
+        layer0 = ms.get("state")
+        classic, classic_desc = None, None
+        atr_pct, vol_src = None, None
+        try:
+            df_daily = load_daily_refreshed(sym)
+            if df_daily is not None and len(df_daily):
+                classic, classic_desc = fd.classify_regime(
+                    df_daily, fd.regime_params_for(sym, _STRAT_CFG, fmg.get_manager())
+                )
+                vol = _stop_vol_daily(sym, df_daily)
+                c_last = float(df_daily["close"].iloc[-1])
+                if vol and c_last:
+                    atr_pct = round(vol / c_last * 100, 2)
+                vol_src = "DR/√14" if sym in _STRAT_CFG.get("dual_range_stop_symbols", ()) else "ATR14"
+        except Exception:
+            pass
+
+        # ② 金字塔四重门（影子模式：逐门如实展示，全过才附阶梯）
+        roll_lv = None
+        try:
+            roll_lv = (rollover_info(sym, p.get("contract")) or {}).get("level")
+        except Exception:
+            pass
+        label = _latest_signal_label(sym, p.get("direction"))
+        stop_dist = abs(avg - stop) if (avg and stop) else None
+        pyramid = None
+        try:
+            passed, gates = pyr._gate_reasons(sym, layer0, label, roll_lv)
+            plan = None
+            if passed and stop_dist and avg:
+                plan = pyr.evaluate(
+                    symbol=sym, direction=p.get("direction"), entry_price=avg,
+                    stop_dist=stop_dist, lots=lots, market_state=layer0,
+                    strategy_label=label, roll_level=roll_lv,
+                )
+            pyramid = {
+                "passed": passed,
+                "gates": {
+                    "regime": {"ok": gates["passed"]["regime"],
+                               "name": "行情门", "desc": f"Layer0={_LAYER0_NAMES.get(layer0, layer0 or '无数据')}（趋势初/中期开放）"},
+                    "symbol": {"ok": gates["passed"]["symbol"],
+                               "name": "品种门", "desc": "白名单" if gates["passed"]["symbol"] else "未过 OOS 验证/黑名单"},
+                    "label": {"ok": gates["passed"]["label"],
+                              "name": "标签门", "desc": f"标签={label or '无'}（趋势/背离开放）"},
+                    "roll": {"ok": gates["passed"]["roll"],
+                             "name": "换月门", "desc": f"换月={roll_lv or 'ok'}（warn/urgent 暂停）"},
+                },
+                "failed_reasons": gates["failed_reasons"],
+                "plan": plan,
+                "label_source": f"最近同向信号标签: {label}" if label else "无同向信号标签",
+            }
+        except Exception:
+            pyramid = None
+
+        # ③ 止盈阶段（R 口径：1R = |avg - stop|）
+        tp = None
+        if stop_dist:
+            cur_r = round((px - avg) * ds / stop_dist, 2) if px else None
+            def _dist_r(target):
+                if target is None or px is None:
+                    return None
+                return round((target - px) * ds / stop_dist, 2)
+            tp = {
+                "tp_level": p.get("tp_level", "tp_none"),
+                "trail_state": p.get("trail_state"),
+                "cur_r": cur_r,
+                "stop_r": round((stop - avg) * ds / stop_dist, 2),
+                "to_t1_r": _dist_r(t1),
+                "to_t2_r": _dist_r(t2),
+            }
+
+        rows[sym] = {
+            "symbol": sym,
+            "name": SYMBOLS.get(sym, {}).get("name", sym),
+            "regime": {
+                "layer0": layer0,
+                "layer0_name": _LAYER0_NAMES.get(layer0),
+                "confidence": ms.get("confidence"),
+                "trend_direction": ms.get("trend_direction"),
+                "classic": classic,
+                "classic_desc": classic_desc,
+                "atr_pct": atr_pct,
+                "vol_src": vol_src,
+            },
+            "pyramid": pyramid,
+            "tp": tp,
+        }
+    out = {"rows": rows, "ts": now, "ttl": _POS_STRAT_TTL}
+    _POS_STRAT_CACHE["ts"] = now
+    _POS_STRAT_CACHE["data"] = out
+    return out
 
 
 # —— B3 跳空风险预警 ——
@@ -6273,7 +6808,7 @@ def _reconcile_journal_vs_account(held):
         }
 
 
-_ACCSYNC_CACHE = {"ts": 0.0, "data": None}
+_ACCSYNC_CACHE = {}  # {account_id: {"ts": float, "data": dict}}
 _ACCSYNC_TTL = 8
 
 
@@ -6350,7 +6885,7 @@ def positions_reconcile(positions):
         return {"ok": False, "message": f"对账异常：{e}"}
 
 
-def account_marketsync(force=False, heal=False):
+def account_marketsync(force=False, heal=False, account_id=None):
     """只读账户同步（minishare 实时盯市 + 对账漂移检测 + 自愈）。
     仅用 minishare 实时行情对 journal 已记录持仓逐笔盯市；不接券商 API、不代下单。
     heal=True 时以 journal 为真相源修正 account_state（已实现盈亏/开仓均价）；
@@ -6358,12 +6893,16 @@ def account_marketsync(force=False, heal=False):
     返回只读快照 + 每持仓盯市状态 + 漂移告警 + 自愈记录 + journal 账户一致性。"""
     global _ACCSYNC_CACHE
     now = time.time()
+    _cid = account_id or at.get_account()
+    _c = _ACCSYNC_CACHE.get(_cid)
     if (
         (not force)
         and (not heal)
-        and _ACCSYNC_CACHE["data"] is not None
-        and (now - _ACCSYNC_CACHE["ts"]) < _ACCSYNC_TTL
+        and _c is not None
+        and _c.get("data") is not None
+        and (now - _c["ts"]) < _ACCSYNC_TTL
     ):
+        return _c["data"]
         return _ACCSYNC_CACHE["data"]
     # 显式自愈（journal 为真相源，仅偏差时写盘，安全幂等）
     healed = []
@@ -6772,11 +7311,11 @@ def premarket_brief(force=False):
     if not force and _PREMK_CACHE["data"] is not None and (now - _PREMK_CACHE["ts"]) < _PREMK_TTL:
         return _PREMK_CACHE["data"]
     # —— 聚合各数据源 ——
-    sync = account_marketsync(force=force)
+    sync = account_marketsync(force=force, account_id=at.get_account())
     heat = compute_heat()
     dd = ddg.current()
-    fsm = rsm.RISK_FSM.summary()
-    halted = rsm.is_halted()
+    fsm = rsm.get_fsm(at.get_account()).summary()
+    halted = rsm.is_halted(at.get_account())
     phase = _market_phase()
     sig_list = _recent_signals_for_premkt()
     expired_n = sum(1 for s in sig_list if s.get("expired"))
@@ -7185,40 +7724,147 @@ def calc_tech_market_state(klines, volumes=None):
     }
 
 
+def load_journal_trades_for_perf():
+    """journal 成交 → 表现面反馈格式（P2 打通休眠数据链）。
+
+    背景：state["discipline"]["trade_log"] 全库无写入点，表现面反馈自上线以来
+    恒返回默认 50 分。本函数以 trade_journal.json（含策略标签）为真实数据源。
+
+    R 值计算：有匹配信号 → (exit-entry)*dir/stop_dist 精确值；
+             无匹配 → pnl / (1% 风险预算 × equity) 估算（系统单笔风险目标 1%）。
+    """
+    try:
+        with open(tj.JOURNAL_FILE, encoding="utf-8") as f:
+            journal_data = json.load(f)
+    except Exception:
+        return []
+    trades = journal_data.get("trades", [])
+    if not trades:
+        return []
+
+    sig_map = {}
+    try:
+        with open(tj.SIGNAL_LOG, encoding="utf-8") as f:
+            sigs = json.load(f)
+        if isinstance(sigs, list):
+            for i, s in enumerate(sigs):
+                key = s.get("signal_id") or f"{s.get('symbol')}_{s.get('created_at', i)}"
+                sig_map[key] = s
+    except Exception:
+        pass
+
+    equity = 985000.0
+    try:
+        with open(os.path.join(HERE, "account_state.json"), encoding="utf-8") as f:
+            equity = float(json.load(f).get("equity") or 985000.0)
+    except Exception:
+        pass
+
+    out = []
+    for t in trades:
+        pnl = t.get("pnl")
+        if pnl is None:
+            pnl = t.get("gross_pnl")
+        if pnl is None:
+            continue
+        direction = 1 if str(t.get("direction")) in ("多", "long", "buy", "1") else -1
+        entry, exit_p = t.get("entry_price"), t.get("exit_price")
+        r_result = 0.0
+        sig = sig_map.get(t.get("signal_id"))
+        if sig and entry and exit_p and sig.get("stop_dist"):
+            try:
+                r_result = (float(exit_p) - float(entry)) * direction / float(sig["stop_dist"])
+            except Exception:
+                r_result = 0.0
+        elif equity > 0:
+            r_result = float(pnl) / (0.01 * equity)
+        out.append({
+            "symbol": t.get("symbol"),
+            "time": t.get("time") or t.get("exit_time"),
+            "win": float(pnl) > 0,
+            "r_result": round(r_result, 3),
+            "pnl": float(pnl),
+            "strategy": t.get("strategy") or "手动",
+            "source": "journal",
+        })
+    return out
+
+
 def calc_performance_score(recent_trades):
-    """表现面反馈统计（v6.0 新增）"""
+    """表现面反馈统计（v6.0 新增；P2 增加胜率分桶）"""
     if not recent_trades or len(recent_trades) == 0:
         return {"total_score": 50, "level": "mid", "metrics": {}}
     trades = recent_trades[-PERF_WINDOW_MID:]
     n = len(trades)
     if n < 3:
         return {"total_score": 50, "level": "mid", "metrics": {"note": f"交易数不足({n}笔)"}}
-    wins = sum(1 for t in trades if t.get("win", t.get("r_result", 0) > 0))
+
+    def _is_win(t):
+        return t.get("win", t.get("r_result", 0) > 0)
+
+    # ── 胜率分桶计分：各标签按自身基线校准（P2）──
+    # 趋势单 33.5% 胜率 = 基线水平 → 中性；旧公式会打 ~28 分（结构性错杀）。
+    buckets = {}
+    for t in trades:
+        label = t.get("strategy") or "无标签"
+        if label in PERF_WINRATE_BASELINE_BY_LABEL:
+            buckets.setdefault(label, []).append(t)
+        else:
+            buckets.setdefault("无标签", []).append(t)
+    # 样本不足的桶并入无标签桶
+    merged = {}
+    for label, bts in buckets.items():
+        if len(bts) < PERF_BUCKET_MIN_TRADES:
+            merged.setdefault("无标签", []).extend(bts)
+        else:
+            merged.setdefault(label, []).extend(bts)
+
+    bucket_scores = {}
+    weighted_sum, weighted_n = 0.0, 0
+    for label, bts in merged.items():
+        wr_b = sum(1 for t in bts if _is_win(t)) / len(bts) * 100
+        base_b = PERF_WINRATE_BASELINE_BY_LABEL.get(label, PERF_WINRATE_BASELINE_DEFAULT)
+        dev = wr_b - base_b  # 相对自身基线的偏离（百分点）
+        score_b = max(0.0, min(100.0, 50.0 + dev * 2.5))
+        bucket_scores[label] = {
+            "n": len(bts), "win_rate": round(wr_b, 1),
+            "baseline": base_b, "dev": round(dev, 1), "score": round(score_b, 1),
+        }
+        weighted_sum += score_b * len(bts)
+        weighted_n += len(bts)
+    winrate_score = weighted_sum / weighted_n if weighted_n else 50.0
+    wins = sum(1 for t in trades if _is_win(t))
     win_rate = wins / n * 100
-    if win_rate > 60:
-        winrate_score = 80 + min(20, (win_rate - 60) * 2)
-    elif win_rate > 45:
-        winrate_score = 50 + (win_rate - 45) / 15 * 30
-    elif win_rate > 30:
-        winrate_score = 20 + (win_rate - 30) / 15 * 30
-    else:
-        winrate_score = max(0, 20 - (30 - win_rate) * 1.5)
-    winning_r = [t.get("r_result", 0) for t in trades if t.get("r_result", 0) > 0]
-    losing_r = [abs(t.get("r_result", 0)) for t in trades if t.get("r_result", 0) < 0]
-    profit_factor = sum(winning_r) / sum(losing_r) if losing_r and sum(losing_r) > 0 else (3.0 if winning_r else 1.0)
-    if profit_factor > 2.5:
-        pf_score = 80 + min(20, (profit_factor - 2.5) * 10)
-    elif profit_factor > 1.5:
-        pf_score = 50 + (profit_factor - 1.5) * 30
-    elif profit_factor > 0.8:
-        pf_score = 20 + (profit_factor - 0.8) / 0.7 * 30
-    else:
-        pf_score = max(0, 20 - (0.8 - profit_factor) * 30)
+
+    # ── PF 分桶计分：各标签按自身 PF 基线校准（偏离 ±1pp → ±50 分）──
+    pf_weighted_sum = 0.0
+    for label, bts in merged.items():
+        winning_r = [t.get("r_result", 0) for t in bts if t.get("r_result", 0) > 0]
+        losing_r = [abs(t.get("r_result", 0)) for t in bts if t.get("r_result", 0) < 0]
+        if losing_r and sum(losing_r) > 0:
+            pf_b = sum(winning_r) / sum(losing_r)
+        else:
+            pf_b = 3.0 if winning_r else 1.0
+        pf_base_b = PERF_PF_BASELINE_BY_LABEL.get(label, PERF_PF_BASELINE_DEFAULT)
+        pf_score_b = max(0.0, min(100.0, 50.0 + (pf_b - pf_base_b) * 50.0))
+        bucket_scores[label]["pf"] = round(pf_b, 2)
+        bucket_scores[label]["pf_score"] = round(pf_score_b, 1)
+        pf_weighted_sum += pf_score_b * len(bts)
+    pf_score = pf_weighted_sum / weighted_n if weighted_n else 50.0
+    # 整体 PF（展示用，计分已用分桶值）
+    winning_r_all = [t.get("r_result", 0) for t in trades if t.get("r_result", 0) > 0]
+    losing_r_all = [abs(t.get("r_result", 0)) for t in trades if t.get("r_result", 0) < 0]
+    profit_factor = (
+        sum(winning_r_all) / sum(losing_r_all)
+        if losing_r_all and sum(losing_r_all) > 0
+        else (3.0 if winning_r_all else 1.0)
+    )
+
+    # ── 连亏惊奇度：当前连亏/连赢在基线胜率下的出现概率（越常见越高分）──
     current_streak = 0
     streak_type = "none"
     for t in reversed(trades):
-        is_win = t.get("win", t.get("r_result", 0) > 0)
-        if is_win:
+        if _is_win(t):
             if streak_type in ("win", "none"):
                 current_streak += 1
                 streak_type = "win"
@@ -7230,16 +7876,21 @@ def calc_performance_score(recent_trades):
                 streak_type = "lose"
             else:
                 break
-    if streak_type == "win":
-        streak_score = (
-            90 if current_streak >= 5 else (75 if current_streak >= 3 else (60 if current_streak >= 2 else 55))
-        )
-    elif streak_type == "lose":
-        streak_score = (
-            10 if current_streak >= 5 else (25 if current_streak >= 3 else (40 if current_streak >= 2 else 45))
-        )
+    # 主导桶基线胜率（streak 跨桶时的近似）
+    dom_label = max(merged.items(), key=lambda kv: len(kv[1]))[0] if merged else "无标签"
+    dom_wr_base = PERF_WINRATE_BASELINE_BY_LABEL.get(dom_label, PERF_WINRATE_BASELINE_DEFAULT) / 100.0
+    if streak_type == "none" or current_streak == 0:
+        streak_score = 50.0
+        streak_p = None
     else:
-        streak_score = 50
+        # 出现概率：p(连亏k) = (1-w)^k；p(连赢k) = w^k
+        streak_p = (1 - dom_wr_base) ** current_streak if streak_type == "lose" else dom_wr_base ** current_streak
+        col = 1 if streak_type == "win" else 0
+        streak_score = 50.0
+        for threshold, lose_s, win_s in PERF_STREAK_SURPRISE_BANDS:
+            if streak_p >= threshold:
+                streak_score = win_s if col else lose_s
+                break
     recent_short = trades[-PERF_WINDOW_SHORT:] if len(trades) >= PERF_WINDOW_SHORT else trades
     total_r = sum(t.get("r_result", 0) for t in recent_short)
     r_score = max(0, min(100, 50 + (total_r / 3.0) * 50))
@@ -7257,11 +7908,13 @@ def calc_performance_score(recent_trades):
         "metrics": {
             "win_rate": round(win_rate, 1),
             "winrate_score": round(winrate_score, 1),
+            "winrate_buckets": bucket_scores,
             "profit_factor": round(profit_factor, 2),
             "pf_score": round(pf_score, 1),
             "current_streak": current_streak,
             "streak_type": streak_type,
             "streak_score": round(streak_score, 1),
+            "streak_p": round(streak_p, 4) if streak_p is not None else None,
             "recent_total_r": round(total_r, 2),
             "r_score": round(r_score, 1),
             "trade_count": n,
@@ -8194,17 +8847,88 @@ def get_trader_state_overlay():
     return overlay
 
 
+# —— v3.9.0: 市场状态缓存持久化（重启不再丢 Layer0，持仓策略参谋/金字塔门盘后可用）——
+_MS_STATE_FILE = os.path.join(HERE, "market_state_cache.json")
+_MS_STATE_SAVE_INTERVAL = 300  # 盘中节流落盘（秒）
+_MS_STATE_MAX_AGE = 7 * 86400  # 恢复上限：超过 7 天的快照视为过期不恢复
+_ms_state_last_save = 0.0
+_MS_STATE_LAST_UPDATE = 0.0
+_MS_STATE_UPDATE_INTERVAL = 600  # 日级状态 10 分钟一轮足够（主循环每几秒调一次，节流防抖）
+
+
+def _save_market_states_locked():
+    tmp = _MS_STATE_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"saved_at": time.time(), "states": market_state_cache},
+                  f, ensure_ascii=False, default=str)
+    os.replace(tmp, _MS_STATE_FILE)
+
+
+def restore_market_states():
+    """启动时恢复上次落盘的市场状态快照（休市期重启后 Layer0 不空白）。"""
+    global _ms_state_last_save
+    try:
+        if not os.path.exists(_MS_STATE_FILE):
+            return 0
+        with open(_MS_STATE_FILE, encoding="utf-8") as f:
+            snap = json.load(f)
+        saved_at = float(snap.get("saved_at") or 0)
+        if time.time() - saved_at > _MS_STATE_MAX_AGE:
+            return 0
+        for sym, info in (snap.get("states") or {}).items():
+            if isinstance(info, dict) and sym in SYMBOLS:
+                market_state_cache[sym] = info
+        _ms_state_last_save = time.time()
+        return len(market_state_cache)
+    except Exception:
+        return 0
+
+
+_ms_state_updating = False  # 后台计算去重（首轮全品种日线加载可能耗时数分钟）
+
+
 def _update_market_states(feed, state):
-    """v6.0: 遍历所有品种更新市场状态"""
+    """v3.9.0: 后台线程调度壳。首轮 50+ 品种日线加载（akshare 网络）可能耗时
+    数分钟，同步执行会卡主循环触发 180s 看门狗自杀，故移入 daemon 线程；
+    _ms_state_updating 去重防多轮并发。"""
+    global _ms_state_updating
+    if _ms_state_updating:
+        return
+    _ms_state_updating = True
+
+    def _worker():
+        global _ms_state_updating
+        try:
+            _update_market_states_impl(feed, state)
+        except Exception:
+            pass
+        finally:
+            _ms_state_updating = False
+
+    threading.Thread(target=_worker, daemon=True, name="ms-state").start()
+
+
+def _update_market_states_impl(feed, state):
+    """v6.0: 遍历所有品种更新市场状态。
+    v3.9.0 修复幽灵键缺陷：原读 state["klines_data"]——全库无任何写入点，
+    状态引擎自上线以来从未产出过状态（market_state_cache 恒空，金字塔行情门/
+    Phase 4 过滤器/Layer0 全部静默失效，API state_count=0 实证）。
+    现改用 load_daily_refreshed 日线驱动，TECH_MA 20/55 语义化为 20日/55日均线
+    （日级趋势状态，与金字塔行情门、持仓策略参谋的 regime 口径一致）。"""
+    global _ms_state_last_save, _MS_STATE_LAST_UPDATE
+    now = time.time()
+    if market_state_cache and now - _MS_STATE_LAST_UPDATE < _MS_STATE_UPDATE_INTERVAL:
+        return
+    _MS_STATE_LAST_UPDATE = now
     # Phase 4: 更新共识状态
     update_consensus_state(market_state_cache)
     for sym in SYMBOLS.keys():
         try:
-            # 获取K线数据
-            klines_data = state.get("klines_data", {})
-            sym_klines = klines_data.get(sym, [])
-            if not sym_klines or len(sym_klines) < TECH_MA_SLOW + 10:
+            # v3.9.0: 日线数据源（原幽灵键 klines_data 无写入点，见函数 docstring）
+            df_daily = load_daily_refreshed(sym)
+            if df_daily is None or len(df_daily) < TECH_MA_SLOW + 10:
                 continue
+            sym_klines = df_daily.tail(120).reset_index().to_dict("records")
 
             # 获取成交量数据
             volumes_list = []
@@ -8216,8 +8940,8 @@ def _update_market_states(feed, state):
             # 1. 技术面识别
             tech_result = calc_tech_market_state(sym_klines, volumes_list or None)
 
-            # 2. 表现面反馈（从state的交易历史获取）
-            trade_log = state.get("discipline", {}).get("trade_log", [])
+            # 2. 表现面反馈（P2：journal 真实成交带策略标签；discipline.trade_log 无写入点，作兼容合并）
+            trade_log = state.get("discipline", {}).get("trade_log", []) or load_journal_trades_for_perf()
             sym_trades = [t for t in trade_log if t.get("symbol") == sym]
             perf_result = calc_performance_score(sym_trades)
 
@@ -8243,6 +8967,16 @@ def _update_market_states(feed, state):
                 "switched": state_result["switched"],
             }
 
+            # 移仓护卫联动（2026-08-31）：换月 warn/urgent 窗口的品种，执行建议流动性临时升一档
+            try:
+                _ri = rollover_info(sym)
+                if (_ri or {}).get("level") in ("warn", "urgent"):
+                    exp.set_roll_thin(sym, True)
+                else:
+                    exp.set_roll_thin(sym, False)
+            except Exception:
+                pass
+
             # 6. 状态切换日志 + 记录
             if state_result["switched"]:
                 log_state_transition(
@@ -8254,6 +8988,14 @@ def _update_market_states(feed, state):
                     confidence=state_result["confidence"],
                 )
         except Exception as _e:
+            pass
+
+    # v3.9.0: 节流落盘（盘中每 5 分钟一次，重启不丢 Layer0）
+    if time.time() - _ms_state_last_save > _MS_STATE_SAVE_INTERVAL:
+        try:
+            _save_market_states_locked()
+            _ms_state_last_save = time.time()
+        except Exception:
             pass
 
 
@@ -9104,11 +9846,11 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 continue
             try:
                 # 状态机锁死 / 组合级硬熔断：禁止新开仓（卡片标 🔒锁定 / 🛑熔断）
-                if rsm.is_locked():
+                if rsm.is_locked(at.get_account()):
                     pipe["risk_locked"] = True
-                    if rsm.is_halted():
+                    if rsm.is_halted(at.get_account()):
                         pipe["kill_halted"] = True
-                        pipe["kill_reason"] = rsm.KILL.reason
+                        pipe["kill_reason"] = rsm.get_kill(at.get_account()).reason
                     continue
                 dir_T = int(pipe["dir_T"])
                 today_key = datetime.now().strftime("%Y-%m-%d")
@@ -9129,11 +9871,11 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 # ★ 立即登记去重记忆（早于 notify/append/log），即使后续调用异常也不会丢失，
                 #   避免“写了聊天流却没记去重”导致下一轮又重发（用户最反感重复）。
                 last_fire[sym] = {"dir": dir_T, "t": datetime.now().timestamp(), "day": today_key, "sig": sig_hash}
-                # 算风控 + 出场 + 信号
-                atr_daily = strat_atr(df_daily).iloc[-1]
+                # 算风控 + 出场 + 信号（止损通道波动估计：白名单品种 DR/√N，其余 ATR）
+                atr_daily = _stop_vol_daily(sym, df_daily)
                 if atr_daily is None or pd.isna(atr_daily) or atr_daily <= 0:
                     continue
-                # 止损基准 ATR：夜盘用 30 分钟 ATR（中间档），日盘维持日线 ATR（详见 _compute_stop_atr）
+                # 止损基准 ATR：夜盘用 30 分钟 ATR（中间档），日盘维持日线波动估计（详见 _compute_stop_atr）
                 stop_atr, atr_src = _compute_stop_atr(sym, df_5m, atr_daily)
                 # P2b：该品种已有持仓手数（open_positions 为 evaluate 开头已加载的真实持仓）
                 _held = next((int(p.get("lots") or 0) for p in open_positions if p.get("sym") == sym), 0)
@@ -9163,6 +9905,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 )
                 sig = build_signal(sym, pipe, rg, ep, _STRAT_CFG, entry_ref=price)
                 sig["regime_hmm"] = pipe.get("regime_hmm")
+                sig["strat_evidence"] = pipe.get("strat_evidence")
+                sig["strategy"] = pipe.get("strategy", "手动")
                 # ★ P-持仓感知 v3：与真实持仓比对，根据持仓逻辑智能处理
                 _pa_result = _position_aware_advice(sig, open_positions, price)
                 # "blocked" = 反向信号/仓位饱和/冷却期 → 不推送为交易信号
@@ -9183,7 +9927,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     pipe["event_blocked"] = True
                     pipe["event_reason"] = ev_gate.get("msg", "临近重磅数据，禁止新开仓")
                     continue
-                scale = rsm.RISK_FSM.scale()
+                scale = rsm.get_fsm(at.get_account()).scale()
                 dd_scale = ddg.scale_factor()
                 sig["dd_scale"] = dd_scale
                 sig["event_scale"] = ev_scale
@@ -9359,6 +10103,39 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         "llm_prompt": "",
                     }
                 sig["kind"] = "signal"
+                # ★★ 2026-09-03: 关键修复 — evaluate 必须调 append_chat 推送到聊天流!
+                # 之前只登记 dedup + 存 state["signals"]，但没调 append_chat
+                # 导致信号面板有数据、聊天推送却只有极少数（从其他路径来的 alert 推）
+                try:
+                    append_chat(sig)
+                except Exception as _ae:
+                    print(f"[append_chat] {sym} 异常(忽略): {repr(_ae)[:60]}")
+                # P2 金字塔加仓影子模式：三重门+换月门全过 → 信号卡附阶梯建议（只推荐不执行，写影子日志）
+                try:
+                    _roll_lv = None
+                    try:
+                        _ri = rollover_info(sym, sig.get("contract"))
+                        _roll_lv = (_ri or {}).get("level")
+                    except Exception:
+                        pass
+                    _pyr_rec = pyr.evaluate(
+                        symbol=sym,
+                        direction=sig["direction"],
+                        entry_price=price,
+                        stop_dist=sig.get("stop_dist") or abs(price - (sig.get("stop") or price)),
+                        lots=sig["lots"],
+                        market_state=(market_state_cache.get(sym) or {}).get("state"),
+                        strategy_label=sig.get("strategy"),
+                        roll_level=_roll_lv,
+                    )
+                    if _pyr_rec:
+                        sig["pyramid_plan"] = _pyr_rec
+                        pyr.log_shadow(_pyr_rec, signal_time=sig.get("time"))
+                        print(f"   🔺 [金字塔影子] {sym} 推荐阶梯：{_pyr_rec['rationale'][:80]}")
+                    elif _roll_lv in ("warn", "urgent"):
+                        print(f"   ⛔ [金字塔影子] {sym} 换月窗口({_roll_lv})，跳过加仓推荐（老合约趋势失真）")
+                except Exception as _e:
+                    print(f"[金字塔影子] {sym} 评估异常(忽略): {repr(_e)[:60]}")
                 _hc = sig.get("hold_context") or {}
                 if not _hc.get("cross_dir_locked"):
                     _round_signal_buffer.append(sig)
@@ -9393,6 +10170,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             "contract",
                             "push_suppressed",
                             "hold_context",
+                            "pyramid_plan",
                             "action_advice",
                             "advice_type",
                         )
@@ -9767,6 +10545,29 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/accounts":
+                # v3.9.1: 多账户列表 API
+                try:
+                    _accounts = at.list_accounts()
+                    _current = at.get_account()
+                    _account_info = []
+                    for _aid in _accounts:
+                        _name_map = {"default": "策略模拟盘", "live": "三感参谋实盘"}
+                        _badge_map = {"default": "自动策略", "live": "实盘跟踪"}
+                        _account_info.append({
+                            "id": _aid,
+                            "name": _name_map.get(_aid, _aid),
+                            "badge": _badge_map.get(_aid, ""),
+                            "current": _aid == _current,
+                        })
+                    body = json.dumps({"ok": True, "accounts": _account_info, "current": _current}, ensure_ascii=False)
+                except Exception as e:
+                    body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
             elif self.path.startswith("/api/state"):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -9796,6 +10597,11 @@ def start_dashboard(state):
                     state["paper_trading"] = pti.get_state()
                 except Exception:
                     state["paper_trading"] = {"enabled": False, "error": "获取失败"}
+                # ★ 注入实盘跟踪引擎状态
+                try:
+                    state["trisense_replay"] = tri.get_state()
+                except Exception:
+                    state["trisense_replay"] = {"enabled": False, "error": "获取失败", "account": "trisense_replay"}
                 # P1-②：门控品种定性提示（lh/JM 等被动态门控暂停发信号的，让面板露出覆盖缺口）
                 try:
                     state["gated_notices"] = _build_gated_notices()
@@ -9857,11 +10663,17 @@ def start_dashboard(state):
                     snap["data_age_min"] = round(_age, 1) if _age is not None else None
                     # 组合风险热度（A1/B4）
                     snap["heat"] = compute_heat(prices)
-                    # 累计手续费（交易所基础费率重算后的全量已平仓手续费合计，与 /api/journal 同源）
+                    # 累计手续费：优先 CTP 同步的 state.fee_total（实盘权威），journal 作回退
                     try:
-                        snap["total_fee"] = tj.summary().get("total_fee", 0)
+                        _st = at.load_state()
+                        _ctp_fee = _st.get("fee_total") or 0
                     except Exception:
-                        snap["total_fee"] = 0
+                        _ctp_fee = 0
+                    try:
+                        _tj_fee = tj.summary().get("total_fee", 0)
+                    except Exception:
+                        _tj_fee = 0
+                    snap["total_fee"] = _ctp_fee if _ctp_fee > 0 else _tj_fee
                     # 换月预警（B2）：给每个持仓挂上距交割月天数与等级，持仓表内联显示
                     try:
                         for _p in snap.get("positions", []):
@@ -9886,12 +10698,23 @@ def start_dashboard(state):
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
                     self.wfile.write(json.dumps(_empty, ensure_ascii=False).encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/pos_strategy":
+                # 持仓策略参谋（v3.9.0）：行情判定+金字塔四重门+止盈阶段，只读
+                try:
+                    body = json.dumps(pos_strategy_payload(), ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"rows": {}, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
             elif self.path.split("?")[0] == "/api/account_sync":
                 # 只读账户同步（minishare 实时盯市 + 对账漂移检测 + 自愈，不接券商 API）
                 force = "force=1" in self.path
                 heal = "heal=1" in self.path
                 try:
-                    body = json.dumps(account_marketsync(force=force, heal=heal), ensure_ascii=False, default=str)
+                    body = json.dumps(account_marketsync(force=force, heal=heal, account_id=at.get_account()), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"read_only": True, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -10024,7 +10847,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/risk":
                 # 仓位状态机快照
                 try:
-                    body = json.dumps(rsm.RISK_FSM.summary(), ensure_ascii=False, default=str)
+                    body = json.dumps(rsm.get_fsm(at.get_account()).summary(), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"state": "NORMAL", "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -10040,11 +10863,11 @@ def start_dashboard(state):
                     _p = dict(x.split("=", 1) for x in _q.split("&") if "=" in x)
                     _act = _p.get("action", "")
                     if _act == "ack":
-                        body = json.dumps(rsm.KILL.acknowledge(), ensure_ascii=False, default=str)
+                        body = json.dumps(rsm.get_kill(at.get_account()).acknowledge(), ensure_ascii=False, default=str)
                     elif _act == "reset":
                         _peak = _p.get("peak")
                         body = json.dumps(
-                            rsm.KILL.reset("面板人工解除", reset_peak_to=float(_peak) if _peak else None),
+                            rsm.get_kill(at.get_account()).reset("面板人工解除", reset_peak_to=float(_peak) if _peak else None),
                             ensure_ascii=False,
                             default=str,
                         )
@@ -10055,7 +10878,7 @@ def start_dashboard(state):
                             pass
                         print("[熔断] 已人工解除（面板操作）")
                     else:
-                        body = json.dumps(rsm.KILL.summary(), ensure_ascii=False, default=str)
+                        body = json.dumps(rsm.get_kill(at.get_account()).summary(), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"halted": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -10067,7 +10890,7 @@ def start_dashboard(state):
                 # #119 回撤水位线：返回当前回撤 / 档位 / 降险系数 / 水位线配置
                 try:
                     _d = ddg.current()
-                    _d["halted"] = rsm.is_halted()
+                    _d["halted"] = rsm.is_halted(at.get_account())
                     body = json.dumps(_d, ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"error": str(e)}, ensure_ascii=False)
@@ -10563,6 +11386,13 @@ def start_dashboard(state):
                     pti.handle_options(self)
                 else:
                     pti.handle_api(self)
+                return
+            elif self.path.split("?")[0] == "/api/trisense-replay":
+                # 实盘跟踪引擎 API（第二账户）
+                if self.command == "OPTIONS":
+                    tri.handle_options(self)
+                else:
+                    tri.handle_api(self)
                 return
             elif self.path.split("?")[0] == "/api/holdings_kline":
                 # 持仓K线 + SR位 + 止损止盈标注
@@ -11148,11 +11978,73 @@ def start_dashboard(state):
                 else:
                     self.send_response(404)
                     self.end_headers()
+            elif self.path.split("?")[0].startswith("/trisense_dashboard/"):
+                # ★ 实盘跟踪仪表盘静态文件（第二账户）
+                _req_path = self.path.split("?")[0]
+                _safe_path = _req_path.replace("/trisense_dashboard/", "", 1)
+                _safe_path = _safe_path.lstrip("/").replace("..", "")
+                _file_path = os.path.join(HERE, "trisense_dashboard", _safe_path)
+                _file_path = os.path.normpath(_file_path)
+                if not _file_path.startswith(os.path.join(HERE, "trisense_dashboard")):
+                    self.send_response(403)
+                    self.end_headers()
+                    return
+                if os.path.isdir(_file_path):
+                    _index_path = os.path.join(_file_path, "index.html")
+                    if os.path.isfile(_index_path):
+                        _file_path = _index_path
+                    else:
+                        self.send_response(404)
+                        self.end_headers()
+                        return
+                if os.path.isfile(_file_path):
+                    _ext = os.path.splitext(_file_path)[1].lower()
+                    _ct = {
+                        ".html": "text/html; charset=utf-8",
+                        ".js": "application/javascript; charset=utf-8",
+                        ".css": "text/css; charset=utf-8",
+                        ".ttf": "font/ttf",
+                        ".woff": "font/woff",
+                        ".woff2": "font/woff2",
+                        ".svg": "image/svg+xml",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".json": "application/json; charset=utf-8",
+                    }.get(_ext, "application/octet-stream")
+                    self.send_response(200)
+                    self.send_header("Content-Type", _ct)
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    with open(_file_path, "rb") as _f:
+                        self.wfile.write(_f.read())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
             else:
                 self.send_response(404)
                 self.end_headers()
 
         # 全局异常保护：任何 handler 抛异常都返回 500 JSON，不让框架吞掉响应
+        # v3.9.1: 增加多账户支持 — 从 URL ?account= 参数切换账户，请求结束自动恢复
+        def parse_request(self):
+            """在标准解析之后，根据 URL 参数切换账户上下文。"""
+            result = super().parse_request()
+            if result:
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    _parsed = urlparse(self.path)
+                    _qs = parse_qs(_parsed.query)
+                    _acc_param = _qs.get("account", [None])[0]
+                    if _acc_param and _acc_param != at.get_account():
+                        self._old_account = at.set_account(_acc_param)
+                    else:
+                        self._old_account = None
+                except Exception:
+                    self._old_account = None
+            return result
+
         def handle_one_request(self):
             try:
                 super().handle_one_request()
@@ -11169,6 +12061,14 @@ def start_dashboard(state):
                     self.wfile.write(json.dumps({"error": str(_e)}, ensure_ascii=False).encode("utf-8"))
                 except Exception:
                     pass
+            finally:
+                # 确保请求结束后切回原账户
+                _old = getattr(self, "_old_account", None)
+                if _old is not None:
+                    try:
+                        at.set_account(_old)
+                    except Exception:
+                        pass
 
         def log_message(self, *a):
             pass
@@ -11219,6 +12119,10 @@ def start_dashboard(state):
                 # 自动模拟交易引擎 API
                 pti.handle_api(self)
                 return
+            if self.path.split("?")[0] == "/api/trisense-replay":
+                # 实盘跟踪引擎 API（第二账户）
+                tri.handle_api(self)
+                return
             if self.path.split("?")[0] == "/api/journal":
                 try:
                     n = int(self.headers.get("Content-Length", 0))
@@ -11236,7 +12140,7 @@ def start_dashboard(state):
 
                         # ★★ 2026-08-26: 开仓前风控检查 - 熔断/锁定时禁止开仓
                         try:
-                            _lock_info = rsm.get_combined_risk_scale()
+                            _lock_info = rsm.get_combined_risk_scale(at.get_account())
                             if _lock_info.get("locked") or _lock_info.get("halted"):
                                 _reason = (
                                     _lock_info.get("reasons", ["风控锁定中"])[0]
@@ -11366,7 +12270,7 @@ def start_dashboard(state):
                         # 记录开仓纪律事件（含当时状态机状态，供锁死判定）
                         try:
                             dr.log_event(
-                                "entry", symbol=sym, direction=direction, lots=lots, risk_state=rsm.RISK_FSM.state
+                                "entry", symbol=sym, direction=direction, lots=lots, risk_state=rsm.get_fsm(at.get_account()).state
                             )
                         except Exception:
                             pass
@@ -11445,7 +12349,7 @@ def start_dashboard(state):
                         # ★★ 2026-08-26: 开仓前风控检查 - 仅 open/add 需要检查，close/reduce 不受限
                         if act in ("open", "add"):
                             try:
-                                _lock_info = rsm.get_combined_risk_scale()
+                                _lock_info = rsm.get_combined_risk_scale(at.get_account())
                                 if _lock_info.get("locked") or _lock_info.get("halted"):
                                     _reason = (
                                         _lock_info.get("reasons", ["风控锁定中"])[0]
@@ -12079,9 +12983,10 @@ def _update_aux(feed, state):
             _dd_peak = None
         # 组合级硬熔断（#5）：把持仓一并喂进去，触发时直接生成一键全平清单
         _res = rsm.update_risk_state(
-            eq, used, daily_pnl, consec, positions=snap.get("positions") or [], peak_equity=_dd_peak
+            eq, used, daily_pnl, consec, positions=snap.get("positions") or [], peak_equity=_dd_peak,
+            account_id=at.get_account()
         )
-        new_state = rsm.RISK_FSM.summary()  # 含 daily_loss_pct / daily_loss_stop / killswitch
+        new_state = rsm.get_fsm(at.get_account()).summary()  # 含 daily_loss_pct / daily_loss_stop / killswitch
         state["risk_state"] = new_state
         # ── v5 新增：10%回撤硬熔断检测 ──
         _current_dd = new_state.get("drawdown", 0)
@@ -12855,8 +13760,8 @@ def _holdings_kline(sym, bars=30):
         if px and px > 0:
             cur_price = px
 
-    # ATR
-    atr_val = float(strat_atr(df).iloc[-1])
+    # 止损通道波动估计（白名单品种 DR/√N，其余 ATR；与 _auto_levels 同口径）
+    atr_val = _stop_vol_daily(sym, df)
 
     # 查持仓信息（从 paper trading）
     entry_price = None
@@ -12999,7 +13904,7 @@ def main():
         ddg.init_from_config()
         _dd0 = ddg.current()
         if _dd0.get("peak_equity"):
-            rsm.RISK_FSM.peak_equity = float(_dd0["peak_equity"])
+            rsm.get_fsm(at.get_account()).peak_equity = float(_dd0["peak_equity"])
         print(
             f"[#119 回撤水位线] 已加载，档位={[(round(t * 100, 1), s) for t, s in ddg.waterlines()]}"
             f" · 持久化峰值={_dd0.get('peak_equity')}"
@@ -13069,6 +13974,10 @@ def main():
                 os._exit(3)
 
     threading.Thread(target=_stall_watchdog, daemon=True).start()
+    # ★ v3.9.0: 恢复上次落盘的市场状态快照（休市期重启后 Layer0 不空白）
+    _restored = restore_market_states()
+    if _restored:
+        print(f"[市场状态] 已恢复 {_restored} 个品种的 Layer0 快照")
     # ★ 启动 minishare rt_fut_k 主数据源轮询线程（5秒/次，不限次快照）
     # rt_fut_k 返回全市场 948 个期货品种实时行情，系统自动筛选持仓品种
     global _TS_SYMBOLS, _AK_SYMBOLS
@@ -13092,6 +14001,14 @@ def main():
         )
     except Exception as _e:
         print(f"[PaperTrading] 初始化失败: {_e}")
+    # ★ 启动实盘跟踪引擎（第二账户，不跟信号，只手动持仓）
+    try:
+        tri.init(
+            price_feed=feed if feed_ok else None,
+            contract_specs=_TCFG.get("contract_specs", {}),
+        )
+    except Exception as _e:
+        print(f"[TriSense] 初始化失败: {_e}")
     last_gate = time.time()
     global LAST_CYCLE_TS  # #16 心跳：main 内给模块全局赋值必须声明 global，否则只更新局部、看门狗读到永远 0.0
     global last_recover  # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
@@ -13117,6 +14034,13 @@ def main():
                 _poll_feed(feed)
             except Exception:
                 pass
+            # v3.9.0: 休市期缓存为空（首次运行/快照丢失/重启未恢复）时，
+            # 从最近收盘日线算一轮基线 Layer0（日级慢变量，盘后语义准确；节流防重复）
+            if MARKET_STATE_ENGINE_ENABLED and not market_state_cache:
+                try:
+                    _update_market_states(feed, state)
+                except Exception:
+                    pass
         # —— 从 da龘 合并进来的三件事（每轮）——
         _update_aux(feed, state)
         # ★ 自动模拟交易：检查新信号 + 检查持仓 TP/SL
@@ -13124,6 +14048,11 @@ def main():
             pti.tick(state)
         except Exception as _pte:
             print(f"[PaperTrading] tick 异常: {repr(_pte)[:80]}")
+        # ★ 实盘跟踪盘：只检查持仓 TP/SL（不跟信号）
+        try:
+            tri.tick(state)
+        except Exception as _pre:
+            print(f"[TriSense] tick 异常: {repr(_pre)[:80]}")
         # 日内权益采样（每轮都跑，内部按分钟去重）
         try:
             prices = {}

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>三感参谋仪表盘 · TriSense Advisor</title>
+  <title>实盘跟踪仪表盘 · Replay Dashboard</title>
 
   <style>
     @font-face {
@@ -134,46 +134,6 @@
     .btn.small {
       padding: 0.3rem 0.7rem;
       font-size: 0.78rem;
-    }
-
-    /* === Account Switcher === */
-    .account-switcher {
-      display: flex;
-      background: var(--bg2);
-      border: 1px solid var(--rule);
-      border-radius: 8px;
-      padding: 3px;
-      gap: 2px;
-    }
-    .account-switcher .account-btn {
-      padding: 0.4rem 0.9rem;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      color: var(--muted);
-      white-space: nowrap;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .account-switcher .account-btn:hover {
-      color: var(--ink);
-    }
-    .account-switcher .account-btn.active {
-      background: var(--accent);
-      color: white;
-      font-weight: 500;
-    }
-    .account-switcher .account-btn .badge {
-      font-size: 0.65rem;
-      padding: 1px 6px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.15);
-    }
-    .account-switcher .account-btn:not(.active) .badge {
-      background: var(--bg3);
-      color: var(--muted);
     }
 
     /* === Toggle Switch === */
@@ -497,18 +457,10 @@
   <header class="dashboard-header">
     <h1>
       <span class="dot" id="status-dot"></span>
-      <span id="dashboard-title">策略模拟盘</span>
-      <span style="font-size: 0.75rem; color: var(--muted); font-weight: 400; margin-left: 0.5rem;" id="dashboard-subtitle">Paper Trading</span>
+      模拟交易仪表盘
+      <span style="font-size: 0.75rem; color: var(--muted); font-weight: 400; margin-left: 0.5rem;">Paper Trading</span>
     </h1>
     <div class="header-actions">
-      <div class="account-switcher" id="account-switcher">
-        <div class="account-btn active" id="account-btn-paper" onclick="window.__switchAccount && window.__switchAccount('paper')">
-          策略模拟盘 <span class="badge">自动</span>
-        </div>
-        <div class="account-btn" id="account-btn-trisense" onclick="window.__switchAccount && window.__switchAccount('trisense')">
-          三感参谋实盘 <span class="badge">实盘</span>
-        </div>
-      </div>
       <span class="status-label">自动交易</span>
       <div class="toggle active" id="auto-toggle" title="点击开关自动模拟交易"></div>
       <span class="updated-time" id="updated-time">--:--:--</span>

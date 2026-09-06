@@ -42,6 +42,22 @@ MIN_SLICE_LOTS = 1
 ICEBERG_TRIGGER = 3  # 单片 ≥3 手且属低流动 → 建议冰山
 _VOL_CACHE: dict = {}  # {sym: (ts, avg_daily_volume)}
 _VOL_TTL = 3600
+# 换月期流动性临时升档（2026-08-31 移仓护卫联动）：老合约临近交割盘口变薄，
+# runner 在换月 warn/urgent 窗口调 set_roll_thin(sym, True)，下次调用自动收紧单片上限。
+_ROLL_THIN: dict = {}  # sym -> True（换月窗口标记，TTL 由 runner 控制）
+_ROLL_TIER_BUMP = {1.0: 1.5, 1.5: 2.0, 2.0: 2.0}  # 升一档，薄档封顶
+
+
+def set_roll_thin(symbol, thin=True):
+    """标记/清除品种的换月窗口流动性降级。调用方负责窗口判定（rollover_info level）。"""
+    if thin:
+        _ROLL_THIN[symbol] = True
+    else:
+        _ROLL_THIN.pop(symbol, None)
+
+
+def is_roll_thin(symbol):
+    return bool(_ROLL_THIN.get(symbol))
 
 
 def _avg_daily_volume(symbol, tail=60):
@@ -98,6 +114,10 @@ def plan_execution(symbol, lots, price=None, direction="多", urgency="normal"):
         return {"symbol": symbol, "lots": 0, "slices": 0, "headline": "无需执行"}
 
     tier = _tier(symbol)
+    tier_bumped = False
+    if _ROLL_THIN.get(symbol):
+        tier = _ROLL_TIER_BUMP.get(tier, tier)
+        tier_bumped = True
     adv = _avg_daily_volume(symbol)
     per_min = (adv / MINUTES_PER_DAY) if adv else None
 
@@ -173,6 +193,7 @@ def plan_execution(symbol, lots, price=None, direction="多", urgency="normal"):
         "direction": direction,
         "tier": tier,
         "tier_label": {1.0: "A超流动", 1.5: "B中流动"}.get(tier, "C薄盘口"),
+        "roll_thin": tier_bumped,  # 换月窗口流动性临时升档标记
         "avg_daily_volume": round(adv) if adv else None,
         "per_min_vol": round(per_min, 1) if per_min else None,
         "max_slice": max_slice,

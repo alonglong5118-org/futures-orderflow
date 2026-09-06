@@ -89,8 +89,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 KILL_STATE_FILE = os.path.join(_HERE, "killswitch_state.json")
 
 
-def risk_guard(
-    equity,
+def risk_guard(    equity,
     used_margin=0.0,
     daily_pnl=0.0,
     proposed_margin=0.0,
@@ -100,6 +99,7 @@ def risk_guard(
     warn_line=WARN_LINE,
     symbol=None,
     opening_equity=None,
+    account_id="default",
 ):
     """da哥 风控闸: 45%红线 / 日亏5%停机 / 单笔30% / 回撤预警。
     返回 {status:'OK'|'WARN'|'LOCK', usage, daily_loss_pct, reasons}。
@@ -153,8 +153,9 @@ class RiskStateMachine:
 
     NORMAL, WARNING, LOCKED = "NORMAL", "WARNING", "LOCKED"
 
-    def __init__(self):
+    def __init__(self, account_id="default"):
         self.state = self.NORMAL
+        self.account_id = account_id
         self.entered_at = time.time()
         self.consec_losses = 0
         self.peak_equity = None
@@ -179,7 +180,7 @@ class RiskStateMachine:
             self.consec_lock = False  # 跨日解除当日连续止损冻结
 
     def scale(self):
-        if _kill_halted() or self.state == self.LOCKED:
+        if _kill_halted(self.account_id) or self.state == self.LOCKED:
             return 0.0
         base = 0.5 if self.state == self.WARNING else 1.0
         loss_factor = max(LOSS_FLOOR, LOSS_DECAY**self.consec_losses)
@@ -257,7 +258,7 @@ class RiskStateMachine:
                 "updated": time.strftime("%H:%M:%S"),
             }
             try:
-                d["killswitch"] = KILL.summary()
+                d["killswitch"] = get_kill(self.account_id).summary()
                 if d["killswitch"].get("halted"):
                     d["state"] = "HALTED"  # 面板显示最高优先级状态
             except Exception:
@@ -328,8 +329,9 @@ class KillSwitch:
     状态落盘 killswitch_state.json，进程重启后仍然是熔断态（防「重启洗白」）。
     """
 
-    def __init__(self, path=KILL_STATE_FILE):
-        self.path = path
+    def __init__(self, account_id="default", path=None):
+        self.account_id = account_id
+        self.path = path or os.path.join(_HERE, "killswitch_state_" + account_id + ".json")
         self.halted = False
         self.reason = ""
         self.triggers = []  # 命中的硬线列表
@@ -517,7 +519,7 @@ class KillSwitch:
             self._save()
             if reset_peak_to:
                 try:
-                    RISK_FSM.peak_equity = float(reset_peak_to)
+                    get_fsm(self.account_id).peak_equity = float(reset_peak_to)
                 except Exception:
                     pass
             return self.summary()
@@ -545,13 +547,29 @@ class KillSwitch:
 
 
 # 全局单例（runner 全程共享）
-RISK_FSM = RiskStateMachine()
-KILL = KillSwitch()
+_FSM_POOL = {}  # {account_id: RiskStateMachine()}
+_KILL_POOL = {}  # {account_id: KillSwitch()}
+
+def get_fsm(account_id="default"):
+    aid = account_id or "default"
+    if aid not in _FSM_POOL:
+        _FSM_POOL[aid] = RiskStateMachine(account_id=aid)
+    return _FSM_POOL[aid]
+
+def get_kill(account_id="default"):
+    aid = account_id or "default"
+    if aid not in _KILL_POOL:
+        _KILL_POOL[aid] = KillSwitch(account_id=aid)
+    return _KILL_POOL[aid]
+
+# 向后兼容：默认账户快捷引用
+RISK_FSM = get_fsm("default")
+KILL = get_kill("default")
 
 
-def _kill_halted():
+def _kill_halted(account_id="default"):
     try:
-        return bool(KILL.halted)
+        return bool(get_kill(account_id).halted)
     except Exception:
         return False
 
@@ -565,6 +583,7 @@ def update_risk_state(
     positions=None,
     peak_equity=None,
     symbol=None,
+    account_id="default"
 ):
     """runner 每轮调用：用账户快照推进状态机 + 组合级硬熔断判定。
     - equity: 当前权益（来自 account_tracker 或账户监控）
@@ -578,20 +597,20 @@ def update_risk_state(
     - 返回 summary dict（含 killswitch 字段；新触发时带 kill_newly=True）
     """
     if consec_losses is not None:
-        with RISK_FSM._lock:
-            RISK_FSM.consec_losses = max(0, int(consec_losses))
+        with get_fsm(account_id)._lock:
+            get_fsm(account_id).consec_losses = max(0, int(consec_losses))
     if peak_equity is not None:
         try:
             pe = float(peak_equity)
-            with RISK_FSM._lock:
-                if RISK_FSM.peak_equity is None or pe > RISK_FSM.peak_equity:
-                    RISK_FSM.peak_equity = pe
+            with get_fsm(account_id)._lock:
+                if get_fsm(account_id).peak_equity is None or pe > get_fsm(account_id).peak_equity:
+                    get_fsm(account_id).peak_equity = pe
         except Exception:
             pass
-    rg = risk_guard(equity, used_margin, daily_pnl, proposed_margin, symbol=symbol)
-    RISK_FSM.update(rg, equity=equity)
-    ks = KILL.check(equity, RISK_FSM.peak_equity, daily_pnl, RISK_FSM.consec_losses, positions)
-    out = RISK_FSM.summary()
+    rg = risk_guard(equity, used_margin, daily_pnl, proposed_margin, symbol=symbol, account_id=account_id)
+    get_fsm(account_id).update(rg, equity=equity)
+    ks = get_kill(account_id).check(equity, get_fsm(account_id).peak_equity, daily_pnl, get_fsm(account_id).consec_losses, positions)
+    out = get_fsm(account_id).summary()
     out["kill_newly"] = ks.get("newly", False)
     if rg.get("symbol_override"):
         out["symbol_override"] = rg["symbol_override"]
@@ -639,7 +658,7 @@ def init_dual_track():
         print(f"[双轨风控] drawdown_guard 初始化失败: {repr(e)[:80]}")
 
 
-def get_combined_risk_scale():
+def get_combined_risk_scale(account_id="default"):
     """P1-15: 获取双轨风控合并后的手数缩放系数。
 
     返回 dict:
@@ -657,15 +676,15 @@ def get_combined_risk_scale():
     reasons = []
 
     # 1. risk_state_machine 侧
-    rsm_scale = RISK_FSM.scale()
-    rsm_state = RISK_FSM.state
+    rsm_scale = get_fsm(account_id).scale()
+    rsm_state = get_fsm(account_id).state
     rsm_locked = rsm_state == RiskStateMachine.LOCKED
-    if _kill_halted():
+    if _kill_halted(account_id):
         rsm_locked = True
         rsm_scale = 0.0
-        reasons.append(f"硬熔断(HALTED): {KILL.reason}")
+        reasons.append(f"硬熔断(HALTED): {get_kill(account_id).reason}")
     elif rsm_state == RiskStateMachine.LOCKED:
-        reasons.append(f"状态机锁定(LOCKED): {RISK_FSM.lock_reason}")
+        reasons.append(f"状态机锁定(LOCKED): {get_fsm(account_id).lock_reason}")
     elif rsm_state == RiskStateMachine.WARNING:
         reasons.append("状态机预警(WARNING): 手数按 0.5x 缩放")
 
@@ -717,18 +736,18 @@ def get_combined_risk_scale():
         "rsm_state": rsm_state,
         "dd_tier": dd_tier,
         "dd_pct": dd_pct,
-        "halted": _kill_halted(),
+        "halted": _kill_halted(account_id),
         "reasons": reasons,
     }
 
 
-def is_locked():
+def is_locked(account_id="default"):
     """禁止新开仓（软锁 LOCKED 或 硬熔断 HALTED 任一成立）。"""
-    return _kill_halted() or RISK_FSM.state == RiskStateMachine.LOCKED
+    return _kill_halted(account_id) or get_fsm(account_id).state == RiskStateMachine.LOCKED
 
 
-def is_halted():
-    return _kill_halted()
+def is_halted(account_id="default"):
+    return _kill_halted(account_id)
 
 
 def reset_daily_if_new_day(last_day_str):
@@ -736,7 +755,7 @@ def reset_daily_if_new_day(last_day_str):
     仅当 last_day_str 与今日日期不同时才重置。"""
     today_str = time.strftime("%Y-%m-%d")
     if last_day_str != today_str:
-        RISK_FSM.reset_daily()
+        get_fsm(at.get_account()).reset_daily()
         # P0-7 fix: 同时记录日初权益
         try:
             import account_tracker as at
@@ -744,8 +763,8 @@ def reset_daily_if_new_day(last_day_str):
             st = at.load_state()
             eq = st.get("equity", 0) if st else 0
             if eq > 0:
-                KILL._opening_equity = eq
-                KILL._save()
+                get_kill(at.get_account())._opening_equity = eq
+                get_kill(at.get_account())._save()
         except Exception:
             pass
         return today_str
@@ -797,7 +816,7 @@ if __name__ == "__main__":
     if not RISK_FSM.consec_lock:
         _consec_ok = False
         print("[FAIL] consec=3 应置 consec_lock=True")
-    RISK_FSM.reset_daily()
+    get_fsm(at.get_account()).reset_daily()
     if RISK_FSM.consec_lock or RISK_FSM.consec_losses != 0:
         _consec_ok = False
         print("[FAIL] reset_daily 应清 consec_lock 且 consec_losses=0")

@@ -96,12 +96,13 @@ class PaperTradingEngine:
         engine.check_positions(current_prices)
     """
 
-    def __init__(self, config: dict | None = None, price_feed=None, contract_specs: dict | None = None):
+    def __init__(self, config: dict | None = None, price_feed=None, contract_specs: dict | None = None, state_file: str | None = None):
         """
         Args:
             config: 配置字典，覆盖默认配置
             price_feed: 价格数据源，需实现 .price(symbol) 方法返回最新价
             contract_specs: 合约规格 {symbol: {multiplier, margin_rate, ...}}
+            state_file: 状态持久化文件路径（默认使用模块级 STATE_FILE）
         """
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         self.feed = price_feed
@@ -111,6 +112,7 @@ class PaperTradingEngine:
         self._thread: threading.Thread | None = None
         self._last_signal_hash = ""
         self._processed_signals: set[str] = set()
+        self.state_file = state_file or STATE_FILE
         self._load_state()
 
     # ── 状态持久化 ──────────────────────────────────────────────────────
@@ -118,8 +120,9 @@ class PaperTradingEngine:
     def _load_state(self):
         """从磁盘加载状态。"""
         try:
-            if os.path.exists(STATE_FILE):
-                with open(STATE_FILE, encoding="utf-8") as f:
+            sf = self.state_file
+            if os.path.exists(sf):
+                with open(sf, encoding="utf-8") as f:
                     state = json.load(f)
                 self.cash = float(state.get("cash", self.config["init_cash"]))
                 self.realized_pnl = float(state.get("realized_pnl", 0.0))
@@ -162,10 +165,10 @@ class PaperTradingEngine:
                 "config": self.config,
                 "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
-            tmp = STATE_FILE + ".tmp"
+            tmp = self.state_file + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(state, f, ensure_ascii=False, indent=2, default=str)
-            os.replace(tmp, STATE_FILE)
+            os.replace(tmp, self.state_file)
         except Exception as e:
             print(f"[PaperEngine] 保存状态失败: {e}")
 

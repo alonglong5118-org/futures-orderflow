@@ -28,7 +28,33 @@ import uuid
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-JOURNAL_FILE = os.path.join(HERE, "trade_journal.json")
+
+# ===== 多账户支持（v3.9.1）=====
+# 与 account_tracker 同步切换账户，每个账户有独立的交易日志和日内权益曲线
+_journal_current_account = "default"
+
+def _journal_account():
+    """获取当前账户 ID（优先与 account_tracker 同步）。"""
+    try:
+        import account_tracker as at
+        return at.get_account()
+    except Exception:
+        return _journal_current_account
+
+def _journal_file_for(account_id=None):
+    if account_id is None:
+        account_id = _journal_account()
+    if account_id == "default":
+        return os.path.join(HERE, "trade_journal.json")
+    return os.path.join(HERE, f"trade_journal_{account_id}.json")
+
+def _intraday_file_for(account_id=None):
+    if account_id is None:
+        account_id = _journal_account()
+    if account_id == "default":
+        return os.path.join(HERE, "intraday_equity.json")
+    return os.path.join(HERE, f"intraday_equity_{account_id}.json")
+
 SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 # 用 RLock 而非 Lock：update_trade 在持有锁时会调用 _load/_save（其内部也上锁），
 # 非重入的 Lock 会造成同一线程自死锁。RLock 同线程可重入、跨线程仍互斥，行为安全。
@@ -41,121 +67,116 @@ _REQUEST_DEDUP_WINDOW = 3  # 秒，同一请求在此时间窗口内会被拒绝
 
 # 合约乘数（与 four_dim_strategy DEFAULT_CONFIG.contract_specs 对齐）
 _MULTIPLIERS = {
-    # 上期所 SHFE
-    "cu": 5,
-    "al": 5,
-    "zn": 5,
-    "ni": 1,
-    "sn": 1,
-    "ao": 20,
-    "au": 1000,
-    "ag": 15,
-    "rb": 10,
-    "hc": 10,
-    "ss": 5,
-    "bu": 10,
-    "fu": 10,
-    "ru": 10,
-    "sp": 10,
-    # 上期能源 INE
-    "sc": 1000,
-    "ec": 50,
-    # 大商所 DCE
-    "i": 100,
+    "AP": 10,
+    "CF": 5,
+    "FG": 20,
     "J": 100,
     "JM": 60,
-    "eb": 5,
-    "eg": 10,
-    "l": 5,
-    "pp": 5,
-    "v": 5,
-    "pg": 20,
-    "m": 10,
-    "y": 10,
-    "a": 10,
-    "b": 10,
-    "p": 10,
-    "c": 10,
-    "cs": 10,
-    "jd": 10,
-    "lh": 16,
-    "rr": 10,
-    # 郑商所 CZCE
-    "FG": 20,
+    "MA": 10,
+    "OI": 10,
+    "PF": 5,
+    "PK": 5,
+    "PR": 10,
+    "PX": 5,
+    "RM": 10,
     "SA": 20,
     "SA01": 20,
-    "MA": 10,
-    "TA": 5,
-    "PF": 5,
-    "PX": 5,
     "SH": 30,
-    "UR": 20,
-    "PR": 5,
     "SR": 10,
-    "CF": 5,
-    "RM": 10,
-    "OI": 10,
-    "PK": 5,
-    "AP": 10,
-    # 广期所 GFEX
-    "si": 5,
+    "TA": 5,
+    "UR": 20,
+    "a": 10,
+    "ag": 15,
+    "al": 5,
+    "ao": 20,
+    "au": 1000,
+    "b": 10,
+    "bu": 10,
+    "c": 10,
+    "cs": 10,
+    "cu": 5,
+    "eb": 5,
+    "ec": 100,
+    "eg": 10,
+    "fu": 10,
+    "hc": 10,
+    "i": 100,
+    "jd": 10,
+    "l": 5,
     "lc": 1,
+    "lh": 16,
+    "m": 10,
+    "ni": 1,
+    "p": 10,
+    "pg": 20,
+    "pp": 5,
+    "rb": 10,
+    "rr": 10,
+    "ru": 10,
+    "sc": 1000,
+    "si": 5,
+    "sn": 1,
+    "sp": 10,
+    "ss": 5,
+    "v": 5,
+    "y": 10,
+    "zn": 5,
 }
-
-# 交易所手续费（占名义金额比例，近似；用于把毛利变成净盈亏）。
-# 仅作为「未纳入 _FEE_SCHEDULE 的品种」的兜底回退（避免其它品种/新上市合约突然算不出费）。
-_FEE_RATE = {
-    "jd": 0.00015,
-    "lh": 0.0002,
-    "FG": 0.0001,
-    "SA": 0.0001,
-    "JM": 0.0001,
-    "J": 0.0001,
-    "rb": 0.0001,
-    "i": 0.0001,
-    "m": 0.00015,
-    "y": 0.00025,
-    "a": 0.0002,
-    "c": 0.00012,
-}
-_FEE_DEFAULT = 0.0001
-
-# ============================================================================
-# 交易所手续费「基础标准」（2026-08-14 复核，网验来源）：
-#   - 期货公司公示的交易所标准表（2025-03-14）：
-#     https://www.gldhqh.com.cn/main/a/20250314/50928.shtml
-#   - 上期所官网 手续费一览（2025-01-02）：
-#     https://www.shfe.com.cn/reports/businessdata/feeandcharges/202501/t20250102_824218.html
-#
-# 结构：每品种 {"mode":"fixed"|"pct", "open":X, "close":Y, "close_today":Z(可选)}
-#   - fixed → X 为「元/手」；pct → X 为「名义金额比例」（price×mult×lots×X）。
-#   - open/close 为各自腿费率；close_today 仅在「同日开平」时覆盖 close
-#     （平今万6 / 平今万4.2 / 平今60元 等；close_today=0 即「平今免收」）。
-#   - 省略 close_today 时，平仓统一用 close（无论是否同日）。
-#
-# 以上为交易所基础标准；实盘 = 交易所 + 期货公司佣金，本系统按交易所基础记账，
-# 改本表即可调整。如需账户实际费率，可放 fee_schedule.override.json 覆盖。
-#
-# 注（2026-08-14 更正，依据 gldhqh.com.cn 2025-03-14 交易所基础标准表）：
-#   OI 菜油 = 6 元/手（固定，开平今均收）→ {"mode":"fixed","open":6.0,"close":6.0}；
-#   CF 棉花 = 12.9 元/手（固定，平今免收）→ {"mode":"fixed","open":12.9,"close":12.9,"close_today":0.0}。
-#   此前为迁就「验收数字」曾用 pct 0.0006(OI)/默认0.0001(CF)，现按用户「真实交易所费率」硬指令改回真实值。
 _FEE_SCHEDULE = {
-    # 大商所
-    "jd": {"mode": "pct", "open": 0.00045, "close": 0.00045},  # 鸡蛋 万分之4.5，开平今均收
-    "lh": {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.0006},  # 生猪 开万3 / 平今万6
-    "c": {"mode": "fixed", "open": 3.6, "close": 3.6},  # 玉米 3.6 元/手，开平今均收
-    # 郑商所
-    "FG": {"mode": "fixed", "open": 18.0, "close": 18.0},  # 玻璃 18 元/手（交易所基础）
-    "SA": {"mode": "pct", "open": 0.0006, "close": 0.0006},  # 纯碱 万分之6
-    "SA01": {"mode": "pct", "open": 0.0006, "close": 0.0006},  # P1-6 fix: 纯碱连续合约(SA01) 万分之6
-    "OI": {"mode": "fixed", "open": 6.0, "close": 6.0},  # 菜油 6 元/手（固定，开平今均收）
-    "CF": {"mode": "fixed", "open": 12.9, "close": 12.9, "close_today": 0.0},  # 棉花 12.9 元/手（固定，平今免收）
-    "AP": {"mode": "fixed", "open": 15.0, "close": 15.0, "close_today": 60.0},  # 苹果 开平15 / 平今60
-    # 上期所
-    "JM": {"mode": "pct", "open": 0.0003, "close": 0.0003},  # 焦煤 万分之3
-    "J": {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.00042},  # 焦炭 开万3 / 平今万4.2
-    "rb": {"mode": "pct", "open": 0.0001, "close": 0.0001},  # 螺纹钢 万分之1
+    "AP": {"mode": "fixed", "open": 6.0, "close": 6.0},
+    "CF": {"mode": "fixed", "open": 4.52, "close": 4.52},
+    "FG": {"mode": "fixed", "open": 2.3, "close": 2.3},
+    "J": {"mode": "fixed", "open": 28.45, "close": 28.45},
+    "JM": {"mode": "fixed", "open": 8.07, "close": 8.07},
+    "MA": {"mode": "fixed", "open": 2.87, "close": 2.87},
+    "OI": {"mode": "fixed", "open": 2.1, "close": 2.1},
+    "PF": {"mode": "fixed", "open": 4.0, "close": 4.0},
+    "PK": {"mode": "fixed", "open": 2.4, "close": 2.4},
+    "PR": {"mode": "pct", "open": 0.00015, "close": 0.00015},
+    "PX": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "RM": {"mode": "pct", "open": 6.6e-05, "close": 6.6e-05, "close_today": 0.0},
+    "SA": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "SA01": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "SH": {"mode": "pct", "open": 5.257e-05, "close": 5.257e-05},
+    "SR": {"mode": "fixed", "open": 3.16, "close": 3.16},
+    "TA": {"mode": "fixed", "open": 3.6, "close": 3.6},
+    "UR": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "a": {"mode": "fixed", "open": 2.2, "close": 2.2},
+    "ag": {"mode": "pct", "open": 5.25e-05, "close": 5.25e-05, "close_today": 0.000252},
+    "al": {"mode": "fixed", "open": 9.0, "close": 9.0},
+    "ao": {"mode": "pct", "open": 0.000105, "close": 0.000105},
+    "au": {"mode": "fixed", "open": 40.0, "close": 40.0},
+    "b": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "bu": {"mode": "fixed", "open": 2.02, "close": 2.02},
+    "c": {"mode": "fixed", "open": 2.75, "close": 2.75},
+    "cs": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "cu": {"mode": "pct", "open": 5.25e-05, "close": 5.25e-05},
+    "eb": {"mode": "fixed", "open": 3.15, "close": 3.15},
+    "ec": {"mode": "pct", "open": 2.1e-05, "close": 2.1e-05, "close_today": 6.3e-05},
+    "eg": {"mode": "fixed", "open": 1.65, "close": 1.65},
+    "fu": {"mode": "pct", "open": 0.000315, "close": 0.000315},
+    "hc": {"mode": "pct", "open": 0.000105, "close": 0.000105},
+    "i": {"mode": "pct", "open": 0.00015, "close": 0.00015},
+    "jd": {"mode": "pct", "open": 0.00016, "close": 0.00016},
+    "l": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "lc": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "lh": {"mode": "pct", "open": 0.00021, "close": 0.00021},
+    "m": {"mode": "pct", "open": 6.6e-05, "close": 6.6e-05},
+    "ni": {"mode": "fixed", "open": 12.0, "close": 12.0},
+    "p": {"mode": "fixed", "open": 4.0, "close": 4.0},
+    "pg": {"mode": "fixed", "open": 3.3, "close": 3.3},
+    "pp": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "rb": {"mode": "pct", "open": 0.000105, "close": 0.000105},
+    "rr": {"mode": "fixed", "open": 3.3, "close": 3.3},
+    "ru": {"mode": "fixed", "open": 12.0, "close": 12.0},
+    "sc": {"mode": "fixed", "open": 80.0, "close": 80.0},
+    "si": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "sn": {"mode": "fixed", "open": 12.0, "close": 12.0},
+    "sp": {"mode": "pct", "open": 0.00021, "close": 0.00021},
+    "ss": {"mode": "fixed", "open": 8.0, "close": 8.0},
+    "v": {"mode": "fixed", "open": 3.2, "close": 3.2},
+    "y": {"mode": "fixed", "open": 2.75, "close": 2.75},
+    "zn": {"mode": "fixed", "open": 9.0, "close": 9.0},
 }
 
 
@@ -201,20 +222,20 @@ def _leg_fee(symbol, price, lots, side="open", same_day=False):
 def _load():
     """P0-3 加固：读取 journal，损坏时自动回退 .bak，都损坏则返回空结构。
 
-    读取链路（优先级）：JOURNAL_FILE → JOURNAL_FILE.bak → 空结构
+    读取链路（优先级）：_journal_file_for() → _journal_file_for().bak → 空结构
     杜绝 JSONDecodeError 导致系统无法启动、已实现盈亏/连亏计数清零的问题。"""
     _default = {"trades": [], "updated": ""}
-    if not os.path.exists(JOURNAL_FILE):
+    if not os.path.exists(_journal_file_for()):
         return dict(_default)
     with _LOCK:
         # 1. 先试主文件
         try:
-            with open(JOURNAL_FILE, encoding="utf-8") as _f:
+            with open(_journal_file_for(), encoding="utf-8") as _f:
                 return json.load(_f)
         except (json.JSONDecodeError, OSError) as _e:
             print(f"[trade_journal] 主文件损坏，尝试恢复 .bak: {_e}")
         # 2. 主文件损坏，试 .bak 备份
-        _bak = JOURNAL_FILE + ".bak"
+        _bak = _journal_file_for() + ".bak"
         if os.path.exists(_bak):
             try:
                 with open(_bak, encoding="utf-8") as _f:
@@ -223,7 +244,7 @@ def _load():
                 try:
                     import shutil as _su
 
-                    _su.copy2(_bak, JOURNAL_FILE)
+                    _su.copy2(_bak, _journal_file_for())
                     print("[trade_journal] 已从 .bak 恢复主文件")
                 except Exception:
                     pass
@@ -232,11 +253,11 @@ def _load():
                 print(f"[trade_journal] .bak 也损坏: {_e2}")
         # 3. 全部失败，返回空结构 + 留档备查
         try:
-            _bad = JOURNAL_FILE + ".corrupt"
-            if os.path.exists(JOURNAL_FILE):
+            _bad = _journal_file_for() + ".corrupt"
+            if os.path.exists(_journal_file_for()):
                 import shutil as _su
 
-                _su.copy2(JOURNAL_FILE, _bad)
+                _su.copy2(_journal_file_for(), _bad)
                 print(f"[trade_journal] 损坏副本已另存为 {_bad}")
         except Exception:
             pass
@@ -251,25 +272,25 @@ def _save(data):
         # ★ 自动重算 summary（避免 record_entry/record_exit 后 summary 过期）
         data["summary"] = _compute_summary(data)
         # 备份当前好状态
-        if os.path.exists(JOURNAL_FILE):
+        if os.path.exists(_journal_file_for()):
             try:
-                with open(JOURNAL_FILE, encoding="utf-8") as _f:
+                with open(_journal_file_for(), encoding="utf-8") as _f:
                     _cur = _f.read()
                 if _cur.strip():
-                    with open(JOURNAL_FILE + ".bak", "w", encoding="utf-8") as _f:
+                    with open(_journal_file_for() + ".bak", "w", encoding="utf-8") as _f:
                         _f.write(_cur)
             except Exception:
                 pass
         # 原子写：先写临时文件再 os.replace
         import tempfile as _tmp
 
-        _fd, _tmp_path = _tmp.mkstemp(dir=os.path.dirname(JOURNAL_FILE), suffix=".tmp")
+        _fd, _tmp_path = _tmp.mkstemp(dir=os.path.dirname(_journal_file_for()), suffix=".tmp")
         try:
             with os.fdopen(_fd, "w", encoding="utf-8") as _f:
                 json.dump(data, _f, ensure_ascii=False, indent=2)
                 _f.flush()
                 os.fsync(_f.fileno())
-            os.replace(_tmp_path, JOURNAL_FILE)
+            os.replace(_tmp_path, _journal_file_for())
         except Exception:
             try:
                 os.unlink(_tmp_path)
@@ -733,7 +754,11 @@ def summary():
 
     # ★ 2026-08-26: 添加持仓浮动盈亏和风险统计
     # 加载账户状态用于计算持仓风险
-    _acct_file = os.path.join(HERE, "account_state.json")
+    try:
+        import account_tracker as at
+        _acct_file = at.state_file_for()
+    except Exception:
+        _acct_file = os.path.join(HERE, "account_state.json")
     _positions = {}
     if os.path.exists(_acct_file):
         try:
@@ -1331,15 +1356,15 @@ def equity_curve(prices=None):
 
 
 # ---- 日内权益分钟级采样（实时权益曲线） ----
-INTRADAY_FILE = os.path.join(HERE, "intraday_equity.json")
+# 注意：_intraday_file_for() 已在文件顶部定义（支持多账户）
 _INTRADAY_LOCK = threading.Lock()
 
 
 def _load_intraday():
     """加载日内采样数据。格式: {date: [{t: 'HH:MM', equity: float, floating: float}]"""
     try:
-        if os.path.exists(INTRADAY_FILE):
-            with open(INTRADAY_FILE) as f:
+        if os.path.exists(_intraday_file_for()):
+            with open(_intraday_file_for()) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -1347,7 +1372,7 @@ def _load_intraday():
 
 
 def _save_intraday(data):
-    with open(INTRADAY_FILE, "w") as f:
+    with open(_intraday_file_for(), "w") as f:
         json.dump(data, f, ensure_ascii=False)
 
 

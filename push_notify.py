@@ -28,6 +28,7 @@ import logging
 import os
 import urllib.parse
 import urllib.request
+import subprocess
 from datetime import datetime
 
 log = logging.getLogger("push_notify")
@@ -39,7 +40,7 @@ _TIMEOUT = 8
 
 
 def _load_cfg():
-    cfg = {"telegram": {}, "bark": {}, "wecom": {}}
+    cfg = {"telegram": {}, "bark": {}, "wecom": {}, "feishu": {}}
     if os.path.exists(CFG_FILE):
         try:
             f = json.load(open(CFG_FILE, encoding="utf-8"))
@@ -59,6 +60,10 @@ def _load_cfg():
         cfg["bark"]["server"] = os.environ["BARK_SERVER"]
     if os.environ.get("WECOM_WEBHOOK"):
         cfg["wecom"]["webhook"] = os.environ["WECOM_WEBHOOK"]
+    if os.environ.get("FEISHU_CHAT_ID"):
+        cfg["feishu"]["chat_id"] = os.environ["FEISHU_CHAT_ID"]
+    if os.environ.get("FEISHU_LARK_CLI"):
+        cfg["feishu"]["lark_cli"] = os.environ["FEISHU_LARK_CLI"]
     return cfg
 
 
@@ -76,6 +81,7 @@ def channels_status():
         "telegram": bool(cfg["telegram"].get("token") and cfg["telegram"].get("chat_id")),
         "bark": bool(cfg["bark"].get("key")),
         "wecom": bool(cfg["wecom"].get("webhook")),
+        "feishu": bool(cfg["feishu"].get("chat_id")),
     }
 
 
@@ -129,11 +135,50 @@ def _send_wecom(cfg, title, text):
     return True, "ok"
 
 
+def _send_feishu(cfg, title, text):
+    """通过 lark-cli 发飞书群消息（#15 新增，2026-09-06）。"""
+    feishu = cfg.get("feishu", {})
+    chat_id = feishu.get("chat_id", "")
+    if not chat_id:
+        return False, "未配置 chat_id"
+    lark_cli = feishu.get("lark_cli", "")
+    if not lark_cli:
+        import shutil as _sh
+        lark_cli = (
+            _sh.which("lark-cli")
+            or "/Users/a123/.trae-cn/plugins/trae-remote-official/lark/1.0.4/bin/lark-cli"
+        )
+    try:
+        payload = json.dumps({"text": f"【{title}】{text}"}, ensure_ascii=False)
+        cmd = [
+            lark_cli, "im", "+messages-send",
+            "--chat-id", chat_id,
+            "--msg-type", "text",
+            "--content", payload,
+            "--as", "user",
+            "--format", "json",
+        ]
+        env = os.environ.copy()
+        env["LARKSUITE_CLI_NO_UPDATE_NOTIFIER"] = "1"
+        env["LARKSUITE_CLI_NO_SKILLS_NOTIFIER"] = "1"
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=env)
+        if r.returncode == 0 and '"ok": true' in r.stdout:
+            return True, "ok"
+        else:
+            return False, (r.stderr or r.stdout or "").strip()[:120]
+    except subprocess.TimeoutExpired:
+        return False, "timeout"
+    except FileNotFoundError:
+        return False, "lark-cli not found: " + lark_cli
+    except Exception as e:
+        return False, str(e)
+
+
 def push(text, title="四维策略"):
     """推送到所有已启用通道。返回 {sent:[], failed:[], at}。"""
     cfg = _load_cfg()
     sent, failed = [], []
-    dispatchers = [("telegram", _send_telegram), ("bark", _send_bark), ("wecom", _send_wecom)]
+    dispatchers = [("telegram", _send_telegram), ("bark", _send_bark), ("wecom", _send_wecom), ("feishu", _send_feishu)]
     for name, fn in dispatchers:
         try:
             ok, info = fn(cfg, title, text)

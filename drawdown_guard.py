@@ -14,6 +14,8 @@
   多档渐变、可配置、且跨重启持久化，因此 risk_state_machine 的回撤分支已移除，
   回撤降险的唯一来源是本模块（避免双重惩罚）。
 
+v3.9.1: 增加 DrawdownGuard 类，支持多账户隔离。模块级函数保留为默认账户兼容。
+
 用法（runner 调用）：
   import drawdown_guard as ddg
   ddg.init_from_config()                 # 启动加载水位线
@@ -34,7 +36,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "drawdown_state.json")
 # 默认三档：[阈值(小数), 新开仓缩放系数]
 _CONFIG = {"waterlines": [(0.05, 0.70), (0.10, 0.50), (0.15, 0.00)]}
-_LOCK = threading.RLock()
+_CONFIG_LOCK = threading.RLock()
 
 
 def init_from_config():
@@ -55,149 +57,162 @@ def init_from_config():
                 parsed.append((th, float(sc)))
             parsed.sort(key=lambda x: x[0])  # 升序，便于查找
             if parsed:
-                _CONFIG["waterlines"] = parsed
+                with _CONFIG_LOCK:
+                    _CONFIG["waterlines"] = parsed
     except Exception:
         pass
     return _CONFIG["waterlines"]
 
 
 def waterlines():
-    return list(_CONFIG["waterlines"])
+    with _CONFIG_LOCK:
+        return list(_CONFIG["waterlines"])
 
 
-def _load():
-    try:
-        if os.path.exists(STATE_FILE):
-            d = json.load(open(STATE_FILE, encoding="utf-8")) or {}
-            return d
-    except Exception:
-        pass
-    # P1-13 fix: 添加日内回撤默认字段
-    return {
-        "peak_equity": None,
-        "dd_pct": 0.0,
-        "tier": 0,
-        "scale": 1.0,
-        "updated": "",
-        "thresholds": waterlines(),
-        "intraday_peak": None,
-        "intraday_peak_date": None,
-        "intraday_dd_pct": 0.0,
-        "opening_equity": None,
-    }
+class DrawdownGuard:
+    """账户级回撤水位线管理器。每个账户独立的峰值/档位/状态文件。"""
+
+    def __init__(self, state_file):
+        self.state_file = state_file
+        self._lock = threading.RLock()
+
+    def _load(self):
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, encoding="utf-8") as f:
+                    d = json.load(f) or {}
+                return d
+        except Exception:
+            pass
+        return {
+            "peak_equity": None,
+            "dd_pct": 0.0,
+            "tier": 0,
+            "scale": 1.0,
+            "updated": "",
+            "thresholds": waterlines(),
+            "intraday_peak": None,
+            "intraday_peak_date": None,
+            "intraday_dd_pct": 0.0,
+            "opening_equity": None,
+        }
+
+    def _save(self, d):
+        try:
+            tmp = self.state_file + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.state_file)
+        except Exception:
+            pass
+
+    def update(self, equity):
+        """每轮喂入动态权益，更新峰值 / 回撤 / 档位，返回当前状态 dict。"""
+        with self._lock:
+            st = self._load()
+            peak = st.get("peak_equity")
+            today = time.strftime("%Y-%m-%d")
+            intraday_peak = st.get("intraday_peak")
+            intraday_date = st.get("intraday_peak_date")
+            try:
+                eq = float(equity)
+            except Exception:
+                eq = None
+            if eq is None or eq <= 0:
+                st["thresholds"] = waterlines()
+                return st
+            # 新的一天 → 初始化日内峰值
+            if intraday_date != today:
+                intraday_peak = eq
+                st["intraday_peak_date"] = today
+                st["opening_equity"] = eq
+                st["intraday_peak"] = eq
+            elif intraday_peak is None or eq > intraday_peak:
+                intraday_peak = eq
+                st["intraday_peak"] = eq
+            # 全周期峰值
+            if peak is None or eq > peak:
+                peak = eq
+            # 全周期回撤
+            dd = (peak - eq) / peak if peak > 0 else 0.0
+            # 日内回撤
+            intraday_dd = (intraday_peak - eq) / intraday_peak if intraday_peak > 0 else 0.0
+            # 取 max(全周期dd, 日内dd) 决定档位
+            _dd_for_scale = max(dd, intraday_dd)
+            wls = waterlines()
+            scale = 1.0
+            tier = 0
+            for i, (th, sc) in enumerate(wls):
+                if _dd_for_scale >= th:
+                    scale = sc
+                    tier = i + 1
+            st["peak_equity"] = peak
+            st["dd_pct"] = round(dd * 100, 2)
+            st["intraday_dd_pct"] = round(intraday_dd * 100, 2)
+            st["intraday_peak"] = intraday_peak
+            st["opening_equity"] = st.get("opening_equity", eq)
+            st["tier"] = tier
+            st["scale"] = scale
+            st["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            st["thresholds"] = wls
+            self._save(st)
+            return st
+
+    def scale_factor(self):
+        try:
+            return float(self._load().get("scale", 1.0))
+        except Exception:
+            return 1.0
+
+    def current(self):
+        st = self._load()
+        st["thresholds"] = waterlines()
+        return st
+
+    def reset_peak(self, equity=None):
+        """重置峰值权益，使回撤归零、降险系数回 1.0。"""
+        with self._lock:
+            st = self._load()
+            if equity is not None:
+                try:
+                    st["peak_equity"] = float(equity)
+                    st["intraday_peak"] = float(equity)
+                    st["opening_equity"] = float(equity)
+                    st["intraday_peak_date"] = time.strftime("%Y-%m-%d")
+                except Exception:
+                    st["peak_equity"] = None
+                    st["intraday_peak"] = None
+            else:
+                st["peak_equity"] = None
+                st["intraday_peak"] = None
+            st["dd_pct"] = 0.0
+            st["intraday_dd_pct"] = 0.0
+            st["tier"] = 0
+            st["scale"] = 1.0
+            st["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            st["thresholds"] = waterlines()
+            self._save(st)
+            return st
 
 
-def _save(d):
-    try:
-        tmp = STATE_FILE + ".tmp"
-        json.dump(d, open(tmp, "w"), ensure_ascii=False, indent=2)
-        os.replace(tmp, STATE_FILE)
-    except Exception:
-        pass
+# ========== 模块级默认实例（兼容旧代码）==========
+_default_guard = DrawdownGuard(STATE_FILE)
 
 
 def update(equity):
-    """每轮喂入动态权益，更新峰值 / 回撤 / 档位，返回当前状态 dict。
-
-    P1-13 fix: 新增日内峰值追踪，用于计算日内最大回撤（独立于全周期峰值）。
-    日内峰值在每日首次调用时初始化为当日开盘权益。"""
-    with _LOCK:
-        st = _load()
-        peak = st.get("peak_equity")
-        # P1-13: 日内峰值追踪
-        today = time.strftime("%Y-%m-%d")
-        intraday_peak = st.get("intraday_peak")
-        intraday_date = st.get("intraday_peak_date")
-        opening_equity = st.get("opening_equity")
-        try:
-            eq = float(equity)
-        except Exception:
-            eq = None
-        if eq is None or eq <= 0:
-            st["thresholds"] = waterlines()
-            return st
-        # P1-13: 新的一天 → 初始化日内峰值
-        if intraday_date != today:
-            intraday_peak = eq
-            st["intraday_peak_date"] = today
-            st["opening_equity"] = eq  # 记录日初权益
-            st["intraday_peak"] = eq
-        elif intraday_peak is None or eq > intraday_peak:
-            intraday_peak = eq
-            st["intraday_peak"] = eq
-        # 全周期峰值
-        if peak is None or eq > peak:
-            peak = eq
-        # 全周期回撤
-        dd = (peak - eq) / peak if peak > 0 else 0.0
-        # P1-13: 日内回撤
-        intraday_dd = (intraday_peak - eq) / intraday_peak if intraday_peak > 0 else 0.0
-        # P1-13 深度重审加固：档位查找取 max(全周期dd, 日内dd)，
-        # 避免"历史峰值高→全周期回撤小但当日回撤巨大"时风控档位偏松的问题。
-        # 例如：账户长期从 200w 涨到 400w 峰值，今日从 400w 跌回 380w →
-        #       全周期 dd=5% 偏松，但 intraday_dd=5% 已经接近 10% 档位，
-        #       用 max 就能在当日剧烈回撤时及时降仓。
-        _dd_for_scale = max(dd, intraday_dd)
-        wls = waterlines()
-        scale = 1.0
-        tier = 0
-        for i, (th, sc) in enumerate(wls):
-            if _dd_for_scale >= th:
-                scale = sc
-                tier = i + 1
-        st["peak_equity"] = peak
-        st["dd_pct"] = round(dd * 100, 2)
-        # P1-13 fix: 同时输出日内回撤指标
-        st["intraday_dd_pct"] = round(intraday_dd * 100, 2)
-        st["intraday_peak"] = intraday_peak
-        st["opening_equity"] = st.get("opening_equity", eq)
-        st["tier"] = tier
-        st["scale"] = scale
-        st["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        st["thresholds"] = wls
-        _save(st)
-        return st
+    return _default_guard.update(equity)
 
 
 def scale_factor():
-    try:
-        return float(_load().get("scale", 1.0))
-    except Exception:
-        return 1.0
+    return _default_guard.scale_factor()
 
 
 def current():
-    st = _load()
-    st["thresholds"] = waterlines()
-    return st
+    return _default_guard.current()
 
 
 def reset_peak(equity=None):
-    """重置峰值权益（人工解除熔断时调用），使回撤归零、降险系数回 1.0。
-
-    P1-13 fix: 同时重置日内峰值追踪。"""
-    with _LOCK:
-        st = _load()
-        if equity is not None:
-            try:
-                st["peak_equity"] = float(equity)
-                st["intraday_peak"] = float(equity)
-                st["opening_equity"] = float(equity)
-                st["intraday_peak_date"] = time.strftime("%Y-%m-%d")
-            except Exception:
-                st["peak_equity"] = None
-                st["intraday_peak"] = None
-        else:
-            st["peak_equity"] = None
-            st["intraday_peak"] = None
-        st["dd_pct"] = 0.0
-        st["intraday_dd_pct"] = 0.0
-        st["tier"] = 0
-        st["scale"] = 1.0
-        st["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        st["thresholds"] = waterlines()
-        _save(st)
-        return st
+    return _default_guard.reset_peak(equity)
 
 
 if __name__ == "__main__":
