@@ -27,6 +27,8 @@ import threading
 import time
 from datetime import datetime
 
+from dir_utils import dir_norm, dir_sign
+
 # ★ 2026-08-27: akshare 实时行情（分钟级，新浪数据源）
 # ★ 2026-08-28: minishare_live 主数据源（rt_fut_k 不限次快照）
 try:
@@ -396,7 +398,18 @@ def save_state(st):
 
 
 def _dir_sign(direction):
-    return 1 if direction == "多" else (-1 if direction == "空" else 0)
+    """方向归一化为 +1(多/long) / -1(空/short) / 0(未知)。
+
+    唯一真源为 dir_utils.dir_sign（并集：另支持数字方向、duo/kong/做多/多头
+    等）。旧实现只支持字符串，_dir_sign(1) 会返回 0 —— 若上游传入数字方向，
+    浮动盈亏 gross 会被乘成 0。保留本名是因为其它模块与测试按模块导入。
+    """
+    return dir_sign(direction)
+
+
+def _dir_norm(direction):
+    """把任何方向格式归一化为中文：long→多, short→空, 未知→—"""
+    return dir_norm(direction)
 
 
 def _fmt_price(v):

@@ -17,6 +17,8 @@ account_tracker.py 中提取出来，便于单元测试。
     from price_protection import validate_price, validate_entry_stop, protect_user_price
 """
 
+from dir_utils import dir_sign
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. 价格有效性校验
@@ -64,21 +66,12 @@ def validate_price(price):
 
 
 def _dir_sign(direction):
-    """方向符号：多/long/1 → 1；空/short/-1 → -1；其他 → 0。"""
-    if isinstance(direction, str):
-        d = direction.strip().lower()
-        if d in ("多", "long", "duo", "buy"):
-            return 1
-        if d in ("空", "short", "kong", "sell"):
-            return -1
-        return 0
-    if isinstance(direction, (int, float)):
-        if direction > 0:
-            return 1
-        if direction < 0:
-            return -1
-        return 0
-    return 0
+    """方向符号：多/long/1 → 1；空/short/-1 → -1；其他 → 0。
+
+    唯一真源为 dir_utils.dir_sign（并集：另支持 做多/多头/bull/bear/l/s/±1 等）。
+    保留本名是因为其它模块与测试按模块导入，此处仅作薄包装。
+    """
+    return dir_sign(direction)
 
 
 def validate_entry_stop(direction, entry_price, stop):

@@ -25,6 +25,8 @@ import os
 import threading
 import time
 
+from dir_utils import dir_sign
+
 # ============ 风控闸参数（da哥 原值） ============
 RED_LINE = 0.45  # 保证金使用率红线（禁新开）
 DAILY_LOSS_STOP = 0.05  # 当日亏损停机线（强制冻结）
@@ -280,18 +282,19 @@ def _pos_lots(p):
 
 
 def _pos_dir(p):
-    """返回 +1 多 / -1 空 / 0 未知。"""
+    """返回 +1 多 / -1 空 / 0 未知。
+
+    方向判定统一委托 dir_utils.dir_sign（全仓库唯一真源）；本函数只负责
+    「按 direction/dir/side/方向 多 key 回退查找」这一层，未知值继续找下一个
+    key 的语义不变。
+    """
     for k in ("direction", "dir", "side", "方向"):
         v = p.get(k)
         if v in (None, ""):
             continue
-        if isinstance(v, (int, float)):
-            return 1 if v > 0 else (-1 if v < 0 else 0)
-        s = str(v).strip().lower()
-        if s in ("long", "buy", "多", "做多", "多头", "1", "+1"):
-            return 1
-        if s in ("short", "sell", "空", "做空", "空头", "-1"):
-            return -1
+        s = dir_sign(v)
+        if s != 0:
+            return s
     return 0
 
 

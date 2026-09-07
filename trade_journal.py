@@ -27,6 +27,8 @@ import threading
 import uuid
 from datetime import datetime
 
+from dir_utils import dir_sign
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ===== 多账户支持（v3.9.1）=====
@@ -322,7 +324,14 @@ def get_all_trades():
 
 
 def _dir_sign(direction):
-    return 1 if direction == "多" else (-1 if direction == "空" else 0)
+    """方向归一化：多/long/... → 1，空/short/... → -1，未知 → 0。
+
+    ⚠️ 旧实现只认 "多"/"空" 两个字面量，导致 _dir_sign("long") → 0，
+    _validate_entry_stop 在 ds==0 时**直接原样返回、不做止损方向校验与镜像
+    修正**——即英文/数字方向传入时止损校验被静默跳过。
+    现统一委托给 dir_utils.dir_sign（全仓库唯一真源）。
+    """
+    return dir_sign(direction)
 
 
 def _validate_entry_stop(direction, entry_price, stop):
