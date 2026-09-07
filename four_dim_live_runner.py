@@ -673,6 +673,25 @@ PORTFOLIO_CORR_BUCKET_PCT = 1.0  # 同相关桶（同向）风险上限 = 权益
 # 相关性桶只管「两两高相关」，管不住「五个化工品两两相关都 0.6，加起来却是一把大赌注」；
 # 净敞口则管不住「全组合清一色做多」的方向性风险。两道闸补上这两个洞。
 PORTFOLIO_SECTOR_PCT = 1.2  # 单板块（化工/黑系/农产品…）风险上限 = 权益 × 1.2%
+# ★ 2026-09-07 方向归一化：CTP 同步层写中文 '多'/'空'，模拟盘写英文 'long'/'short'
+# 统一在此处归一化，以后所有方向判断都用这个函数，不能再硬编码比较
+def _dir_norm(d):
+    """把各种方向写法统一成 '多' / '空' / '中性'"""
+    if not d:
+        return '中性'
+    s = str(d).lower().strip()
+    if s in ('多', 'long', '多头', '做多', 'bull', 'bullish', 'buy'):
+        return '多'
+    if s in ('空', 'short', '空头', '做空', 'sell', 'bear', 'bearish'):
+        return '空'
+    return str(d)
+
+def _dir_sign(d):
+    """返回 +1(多) / -1(空) / 0(未知)"""
+    n = _dir_norm(d)
+    return 1 if n == '多' else (-1 if n == '空' else 0)
+
+
 PORTFOLIO_NET_DIR_PCT = 1.5  # 单边净敞口上限 = 权益 × 1.5%（Σ多风险 或 Σ空风险）
 PORTFOLIO_SECTOR_MAX_N = 3
 
@@ -1572,7 +1591,7 @@ def _compute_stop_atr(sym, df_5m, atr_daily, now=None):
 def _auto_levels(sym, direction, price):
     """开仓时自动算止损/止盈/t1/t2（30min ATR 规则）。price 为 0/None 时回退实时价。
     返回 (stop, t1, t2, atr_src, used_price, tail_enabled) 或失败元组。"""
-    dir_T = 1 if direction == "多" else (-1 if direction == "空" else 0)
+    dir_T = _dir_sign(direction)
     if dir_T == 0 or not sym:
         return None, None, None, None, price, False
     if FEED is None:
@@ -1680,7 +1699,7 @@ def _rebuild_dedup_from_chat(last_fire):
             if sym is None:
                 continue
             d = e.get("direction")
-            dir_T = 1 if d == "多" else (-1 if d == "空" else 0)
+            dir_T = 1 if _dir_norm(d) == "多" else (-1 if _dir_norm(d) == "空" else 0)
             if dir_T == 0:
                 continue
             # 保留每个品种最新一条
@@ -1905,7 +1924,7 @@ def build_batch_orders(mode="flatten", symbol=None):
             continue
         px = p.get("price") or prices.get(sym)
         d = p.get("direction")
-        close_side = "卖平" if d == "多" else "买平"
+        close_side = "卖平" if _dir_norm(d) == "多" else "买平"
         item = {
             "symbol": sym,
             "name": p.get("name") or sym,
@@ -1924,7 +1943,7 @@ def build_batch_orders(mode="flatten", symbol=None):
             pass
         rows.append(item)
         if mode == "reverse":
-            new_dir = "空" if d == "多" else "多"
+            new_dir = "空" if _dir_norm(d) == "多" else "多"
             new_lots = lots
             try:
                 df = load_daily_refreshed(sym)
@@ -1949,7 +1968,7 @@ def build_batch_orders(mode="flatten", symbol=None):
                 "name": p.get("name") or sym,
                 "contract": ml.normalize_contract_code(p.get("contract") or sym),
                 "step": "反手开仓",
-                "side": "买开" if new_dir == "多" else "卖开",
+                "side": "买开" if _dir_norm(new_dir) == "多" else "卖开",
                 "direction": new_dir,
                 "lots": new_lots,
                 "ref_price": px,
@@ -2328,7 +2347,7 @@ def _levels_sane(p):
         avg = float(avg)
     except (TypeError, ValueError):
         avg = None  # 非数值 avg（如字符串脏数据）→ 无法校验，不拦截
-    ds = 1 if p.get("direction") == "多" else (-1 if p.get("direction") == "空" else 0)
+    ds = _dir_sign(p.get("direction"))
     if not avg or ds == 0:
         return res
     for k in ("stop", "t1", "t2"):
@@ -2556,7 +2575,7 @@ def check_position_alerts(positions):
         px = p.get("price")
         if px is None:
             continue
-        ds = 1 if p["direction"] == "多" else (-1 if p["direction"] == "空" else 0)
+        ds = 1 if _dir_norm(p["direction"]) == "多" else (-1 if _dir_norm(p["direction"]) == "空" else 0)
         if ds == 0:
             continue
         # D3：avg 统一转 float（非数值脏数据如 "abc" → None），供浮盈保险/缺口击穿
@@ -3024,7 +3043,7 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
         if not px:
             continue
         mult = _spec_mult(sym)
-        sign = 1 if p.get("direction") == "多" else -1
+        sign = _dir_sign(p.get("direction"))
         X[sym] = sign * p["lots"] * float(px) * mult
         info[sym] = {
             "name": SYMBOLS.get(sym, {}).get("name", sym),
@@ -3482,7 +3501,7 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
             }
         )
         if cur_lots > 0:
-            ds = 1 if direction == "多" else (-1 if direction == "空" else 0)
+            ds = 1 if _dir_norm(direction) == "多" else (-1 if _dir_norm(direction) == "空" else 0)
             per_sym_vol[sym] = abs(cur_vol)
             signed_X[sym] = ds * cur_lots * px * mult
         per_sym_target_vol[sym] = vol_per_lot * target_lots
@@ -3695,7 +3714,7 @@ def stress_test():
         mult = specs.get(sym, {}).get("multiplier", 10)
         px = p.get("price")
         avg = p["avg"]
-        ds = 1 if p["direction"] == "多" else -1
+        ds = _dir_sign(p["direction"])
         cur_pnl[sym] = (px - avg) * mult * p["lots"] * ds if px is not None else 0
         t1 = p.get("t1")
         stop = p.get("stop")
@@ -3711,7 +3730,7 @@ def stress_test():
                 mult = specs.get(sym, {}).get("multiplier", 10)
                 px = p.get("price") or p["avg"]
                 avg = p["avg"]
-                ds = 1 if p["direction"] == "多" else -1
+                ds = _dir_sign(p["direction"])
                 newpx = px * (1 - shock * ds)  # 不利方向
                 new = (newpx - avg) * mult * p["lots"] * ds
                 loss = cur_pnl.get(sym, 0) - new
@@ -3739,7 +3758,7 @@ def stress_test():
             mult = specs.get(sym, {}).get("multiplier", 10)
             px = p.get("price") or p["avg"]
             avg = p["avg"]
-            ds = 1 if p["direction"] == "多" else -1
+            ds = _dir_sign(p["direction"])
             if scope == "black" and sym not in _BLACK:
                 shk = 0.0
             elif scope == "ag" and sym not in _AG:
@@ -3804,7 +3823,7 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
         if not px:
             continue
         mult = _spec_mult(sym)
-        sign = 1 if p.get("direction") == "多" else -1
+        sign = _dir_sign(p.get("direction"))
         X[sym] = sign * p["lots"] * float(px) * mult
         info[sym] = {
             "name": SYMBOLS.get(sym, {}).get("name", sym),
@@ -4363,7 +4382,7 @@ def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
     """计算分级止损的各档位价格。
     返回: {initial, breakeven, trailing, hard}
     """
-    ds = 1 if direction == "多" else -1
+    ds = 1 if _dir_norm(direction) == "多" else -1
     oneR = abs(entry - t1) if t1 else abs(entry - stop)
 
     levels = {}
@@ -4398,7 +4417,7 @@ def _get_stop_level_state(profit_R, cur_state, direction, px, entry, oneR, atr):
     """根据浮盈R倍数确定当前止损状态。
     返回: (new_stop, new_state)
     """
-    ds = 1 if direction == "多" else -1
+    ds = 1 if _dir_norm(direction) == "多" else -1
 
     if profit_R < BREAKEVEN_TRIGGER_R:
         # 未达1R：保持初始止损
@@ -6187,7 +6206,7 @@ def pos_strategy_payload():
             px = None
         if not px or px <= 0:
             px = p.get("price")
-        ds = 1 if p.get("direction") == "多" else -1
+        ds = 1 if _dir_norm(p.get("direction")) == "多" else -1
 
         # ① 行情判定
         ms = market_state_cache.get(sym) or {}
@@ -9156,7 +9175,7 @@ def _position_aware_advice(sig, open_positions, price):
         avg = float(pos.get("avg") or 0)
         if price and mult and lots:
             float_pnl = (
-                ((float(price) - avg) * mult * lots) if pos_dir == "多" else ((avg - float(price)) * mult * lots)
+                ((float(price) - avg) * mult * lots) if _dir_norm(pos_dir) == "多" else ((avg - float(price)) * mult * lots)
             )
         else:
             float_pnl = None
@@ -9276,7 +9295,7 @@ def _position_aware_advice(sig, open_positions, price):
         long_count = sum(1 for p in open_positions if p.get("direction") == sig_dir)
         short_count = total_positions - long_count
 
-        if (sig_dir == "多" and long_count > 0) or (sig_dir == "空" and short_count > 0):
+        if (_dir_norm(sig_dir) == "多" and long_count > 0) or (_dir_norm(sig_dir) == "空" and short_count > 0):
             advice = (
                 f"当前已有{long_count if sig_dir == '多' else short_count}笔{sig_dir}头持仓，"
                 f"本信号为新{sig_dir}方向——注意整体敞口。"
@@ -9920,7 +9939,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             "time": datetime.now().strftime("%H:%M:%S"),
                             "ts": time.time(),
                             "count": (_sp.get("count", 0) + 1) if _sp else 1,
-                            "first_ts": _sp.get("first_ts", time.time()),
+                            "first_ts": _sp.get("first_ts", time.time()) if _sp else time.time(),
                         }
                         # 聊天流推送（仅「新事件」首条：dir 翻转或 >30min，避免每轮刷屏）
                         _clast = _C_GATE_CHAT_LAST.get(sym)
@@ -13706,7 +13725,7 @@ def _paper_mtm(d):
         if px is None:
             continue
         mult = _paper_mult(sym)
-        sign = 1 if p.get("direction") == "多" else -1
+        sign = _dir_sign(p.get("direction"))
         total += (px - p["avg"]) * mult * p["lots"] * sign
     return round(total, 2)
 
@@ -13867,7 +13886,7 @@ def _holdings_kline(sym, bars=30):
         if pos:
             entry_price = pos.get("avg")
             direction = pos.get("direction")
-            dir_sign = 1 if direction == "多" else -1
+            dir_sign = 1 if _dir_norm(direction) == "多" else -1
             rg = risk_gate(sym, entry_price, atr_val, DEFAULT_CONFIG)
             if rg.get("passed"):
                 ep = exit_plan(sym, entry_price, dir_sign, atr_val, "neutral", DEFAULT_CONFIG)
