@@ -13119,7 +13119,9 @@ def _refresh_main_contracts_external():
     script = os.path.join(HERE, "refresh_main_contracts.py")
     if not os.path.exists(script):
         return
-    py = "/usr/bin/python3"  # 系统 python3.9 + akshare；本进程 venv 无 akshare
+    py = "/Users/a123/.workbuddy/venvs/akshare39/bin/python3"  # 隔离 venv（python3.9 + akshare），不动系统 python
+    # 注：旧值 "/usr/bin/python3"(3.9.6) 未装 akshare → subprocess 静默失败 → 真主力比对长期失效（B2 缺口）。
+    # 缺 akshare 或 venv 不在时，下方 except 兜底，不阻塞主流程。
     try:
         print(f"[换月核对] 调用 {py} {script} --apply (全市场扫描)")
         r = subprocess.run([py, script, "--apply"], cwd=HERE, timeout=300, capture_output=True, text=True)
@@ -13171,7 +13173,9 @@ def refresh_ak_main(force=False):
     script = os.path.join(HERE, "refresh_main_contracts.py")
     if not os.path.exists(script):
         return _AK_MAIN_CACHE.get("v")
-    py = "/usr/bin/python3"  # 系统 python3.9 + akshare；本进程 venv 无 akshare
+    py = "/Users/a123/.workbuddy/venvs/akshare39/bin/python3"  # 隔离 venv（python3.9 + akshare），不动系统 python
+    # 注：旧值 "/usr/bin/python3"(3.9.6) 未装 akshare → subprocess 静默失败 → 真主力比对长期失效（B2 缺口）。
+    # 缺 akshare 或 venv 不在时，下方 except 兜底，不阻塞主流程。
     with _AK_MAIN_LOCK:
         # 加锁后二次检查（等待期间可能已被别的线程刷新）
         if not force and (time.time() - _AK_MAIN_CACHE.get("t", 0.0)) < 1800 and _AK_MAIN_CACHE.get("v"):
@@ -13212,23 +13216,28 @@ def rollover_mismatch_check():
     # 非阻塞：直接用后台 5.5 每 30min 刷新的 _AK_MAIN_CACHE（启动后首次立即跑）。
     # 缓存未就绪时先用 main_overrides.json 权威层兜底(立即可用)，不 force 触发 akshare 子进程，
     # 避免前端 30s 轮询阻塞超时。
-    if not _AK_MAIN_CACHE.get("v"):
+    # 解析权威主力源：优先 akshare（交易所第三方交叉验证）；不可用时离线兜底
+    #   （main_overrides.json 手工权威层 → minishare 实时主力），并在返回里标 source，
+    #   让前端能区分「真·交易所比对」与「离线自证」（旧版缺失时直接 return，B2 比对长期静默失效）。
+    ak = _AK_MAIN_CACHE.get("v", {}) or {}
+    source = "akshare" if ak else "none"
+    if not ak:
         seeded = _seed_from_overrides()
         if seeded:
-            _AK_MAIN_CACHE["v"] = seeded
+            ak = seeded
+            source = "main_overrides"
         else:
-            return {
-                "mismatches": [],
-                "count": 0,
-                "checked_at": None,
-                "ak_available": False,
-                "error": "akshare 缓存尚未就绪（后台刷新中）",
-                "pending": True,
-            }
+            try:
+                ak = ml._authoritative_contracts() or {}
+                source = "minishare_internal"
+            except Exception:
+                ak = {}
+                source = "none"
     refresh_contract_map()  # 确保 CONTRACT_MAP 为最新在用合约
-    ak = _AK_MAIN_CACHE.get("v", {}) or {}
     mismatches = []
     err = _AK_MAIN_CACHE.get("error") if isinstance(_AK_MAIN_CACHE, dict) else None
+    if source == "minishare_internal":
+        err = err or "akshare 不可用，已用 minishare 实时主力作离线兜底比对（非交易所第三方验证）"
     for sym in SYMBOLS:
         cur = (CONTRACT_MAP.get(sym) or "").upper()
         akv = (ak.get(sym.lower()) or "").upper()
@@ -13250,6 +13259,8 @@ def rollover_mismatch_check():
         "checked_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ak_available": bool(ak),
         "ak_count": len(ak),
+        "source": source,  # akshare / main_overrides / minishare_internal / none
+        "third_party_verified": source == "akshare",
         "error": err,
     }
 
