@@ -9658,6 +9658,37 @@ def _portfolio_recommend(signals, open_positions, state):
         print(f"   📋 [组合推荐·暂缓] {sym} {sig.get('direction', '')} → 优先级不足")
 
 
+# ── C 感知方向门（live 部署，2026-09-07）─────────────────────────────────────
+# 与 four_dim_strategy.walk_forward_backtest 内注入的门逻辑完全对齐；只在 live 信号路径
+# 真正生效（build_signal 本身不含门）。门消费**独立的 kline C**（17 年 1 分钟 K 线 proxy，
+# cflow_kline_cache.json），不扰动 live 的 pipe["C"]/bias_G（dragon C + 实时 tick 注入，
+# threshold 模式下本就惰性）。配置由 trade_config.json 的 bias_synthesis.c_gate 驱动：
+#   "same_sign"      → C 与 T 反向(且 C≠0) 则不开
+#   "oppose_threshold"→ 仅 |C|>阈值 且反向 才不开（温和，推荐）
+# 缺省 None = 门关闭，零回归。
+_C_GATE_STATS = {"blocked": 0, "passed": 0, "last_blocked": [], "last_log": 0.0}
+
+
+def _apply_c_gate(sym, dir_T, today, cfg, now_ts=None):
+    """返回 (blocked:bool, c_kline:float)。blocked=True 表示逆资金流，应抑制开仓。"""
+    bs = (cfg or {}).get("bias_synthesis", {}) or {}
+    mode = bs.get("c_gate")
+    if not mode:
+        return (False, 0.0)
+    thr = float(bs.get("c_gate_threshold", 30.0))
+    try:
+        c_kline = float(fd.score_C(sym, today, c_source="kline") or 0.0)
+    except Exception:
+        c_kline = 0.0  # 取不到 kline C → 门惰性，不拦（安全默认）
+    if mode == "same_sign":
+        blocked = (c_kline != 0.0) and ((c_kline > 0) != (dir_T > 0))
+    elif mode == "oppose_threshold":
+        blocked = ((c_kline > 0) != (dir_T > 0)) and (abs(c_kline) > thr)
+    else:
+        blocked = False
+    return (blocked, c_kline)
+
+
 def evaluate(feed, today, last_fire, state, corr_histories):
     fired = []
     _round_signal_buffer = []  # 组合级智能推荐：收集本轮回所有可推送信号，延迟notify
@@ -9859,6 +9890,24 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 _SIG_PREV_DIR[sym] = dir_T
                 if prev_d is None or prev_d != dir_T:
                     continue
+                # ── C 感知方向门（live 部署，2026-09-07）：逆资金流(kline C)则抑制开仓 ──
+                _cg_mode = (_STRAT_CFG.get("bias_synthesis", {}) or {}).get("c_gate")
+                if _cg_mode:
+                    _cg_blocked, _cg_c = _apply_c_gate(sym, dir_T, today, _STRAT_CFG)
+                    if _cg_blocked:
+                        _C_GATE_STATS["blocked"] += 1
+                        _C_GATE_STATS["last_blocked"] = (_C_GATE_STATS["last_blocked"][-9:] + [(sym, dir_T, round(_cg_c, 1))])
+                        pipe["c_gate_blocked"] = True
+                        pipe["c_gate_c_kline"] = round(_cg_c, 1)
+                        pipe["c_gate_mode"] = _cg_mode
+                        # 周期日志（每 10 分钟），便于 live 监控门的实际拦截率
+                        _now = time.time()
+                        if _now - _C_GATE_STATS["last_log"] > 600:
+                            _C_GATE_STATS["last_log"] = _now
+                            print(f"[C门] 拦截 {_C_GATE_STATS['blocked']} / 通过 {_C_GATE_STATS['passed']} ｜ 最近拦截: {_C_GATE_STATS['last_blocked'][-5:]}")
+                        continue
+                    else:
+                        _C_GATE_STATS["passed"] += 1
                 # ② 签名去重：相同签名(同方向+同价位桶)在窗口内抑制；不同签名=真实新信号立即推
                 sig_hash = _sig_signature(sym, dir_T, price)
                 last = last_fire.get(sym)

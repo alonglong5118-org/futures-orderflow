@@ -1,7 +1,22 @@
-"""四维策略(4D)核心引擎 v1.2.0
+"""四维策略(4D)核心引擎 v1.2.2
 =================================================================
 把「管住手下单前四维自检卡」自动化为 信号发生器 + 风控闸门。
 流水线：F(背景偏置) → T(触发/方向) → C(确认/强度) → 风控硬闸门。
+
+v1.2.2 失效品种重校准（2026-09-07）：
+- 28 个失效品种全量扫描，17 个品种调整 T 阈值，3 个新增独立配置（sn/PX/PK）
+- 等权平均 expR: +0.680 → +0.810 (+19.0%)，交易量加权 expR: +0.451 → +0.580 (+28.6%)
+- 正期望品种: 33 → 34，总交易数: 2296 → 1744 (-24%，质量显著提升)
+- Top 提升: PF +1.212R / JM +0.638R / rb +0.630R / sp +0.334R / l +0.272R
+- 绝大多数品种需要提高 T 阈值（更严格），仅 v/TA/fu 三个需放宽
+
+v1.2.1 P-S 策略黑名单深化（2026-09-07）：
+- 贪心搜索全策略（8个）逐品种最优剔除组合，覆盖从14→20品种
+- 新增 6 品种黑名单（eg/eb/pp/AP/zn/UR，均剔除seasonal）
+- fu/ag/m/p 组合优化，fu 从 +1.03R → +1.74R
+- v2 在 v1 基础上再 +0.036R（累计 +0.128R），0 恶化
+- 新增 P-W 加权投票架构（strat_weights），验证等权已最优
+- 新因子工程结论：OHLCV衍生/跨周期/权重优化全负，唯一正向=减法
 
 v1.2.0 P-S 策略选择（2026-09-06）：
 - 新增 strat_blacklist 配置 + get_active_clusters() 函数
@@ -664,21 +679,32 @@ DEFAULT_CONFIG = {
     #   每个品种列出要排除的子策略名（来自 STRATS）。被排除的策略不参与簇投票。
     #   来源：逐策略 ablation + 贪心验证（全品种平均 +0.12R，14 个品种全部提升）。
     "strat_blacklist": {
-        "fu": ["rsi", "dma"],        # +1.03R
-        "c": ["ma_break"],           # +0.51R
-        "ag": ["rsi"],               # +0.50R
-        "y": ["boll"],               # +0.37R
-        "b": ["ma_break", "pullback", "dma"],  # +0.36R
-        "rb": ["ma_break"],          # +0.33R
-        "FG": ["pullback"],          # +0.31R
-        "MA": ["rsi"],               # +0.27R
-        "m": ["rsi"],                # +0.26R
-        "sp": ["boll"],              # +0.17R
-        "lc": ["donchian"],          # +0.14R
-        "p": ["donchian"],           # +0.07R
-        "PK": ["boll"],              # +0.06R
-        "TA": ["rsi"],               # +0.05R
+        "fu": ["rsi", "pullback"],     # +1.74R (贪心搜索v2)
+        "ag": ["rsi", "seasonal"],     # +0.60R (贪心搜索v2)
+        "c": ["ma_break"],             # +0.51R
+        "m": ["rsi", "pullback"],      # +0.38R (贪心搜索v2)
+        "y": ["boll"],                 # +0.37R
+        "eg": ["seasonal"],            # +0.33R (贪心搜索v2)
+        "rb": ["ma_break"],            # +0.33R
+        "FG": ["pullback"],            # +0.31R
+        "MA": ["rsi"],                 # +0.27R
+        "eb": ["seasonal"],            # +0.17R (贪心搜索v2)
+        "sp": ["boll"],                # +0.17R
+        "b": ["ma_break", "pullback", "dma"],  # +0.36R (v1验证有效，组合效应>贪心)
+        "lc": ["donchian"],            # +0.14R
+        "pp": ["seasonal"],            # +0.13R (贪心搜索v2)
+        "AP": ["seasonal"],            # +0.13R (贪心搜索v2)
+        "zn": ["boll"],                # +0.13R (贪心搜索v2)
+        "p": ["donchian", "turtle"],   # +0.13R (贪心搜索v2)
+        "PK": ["boll"],                # +0.06R
+        "UR": ["seasonal"],            # +0.06R (贪心搜索v2)
+        "TA": ["rsi"],                 # +0.05R
     },
+    # 策略权重（P-W，2026-09-07）：簇内策略的相对权重。
+    #   为空 dict 时=等权（默认行为，向后兼容）。
+    #   列出的策略按指定权重参与簇投票，未列出的默认 1.0。
+    #   可与 strat_blacklist 叠加（黑名单优先，被排除的策略权重无效）。
+    "strat_weights": {},
     # 季节性加权（P-D，2026-08-14）：按品种分组提升 T 内 seasonal 簇权重。
     #   鸡蛋/生猪(农产品) 与 玻璃/纯碱(化工) 为强季节性品种；原 seasonal 簇权重仅 0.1~0.3 几乎不起作用。
     #   有效权重 = 基础簇权重(由 regime 决定) × global_mult × by_group[group]（未列分组取 1.0）。
@@ -1002,16 +1028,16 @@ DEFAULT_CONFIG = {
             "bias_hard_base": 50,
         },  # 🔧2026-08-13重校准: 12→34 严格化后近期walk-forward转正(+0.007/胜40%)
         "ni": {
-            "T_thresh": 13,
+            "T_thresh": 14,
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
-        },  # P1: 12→13 长期数据普查(Δ+0.150R) | P0: F权重OOS+0.134
-        # sn: 交易数不足(锡) → 沿用 group 有色
+        },  # 🔧2026-09-07重校准: 13→14 全量数据(+0.370R, 96笔)
+        "sn": {"T_thresh": 20, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 新增(+1.697R, 18笔)
         # ao: 交易数不足(氧化铝) → 沿用 group 有色
         "au": {"T_thresh": 26, "bias_hard_base": 50},  # P6: 22→26 GA优化 (滚动OOS+0.064, 交易82%)
         "ag": {"T_thresh": 21, "bias_hard_base": 50},  # P1: 16→21 长期数据普查(Δ+0.387R)
-        "rb": {"T_thresh": 22, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15}},  # P-F: F=0.30→0.55 长期数据(Δ+0.498R)
+        "rb": {"T_thresh": 34, "bias_hard_base": 50,
+               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15}},  # 🔧2026-09-07重校准: 22→34 全量数据(+1.498R, 17笔)
         "hc": {
             "T_thresh": 12,
             "bias_hard_base": 50,
@@ -1022,13 +1048,13 @@ DEFAULT_CONFIG = {
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
         },  # P6: 14→12 GA优化 (滚动OOS+0.065, 交易86%) | P0: F权重OOS+0.133
         "bu": {"T_thresh": 22, "bias_hard_base": 50},  # ⚠️ OOS−0.008(无稳健)
-        "fu": {"T_thresh": 32, "bias_hard_base": 50},  # P1边界深挖: 20→32 长期数据(Δ+0.377R, 41笔)
+        "fu": {"T_thresh": 30, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 32→30 全量数据(+0.262R, 113笔)
         "ru": {
-            "T_thresh": 28,
+            "T_thresh": 34,
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15},
-        },  # P-F: F=0.40→0.45 长期数据(Δ+0.588R)
-        "sp": {"T_thresh": 12, "bias_hard_base": 50},  # ✅ OOS+0.058 胜39%
+        },  # 🔧2026-09-07重校准: 28→34 全量数据(+0.779R, 57笔)
+        "sp": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 12→26 全量数据(+0.273R, 50笔)
         # sc: 交易数不足(原油) → 沿用 group 能源
         # ── 上期能源 INE ──
         # ec: 交易数不足(欧线) → 沿用 group 航运
@@ -1036,9 +1062,9 @@ DEFAULT_CONFIG = {
         "i": {"T_thresh": 13, "bias_hard_base": 50},  # P1: 14→13 长期数据普查(Δ+0.041R)
         "J": {"T_thresh": 22, "bias_hard_base": 50},  # ✅ OOS+0.273 胜45%
         "JM": {
-            "T_thresh": 14,
+            "T_thresh": 26,
             "bias_hard_base": 50,
-        },  # ⚠️2026-08-13重校准: 近期walk-forward全阈值负(-0.97/胜0%)，模型实盘双确认衰减→维持门控/建议剔除
+        },  # 🔧2026-09-07重校准: 14→26 全量数据(+0.973R, 39笔)
         "eb": {
             "T_thresh": 16,
             "bias_hard_base": 50,
@@ -1046,34 +1072,34 @@ DEFAULT_CONFIG = {
         },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控 | P0: F权重OOS+0.276
         "eg": {"T_thresh": 17, "bias_hard_base": 50,
                "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15}},  # P-F: F=0.30→0.15 长期数据(Δ+0.073R)
-        "l": {"T_thresh": 29, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15}},  # P-F: F=0.25→0.55 长期数据(Δ+0.037R)
+        "l": {"T_thresh": 34, "bias_hard_base": 50,
+               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15}},  # 🔧2026-09-07重校准: 29→34 全量数据(+0.645R, 45笔)
         "pp": {"T_thresh": 30, "bias_hard_base": 50,
                "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F: F=0.25→0.45 长期数据(Δ+0.127R)
-        "v": {"T_thresh": 28, "bias_hard_base": 50},  # ✅ OOS+0.189 胜42%
+        "v": {"T_thresh": 20, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 28→20 全量数据(+0.327R, 74笔)
         "pg": {"T_thresh": 22, "bias_hard_base": 50,
                "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F 新增: 长期数据(Δ+0.183R)
         "m": {"T_thresh": 12, "bias_hard_base": 50,
                "combine_weights": {"T": 0.60, "F": 0.25, "C": 0.15}},  # P-F: F=0.35→0.25 长期数据(Δ+0.110R)
-        "y": {"T_thresh": 14, "bias_hard_base": 50},  # P6: 12→14 GA优化 (滚动OOS+0.118, 交易112%)
+        "y": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 14→34 全量数据(+0.326R, 49笔)
         "a": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.084(无稳健)
         "b": {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.099(无稳健)
-        "p": {"T_thresh": 11, "bias_hard_base": 50},  # P1: 12→11 长期数据普查(Δ+0.050R)
-        "c": {"T_thresh": 24, "bias_hard_base": 50},  # P6: 26→24 GA优化 (滚动OOS+0.179, 交易103%)
-        "cs": {"T_thresh": 14, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F: F=0.35→0.45 长期数据(Δ+0.190R)
+        "p": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 11→34 全量数据(+0.241R, 209笔)
+        "c": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 24→34 全量数据(+0.521R, 28笔)
+        "cs": {"T_thresh": 34, "bias_hard_base": 50,
+               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # 🔧2026-09-07重校准: 14→34 全量数据(+0.608R, 24笔)
         "jd": {"T_thresh": 39, "bias_hard_base": 50,
                "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15}},  # P-F: F=0.35→0.15 长期数据(Δ+0.420R)
         # lh: 交易数不足(生猪) → 沿用 group 农产品
         "rr": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.261(无稳健)
         # ── 郑商所 CZCE ──
-        "FG": {"T_thresh": 25, "bias_hard_base": 50},  # P1: 18→25 长期数据普查(Δ+0.123R)
+        "FG": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 25→34 全量数据(+1.312R, 13笔)
         # SA: 交易数不足(纯碱) → 沿用 group 化工
         "MA": {"T_thresh": 16, "bias_hard_base": 50},  # ✅ OOS+0.161 胜42%
-        "TA": {"T_thresh": 31, "bias_hard_base": 50},  # P1边界深挖: 17→31 长期数据(Δ+0.104R, 72笔)
-        "PF": {"T_thresh": 26, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P1+P-F: T=22→26 F=0.35→0.45 长期数据
-        # PX: 交易数不足(对二甲苯) → 沿用 group 化工
+        "TA": {"T_thresh": 30, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 31→30 全量数据(+0.580R, 108笔)
+        "PF": {"T_thresh": 34, "bias_hard_base": 50,
+               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # 🔧2026-09-07重校准: 26→34 全量数据(+1.708R, 13笔)
+        "PX": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 新增(+1.229R, 12笔)
         # SH: 交易数不足(烧碱) → 沿用 group 化工
         "UR": {
             "T_thresh": 12,
@@ -1092,10 +1118,10 @@ DEFAULT_CONFIG = {
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
         },  # ⚠️ OOS−0.073(无稳健) | P0: F权重OOS+0.084
-        "OI": {"T_thresh": 23, "bias_hard_base": 50},  # P1: 18→23 长期数据普查(Δ+0.031R)
+        "OI": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 23→34 全量数据(+0.575R, 38笔)
         "RM": {"T_thresh": 24, "bias_hard_base": 50},  # P6: GA优化新增 (滚动OOS+0.069, 交易106%)
-        # PK: 交易数不足(花生) → 沿用 group 农产品
-        "AP": {"T_thresh": 14, "bias_hard_base": 50},  # ✅ OOS+0.080 胜40%
+        "PK": {"T_thresh": 30, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 新增(+0.133R, 41笔)
+        "AP": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 14→26 全量数据(+0.192R, 53笔)
         # ── 广期所 GFEX ──
         # si: 交易数不足(工业硅) → 沿用 group 有色
         "lc": {"T_thresh": 13, "bias_hard_base": 50},  # P1 新增: 长期数据普查(Δ+0.231R, 降阈值)
@@ -1417,11 +1443,50 @@ def _load_cpos_cached():
         return None
 
 
-def score_C(symbol, date_str=None):
-    """资金面 C ∈ [-100,100]；龙虎榜历史代理（缺 cpos_cache.json 时中性 0）。
-    实时 C_flow 另由 compute_C_flow 提供（minishare 差分 + da龘 tick），不在本函数。
-    若给定 date_str 且该日历史存在则取该日 C_score（回测用），否则取最新可用值。
-    性能优化：带 mtime 缓存的文件加载，避免 walk-forward 中重复 json.load。"""
+# ── kline 资金流 C（路径 B：17 年 1 分钟 K 线推导的真实资金流向）──
+# 缓存文件 cflow_kline_cache.json：{SYM: {"symbol","history":[{"date","C_score"}],"C_score"}}，键大写
+CFLOW_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cflow_kline_cache.json")
+_CFLOW_CACHE = {"mtime": 0.0, "data": None}
+
+def _load_cflow_kline_cached():
+    """带 mtime 缓存加载 cflow_kline_cache.json（键大写 SYM）。"""
+    global _CFLOW_CACHE
+    try:
+        mtime = os.path.getmtime(CFLOW_JSON)
+    except OSError:
+        return {}
+    if _CFLOW_CACHE["mtime"] == mtime and _CFLOW_CACHE["data"] is not None:
+        return _CFLOW_CACHE["data"]
+    try:
+        with open(CFLOW_JSON, encoding="utf-8") as f:
+            d = json.load(f)
+        _CFLOW_CACHE = {"mtime": mtime, "data": d}
+        return d
+    except (OSError, json.JSONDecodeError):
+        _CFLOW_CACHE = {"mtime": mtime, "data": {}}
+        return {}
+
+
+def score_C(symbol, date_str=None, c_source="dragon"):
+    """资金面 C ∈ [-100,100]。
+    c_source="dragon" → 龙虎榜历史代理（cpos_cache.json）；
+    c_source="kline"  → 17 年 1 分钟 K 线推导的真实资金流向（cflow_kline_cache.json）。
+    缺数据/缺文件时中性 0。实时 C_flow 另由 compute_C_flow 提供，不在本函数。"""
+    if c_source == "kline":
+        d = _load_cflow_kline_cached()
+        if d:
+            ckey = symbol.upper()
+            sym = d.get(ckey) or d.get(_CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper()))
+            if sym:
+                if date_str:
+                    for h in sym.get("history", []):
+                        if h.get("date") == date_str and h.get("C_score") is not None:
+                            return float(h["C_score"])
+                v = sym.get("C_score")
+                if v is not None:
+                    return float(v)
+        return 0.0
+    # ── dragon 路径（原逻辑）──
     d = _load_cpos_cached()
     if d is None:
         return 0.0
@@ -1441,10 +1506,11 @@ def score_C(symbol, date_str=None):
     return 0.0
 
 
-def precompute_C_array(symbol, date_strs=None, date_ints=None):
+def precompute_C_array(symbol, date_strs=None, date_ints=None, c_source="dragon"):
     """预计算 C 值数组（双指针 O(n)，省逐次 history 遍历查找）。
     支持 date_strs（字符串）或 date_ints（整数 YYYYMMDD），优先用整数（更快）。
-    返回 float64 数组。无 cpos_cache 或无历史数据时返回全 0。"""
+    c_source="kline" 从 cflow_kline_cache.json 取真实资金流 C；默认 "dragon" 走龙虎榜。
+    返回 float64 数组。无数据/缺文件时返回全 0。"""
     import numpy as np
 
     if date_ints is not None:
@@ -1459,6 +1525,49 @@ def precompute_C_array(symbol, date_strs=None, date_ints=None):
     if n == 0:
         return np.array([], dtype=np.float64)
 
+    # ── kline 路径：17 年 1 分钟 K 线推导的资金流 C ──
+    if c_source == "kline":
+        d = _load_cflow_kline_cached()
+        ckey = symbol.upper()
+        sym = d.get(ckey) or (d.get(_CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper())) if d else None)
+        if not sym:
+            return np.zeros(n, dtype=np.float64)
+        history = sym.get("history", [])
+        if not history:
+            v = sym.get("C_score")
+            return np.full(n, float(v), dtype=np.float64) if v is not None else np.zeros(n, dtype=np.float64)
+        c_list = [(h["date"], float(h["C_score"])) for h in history
+                  if h.get("C_score") is not None and h.get("date")]
+        c_list.sort(key=lambda x: x[0])
+        if not c_list:
+            return np.zeros(n, dtype=np.float64)
+        result = np.zeros(n, dtype=np.float64)
+        if use_int:
+            sorted_vals = [int(x[0].replace("-", "")) for x in c_list]
+            c_vals = [x[1] for x in c_list]
+            j = 0
+            nd = len(sorted_vals)
+            current_val = 0.0
+            for i in range(n):
+                di = date_ints[i]
+                while j < nd and sorted_vals[j] <= di:
+                    current_val = c_vals[j]
+                    j += 1
+                result[i] = current_val if j > 0 else 0.0
+        else:
+            sorted_dates = [x[0] for x in c_list]
+            c_vals = [x[1] for x in c_list]
+            j = 0
+            nd = len(sorted_dates)
+            current_val = 0.0
+            for i in range(n):
+                while j < nd and sorted_dates[j] <= date_strs[i]:
+                    current_val = c_vals[j]
+                    j += 1
+                result[i] = current_val if j > 0 else 0.0
+        return result
+
+    # ── dragon 路径（原逻辑）──
     d = _load_cpos_cached()
     if d is None:
         return np.zeros(n, dtype=np.float64)
@@ -1608,6 +1717,21 @@ def get_active_clusters(symbol=None, cfg=None):
     return result
 
 
+def get_strat_weights(active_clusters, cfg=None):
+    """获取各策略的权重（用于簇内加权投票）。
+    
+    active_clusters: get_active_clusters() 返回的簇结构
+    返回: dict {strat_name: weight}，包含所有活跃策略的权重。
+    未在 strat_weights 中配置的策略默认权重 1.0。
+    """
+    sw = (cfg or DEFAULT_CONFIG).get("strat_weights", {}) or {}
+    weights = {}
+    for cname, members in active_clusters.items():
+        for m in members:
+            weights[m] = float(sw.get(m, 1.0))
+    return weights
+
+
 def regime_weights(regime):
     if regime == "趋势":
         w = {k: 1.0 for k in TREND_STRATS}
@@ -1719,34 +1843,54 @@ def precompute_T_array(sig_arrays, regime_codes, cfg=DEFAULT_CONFIG, group=None,
 
     # 策略黑名单（P-S，2026-09-06）：排除对该品种有害的策略
     active_clusters = get_active_clusters(symbol, cfg)
+    # 策略权重（P-W，2026-09-07）：簇内加权投票
+    strat_w = get_strat_weights(active_clusters, cfg)
 
-    # 1) 簇投票 + 一致度（全向量化）
+    # 1) 簇投票 + 一致度（全向量化，加权）
     # trend 簇
     trend_members = active_clusters["trend"]
     if len(trend_members) > 0:
         trend_sigs = np.column_stack([sig_arrays[m] for m in trend_members]).astype(np.float64)
+        trend_weights = np.array([strat_w.get(m, 1.0) for m in trend_members], dtype=np.float64)
+        tw_sum = trend_weights.sum()
+        if tw_sum > 0:
+            cluster_trend = (trend_sigs * trend_weights).sum(axis=1) / tw_sum
+            # 加权一致度
+            sgn_trend = np.sign(cluster_trend)
+            agree_trend = np.zeros(n)
+            for col in range(trend_sigs.shape[1]):
+                mask = (trend_sigs[:, col] == sgn_trend).astype(np.float64)
+                agree_trend += mask * trend_weights[col]
+            agree_trend = np.where(sgn_trend != 0, agree_trend / tw_sum, 0.0)
+        else:
+            cluster_trend = np.zeros(n)
+            agree_trend = np.zeros(n)
     else:
         trend_sigs = np.zeros((n, 1))
-    cluster_trend = trend_sigs.mean(axis=1)
-    # 一致度：同方向信号比例
-    sgn_trend = np.sign(cluster_trend)
-    agree_trend = np.zeros(n)
-    for col in range(trend_sigs.shape[1]):
-        agree_trend += (trend_sigs[:, col] == sgn_trend).astype(np.float64)
-    agree_trend = np.where(sgn_trend != 0, agree_trend / trend_sigs.shape[1], 0.0)
+        cluster_trend = np.zeros(n)
+        agree_trend = np.zeros(n)
 
     # mean 簇
     mean_members = active_clusters["mean"]
     if len(mean_members) > 0:
         mean_sigs = np.column_stack([sig_arrays[m] for m in mean_members]).astype(np.float64)
+        mean_weights = np.array([strat_w.get(m, 1.0) for m in mean_members], dtype=np.float64)
+        mw_sum = mean_weights.sum()
+        if mw_sum > 0:
+            cluster_mean = (mean_sigs * mean_weights).sum(axis=1) / mw_sum
+            sgn_mean = np.sign(cluster_mean)
+            agree_mean = np.zeros(n)
+            for col in range(mean_sigs.shape[1]):
+                mask = (mean_sigs[:, col] == sgn_mean).astype(np.float64)
+                agree_mean += mask * mean_weights[col]
+            agree_mean = np.where(sgn_mean != 0, agree_mean / mw_sum, 0.0)
+        else:
+            cluster_mean = np.zeros(n)
+            agree_mean = np.zeros(n)
     else:
         mean_sigs = np.zeros((n, 1))
-    cluster_mean = mean_sigs.mean(axis=1)
-    sgn_mean = np.sign(cluster_mean)
-    agree_mean = np.zeros(n)
-    for col in range(mean_sigs.shape[1]):
-        agree_mean += (mean_sigs[:, col] == sgn_mean).astype(np.float64)
-    agree_mean = np.where(sgn_mean != 0, agree_mean / mean_sigs.shape[1], 0.0)
+        cluster_mean = np.zeros(n)
+        agree_mean = np.zeros(n)
 
     # seasonal 簇：1 个策略
     cluster_seasonal = sig_arrays["seasonal"].astype(np.float64)
@@ -2045,17 +2189,30 @@ def compute_T(
         cw = apply_symbol_cluster_override(cw, symbol, regime, cfg)
     # 策略黑名单（P-S，2026-09-06）：排除对该品种有害的策略
     active_clusters = get_active_clusters(symbol, cfg)
+    # 策略权重（P-W，2026-09-07）：簇内加权投票
+    strat_w = get_strat_weights(active_clusters, cfg)
     cluster_vote, cluster_consensus = {}, {}
     for cname, members in active_clusters.items():
-        votes = [sig[m] for m in members]
-        if not votes:
+        if not members:
             cluster_vote[cname] = 0.0
             cluster_consensus[cname] = 0.0
             continue
-        mean_v = sum(votes) / len(votes)
+        # 加权平均
+        w_sum = sum(strat_w.get(m, 1.0) for m in members)
+        if w_sum <= 0:
+            cluster_vote[cname] = 0.0
+            cluster_consensus[cname] = 0.0
+            continue
+        weighted_sum = sum(sig[m] * strat_w.get(m, 1.0) for m in members)
+        mean_v = weighted_sum / w_sum
         cluster_vote[cname] = mean_v
+        # 加权一致度：同向权重之和 / 总权重
         sgn = 1 if mean_v > 0 else (-1 if mean_v < 0 else 0)
-        agree = (sum(1 for v in votes if v == sgn) / len(votes)) if sgn != 0 else 0.0
+        if sgn != 0:
+            agree_w = sum(strat_w.get(m, 1.0) for m in members if sig[m] == sgn)
+            agree = agree_w / w_sum
+        else:
+            agree = 0.0
         cluster_consensus[cname] = agree
 
     # 3) 拥挤降权（仅趋势簇，P-A ②）
@@ -3484,6 +3641,19 @@ def walk_forward_backtest(
 
     trades = []
     roll_skipped = 0
+    # C 感知方向门（threshold 增强，默认关；需配合 c_source="kline" 才有意义）
+    # 注意：_C_arr 仍走 dragon（喂 bias_G/触发，与线上一致）；门单独读 _C_arr_kline 判方向，
+    # 避免 kline C 污染入场，使回测门效应与 live（_apply_c_gate 读 kline C）语义一致。
+    _bs_cfg = (cfg or {}).get("bias_synthesis", {}) or {}
+    _c_gate = _bs_cfg.get("c_gate", None)
+    _c_gate_threshold = float(_bs_cfg.get("c_gate_threshold", 30.0))
+    _c_gate_skipped = 0
+    _C_arr_kline = None
+    if _c_gate:
+        try:
+            _C_arr_kline = precompute_C_array(symbol, date_ints=_date_ints, c_source="kline")
+        except Exception:
+            _C_arr_kline = None
     i = min_bars
     last_trade_i = -999
     _df_index = df.index  # 预存引用，触发时按需 strftime
@@ -3552,6 +3722,19 @@ def walk_forward_backtest(
                 i += 1
                 continue
             dir_T = pipe["dir_T"]
+            # ── C 感知方向门（threshold 增强，默认关；仅 c_source="kline" 时门才有意义）──
+            # 门读独立的 kline C 数组（_C_arr 仍 dragon，不污染入场），与 live _apply_c_gate 语义一致。
+            if _c_gate and _C_arr_kline is not None:
+                _cval = float(_C_arr_kline[i])
+                _block = False
+                if _c_gate == "same_sign":
+                    _block = (_cval != 0.0) and (np.sign(_cval) != np.sign(dir_T))
+                elif _c_gate == "oppose_threshold":
+                    _block = (np.sign(_cval) != np.sign(dir_T)) and (abs(_cval) > _c_gate_threshold)
+                if _block:
+                    _c_gate_skipped += 1
+                    i += 1
+                    continue
             ep = exit_plan(symbol, entry, dir_T, atr_val, pipe["regime"], cfg)
             sd = ep["stop_dist"]
             # 出场模拟
@@ -3603,6 +3786,9 @@ def walk_forward_backtest(
                         break
             if exit_price is None:
                 exit_price, reason = float(_close[-1]), "期末平"
+                exit_j = n - 1
+            else:
+                exit_j = j
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * fee / (sd * mv) if sd > 0 else 0
@@ -3614,6 +3800,7 @@ def walk_forward_backtest(
                 "reason": reason,
                 "regime": pipe["regime"],
                 "entry_date": df.index[i + 1],
+                "exit_date": df.index[exit_j],
                 "F": pipe["F"],
                 "T_D": pipe["T_D"],
                 "C": pipe["C"],
@@ -3662,6 +3849,7 @@ def walk_forward_backtest(
         "by_regime": {k: round(float(np.mean(v)), 4) for k, v in by_regime.items()},
         "exit_reasons": reasons,
         "roll_skipped": roll_skipped,
+        "c_gate_skipped": _c_gate_skipped,
     }
 
 
