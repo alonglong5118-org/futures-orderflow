@@ -176,6 +176,127 @@ def basis_rate_factor(symbol, date_int, z_window=60, trend_days=10):
 
 
 # ===========================================================================
+# 1b. 基差截面排名因子（Cross-Section Basis Rank）
+# ===========================================================================
+#
+# 核心思想：同板块内基差相对排名比绝对基差水平更有预测力
+#   - 板块内基差最高（现货最紧）→ 正分
+#   - 板块内基差最低（现货最松）→ 负分
+#
+# 数据来源：fundamentals.json 中所有品种的 basis_series
+# 缓存机制：按日预计算全市场排名，查询时直接读取
+
+_CS_RANK_CACHE = {}  # date_int -> {symbol: rank_score (-100 to 100)}
+_CS_RANK_SMOOTH = 5  # 排名平滑窗口（天）
+
+
+def _sector_of(symbol):
+    """获取品种所属板块（从 four_dim_strategy.SYMBOLS）。"""
+    try:
+        from four_dim_strategy import SYMBOLS
+        return SYMBOLS.get(symbol, {}).get("group", "其他")
+    except Exception:
+        return "其他"
+
+
+def _compute_cs_ranks_for_date(target_date_int):
+    """计算某一天全市场各板块内的基差截面排名。
+    
+    返回 {symbol: rank_score (-100 to 100)}
+    """
+    data = _load_fundamentals()
+    
+    # 收集各品种在该日的基差率
+    sector_basis = {}  # sector -> {symbol: basis_rate}
+    
+    for sym, sym_data in data.items():
+        bs = sym_data.get("basis_series", [])
+        if not bs:
+            continue
+        
+        # 双指针找最近日期
+        dates = [int(d["date"]) for d in bs]
+        rates = [d.get("dom_basis_rate", 0) for d in bs]
+        
+        idx = bisect.bisect_right(dates, target_date_int) - 1
+        if idx < 0:
+            continue
+        
+        rate = rates[idx]
+        if rate is None:
+            continue
+        
+        sec = _sector_of(sym)
+        if sec not in sector_basis:
+            sector_basis[sec] = {}
+        sector_basis[sec][sym] = rate
+    
+    # 各板块内排名
+    result = {}
+    for sec, sym_rates in sector_basis.items():
+        if len(sym_rates) < 3:
+            # 板块内品种太少，截面排名无意义
+            continue
+        
+        syms = list(sym_rates.keys())
+        vals = [sym_rates[s] for s in syms]
+        n = len(syms)
+        
+        # 排名 → [-1, 1] → [-100, 100]
+        sorted_idx = np.argsort(vals)
+        ranks = np.zeros(n)
+        ranks[sorted_idx] = np.arange(1, n + 1)
+        norm_ranks = (ranks - 1) / max(n - 1, 1) * 2 - 1  # [-1, 1]
+        
+        for i, sym in enumerate(syms):
+            result[sym] = norm_ranks[i] * 100  # [-100, 100]
+    
+    return result
+
+
+def _get_smoothed_cs_rank(symbol, date_int, smooth=5):
+    """获取平滑后的基差截面排名。
+    
+    用最近 smooth 天的排名平均，减少单日波动。
+    """
+    if not has_basis_data(symbol):
+        return 0.0
+    
+    # 确保日期在缓存中
+    for d_offset in range(smooth):
+        d = date_int - d_offset
+        if d not in _CS_RANK_CACHE:
+            _CS_RANK_CACHE[d] = _compute_cs_ranks_for_date(d)
+    
+    # 取最近 smooth 天的平均
+    total = 0.0
+    count = 0
+    for d_offset in range(smooth):
+        d = date_int - d_offset
+        ranks = _CS_RANK_CACHE.get(d, {})
+        if symbol in ranks:
+            total += ranks[symbol]
+            count += 1
+    
+    if count == 0:
+        return 0.0
+    
+    return total / count
+
+
+def basis_cs_rank_factor(symbol, date_int, smooth=5):
+    """基差截面排名因子。
+    
+    返回 dict:
+      - basis_cs_rank: 同板块内基差排名 × 100（[-100, +100]）
+        · 排名最高（基差最强）→ +100
+        · 排名最低（基差最弱）→ -100
+    """
+    score = _get_smoothed_cs_rank(symbol, date_int, smooth=smooth)
+    return {"basis_cs_rank": round(_clip_to_100(score), 2)}
+
+
+# ===========================================================================
 # 2. 库存因子深化
 # ===========================================================================
 
@@ -540,6 +661,10 @@ def compute_all_fund_factors(symbol, date_int, date_str=None, df_cache=None):
     result["basis_rate"] = basis["basis_rate"]
     result["basis_trend"] = basis["basis_trend"]
 
+    # 1b. 基差截面排名因子
+    csr = basis_cs_rank_factor(symbol, date_int)
+    result["basis_cs_rank"] = csr["basis_cs_rank"]
+
     # 2. 库存深化因子
     inv = inventory_factors(symbol, date_str)
     result["inv_level"] = inv["inv_level"]
@@ -559,10 +684,11 @@ def compute_all_fund_factors(symbol, date_int, date_str=None, df_cache=None):
     return result
 
 
-# 所有可用的基本面新因子名（含利润）
+# 所有可用的基本面新因子名（含利润 + 截面排名）
 ALL_FUND_FACTOR_NAMES = [
     "basis_rate",
     "basis_trend",
+    "basis_cs_rank",  # 基差截面排名（v3 新增）
     "inv_level",
     "inv_mom",
     "inv_speed",
@@ -584,69 +710,84 @@ ALL_FUND_FACTOR_NAMES = [
 
 SECTOR_FACTOR_WEIGHTS = {
     # 农产品：期限结构最强，库存动量次之，利润反向
+    # v4 更新：profit_trend 改为强反向（papertrack 验证：利润扩大时做趋势反而差）
     "农产品": {
-        "basis_rate": 0.30,
-        "basis_trend": 0.30,
-        "inv_mom": 0.20,
+        "basis_rate": 0.22,
+        "basis_trend": 0.28,  # v4: 略提升（趋势比绝对水平更有效）
+        "basis_cs_rank": 0.10,
+        "inv_mom": 0.15,
         "inv_speed": 0.10,
-        "profit_z": -0.10,  # 反向因子：负权重=反向使用
+        "profit_z": -0.08,  # 反向因子
+        "profit_trend": -0.07,  # v4: 反向（利润扩大=利空趋势跟踪）
     },
-    # 有色：库存最强，利润也正向，期限结构反向
+    # 有色：库存最强，利润反向（v4 更新）
     "有色": {
-        "inv_mom": 0.35,
-        "inv_speed": 0.25,
-        "profit_z": 0.15,
-        "profit_trend": 0.10,
-        "basis_rate": 0.05,  # 弱反向，给小权重
-        "basis_trend": 0.10,
+        "inv_mom": 0.30,
+        "inv_speed": 0.20,
+        "profit_z": -0.08,  # v4: 正→反向（papertrack 显示高利润差）
+        "profit_trend": -0.07,  # v4: 正→反向
+        "basis_rate": 0.05,
+        "basis_trend": 0.15,  # v4: 略提升
+        "basis_cs_rank": 0.15,  # v4: 提升（有色品种多，截面效果好）
     },
     # 能源：期限结构最强
     "能源": {
-        "basis_rate": 0.40,
-        "basis_trend": 0.35,
+        "basis_rate": 0.32,
+        "basis_trend": 0.33,  # v4: 略提升
+        "basis_cs_rank": 0.10,
         "inv_mom": 0.15,
         "inv_speed": 0.10,
     },
-    # 黑系：整体偏弱，库存速度强反向 → 作为反向过滤器
-    # 注意：权重较小，黑系主要靠技术面和政策面驱动
+    # 黑系：整体偏弱，库存速度强反向 + 利润反向
+    # v4: profit_trend 改为反向
     "黑系": {
-        "basis_rate": 0.20,
-        "basis_trend": 0.15,
-        "inv_mom": 0.25,
+        "basis_rate": 0.16,
+        "basis_trend": 0.14,  # v4: 略提升
+        "basis_cs_rank": 0.10,
+        "inv_mom": 0.20,
         "inv_speed": -0.20,  # 反向因子
-        "profit_z": -0.20,  # 反向因子
+        "profit_z": -0.18,  # 反向因子
+        "profit_trend": -0.12,  # v4: 新增反向（利润扩大=陷阱）
     },
     # 化工：因子效果一般，均衡配置
+    # v4: 利润改为反向，基差趋势略提升
     "化工": {
-        "basis_rate": 0.20,
-        "basis_trend": 0.15,
-        "inv_mom": 0.25,
-        "inv_speed": 0.15,
-        "profit_z": 0.15,
-        "profit_trend": 0.10,
+        "basis_rate": 0.16,
+        "basis_trend": 0.14,  # v4: 略提升
+        "basis_cs_rank": 0.10,
+        "inv_mom": 0.22,
+        "inv_speed": 0.13,
+        "profit_z": -0.10,  # v4: 正→反向
+        "profit_trend": -0.10,  # v4: 正→反向
     },
     # 贵金属：只有基差数据，效果一般
     "贵金属": {
-        "basis_rate": 0.45,
-        "basis_trend": 0.55,
+        "basis_rate": 0.40,
+        "basis_trend": 0.45,
+        "basis_cs_rank": 0.15,
     },
     # 建材：默认均衡
     "建材": {
-        "basis_rate": 0.25,
-        "basis_trend": 0.25,
-        "inv_mom": 0.25,
-        "inv_speed": 0.25,
+        "basis_rate": 0.20,
+        "basis_trend": 0.24,  # v4: 略提升
+        "basis_cs_rank": 0.06,
+        "inv_mom": 0.22,
+        "inv_speed": 0.22,
+        "profit_z": 0.02,
+        "profit_trend": -0.04,  # v4: 弱反向
     },
 }
 
 # 默认权重（兜底用）
+# v4: profit 改为反向，basis_trend 略提升
 DEFAULT_FACTOR_WEIGHTS = {
-    "basis_rate": 0.20,
-    "basis_trend": 0.20,
-    "inv_mom": 0.20,
-    "inv_speed": 0.15,
-    "profit_z": 0.15,
-    "profit_trend": 0.10,
+    "basis_rate": 0.16,
+    "basis_trend": 0.20,  # v4: 提升（趋势比绝对水平更有效）
+    "basis_cs_rank": 0.08,
+    "inv_mom": 0.18,
+    "inv_speed": 0.14,
+    "profit_z": -0.10,  # v4: 反向
+    "profit_trend": -0.10,  # v4: 反向（利润扩大=趋势陷阱）
 }
 
 # ======================================================================

@@ -48,8 +48,6 @@ except ImportError:
 # minishare 价格缓存（主数据源，rt_fut_k 快照）
 _MS_PRICE_CACHE = {}
 _MS_PRICE_TS = 0.0
-_MS_PRE_CLOSE_CACHE = {}
-_MS_PRE_CLOSE_TS = 0.0
 _MS_CACHE_LOCK = threading.Lock()
 
 # minishare feed 实例（单例，避免重复创建）
@@ -138,36 +136,6 @@ def _get_ms_price(sym):
                     _MS_PRICE_CACHE[sym_lower] = px
                     _MS_PRICE_TS = time.time()
                 return px
-    except Exception:
-        pass
-    return None
-
-
-def _get_ms_pre_close(sym):
-    """从 minishare rt_fut_k 获取昨结价（pre_close）。
-    CTP 用昨结价算保证金，所以优先用昨结价保证口径一致。
-    """
-    global _MS_PRE_CLOSE_CACHE, _MS_PRE_CLOSE_TS, _MS_CACHE_LOCK
-    if not _MS_AVAILABLE or _ml is None:
-        return None
-    sym_lower = sym.lower()
-    # 先查缓存（60秒TTL，昨结价一天内不变）
-    with _MS_CACHE_LOCK:
-        if _MS_PRE_CLOSE_TS > 0 and (time.time() - _MS_PRE_CLOSE_TS) < 60:
-            if sym_lower in _MS_PRE_CLOSE_CACHE and _MS_PRE_CLOSE_CACHE[sym_lower] > 0:
-                return _MS_PRE_CLOSE_CACHE[sym_lower]
-    try:
-        _feed = _get_ms_feed()
-        if _feed and hasattr(_feed, 'last_snap'):
-            snap = _feed.last_snap
-            if isinstance(snap, dict):
-                snap_data = snap.get(sym_lower) or snap.get(sym) or {}
-                pre = snap_data.get("pre_close") or snap_data.get("pre_settle")
-                if pre and pre > 0:
-                    with _MS_CACHE_LOCK:
-                        _MS_PRE_CLOSE_CACHE[sym_lower] = pre
-                        _MS_PRE_CLOSE_TS = time.time()
-                    return pre
     except Exception:
         pass
     return None
@@ -343,81 +311,6 @@ class account_context:
         return False
 
 
-# ===== 多账户：killswitch + drawdown_guard + risk_fsm 工厂（v3.9.1）=====
-_ks_instances = {}
-_dd_instances = {}
-_fsm_instances = {}
-_ks_dd_lock = threading.RLock()
-
-
-def killswitch_file_for(account_id=None):
-    """获取指定账户的 killswitch 状态文件路径。"""
-    if account_id is None:
-        account_id = get_account()
-    if account_id == "default":
-        return os.path.join(HERE, "killswitch_state.json")
-    return os.path.join(HERE, f"killswitch_state_{account_id}.json")
-
-
-def drawdown_file_for(account_id=None):
-    """获取指定账户的 drawdown 状态文件路径。"""
-    if account_id is None:
-        account_id = get_account()
-    if account_id == "default":
-        return os.path.join(HERE, "drawdown_state.json")
-    return os.path.join(HERE, f"drawdown_state_{account_id}.json")
-
-
-def get_killswitch(account_id=None):
-    """获取指定账户的 KillSwitch 实例（懒加载，线程安全）。
-    default 账户复用 rsm.KILL 全局单例，保证与主循环一致。"""
-    if account_id is None:
-        account_id = get_account()
-    with _ks_dd_lock:
-        if account_id not in _ks_instances:
-            import risk_state_machine as rsm
-            if account_id == "default":
-                # default 账户复用全局单例，与主循环保持一致
-                _ks_instances[account_id] = rsm.KILL
-            else:
-                path = killswitch_file_for(account_id)
-                _ks_instances[account_id] = rsm.KillSwitch(path=path)
-        return _ks_instances[account_id]
-
-
-def get_drawdown_guard(account_id=None):
-    """获取指定账户的 DrawdownGuard 实例（懒加载，线程安全）。
-    default 账户复用 ddg 全局实例，保证与主循环一致。"""
-    if account_id is None:
-        account_id = get_account()
-    with _ks_dd_lock:
-        if account_id not in _dd_instances:
-            import drawdown_guard as ddg
-            if account_id == "default":
-                # default 账户复用全局实例，与主循环保持一致
-                _dd_instances[account_id] = ddg._default_guard
-            else:
-                path = drawdown_file_for(account_id)
-                _dd_instances[account_id] = ddg.DrawdownGuard(path)
-        return _dd_instances[account_id]
-
-
-def get_risk_fsm(account_id=None):
-    """获取指定账户的 RiskStateMachine 实例（懒加载，线程安全）。
-    default 账户复用 rsm.RISK_FSM 全局单例，保证与主循环一致。"""
-    if account_id is None:
-        account_id = get_account()
-    with _ks_dd_lock:
-        if account_id not in _fsm_instances:
-            import risk_state_machine as rsm
-            if account_id == "default":
-                # default 账户复用全局单例，与主循环保持一致
-                _fsm_instances[account_id] = rsm.RISK_FSM
-            else:
-                _fsm_instances[account_id] = rsm.RiskStateMachine()
-        return _fsm_instances[account_id]
-
-
 def _authoritative_contract(sym, fallback):
     """优先用 main_overrides.json 的主力合约覆盖（避免 account 总览用陈旧 contract_specs）。
     fallback 来自 trade_config.json 的 contract_specs。两者不一致时以 main_overrides 为准。"""
@@ -486,15 +379,6 @@ def save_state(st):
                     f.write(cur)
         except OSError:
             pass
-    # 清理零持仓垃圾条目（CTP 同步可能产生 lots=0 的残留）
-    if isinstance(st, dict) and isinstance(st.get("positions"), dict):
-        _before = len(st["positions"])
-        st["positions"] = {k: v for k, v in st["positions"].items()
-                            if isinstance(v, dict) and v.get("lots", 0) > 0}
-        if _before != len(st["positions"]):
-            import os as _os
-            print("[save_state] 清理 %s: %d → %d 持仓" % (_os.path.basename(state_file_for()), _before, len(st["positions"])))
-
     # 原子写：temp 与 state_file_for() 同目录（保证 os.replace 同 fs）
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(state_file_for()), suffix=".tmp")
     try:
@@ -512,15 +396,7 @@ def save_state(st):
 
 
 def _dir_sign(direction):
-    """方向归一化：接受 long/short/多/空/做多/做空/bull/bear 等各种写法"""
-    if not direction:
-        return 0
-    s = str(direction).lower().strip()
-    if s in ("多", "long", "多头", "做多", "bull", "bullish", "buy"):
-        return 1
-    if s in ("空", "short", "空头", "做空", "sell", "bear", "bearish"):
-        return -1
-    return 0
+    return 1 if direction == "多" else (-1 if direction == "空" else 0)
 
 
 def _fmt_price(v):
@@ -1160,14 +1036,8 @@ def snapshot(prices=None):
     positions = []
     total_margin = 0.0
     float_total = 0.0
-    # ★ 2026-09-07 修复：state.positions 的 symbol 大小写可能和 specs 不一致
-    # (如 state["SS"] vs specs["ss"]). 用大小写不敏感查找表避免漏持仓
-    _pos_ci = {}
-    for _sk, _sv in st["positions"].items():
-        _pos_ci[_sk.lower()] = (_sk, _sv)
     for sym, sp in specs.items():
-        # state 里的原始 symbol (保留大小写) 用于输出的 "symbol" 字段
-        _state_key, pos = _pos_ci.get(sym.lower(), (sym, None))
+        pos = st["positions"].get(sym)
         lots = (pos or {}).get("lots", 0) if pos else 0
         mult = sp["multiplier"]
         mrate = sp["margin_rate"]
@@ -1207,21 +1077,11 @@ def snapshot(prices=None):
                 px = pos["price"]
             if px is None:
                 px = (prices or {}).get(sym)
-        if pos and pos.get("lots", 0) > 0:
+        if pos:
             lots = pos["lots"]
             avg = pos["avg"]
             ds = _dir_sign(pos["direction"])
-            # 保证金价格优先级：昨结价 > 现价 > 开仓均价
-            # 西南期货 CTP 盘中固定用昨结价算保证金，不随现价浮动
-            pre_close_px = _get_ms_pre_close(sym) if lots and lots > 0 else None
-            if pre_close_px and pre_close_px > 0:
-                margin_px = pre_close_px
-            elif px and px > 0:
-                margin_px = px
-            else:
-                margin_px = avg
-            _broker_margin_mult = float(st.get("margin_rate_broker") or st.get("margin_rate") or 1.0)
-            margin_used = lots * margin_px * mult * mrate * _broker_margin_mult
+            margin_used = lots * avg * mult * mrate
             total_margin += margin_used
             float_pnl = None
             if px is not None:
@@ -1230,7 +1090,7 @@ def snapshot(prices=None):
             cap_value = equity_synced * margin_cap_pct / 100
             positions.append(
                 {
-                    "symbol": _state_key,
+                    "symbol": sym,
                     "name": sp.get("name", sym),
                     "contract": _authoritative_contract(sym, sp.get("contract", sym)),
                     "direction": pos["direction"],
@@ -1252,23 +1112,32 @@ def snapshot(prices=None):
                     "dist_to_cap": round(cap_value - margin_used, 2) if equity_synced > 0 else 0.0,
                 }
             )
-    # ★ 所有账户：state 里有 CTP 真实保证金就用真实值覆盖（实盘/模拟盘通用）
-    _acc_id = get_account()
-    if st.get("margin_used"):
-        total_margin = float(st["margin_used"])
+        else:
+            positions.append(
+                {
+                    "symbol": sym,
+                    "name": sp.get("name", sym),
+                    "contract": _authoritative_contract(sym, sp.get("contract", sym)),
+                    "direction": "—",
+                    "lots": 0,
+                    "avg": None,
+                    "price": px,
+                    "float_pnl": None,
+                    "margin_used": 0,
+                    "margin_pct": 0.0,
+                    "dist_to_cap": round(equity_synced * margin_cap_pct / 100, 2) if equity_synced > 0 else 0.0,
+                }
+            )
     # 动态权益：让账户总览与持仓实时行情保持同步
     # ★★ 2026-08-31 v2: 正确公式 — 以 st.equity（用户同步基准）为锚
     #   equity = st.equity + (journal已实现增量) + (当前浮动 - 上次浮动)
     #   既覆盖手动入金/出金，又跟随行情实时波动
     INIT_CAPITAL = 1000000.0
-    if get_account() == "live":
-        realized_pnl = float(st.get("realized_pnl", st.get("realized_pnl_at_sync", 0)) or 0)
-    else:
-        try:
-            import trade_journal as _tj
-            realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
-        except Exception:
-            realized_pnl = st.get("realized_pnl_at_sync", 0) or 0
+    try:
+        import trade_journal as _tj
+        realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
+    except Exception:
+        realized_pnl = st.get("realized_pnl_at_sync", 0) or 0
     float_at_sync = st.get("float_at_sync", 0.0) or 0.0
     realized_at_sync = st.get("realized_pnl_at_sync", realized_pnl) or 0.0
     equity_anchor = st.get("equity", INIT_CAPITAL) or INIT_CAPITAL
@@ -1277,9 +1146,6 @@ def snapshot(prices=None):
     # 浮动盈亏变化（从上次 snapshot 到现在）
     delta_float = float_total - float_at_sync
     dynamic_equity = round(equity_anchor + delta_realized + delta_float, 2)
-    # ★ 所有账户：state 里有 CTP 真实权益就用真实值
-    if st.get("equity"):
-        dynamic_equity = float(st["equity"])
     if dynamic_equity <= 0:
         dynamic_equity = 1  # 防除零
     # 基于动态权益重新计算占用率 / 距上限（使上下板块同步）
@@ -1304,11 +1170,7 @@ def snapshot(prices=None):
         st["updated"] = now_str
         save_state(st)
 
-    # ★ 所有账户：state 里有 CTP 真实可用资金就直接用
-    if st.get("cash"):
-        available = float(st["cash"])
-    else:
-        available = round(dynamic_equity - total_margin, 2)
+    available = round(dynamic_equity - total_margin, 2)
     # ★ 2026-08-28: 使用用户设定的同步权益作为基准，动态权益仅用于显示
     base_equity = equity_synced  # 用户/同步时设定的基准权益
 
@@ -1334,47 +1196,10 @@ def snapshot(prices=None):
     if usage_rate > 100:
         self_check_msg += f"[警告] 资金使用率超过100%: {usage_rate:.1f}%"
 
-
-    # ★ 2026-09-07 防御性断言：防止 direction/持仓/状态文件 3 类 Bug 复发
-    # 如果断言失败，runner 日志会打 WARNING，不会影响主流程
-    import logging as _logging
-    _log = _logging.getLogger('snapshot_invariant')
-    
-    # 检查 1: 所有持仓 direction 能被归一化
-    for _p in positions:
-        _d = str(_p.get('direction', ''))
-        _norm = _d.lower().strip()
-        if _norm not in ('多', '空', 'long', 'short', '中性', ''):
-            _log.warning(f"[INVARIANT] {acc}: {_p.get('symbol')} direction={_d!r} 无法归一化")
-    
-    # 检查 2: 不应有 lots=0 的垃圾 entries
-    _garbage = [_p['symbol'] for _p in positions if _p.get('lots', 0) == 0]
-    if _garbage:
-        _log.warning(f"[INVARIANT] {acc}: 有 {len(_garbage)} 个零持仓垃圾 entries: {_garbage[:5]}")
-    
-    # 检查 3: 输出持仓应该是 state positions 的子集
-    _state_syms = set(_pos_ci.keys())
-    _api_syms = set(_p.get('symbol', '') for _p in positions if _p.get('lots', 0) > 0)
-    _missing = _state_syms - _api_syms
-    if _missing:
-        _log.warning(f"[INVARIANT] {acc}: state 有但 API 没输出的持仓: {_missing}")
-    
-    # 检查 4: 如果有实时价，浮盈亏不应该是 0
-    for _p in positions:
-        if _p.get('lots', 0) > 0 and _p.get('price') is not None and _p.get('price', 0) != 0:
-            _avg = _p.get('avg', 0) or 0
-            if _p['price'] != _avg and _p.get('float_pnl') in (0, 0.0, None):
-                _log.warning(f"[INVARIANT] {acc}: {_p['symbol']} price={_p['price']} avg={_avg} 但 float_pnl={_p.get('float_pnl')}")
-    
-    # 注意: 不能 raise 异常 — 那样会让 API 返回 500，用户看不到数据
-    # 只打 WARNING，让 runner 主流程继续跑
     return {
         "equity": round(dynamic_equity, 2),
         "equity_synced_raw": round(dynamic_equity, 2),
         "available": available,
-        "cash": st.get("cash"),
-        "fee_total": st.get("fee_total"),
-        "total_pnl": round(st.get("total_pnl", realized_pnl), 2),
         "realized_pnl": round(realized_pnl, 2),
         "realized_pnl_at_sync": round(realized_pnl, 2),
         "float_total": round(float_total, 2),

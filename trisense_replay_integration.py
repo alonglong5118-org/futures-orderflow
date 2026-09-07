@@ -7,6 +7,7 @@ trisense_replay_integration.py · 三感参谋实盘跟踪账户
 - 独立状态文件：trisense_replay_state.json
 - 独立 API 路由：/api/trisense-replay
 - 独立仪表盘：/trisense_dashboard/
+- **独立风控状态**（2026-09-07）：账户级风控（状态机+回撤水位线+硬熔断）与主账户完全隔离
 
 命名说明：
 - 系统对外定名「三感参谋」（TriSense Advisor，决策 #40）
@@ -40,20 +41,27 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from paper_trading_engine import PaperTradingEngine
+import risk_state_machine as _rsm
+import drawdown_guard as _ddg
 
 STATE_FILE = os.path.join(HERE, "trisense_replay_state.json")
+TRI_ACCOUNT_ID = "trisense_replay"  # 三感参谋独立账户 ID（风控/回撤状态按此隔离）
 
 _engine: PaperTradingEngine | None = None
 _initialized = False
 
 
-def init(price_feed=None, contract_specs: dict | None = None, config: dict | None = None):
+def init(price_feed=None, contract_specs: dict | None = None, config: dict | None = None, stop_vol_fn=None):
     """初始化三感参谋实盘跟踪引擎。
 
     默认配置：
     - enabled: False（不跟随策略信号自动开仓，只做手动持仓跟踪）
     - max_positions: 20（足够容纳实盘所有持仓）
     - enable_trailing: True（移动止损照常工作）
+
+    Args:
+        stop_vol_fn: 可选 fn(symbol) -> float，返回日线波动量（ATR/DR），
+                     用于自动计算默认止损距离；为 None 时用价格 2% 兜底
     """
     global _engine, _initialized
     if _initialized:
@@ -68,7 +76,12 @@ def init(price_feed=None, contract_specs: dict | None = None, config: dict | Non
         "use_signal_lots": False,
         "enable_trailing": True,
         "trailing_start_R": 0.5,
-        "trailing_lock_R": 0.3,
+        "trailing_lock_R": 0.3,  # T1 前：0.3R 锁定（紧）
+        "trailing_tail_lock_R": 1.2,  # T1 后尾仓：1.2R 锁定（宽，抓趋势）
+        "default_rr": 2.0,
+        "enable_time_exit": True,
+        "time_exit_hours": 120,  # 5 天，给趋势足够时间
+        "time_exit_min_profit_R": 1.5,  # 至少 1.5R 才触发时间止盈
         "cooldown_minutes": 0,
         "slippage_pts": 0,
     }
@@ -80,7 +93,23 @@ def init(price_feed=None, contract_specs: dict | None = None, config: dict | Non
         price_feed=price_feed,
         contract_specs=contract_specs,
         state_file=STATE_FILE,
+        stop_vol_fn=stop_vol_fn,
     )
+
+    # 初始化独立风控：把当前权益作为峰值基准
+    try:
+        _st = _engine.get_state()
+        eq = float(_st.get("equity", _engine.config["init_cash"]))
+        _ddg.update(eq, account_id=TRI_ACCOUNT_ID)
+        _dd_st = _ddg.current(account_id=TRI_ACCOUNT_ID)
+        if _dd_st.get("peak_equity"):
+            _rsm.get_fsm(TRI_ACCOUNT_ID).peak_equity = float(_dd_st["peak_equity"])
+        print(
+            f"[TriSense] 独立风控已就绪（账户: {TRI_ACCOUNT_ID}）· "
+            f"权益={eq:,.0f} · 峰值={_dd_st.get('peak_equity', 0):,.0f}"
+        )
+    except Exception as e:
+        print(f"[TriSense] 独立风控初始化异常: {e}")
 
     _initialized = True
     print(f"[TriSense] 三感参谋实盘跟踪账户已初始化（自动开仓: {_engine.config['enabled']}）")
@@ -92,8 +121,28 @@ def get_engine() -> PaperTradingEngine | None:
     return _engine
 
 
+def _calc_consec_losses() -> int:
+    """从最近成交记录统计连续止损笔数（供风控状态机使用）。"""
+    if not _engine:
+        return 0
+    try:
+        trades = _engine.get_state().get("closed_trades", [])
+        if not trades:
+            return 0
+        count = 0
+        for t in reversed(trades[-20:]):  # 只看最近 20 笔
+            pnl = float(t.get("pnl", 0))
+            if pnl < 0:
+                count += 1
+            else:
+                break
+        return count
+    except Exception:
+        return 0
+
+
 def tick(state: dict | None = None) -> dict:
-    """每轮调用：只检查持仓 TP/SL + 移动止损，不跟随信号。
+    """每轮调用：检查持仓 TP/SL + 移动止损 + 更新独立风控状态。
 
     Args:
         state: live runner 的 state 字典，用于注入 trisense_replay 状态
@@ -114,6 +163,28 @@ def tick(state: dict | None = None) -> dict:
     except Exception as e:
         print(f"[TriSense] 检查持仓异常: {e}")
 
+    # 更新独立风控状态（每轮同步权益/回撤/连亏）
+    try:
+        _st = _engine.get_state()
+        eq = float(_st.get("equity", 0))
+        daily_pnl = float(_st.get("daily_pnl", 0))
+        used = float(_st.get("used_margin", 0))
+        consec = _calc_consec_losses()
+        positions = _st.get("positions", [])
+
+        # 回撤水位线更新
+        _dd_state = _ddg.update(eq, account_id=TRI_ACCOUNT_ID)
+        _dd_peak = _dd_state.get("peak_equity")
+
+        # 风控状态机 + 硬熔断更新
+        _rsm.update_risk_state(
+            eq, used, daily_pnl, consec,
+            positions=positions, peak_equity=_dd_peak,
+            account_id=TRI_ACCOUNT_ID,
+        )
+    except Exception as e:
+        print(f"[TriSense] 独立风控更新异常: {e}")
+
     # 注入到 state
     if state is not None:
         try:
@@ -124,17 +195,98 @@ def tick(state: dict | None = None) -> dict:
     return result
 
 
+def get_risk_state() -> dict:
+    """获取三感参谋独立风控状态（总览，含 fsm/killswitch/drawdown/combined）。"""
+    try:
+        fsm = _rsm.get_fsm(TRI_ACCOUNT_ID).summary()
+        kill = _rsm.get_kill(TRI_ACCOUNT_ID).summary()
+        dd = _ddg.current(account_id=TRI_ACCOUNT_ID)
+        combined = _rsm.get_combined_risk_scale(TRI_ACCOUNT_ID)
+        return {
+            "fsm": fsm,
+            "killswitch": kill,
+            "drawdown": dd,
+            "combined": combined,
+            "account_id": TRI_ACCOUNT_ID,
+        }
+    except Exception as e:
+        return {"error": str(e), "account_id": TRI_ACCOUNT_ID}
+
+
+def get_risk_fsm() -> dict:
+    """获取三感参谋风控状态机快照（与 /api/risk 结构一致）。"""
+    try:
+        return _rsm.get_fsm(TRI_ACCOUNT_ID).summary()
+    except Exception as e:
+        return {"state": "NORMAL", "error": str(e)}
+
+
+def get_risk_killswitch() -> dict:
+    """获取三感参谋硬熔断状态（与 /api/killswitch GET 结构一致）。"""
+    try:
+        return _rsm.get_kill(TRI_ACCOUNT_ID).summary()
+    except Exception as e:
+        return {"halted": False, "error": str(e)}
+
+
+def get_risk_drawdown() -> dict:
+    """获取三感参谋回撤水位线状态（与 /api/drawdown 结构一致）。"""
+    try:
+        d = _ddg.current(account_id=TRI_ACCOUNT_ID)
+        d["halted"] = _rsm.is_halted(TRI_ACCOUNT_ID)
+        return d
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def risk_kill_ack() -> dict:
+    """确认三感参谋硬熔断告警（已手动全平，解除 halt 但保留锁定计数）。"""
+    try:
+        return _rsm.get_kill(TRI_ACCOUNT_ID).acknowledge()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def risk_kill_reset(peak_equity=None) -> dict:
+    """人工解除三感参谋硬熔断，可指定新的峰值权益。"""
+    try:
+        result = _rsm.get_kill(TRI_ACCOUNT_ID).reset(
+            "面板人工解除", reset_peak_to=peak_equity
+        )
+        # 同步重置回撤水位线峰值
+        try:
+            _ddg.reset_peak(peak_equity, account_id=TRI_ACCOUNT_ID)
+        except Exception:
+            pass
+        return result
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def risk_reset_peak(peak_equity=None) -> dict:
+    """重置三感参谋回撤峰值权益（解除降险档位）。"""
+    try:
+        _ddg.reset_peak(peak_equity, account_id=TRI_ACCOUNT_ID)
+        if peak_equity is not None:
+            _rsm.get_fsm(TRI_ACCOUNT_ID).peak_equity = float(peak_equity)
+        return {"ok": True, "msg": "峰值已重置"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def get_state() -> dict:
     """获取三感参谋实盘跟踪状态（供前端展示）。"""
     if not _engine:
-        return {"enabled": False, "error": "未初始化", "account": "trisense_replay"}
+        return {"enabled": False, "error": "未初始化", "account": TRI_ACCOUNT_ID}
     try:
         s = _engine.get_state()
-        s["account"] = "trisense_replay"
+        s["account"] = TRI_ACCOUNT_ID
         s["account_name"] = "三感参谋实盘账户"
+        # 注入独立风控状态
+        s["risk"] = get_risk_state()
         return s
     except Exception as e:
-        return {"enabled": False, "error": str(e), "account": "trisense_replay"}
+        return {"enabled": False, "error": str(e), "account": TRI_ACCOUNT_ID}
 
 
 def handle_api(handler) -> None:
@@ -145,8 +297,11 @@ def handle_api(handler) -> None:
       - POST {action: "toggle"}: 切换启用状态（是否跟信号，默认关）
       - POST {action: "open", symbol, direction, lots, price, stop, target}: 手动开仓
       - POST {action: "close", symbol, price, lots}: 手动平仓
-      - POST {action: "reset", init_cash}: 重置账户（可指定初始资金）
+      - POST {action: "reset", init_cash}: 重置账户（可指定初始资金，同步重置风控）
       - POST {action: "config", ...}: 更新配置
+      - POST {action: "risk_reset_peak", peak}: 重置风控峰值权益
+      - POST {action: "risk_kill_ack"}: 确认熔断告警
+      - POST {action: "risk_kill_reset", peak}: 解除硬熔断
     """
     if not _engine:
         body = json.dumps({"ok": False, "error": "引擎未初始化"}, ensure_ascii=False)
@@ -174,39 +329,56 @@ def handle_api(handler) -> None:
             resp = {"ok": True, "enabled": result, "state": get_state()}
 
         elif action == "open":
-            # C 感知方向门检查（与主账户一致）
-            sym_open = body_json.get("symbol", "")
-            dir_open = body_json.get("direction", "多")
-            _dir_val = 1 if dir_open == "多" else (-1 if dir_open == "空" else 0)
-            _cg_blocked = False
-            _cg_reason = ""
-            try:
-                import four_dim_strategy as _fd_cg_tri
-                from four_dim_strategy import DEFAULT_CONFIG as _TRI_CFG
-                _cg_res = _fd_cg_tri.check_c_gate(sym_open, _dir_val, _TRI_CFG)
-                if not _cg_res["passed"]:
-                    _cg_blocked = True
-                    _cg_reason = _cg_res["reason"]
-            except Exception:
-                pass  # 异常放行
-            if _cg_blocked:
+            # 独立风控闸门：锁定/熔断时禁止开仓
+            lock_info = _rsm.get_combined_risk_scale(TRI_ACCOUNT_ID)
+            if lock_info.get("locked") or lock_info.get("halted"):
+                reason = "；".join(lock_info.get("reasons", ["风控锁定"]))
                 resp = {
                     "ok": False,
-                    "msg": f"开仓被C感知门拦截: {_cg_reason}",
-                    "c_gate": {"passed": False, "reason": _cg_reason},
-                    "state": get_state(),
+                    "msg": f"开仓被风控拦截: {reason}",
+                    "risk": get_risk_state(),
                 }
             else:
-                ok, msg, pos = _engine.manual_open(
-                    symbol=sym_open,
-                    direction=dir_open,
-                    lots=int(body_json.get("lots", 1)),
-                    price=float(body_json.get("price", 0)),
-                    stop=body_json.get("stop"),
-                    target=body_json.get("target"),
-                    strategy=body_json.get("strategy", "实盘导入"),
-                )
-                resp = {"ok": ok, "msg": msg, "position": pos, "state": get_state()}
+                # C 感知方向门检查（与主账户一致）
+                sym_open = body_json.get("symbol", "")
+                dir_open = body_json.get("direction", "多")
+                _dir_val = 1 if dir_open == "多" else (-1 if dir_open == "空" else 0)
+                _cg_blocked = False
+                _cg_reason = ""
+                try:
+                    import four_dim_strategy as _fd_cg_tri
+                    from four_dim_strategy import DEFAULT_CONFIG as _TRI_CFG
+                    _cg_res = _fd_cg_tri.check_c_gate(sym_open, _dir_val, _TRI_CFG)
+                    if not _cg_res["passed"]:
+                        _cg_blocked = True
+                        _cg_reason = _cg_res["reason"]
+                except Exception:
+                    pass  # 异常放行
+                if _cg_blocked:
+                    resp = {
+                        "ok": False,
+                        "msg": f"开仓被C感知门拦截: {_cg_reason}",
+                        "c_gate": {"passed": False, "reason": _cg_reason},
+                        "state": get_state(),
+                    }
+                else:
+                    # 风控缩放：手数按 combined 系数调整（向下取整，至少 1 手）
+                    lots = int(body_json.get("lots", 1))
+                    scale = lock_info.get("combined", 1.0)
+                    if scale < 1.0:
+                        scaled_lots = max(1, int(lots * scale))
+                        lots = scaled_lots
+
+                    ok, msg, pos = _engine.manual_open(
+                        symbol=sym_open,
+                        direction=dir_open,
+                        lots=lots,
+                        price=float(body_json.get("price", 0)),
+                        stop=body_json.get("stop"),
+                        target=body_json.get("target"),
+                        strategy=body_json.get("strategy", "手动开仓"),
+                    )
+                    resp = {"ok": ok, "msg": msg, "position": pos, "state": get_state()}
 
         elif action == "close":
             ok, msg, result = _engine.manual_close(
@@ -223,6 +395,13 @@ def handle_api(handler) -> None:
                 _engine.config["init_cash"] = float(init_cash)
                 _engine.cash = float(init_cash)
             _engine.reset()
+            # 同步重置独立风控（峰值 + 回撤 + 连亏 + 熔断）
+            try:
+                _rsm.get_fsm(TRI_ACCOUNT_ID).reset_daily()
+                _rsm.get_kill(TRI_ACCOUNT_ID).reset("账户重置")
+                _ddg.reset_peak(_engine.config["init_cash"], account_id=TRI_ACCOUNT_ID)
+            except Exception:
+                pass
             resp = {"ok": True, "msg": "账户已重置", "state": get_state()}
 
         elif action == "config":
@@ -243,6 +422,38 @@ def handle_api(handler) -> None:
             updates = {k: source[k] for k in config_keys if k in source}
             _engine.update_config(**updates)
             resp = {"ok": True, "config": _engine.config, "state": get_state()}
+
+        # ===== 独立风控专用接口 =====
+        elif action == "risk_reset_peak":
+            peak = body_json.get("peak")
+            try:
+                peak_val = float(peak) if peak else None
+            except (TypeError, ValueError):
+                peak_val = None
+            _ddg.reset_peak(peak_val, account_id=TRI_ACCOUNT_ID)
+            if peak_val:
+                _rsm.get_fsm(TRI_ACCOUNT_ID).peak_equity = peak_val
+            resp = {"ok": True, "msg": "风控峰值已重置", "risk": get_risk_state()}
+
+        elif action == "risk_kill_ack":
+            result = _rsm.get_kill(TRI_ACCOUNT_ID).acknowledge()
+            resp = {"ok": True, "result": result, "risk": get_risk_state()}
+
+        elif action == "risk_kill_reset":
+            peak = body_json.get("peak")
+            try:
+                peak_val = float(peak) if peak else None
+            except (TypeError, ValueError):
+                peak_val = None
+            result = _rsm.get_kill(TRI_ACCOUNT_ID).reset(
+                "面板人工解除", reset_peak_to=peak_val
+            )
+            # 同步重置回撤水位线峰值
+            try:
+                _ddg.reset_peak(peak_val, account_id=TRI_ACCOUNT_ID)
+            except Exception:
+                pass
+            resp = {"ok": True, "result": result, "risk": get_risk_state()}
 
         else:
             resp = {"ok": False, "msg": f"未知 action: {action}"}

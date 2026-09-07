@@ -23,7 +23,7 @@
       "震荡": 10
     },
     "bias_g_min": 50,
-    "c_gate": null,
+    "c_gate": "oppose_threshold",
     "c_gate_threshold": 30.0,
     "_note": "P1-全局优化: fc_confirm 25→18, confirm_relief 0.85→0.92, fc_hard 25→18 (长期数据 +0.008R)；2026-09-07 部署 C 感知方向门 oppose_threshold(30)：逆 17年 kline 资金流(C>30 反向)则抑制开仓。修复后大样本 OOS(41 品种) Δ+0.066、增益23/有损10/持平8、二项 p=0.035(显著)；被拦交易 68% 确为亏损单。全 43 活跃品种覆盖(41 验证+2 零成交)。门消费独立 kline C，不扰动 dragon C 实时 bias_G。置 null 即关。；2026-09-07 调整：全局关闭，仅A档7只化工品种(ru/eb/TA/l/v/SH/sp)品种级启用 oppose_threshold(30)"
   },

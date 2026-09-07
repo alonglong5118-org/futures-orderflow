@@ -43,7 +43,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.8.0"
+APP_VERSION = "v3.9.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
@@ -193,6 +193,7 @@ from four_dim_strategy import (
     score_F,
     variety_of,
 )
+from portfolio_manager import dynamic_position_scale
 
 # P-B/P-C（2026-08-14）：合并 trade_config.json 的 bias_synthesis 覆盖，使策略合成参数可调参而不改码。
 # 缺省用 four_dim_strategy.DEFAULT_CONFIG["bias_synthesis"]；trade_config.json 同名字段覆盖（浅合并）。
@@ -673,25 +674,6 @@ PORTFOLIO_CORR_BUCKET_PCT = 1.0  # 同相关桶（同向）风险上限 = 权益
 # 相关性桶只管「两两高相关」，管不住「五个化工品两两相关都 0.6，加起来却是一把大赌注」；
 # 净敞口则管不住「全组合清一色做多」的方向性风险。两道闸补上这两个洞。
 PORTFOLIO_SECTOR_PCT = 1.2  # 单板块（化工/黑系/农产品…）风险上限 = 权益 × 1.2%
-# ★ 2026-09-07 方向归一化：CTP 同步层写中文 '多'/'空'，模拟盘写英文 'long'/'short'
-# 统一在此处归一化，以后所有方向判断都用这个函数，不能再硬编码比较
-def _dir_norm(d):
-    """把各种方向写法统一成 '多' / '空' / '中性'"""
-    if not d:
-        return '中性'
-    s = str(d).lower().strip()
-    if s in ('多', 'long', '多头', '做多', 'bull', 'bullish', 'buy'):
-        return '多'
-    if s in ('空', 'short', '空头', '做空', 'sell', 'bear', 'bearish'):
-        return '空'
-    return str(d)
-
-def _dir_sign(d):
-    """返回 +1(多) / -1(空) / 0(未知)"""
-    n = _dir_norm(d)
-    return 1 if n == '多' else (-1 if n == '空' else 0)
-
-
 PORTFOLIO_NET_DIR_PCT = 1.5  # 单边净敞口上限 = 权益 × 1.5%（Σ多风险 或 Σ空风险）
 PORTFOLIO_SECTOR_MAX_N = 3
 
@@ -1591,7 +1573,7 @@ def _compute_stop_atr(sym, df_5m, atr_daily, now=None):
 def _auto_levels(sym, direction, price):
     """开仓时自动算止损/止盈/t1/t2（30min ATR 规则）。price 为 0/None 时回退实时价。
     返回 (stop, t1, t2, atr_src, used_price, tail_enabled) 或失败元组。"""
-    dir_T = _dir_sign(direction)
+    dir_T = 1 if direction == "多" else (-1 if direction == "空" else 0)
     if dir_T == 0 or not sym:
         return None, None, None, None, price, False
     if FEED is None:
@@ -1699,7 +1681,7 @@ def _rebuild_dedup_from_chat(last_fire):
             if sym is None:
                 continue
             d = e.get("direction")
-            dir_T = 1 if _dir_norm(d) == "多" else (-1 if _dir_norm(d) == "空" else 0)
+            dir_T = 1 if d == "多" else (-1 if d == "空" else 0)
             if dir_T == 0:
                 continue
             # 保留每个品种最新一条
@@ -1924,7 +1906,7 @@ def build_batch_orders(mode="flatten", symbol=None):
             continue
         px = p.get("price") or prices.get(sym)
         d = p.get("direction")
-        close_side = "卖平" if _dir_norm(d) == "多" else "买平"
+        close_side = "卖平" if d == "多" else "买平"
         item = {
             "symbol": sym,
             "name": p.get("name") or sym,
@@ -1943,7 +1925,7 @@ def build_batch_orders(mode="flatten", symbol=None):
             pass
         rows.append(item)
         if mode == "reverse":
-            new_dir = "空" if _dir_norm(d) == "多" else "多"
+            new_dir = "空" if d == "多" else "多"
             new_lots = lots
             try:
                 df = load_daily_refreshed(sym)
@@ -1955,7 +1937,7 @@ def build_batch_orders(mode="flatten", symbol=None):
                     ev_gate = ec.gate(lookahead_hours=4)
                     ev_scale = ec.scale_factor(ev_gate)
                     scale = rsm.get_fsm(at.get_account()).scale()
-                    dd_scale = ddg.scale_factor()  # #119 回撤水位线渐变降险
+                    dd_scale = ddg.scale_factor(account_id=at.get_account())  # #119 回撤水位线渐变降险
                     _combined = round(
                         min(scale, dd_scale, ev_scale), 3
                     )  # 整改：取较严者而非连乘（含#13事件闸门软减速）
@@ -1968,7 +1950,7 @@ def build_batch_orders(mode="flatten", symbol=None):
                 "name": p.get("name") or sym,
                 "contract": ml.normalize_contract_code(p.get("contract") or sym),
                 "step": "反手开仓",
-                "side": "买开" if _dir_norm(new_dir) == "多" else "卖开",
+                "side": "买开" if new_dir == "多" else "卖开",
                 "direction": new_dir,
                 "lots": new_lots,
                 "ref_price": px,
@@ -2347,7 +2329,7 @@ def _levels_sane(p):
         avg = float(avg)
     except (TypeError, ValueError):
         avg = None  # 非数值 avg（如字符串脏数据）→ 无法校验，不拦截
-    ds = _dir_sign(p.get("direction"))
+    ds = 1 if p.get("direction") == "多" else (-1 if p.get("direction") == "空" else 0)
     if not avg or ds == 0:
         return res
     for k in ("stop", "t1", "t2"):
@@ -2575,7 +2557,7 @@ def check_position_alerts(positions):
         px = p.get("price")
         if px is None:
             continue
-        ds = 1 if _dir_norm(p["direction"]) == "多" else (-1 if _dir_norm(p["direction"]) == "空" else 0)
+        ds = 1 if p["direction"] == "多" else (-1 if p["direction"] == "空" else 0)
         if ds == 0:
             continue
         # D3：avg 统一转 float（非数值脏数据如 "abc" → None），供浮盈保险/缺口击穿
@@ -3043,7 +3025,7 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
         if not px:
             continue
         mult = _spec_mult(sym)
-        sign = _dir_sign(p.get("direction"))
+        sign = 1 if p.get("direction") == "多" else -1
         X[sym] = sign * p["lots"] * float(px) * mult
         info[sym] = {
             "name": SYMBOLS.get(sym, {}).get("name", sym),
@@ -3501,7 +3483,7 @@ def vol_target_position(vol_target_pct=1.0, force=False, cache_sec=120):
             }
         )
         if cur_lots > 0:
-            ds = 1 if _dir_norm(direction) == "多" else (-1 if _dir_norm(direction) == "空" else 0)
+            ds = 1 if direction == "多" else (-1 if direction == "空" else 0)
             per_sym_vol[sym] = abs(cur_vol)
             signed_X[sym] = ds * cur_lots * px * mult
         per_sym_target_vol[sym] = vol_per_lot * target_lots
@@ -3714,7 +3696,7 @@ def stress_test():
         mult = specs.get(sym, {}).get("multiplier", 10)
         px = p.get("price")
         avg = p["avg"]
-        ds = _dir_sign(p["direction"])
+        ds = 1 if p["direction"] == "多" else -1
         cur_pnl[sym] = (px - avg) * mult * p["lots"] * ds if px is not None else 0
         t1 = p.get("t1")
         stop = p.get("stop")
@@ -3730,7 +3712,7 @@ def stress_test():
                 mult = specs.get(sym, {}).get("multiplier", 10)
                 px = p.get("price") or p["avg"]
                 avg = p["avg"]
-                ds = _dir_sign(p["direction"])
+                ds = 1 if p["direction"] == "多" else -1
                 newpx = px * (1 - shock * ds)  # 不利方向
                 new = (newpx - avg) * mult * p["lots"] * ds
                 loss = cur_pnl.get(sym, 0) - new
@@ -3758,7 +3740,7 @@ def stress_test():
             mult = specs.get(sym, {}).get("multiplier", 10)
             px = p.get("price") or p["avg"]
             avg = p["avg"]
-            ds = _dir_sign(p["direction"])
+            ds = 1 if p["direction"] == "多" else -1
             if scope == "black" and sym not in _BLACK:
                 shk = 0.0
             elif scope == "ag" and sym not in _AG:
@@ -3823,7 +3805,7 @@ def correlation_breakdown_stress(force=False, rho_crisis=0.7, rho_tail=0.9, z_cr
         if not px:
             continue
         mult = _spec_mult(sym)
-        sign = _dir_sign(p.get("direction"))
+        sign = 1 if p.get("direction") == "多" else -1
         X[sym] = sign * p["lots"] * float(px) * mult
         info[sym] = {
             "name": SYMBOLS.get(sym, {}).get("name", sym),
@@ -4382,7 +4364,7 @@ def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
     """计算分级止损的各档位价格。
     返回: {initial, breakeven, trailing, hard}
     """
-    ds = 1 if _dir_norm(direction) == "多" else -1
+    ds = 1 if direction == "多" else -1
     oneR = abs(entry - t1) if t1 else abs(entry - stop)
 
     levels = {}
@@ -4417,7 +4399,7 @@ def _get_stop_level_state(profit_R, cur_state, direction, px, entry, oneR, atr):
     """根据浮盈R倍数确定当前止损状态。
     返回: (new_stop, new_state)
     """
-    ds = 1 if _dir_norm(direction) == "多" else -1
+    ds = 1 if direction == "多" else -1
 
     if profit_R < BREAKEVEN_TRIGGER_R:
         # 未达1R：保持初始止损
@@ -5043,7 +5025,7 @@ def _risk_rule_context(prices=None):
     ctx["consec_losses"] = fsm.get("consec_losses")
     ctx["daily_loss_pct"] = fsm.get("daily_loss_pct")
     try:
-        dd = ddg.current()
+        dd = ddg.current(account_id=at.get_account())
     except Exception:
         dd = {}
     ctx["dd_pct"] = dd.get("dd_pct")
@@ -6206,7 +6188,7 @@ def pos_strategy_payload():
             px = None
         if not px or px <= 0:
             px = p.get("price")
-        ds = 1 if _dir_norm(p.get("direction")) == "多" else -1
+        ds = 1 if p.get("direction") == "多" else -1
 
         # ① 行情判定
         ms = market_state_cache.get(sym) or {}
@@ -6300,6 +6282,149 @@ def pos_strategy_payload():
     out = {"rows": rows, "ts": now, "ttl": _POS_STRAT_TTL}
     _POS_STRAT_CACHE["ts"] = now
     _POS_STRAT_CACHE["data"] = out
+    return out
+
+
+# —— 三感参谋持仓策略参谋（v3.9.0 增补）——
+_TRI_POS_STRAT_CACHE = {"ts": 0.0, "data": {}}
+
+
+def trisense_pos_strategy_payload():
+    """三感参谋版持仓策略参谋：从 trisense_replay 引擎读取持仓，输出行情+金字塔+止盈分析。
+    与主账户 pos_strategy_payload 结构一致，数据源不同。"""
+    now = time.time()
+    if now - _TRI_POS_STRAT_CACHE["ts"] < _POS_STRAT_TTL:
+        return _TRI_POS_STRAT_CACHE["data"]
+
+    rows = {}
+    try:
+        import trisense_replay_integration as _tri
+        tri_state = _tri.get_state()
+        tri_positions = tri_state.get("positions", [])
+    except Exception:
+        tri_positions = []
+
+    for pos in tri_positions:
+        raw_sym = pos.get("symbol", "")
+        lots = pos.get("lots") or pos.get("remaining_lots") or 0
+        if not lots or not raw_sym:
+            continue
+        # 合约代码转纯品种：优先查 VARIETY_OF，否则用正则提取字母前缀，再对齐 SYMBOLS 大小写
+        sym = fd.variety_of(raw_sym)
+        if sym == raw_sym:
+            # 没查到映射，尝试从合约号里提取品种代码（如 J701 -> J, SH611 -> SH）
+            import re
+            m = re.match(r'^([A-Za-z]+)', raw_sym)
+            if m:
+                prefix = m.group(1)
+                # 对齐 SYMBOLS 里的大小写
+                if prefix.upper() in SYMBOLS:
+                    sym = prefix.upper()
+                elif prefix.lower() in SYMBOLS:
+                    sym = prefix.lower()
+                else:
+                    sym = prefix.upper()
+        avg = pos.get("entry_price")
+        stop = pos.get("stop_price")
+        t1 = pos.get("t1_price")
+        t2 = pos.get("t2_price")
+        px = pos.get("current_price") or avg
+        ds = 1 if pos.get("direction") == "多" else -1
+        stop_dist = abs(avg - stop) if (avg and stop) else None
+
+        # ① 行情判定（复用主账户的 market_state_cache + 日线数据）
+        ms = market_state_cache.get(sym) or {}
+        layer0 = ms.get("state")
+        classic, classic_desc = None, None
+        atr_pct, vol_src = None, None
+        try:
+            df_daily = load_daily_refreshed(sym)
+            if df_daily is not None and len(df_daily):
+                classic, classic_desc = fd.classify_regime(
+                    df_daily, fd.regime_params_for(sym, _STRAT_CFG, fmg.get_manager())
+                )
+                vol = _stop_vol_daily(sym, df_daily)
+                c_last = float(df_daily["close"].iloc[-1])
+                if vol and c_last:
+                    atr_pct = round(vol / c_last * 100, 2)
+                vol_src = "DR/√14" if sym in _STRAT_CFG.get("dual_range_stop_symbols", ()) else "ATR14"
+        except Exception:
+            pass
+
+        # ② 金字塔四重门（影子模式）
+        roll_lv = None
+        try:
+            contract = pos.get("contract") or pos.get("symbol")
+            roll_lv = (rollover_info(sym, contract) or {}).get("level")
+        except Exception:
+            pass
+        label = _latest_signal_label(sym, pos.get("direction"))
+        pyramid = None
+        try:
+            passed, gates = pyr._gate_reasons(sym, layer0, label, roll_lv)
+            plan = None
+            if passed and stop_dist and avg:
+                plan = pyr.evaluate(
+                    symbol=sym, direction=pos.get("direction"), entry_price=avg,
+                    stop_dist=stop_dist, lots=lots, market_state=layer0,
+                    strategy_label=label, roll_level=roll_lv,
+                )
+            pyramid = {
+                "passed": passed,
+                "gates": {
+                    "regime": {"ok": gates["passed"]["regime"],
+                               "name": "行情门", "desc": f"Layer0={_LAYER0_NAMES.get(layer0, layer0 or '无数据')}（趋势初/中期开放）"},
+                    "symbol": {"ok": gates["passed"]["symbol"],
+                               "name": "品种门", "desc": "白名单" if gates["passed"]["symbol"] else "未过 OOS 验证/黑名单"},
+                    "label": {"ok": gates["passed"]["label"],
+                              "name": "标签门", "desc": f"标签={label or '无'}（趋势/背离开放）"},
+                    "roll": {"ok": gates["passed"]["roll"],
+                             "name": "换月门", "desc": f"换月={roll_lv or 'ok'}（warn/urgent 暂停）"},
+                },
+                "failed_reasons": gates["failed_reasons"],
+                "plan": plan,
+                "label_source": f"最近同向信号标签: {label}" if label else "无同向信号标签",
+            }
+        except Exception:
+            pyramid = None
+
+        # ③ 止盈阶段（R 口径）
+        tp = None
+        if stop_dist:
+            cur_r = round((px - avg) * ds / stop_dist, 2) if px else None
+            def _tri_dist_r(target):
+                if target is None or px is None:
+                    return None
+                return round((target - px) * ds / stop_dist, 2)
+            tp = {
+                "tp_level": pos.get("tp_level", "tp_none"),
+                "trail_state": pos.get("trail_state"),
+                "cur_r": cur_r,
+                "stop_r": round((stop - avg) * ds / stop_dist, 2) if stop else None,
+                "to_t1_r": _tri_dist_r(t1),
+                "to_t2_r": _tri_dist_r(t2),
+            }
+
+        rows[sym] = {
+            "symbol": sym,
+            "contract": raw_sym,
+            "name": SYMBOLS.get(sym, {}).get("name", pos.get("name", sym)),
+            "regime": {
+                "layer0": layer0,
+                "layer0_name": _LAYER0_NAMES.get(layer0),
+                "confidence": ms.get("confidence"),
+                "trend_direction": ms.get("trend_direction"),
+                "classic": classic,
+                "classic_desc": classic_desc,
+                "atr_pct": atr_pct,
+                "vol_src": vol_src,
+            },
+            "pyramid": pyramid,
+            "tp": tp,
+        }
+    out = {"rows": rows, "ts": now, "ttl": _POS_STRAT_TTL, "account": "trisense_replay"}
+    _TRI_POS_STRAT_CACHE["ts"] = now
+    _TRI_POS_STRAT_CACHE["data"] = out
     return out
 
 
@@ -6827,7 +6952,7 @@ def _reconcile_journal_vs_account(held):
         }
 
 
-_ACCSYNC_CACHE = {}  # {account_id: {"ts": float, "data": dict}}
+_ACCSYNC_CACHE = {"ts": 0.0, "data": None}
 _ACCSYNC_TTL = 8
 
 
@@ -6904,7 +7029,7 @@ def positions_reconcile(positions):
         return {"ok": False, "message": f"对账异常：{e}"}
 
 
-def account_marketsync(force=False, heal=False, account_id=None):
+def account_marketsync(force=False, heal=False):
     """只读账户同步（minishare 实时盯市 + 对账漂移检测 + 自愈）。
     仅用 minishare 实时行情对 journal 已记录持仓逐笔盯市；不接券商 API、不代下单。
     heal=True 时以 journal 为真相源修正 account_state（已实现盈亏/开仓均价）；
@@ -6912,16 +7037,12 @@ def account_marketsync(force=False, heal=False, account_id=None):
     返回只读快照 + 每持仓盯市状态 + 漂移告警 + 自愈记录 + journal 账户一致性。"""
     global _ACCSYNC_CACHE
     now = time.time()
-    _cid = account_id or at.get_account()
-    _c = _ACCSYNC_CACHE.get(_cid)
     if (
         (not force)
         and (not heal)
-        and _c is not None
-        and _c.get("data") is not None
-        and (now - _c["ts"]) < _ACCSYNC_TTL
+        and _ACCSYNC_CACHE["data"] is not None
+        and (now - _ACCSYNC_CACHE["ts"]) < _ACCSYNC_TTL
     ):
-        return _c["data"]
         return _ACCSYNC_CACHE["data"]
     # 显式自愈（journal 为真相源，仅偏差时写盘，安全幂等）
     healed = []
@@ -7330,9 +7451,9 @@ def premarket_brief(force=False):
     if not force and _PREMK_CACHE["data"] is not None and (now - _PREMK_CACHE["ts"]) < _PREMK_TTL:
         return _PREMK_CACHE["data"]
     # —— 聚合各数据源 ——
-    sync = account_marketsync(force=force, account_id=at.get_account())
+    sync = account_marketsync(force=force)
     heat = compute_heat()
-    dd = ddg.current()
+    dd = ddg.current(account_id=at.get_account())
     fsm = rsm.get_fsm(at.get_account()).summary()
     halted = rsm.is_halted(at.get_account())
     phase = _market_phase()
@@ -9175,7 +9296,7 @@ def _position_aware_advice(sig, open_positions, price):
         avg = float(pos.get("avg") or 0)
         if price and mult and lots:
             float_pnl = (
-                ((float(price) - avg) * mult * lots) if _dir_norm(pos_dir) == "多" else ((avg - float(price)) * mult * lots)
+                ((float(price) - avg) * mult * lots) if pos_dir == "多" else ((avg - float(price)) * mult * lots)
             )
         else:
             float_pnl = None
@@ -9295,7 +9416,7 @@ def _position_aware_advice(sig, open_positions, price):
         long_count = sum(1 for p in open_positions if p.get("direction") == sig_dir)
         short_count = total_positions - long_count
 
-        if (_dir_norm(sig_dir) == "多" and long_count > 0) or (_dir_norm(sig_dir) == "空" and short_count > 0):
+        if (sig_dir == "多" and long_count > 0) or (sig_dir == "空" and short_count > 0):
             advice = (
                 f"当前已有{long_count if sig_dir == '多' else short_count}笔{sig_dir}头持仓，"
                 f"本信号为新{sig_dir}方向——注意整体敞口。"
@@ -9905,13 +10026,6 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         pipe["kill_reason"] = rsm.get_kill(at.get_account()).reason
                     continue
                 dir_T = int(pipe["dir_T"])
-                today_key = datetime.now().strftime("%Y-%m-%d")
-                # ① 持续性去抖：dir_T 须同号连续 2 轮，单轮临界抖动不触发（根治连环弹窗）
-                prev_d = _SIG_PREV_DIR.get(sym)
-                _SIG_PREV_DIR[sym] = dir_T
-                if prev_d is None or prev_d != dir_T:
-                    continue
-                # ── C 感知方向门（live 部署，2026-09-07）：逆资金流(kline C)则抑制开仓 ──
                 _cg_mode = (_STRAT_CFG.get("bias_synthesis", {}) or {}).get("c_gate")
                 if _cg_mode:
                     _cg_blocked, _cg_c = _apply_c_gate(sym, dir_T, today, _STRAT_CFG)
@@ -9970,6 +10084,12 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         continue
                     else:
                         _C_GATE_STATS["passed"] += 1
+                today_key = datetime.now().strftime("%Y-%m-%d")
+                # ① 持续性去抖：dir_T 须同号连续 2 轮，单轮临界抖动不触发（根治连环弹窗）
+                prev_d = _SIG_PREV_DIR.get(sym)
+                _SIG_PREV_DIR[sym] = dir_T
+                if prev_d is None or prev_d != dir_T:
+                    continue
                 # ② 签名去重：相同签名(同方向+同价位桶)在窗口内抑制；不同签名=真实新信号立即推
                 sig_hash = _sig_signature(sym, dir_T, price)
                 last = last_fire.get(sym)
@@ -10039,16 +10159,27 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     pipe["event_reason"] = ev_gate.get("msg", "临近重磅数据，禁止新开仓")
                     continue
                 scale = rsm.get_fsm(at.get_account()).scale()
-                dd_scale = ddg.scale_factor()
+                dd_scale = ddg.scale_factor(account_id=at.get_account())
                 sig["dd_scale"] = dd_scale
                 sig["event_scale"] = ev_scale
                 _gbm_scale = pipe.get("risk_scale") or 1.0
+                # v3.9 组合层动态仓位：多空失衡 + 持仓数 + 板块集中
+                # 回测验证 Calmar +50.6%，最大回撤 -41%
+                dp_result = dynamic_position_scale(open_positions, sym=sym, cfg=_STRAT_CFG)
+                dp_scale = dp_result["scale"]
+                sig["dp_scale"] = dp_scale
+                sig["dp_details"] = dp_result["details"]
+                sig["dp_ls_ratio"] = dp_result["ls_ratio"]
                 _combined = round(
-                    min(scale, dd_scale, ev_scale, _gbm_scale), 3
-                )  # 整改：取较严者而非连乘（含#13事件闸门+GBM高波动降仓）
+                    min(scale, dd_scale, ev_scale, _gbm_scale, dp_scale), 3
+                )  # 整改：取较严者而非连乘（含#13事件闸门+GBM高波动降仓+v3.9动态仓位）
                 if _combined < 1.0:
                     sig["lots"] = max(1, int(round(sig["lots"] * _combined)))
                     sig["risk_scale"] = _combined
+                    # v3.9：如果动态仓位是主要降仓因素，补充说明
+                    if dp_scale < 0.95 and dp_scale <= min(scale, dd_scale, ev_scale, _gbm_scale):
+                        sig["dp_reduced"] = True
+                        sig["reason"] += f"（动态仓位:{dp_result['details']}）"
                 # 组合层约束：相关性同向降仓/否决 + 总风险预算（日亏含浮亏由 P0-1 主源=动态权益回撤负责，非此处）
                 pchk = portfolio_risk_check(
                     sym,
@@ -10703,6 +10834,37 @@ def start_dashboard(state):
                             _s2["contract"] = ml.normalize_contract_code(_ct)
                 # 版本号随 /api/state 实时下发，前端侧栏动态渲染（方案 B）
                 state["version"] = APP_VERSION
+                # v3.9 动态仓位状态（组合层优化）
+                try:
+                    def _dir_int(d):
+                        """方向字段兼容多种格式：1/-1、'多'/'空'、'long'/'short' 等。"""
+                        if isinstance(d, (int, float)):
+                            return 1 if d > 0 else (-1 if d < 0 else 0)
+                        s = str(d).strip().lower()
+                        if s in ("多", "多单", "long", "buy", "多頭", "duo", "1", "+1"):
+                            return 1
+                        if s in ("空", "空单", "short", "sell", "空頭", "kong", "-1", "-"):
+                            return -1
+                        return 0
+                    _dp_pos_list = [
+                        {"sym": _s, "direction": _dir_int(_p.get("direction", 0)), "lots": _p.get("lots", 0)}
+                        for _s, _p in state.get("positions", {}).items()
+                        if isinstance(_p, dict) and _p.get("lots", 0) > 0
+                    ]
+                    _dp = dynamic_position_scale(_dp_pos_list, cfg=_STRAT_CFG)
+                    state["dynamic_position"] = {
+                        "enabled": _dp.get("enabled", False),
+                        "scale": _dp["scale"],
+                        "ls_ratio": _dp["ls_ratio"],
+                        "n_long": _dp["n_long"],
+                        "n_short": _dp["n_short"],
+                        "n_total": _dp["n_total"],
+                        "ls_scale": _dp["ls_scale"],
+                        "n_pos_scale": _dp["n_pos_scale"],
+                        "details": _dp["details"],
+                    }
+                except Exception:
+                    state["dynamic_position"] = {"enabled": False, "error": "计算失败"}
                 # ★ 注入自动模拟交易状态
                 try:
                     state["paper_trading"] = pti.get_state()
@@ -10774,17 +10936,11 @@ def start_dashboard(state):
                     snap["data_age_min"] = round(_age, 1) if _age is not None else None
                     # 组合风险热度（A1/B4）
                     snap["heat"] = compute_heat(prices)
-                    # 累计手续费：优先 CTP 同步的 state.fee_total（实盘权威），journal 作回退
+                    # 累计手续费（交易所基础费率重算后的全量已平仓手续费合计，与 /api/journal 同源）
                     try:
-                        _st = at.load_state()
-                        _ctp_fee = _st.get("fee_total") or 0
+                        snap["total_fee"] = tj.summary().get("total_fee", 0)
                     except Exception:
-                        _ctp_fee = 0
-                    try:
-                        _tj_fee = tj.summary().get("total_fee", 0)
-                    except Exception:
-                        _tj_fee = 0
-                    snap["total_fee"] = _ctp_fee if _ctp_fee > 0 else _tj_fee
+                        snap["total_fee"] = 0
                     # 换月预警（B2）：给每个持仓挂上距交割月天数与等级，持仓表内联显示
                     try:
                         for _p in snap.get("positions", []):
@@ -10825,7 +10981,7 @@ def start_dashboard(state):
                 force = "force=1" in self.path
                 heal = "heal=1" in self.path
                 try:
-                    body = json.dumps(account_marketsync(force=force, heal=heal, account_id=at.get_account()), ensure_ascii=False, default=str)
+                    body = json.dumps(account_marketsync(force=force, heal=heal), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"read_only": True, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -10984,7 +11140,7 @@ def start_dashboard(state):
                         )
                         # #119 同步重置回撤水位线峰值（解除即视为新起点，避免旧峰值秒杀）
                         try:
-                            ddg.reset_peak(float(_peak)) if _peak else ddg.reset_peak()
+                            ddg.reset_peak(float(_peak) if _peak else None, account_id=at.get_account())
                         except Exception:
                             pass
                         print("[熔断] 已人工解除（面板操作）")
@@ -11000,7 +11156,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/drawdown":
                 # #119 回撤水位线：返回当前回撤 / 档位 / 降险系数 / 水位线配置
                 try:
-                    _d = ddg.current()
+                    _d = ddg.current(account_id=at.get_account())
                     _d["halted"] = rsm.is_halted(at.get_account())
                     body = json.dumps(_d, ensure_ascii=False, default=str)
                 except Exception as e:
@@ -11525,6 +11681,69 @@ def start_dashboard(state):
                     pti.handle_options(self)
                 else:
                     pti.handle_api(self)
+                return
+            elif self.path.split("?")[0] == "/api/trisense-replay/risk":
+                # 三感参谋：风控状态机快照
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                body = json.dumps(tri.get_risk_fsm(), ensure_ascii=False, default=str)
+                self.wfile.write(body.encode("utf-8"))
+                return
+            elif self.path.split("?")[0] == "/api/trisense-replay/killswitch":
+                # 三感参谋：硬熔断状态（GET 查；POST action=ack/reset）
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.end_headers()
+                if self.command == "OPTIONS":
+                    return
+                if self.command == "GET":
+                    body = json.dumps(tri.get_risk_killswitch(), ensure_ascii=False, default=str)
+                    self.wfile.write(body.encode("utf-8"))
+                    return
+                # POST
+                length = int(self.headers.get("Content-Length", 0) or 0)
+                raw = self.rfile.read(length).decode("utf-8", "ignore") if length else "{}"
+                data = json.loads(raw) if raw.strip() else {}
+                act = data.get("action", "")
+                if act == "ack":
+                    r = tri.risk_kill_ack()
+                elif act == "reset":
+                    peak = data.get("peak")
+                    try:
+                        peak_val = float(peak) if peak else None
+                    except (TypeError, ValueError):
+                        peak_val = None
+                    r = tri.risk_kill_reset(peak_val)
+                else:
+                    r = {"ok": False, "msg": f"未知 action: {act}"}
+                body = json.dumps(r, ensure_ascii=False, default=str)
+                self.wfile.write(body.encode("utf-8"))
+                return
+            elif self.path.split("?")[0] == "/api/trisense-replay/drawdown":
+                # 三感参谋：回撤水位线状态
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                body = json.dumps(tri.get_risk_drawdown(), ensure_ascii=False, default=str)
+                self.wfile.write(body.encode("utf-8"))
+                return
+            elif self.path.split("?")[0] == "/api/trisense-replay/pos_strategy":
+                # 三感参谋：持仓策略参谋（行情判定+金字塔四重门+止盈阶段）
+                try:
+                    body = json.dumps(trisense_pos_strategy_payload(), ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"rows": {}, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
                 return
             elif self.path.split("?")[0] == "/api/trisense-replay":
                 # 实盘跟踪引擎 API（第二账户）
@@ -12306,12 +12525,12 @@ def start_dashboard(state):
                         except Exception as _risk_e:
                             print(f"[journal] ⚠️ 风控检查异常(放行): {_risk_e}")
                         
-                        # C 感知方向门（oppose_threshold）：T 方向与 kline C 反向时抑制开仓
+                        # C 感知方向门（记账入口同样检查，与实盘一致）
                         try:
                             _dir_val = 1 if direction == "多" else (-1 if direction == "空" else 0)
                             if _dir_val != 0:
-                                import four_dim_strategy as _fd_cg_j
-                                _cg = _fd_cg_j.check_c_gate(sym, _dir_val, _STRAT_CFG)
+                                import four_dim_strategy as _fd_cg2
+                                _cg = _fd_cg2.check_c_gate(sym, _dir_val, _STRAT_CFG)
                                 if not _cg["passed"]:
                                     print(f"[journal] 🚫 开仓被C感知门拦截: {_cg['reason']}")
                                     body = json.dumps(
@@ -13156,7 +13375,7 @@ def _update_aux(feed, state):
         prev_state = state.get("risk_state", {}).get("state")
         # #119 回撤水位线：每轮用动态权益更新峰值/回撤/档位（持久化），取回峰值喂硬熔断
         try:
-            _dd_state = ddg.update(eq)
+            _dd_state = ddg.update(eq, account_id=at.get_account())
             state["drawdown"] = _dd_state
             _dd_peak = _dd_state.get("peak_equity")
         except Exception as e:
@@ -13795,7 +14014,7 @@ def _paper_mtm(d):
         if px is None:
             continue
         mult = _paper_mult(sym)
-        sign = _dir_sign(p.get("direction"))
+        sign = 1 if p.get("direction") == "多" else -1
         total += (px - p["avg"]) * mult * p["lots"] * sign
     return round(total, 2)
 
@@ -13956,7 +14175,7 @@ def _holdings_kline(sym, bars=30):
         if pos:
             entry_price = pos.get("avg")
             direction = pos.get("direction")
-            dir_sign = 1 if _dir_norm(direction) == "多" else -1
+            dir_sign = 1 if direction == "多" else -1
             rg = risk_gate(sym, entry_price, atr_val, DEFAULT_CONFIG)
             if rg.get("passed"):
                 ep = exit_plan(sym, entry_price, dir_sign, atr_val, "neutral", DEFAULT_CONFIG)
@@ -14083,7 +14302,7 @@ def main():
     # #119 回撤水位线：加载水位线配置，并把持久化峰值权益喂给状态机（重启不洗白）
     try:
         ddg.init_from_config()
-        _dd0 = ddg.current()
+        _dd0 = ddg.current(account_id=at.get_account())
         if _dd0.get("peak_equity"):
             rsm.get_fsm(at.get_account()).peak_equity = float(_dd0["peak_equity"])
         print(
@@ -14184,9 +14403,31 @@ def main():
         print(f"[PaperTrading] 初始化失败: {_e}")
     # ★ 启动实盘跟踪引擎（第二账户，不跟信号，只手动持仓）
     try:
+        def _tri_stop_vol(contract_symbol):
+            """三感参谋默认止损波动量：合约代码 → 纯品种 → 日线 ATR/DR。"""
+            sym = fd.variety_of(contract_symbol)
+            if not sym or sym == contract_symbol:
+                import re
+                m = re.match(r'^([A-Za-z]+)', contract_symbol)
+                if m:
+                    prefix = m.group(1)
+                    if prefix.upper() in SYMBOLS:
+                        sym = prefix.upper()
+                    elif prefix.lower() in SYMBOLS:
+                        sym = prefix.lower()
+                    else:
+                        sym = prefix.upper()
+            try:
+                df = load_daily_refreshed(sym)
+                if df is not None and len(df) > 0:
+                    return _stop_vol_daily(sym, df)
+            except Exception:
+                pass
+            return None
         tri.init(
             price_feed=feed if feed_ok else None,
             contract_specs=_TCFG.get("contract_specs", {}),
+            stop_vol_fn=_tri_stop_vol,
         )
     except Exception as _e:
         print(f"[TriSense] 初始化失败: {_e}")

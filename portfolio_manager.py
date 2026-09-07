@@ -273,6 +273,203 @@ def apply_portfolio_risk(symbol, base_lots, cfg=DEFAULT_CONFIG):
     return max(0, int(round(base_lots * mult)))
 
 
+# ── 动态仓位缩放（v3.9 组合层优化） ─────────────────────────────────────────
+# 基于回测验证的三规则组合：多空失衡 + 持仓数 + 板块集中
+# 回测效果：Calmar 1.36 → 2.04 (+50.6%)，最大回撤 -1.79R → -1.06R (-41%)
+#
+# 与现有硬上限（portfolio_risk_check）的区别：
+#   - 硬上限 = 阻断式（要么全有要么全无），适合极端风险兜底
+#   - 动态缩放 = 平滑式（0.3~1.0 连续调节），适合日常风险管理
+#   - 两者叠加使用：先缩放再检查硬上限
+
+DYNAMIC_POS_DEFAULT = {
+    "enabled": True,
+    "ls_threshold": 0.75,       # 多空失衡阈值：单边占比超过则触发
+    "ls_strength": 1.5,         # 多空失衡强度：失衡越严重降仓越多
+    "n_pos_strength": 0.8,      # 持仓数强度：持仓越多降仓越多
+    "sector_strength": 0.5,     # 板块集中强度：集中度越高该板块降仓越多
+    "min_scale": 0.3,           # 最低仓位乘数（防止过度降仓）
+    "min_positions": 5,         # 最少持仓数（低于此数不触发持仓数/多空失衡规则）
+}
+
+
+def _get_dynamic_pos_config(cfg=None):
+    """从 cfg 中提取动态仓位配置，缺失项用默认值填充。"""
+    if cfg is None:
+        cfg = DEFAULT_CONFIG
+    dp = cfg.get("dynamic_position", {})
+    result = dict(DYNAMIC_POS_DEFAULT)
+    if dp:
+        result.update(dp)
+    return result
+
+
+def _normalize_direction(d):
+    """方向字段兼容多种格式：1/-1、'多'/'空'、'long'/'short' 等。"""
+    if isinstance(d, (int, float)):
+        return 1 if d > 0 else (-1 if d < 0 else 0)
+    s = str(d).strip().lower()
+    if s in ("多", "多单", "long", "buy", "多頭", "duo", "1", "+1", "多^", "多→"):
+        return 1
+    if s in ("空", "空单", "short", "sell", "空頭", "kong", "-1", "-", "空↓", "空→"):
+        return -1
+    return 0
+
+
+def dynamic_position_scale(open_positions, sym=None, cfg=None):
+    """计算动态仓位乘数。
+
+    基于当前组合持仓状态，综合三种规则计算仓位缩放因子：
+      1. 多空失衡：单边持仓占比过高 → 整体降仓
+      2. 总持仓数：持仓数超过中位数 → 整体降仓
+      3. 板块集中：同板块同向持仓集中 → 该板块降仓
+
+    Args:
+        open_positions: list of dicts，每个含 "sym"/"direction"/"lots"/"risk" 等字段
+                         （与实盘 _load_open_positions() 格式一致）
+        sym: str, 可选。如果指定，则返回该品种的缩放（含板块集中因子）
+             如果为 None，则返回全局缩放因子（不含板块集中）
+        cfg: 配置 dict
+
+    Returns:
+        dict with:
+          - scale: float, 总缩放因子 (min_scale ~ 1.0)
+          - ls_scale: float, 多空失衡因子
+          - n_pos_scale: float, 持仓数因子
+          - sector_scale: float, 板块集中因子（仅 sym 指定时有意义）
+          - ls_ratio: float, 当前多空比 (0.5 ~ 1.0)
+          - n_long: int, 多头持仓数
+          - n_short: int, 空头持仓数
+          - n_total: int, 总持仓数
+          - details: str, 人类可读的说明
+    """
+    dp = _get_dynamic_pos_config(cfg)
+    if not dp.get("enabled", False):
+        return {
+            "scale": 1.0,
+            "ls_scale": 1.0,
+            "n_pos_scale": 1.0,
+            "sector_scale": 1.0,
+            "ls_ratio": 0.5,
+            "n_long": 0,
+            "n_short": 0,
+            "n_total": 0,
+            "details": "动态仓位未启用",
+        }
+
+    min_scale = dp.get("min_scale", 0.3)
+    min_positions = dp.get("min_positions", 5)
+
+    # 提取持仓信息（方向归一化）
+    positions = open_positions or []
+    n_total = len(positions)
+
+    # 统计多空
+    n_long = 0
+    n_short = 0
+    for p in positions:
+        d = _normalize_direction(p.get("direction", 0))
+        if d > 0:
+            n_long += 1
+        elif d < 0:
+            n_short += 1
+
+    # 多空比
+    if n_long + n_short > 0:
+        ls_ratio = max(n_long, n_short) / (n_long + n_short)
+    else:
+        ls_ratio = 0.5
+
+    # ── 规则1：多空失衡 ──
+    ls_scale = 1.0
+    ls_threshold = dp.get("ls_threshold", 0.75)
+    ls_strength = dp.get("ls_strength", 1.5)
+
+    if n_long + n_short >= min_positions and ls_ratio > ls_threshold:
+        excess = (ls_ratio - ls_threshold) / (1.0 - ls_threshold)  # 0~1
+        ls_scale = max(min_scale, 1.0 - excess * ls_strength)
+
+    # ── 规则2：总持仓数 ──
+    n_pos_scale = 1.0
+    n_pos_strength = dp.get("n_pos_strength", 0.8)
+
+    if n_total >= min_positions:
+        # 用 min_positions 作为基准（约等于典型持仓数的中位数）
+        target = max(min_positions * 2, 10)  # 基准持仓数（约20-30%超配时触发）
+        if n_total > target:
+            excess = (n_total - target) / target
+            n_pos_scale = max(min_scale, 1.0 - excess * n_pos_strength)
+
+    # ── 规则3：板块集中度（仅当指定 sym 时计算） ──
+    sector_scale = 1.0
+    sector_strength = dp.get("sector_strength", 0.5)
+
+    if sym is not None and positions:
+        # 按板块分组
+        sector_syms = {}
+        for p in positions:
+            psym = p.get("sym", "")
+            grp = symbols_group(psym)
+            if grp not in sector_syms:
+                sector_syms[grp] = []
+            sector_syms[grp].append(p)
+
+        # 当前品种的板块
+        sym_group = symbols_group(sym)
+        if sym_group and sym_group in sector_syms and sym_group != "其他":
+            group_positions = sector_syms[sym_group]
+            group_total = len(group_positions)
+            if group_total >= 2:
+                # 同向持仓数（板块内最多的那个方向的占比作为集中度指标）
+                grp_long = sum(1 for p in group_positions if _normalize_direction(p.get("direction", 0)) > 0)
+                grp_short = sum(1 for p in group_positions if _normalize_direction(p.get("direction", 0)) < 0)
+                max_same = max(grp_long, grp_short)
+                concentration = max_same / group_total if group_total > 0 else 0
+
+                if concentration > 0.5:
+                    excess = (concentration - 0.5) / 0.5
+                    sector_scale = max(min_scale, 1.0 - excess * sector_strength)
+
+    # ── 综合缩放 ──
+    # 多空失衡 + 持仓数 是全局的，板块集中是品种级的
+    global_scale = ls_scale * n_pos_scale
+    total_scale = global_scale * sector_scale
+    total_scale = max(min_scale, min(1.0, total_scale))
+
+    # 说明文字
+    details_parts = []
+    if ls_scale < 0.99:
+        details_parts.append(
+            f"多空失衡({ls_ratio:.0%}, 阈值{ls_threshold:.0%})→{ls_scale:.0%}"
+        )
+    if n_pos_scale < 0.99:
+        details_parts.append(
+            f"持仓数({n_total})→{n_pos_scale:.0%}"
+        )
+    if sym is not None and sector_scale < 0.99:
+        details_parts.append(
+            f"板块集中({sym_group})→{sector_scale:.0%}"
+        )
+
+    if not details_parts:
+        details = "无动态调整"
+    else:
+        details = f"动态仓位: {' + '.join(details_parts)} = {total_scale:.0%}"
+
+    return {
+        "scale": round(total_scale, 4),
+        "ls_scale": round(ls_scale, 4),
+        "n_pos_scale": round(n_pos_scale, 4),
+        "sector_scale": round(sector_scale, 4),
+        "ls_ratio": round(ls_ratio, 4),
+        "n_long": n_long,
+        "n_short": n_short,
+        "n_total": n_total,
+        "details": details,
+        "enabled": True,
+    }
+
+
 # ── 诊断报告 ────────────────────────────────────────────────────────────────
 def portfolio_diagnostic(current_positions, cfg=DEFAULT_CONFIG):
     """生成组合诊断报告。"""

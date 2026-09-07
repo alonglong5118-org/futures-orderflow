@@ -47,7 +47,12 @@ DEFAULT_CONFIG = {
     "use_signal_lots": True,  # 是否使用信号推荐的手数
     "enable_trailing": True,  # 是否启用移动止损
     "trailing_start_R": 1.0,  # 浮盈达到多少 R 后启动移动止损
-    "trailing_lock_R": 0.5,  # 移动止损锁定利润（R）
+    "trailing_lock_R": 0.5,  # T1 前移动止损锁定利润（R）— 较紧，保护利润
+    "trailing_tail_lock_R": 1.5,  # T1 后尾仓移动止损锁定利润（R）— 较宽，抓趋势
+    "default_rr": 2.0,  # 默认盈亏比（未传 target 时使用）
+    "enable_time_exit": True,  # 是否启用时间止盈
+    "time_exit_hours": 72,  # 时间止盈：持仓超过多少小时触发
+    "time_exit_min_profit_R": 1.0,  # 时间止盈：最低浮盈 R（低于则不触发，等止损）
     "cooldown_minutes": 30,  # 同品种平仓后冷却时间（分钟）
     "slippage_pts": 0,  # 模拟滑点（点数）
 }
@@ -96,17 +101,20 @@ class PaperTradingEngine:
         engine.check_positions(current_prices)
     """
 
-    def __init__(self, config: dict | None = None, price_feed=None, contract_specs: dict | None = None, state_file: str | None = None):
+    def __init__(self, config: dict | None = None, price_feed=None, contract_specs: dict | None = None, state_file: str | None = None, stop_vol_fn=None):
         """
         Args:
             config: 配置字典，覆盖默认配置
             price_feed: 价格数据源，需实现 .price(symbol) 方法返回最新价
             contract_specs: 合约规格 {symbol: {multiplier, margin_rate, ...}}
             state_file: 状态持久化文件路径（默认使用模块级 STATE_FILE）
+            stop_vol_fn: 可选的止损波动量计算函数 fn(symbol) -> float，返回日线 ATR/DR
+                         用于自动计算默认止损距离；为 None 时用价格 2% 兜底
         """
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         self.feed = price_feed
         self.contract_specs = contract_specs or {}
+        self.stop_vol_fn = stop_vol_fn
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -133,6 +141,8 @@ class PaperTradingEngine:
                 self._processed_signals = set(state.get("processed_signals", []))
                 self._cooldowns = state.get("cooldowns", {})
                 self.config = {**self.config, **state.get("config", {})}
+                # 兼容修复：旧版本持仓可能 stop/target 为 None，自动补填默认值
+                self._fixup_positions()
             else:
                 self._init_state()
         except Exception as e:
@@ -149,6 +159,95 @@ class PaperTradingEngine:
         self.stats = {}
         self._processed_signals = set()
         self._cooldowns = {}  # symbol -> cooldown_end_timestamp
+
+    def _fixup_positions(self):
+        """兼容修复：给旧版本持仓补填缺失的 stop/target/t1/t2/peak_price 等字段。
+        避免 None 导致检查崩溃。修复后自动保存。"""
+        fixed = 0
+        default_rr = self.config.get("default_rr", 2.0)
+        for sym, pos in self.positions.items():
+            entry = pos.get("entry_price", 0)
+            dir_en = pos.get("direction_en", "long")
+            stop_dist = pos.get("stop_dist") or 0.0
+            recalc_needed = False
+
+            if stop_dist <= 0:
+                recalc_needed = True
+            elif self.stop_vol_fn and pos.get("stop_dist_source") != "atr_dr":
+                # 升级检测：如果 stop_dist 接近 entry*2%（旧版兜底），且有 ATR 函数，就重新算
+                fallback_val = entry * 0.02
+                if abs(stop_dist - fallback_val) / max(fallback_val, 0.01) < 0.001:
+                    recalc_needed = True
+
+            if recalc_needed:
+                new_sd = self._calc_default_stop_dist(sym, entry)
+                if new_sd > 0 and new_sd != stop_dist:
+                    stop_dist = new_sd
+                    pos["stop_dist"] = round(stop_dist, 4)
+                    # 标记来源，避免反复重算
+                    pos["stop_dist_source"] = "atr_dr" if self.stop_vol_fn else "fallback_2pct"
+                    # stop_dist 变了，stop/target/t1/t2 都要重算（下面的 None 检查会补）
+                    pos["stop_price"] = None
+                    pos["target_price"] = None
+                    pos["t1_price"] = None
+                    pos["t2_price"] = None
+
+            changed = False
+            # 补 stop_price
+            if pos.get("stop_price") is None:
+                stop = entry - stop_dist if dir_en == "long" else entry + stop_dist
+                pos["stop_price"] = round(stop, 4)
+                changed = True
+            # 补 target_price
+            if pos.get("target_price") is None:
+                target = entry + stop_dist * default_rr if dir_en == "long" else entry - stop_dist * default_rr
+                pos["target_price"] = round(target, 4)
+                changed = True
+            # 补 t1_price（默认 1R）
+            if pos.get("t1_price") is None:
+                t1 = entry + stop_dist * 1.0 if dir_en == "long" else entry - stop_dist * 1.0
+                pos["t1_price"] = round(t1, 4)
+                changed = True
+            # 补 t2_price（默认 = target）
+            if pos.get("t2_price") is None:
+                pos["t2_price"] = pos["target_price"]
+                changed = True
+            # 补 peak_price
+            if pos.get("peak_price") is None:
+                pos["peak_price"] = entry
+                changed = True
+            # 补 trailing 相关
+            if pos.get("trailing_active") is None:
+                pos["trailing_active"] = False
+                pos["trailing_stop"] = None
+                changed = True
+            if pos.get("t1_filled") is None:
+                pos["t1_filled"] = False
+                changed = True
+            if pos.get("remaining_lots") is None:
+                pos["remaining_lots"] = pos.get("lots", 1)
+                changed = True
+
+            if changed:
+                fixed += 1
+
+        if fixed > 0:
+            print(f"[PaperEngine] 兼容修复 {fixed} 个持仓的止盈止损字段")
+            self._save_state()
+
+    def _calc_default_stop_dist(self, symbol: str, price: float) -> float:
+        """计算默认止损距离：优先用 stop_vol_fn（ATR/DR），失败则用价格 2% 兜底。
+        返回正数。"""
+        vol = None
+        if self.stop_vol_fn:
+            try:
+                vol = self.stop_vol_fn(symbol)
+                if vol and vol > 0:
+                    return float(vol)
+            except Exception:
+                pass
+        # 兜底：价格的 2%
+        return max(price * 0.02, 0.01)
 
     def _save_state(self):
         """保存状态到磁盘。"""
@@ -415,72 +514,96 @@ class PaperTradingEngine:
         direction = pos["direction_en"]
         remaining_lots = pos["remaining_lots"]
         entry = pos["entry_price"]
-        stop = pos["stop_price"]
-        target = pos["target_price"]
-        stop_dist = pos["stop_dist"]
+        stop = pos.get("stop_price")
+        target = pos.get("target_price")
+        stop_dist = pos.get("stop_dist") or 0.0
+
+        # 无效的止损距离，跳过检查（避免除零和崩溃）
+        if stop_dist <= 0:
+            return None
+
+        ds = 1 if direction == "long" else -1  # 方向符号
 
         # 更新峰值价格（用于移动止损）
         if direction == "long":
-            pos["peak_price"] = max(pos["peak_price"], cur_price)
-            profit_R = (cur_price - entry) / stop_dist
+            pos["peak_price"] = max(pos["peak_price"] or cur_price, cur_price)
         else:
-            pos["peak_price"] = min(pos["peak_price"], cur_price)
-            profit_R = (entry - cur_price) / stop_dist
+            pos["peak_price"] = min(pos["peak_price"] or cur_price, cur_price)
+        profit_R = (cur_price - entry) * ds / stop_dist
 
-        # 检查止损
-        if direction == "long" and cur_price <= stop:
-            return self._close_position(pos, remaining_lots, cur_price, "止损")
-        if direction == "short" and cur_price >= stop:
-            return self._close_position(pos, remaining_lots, cur_price, "止损")
+        # 检查止损（stop 为 None 时跳过）
+        if stop is not None:
+            if direction == "long" and cur_price <= stop:
+                return self._close_position(pos, remaining_lots, cur_price, "止损")
+            if direction == "short" and cur_price >= stop:
+                return self._close_position(pos, remaining_lots, cur_price, "止损")
 
-        # 检查 t1 止盈（平半）
+        # 检查 t1 止盈（平半）— 需 t1 价格存在 + 未平过 + 至少 2 手
         t1_price = pos.get("t1_price")
-        if t1_price and not pos["t1_filled"] and remaining_lots >= 2:
+        if t1_price and not pos.get("t1_filled") and remaining_lots >= 2:
             hit_t1 = (direction == "long" and cur_price >= t1_price) or (direction == "short" and cur_price <= t1_price)
             if hit_t1:
                 half_lots = remaining_lots // 2
                 result = self._partial_close(pos, half_lots, cur_price, "t1 平半")
                 pos["t1_filled"] = True
                 # t1 后启动移动止损
-                if self.config["enable_trailing"]:
+                if self.config.get("enable_trailing", True):
                     pos["trailing_active"] = True
                     pos["trailing_stop"] = self._calc_trailing_stop(pos)
                 return result
 
-        # 检查 t2 / 目标止盈（全平）
-        hit_target = (direction == "long" and cur_price >= target) or (direction == "short" and cur_price <= target)
-        if hit_target:
-            return self._close_position(pos, remaining_lots, cur_price, "止盈")
+        # 检查 t2 / 目标止盈（全平）— target 为 None 时跳过
+        if target is not None:
+            hit_target = (direction == "long" and cur_price >= target) or (direction == "short" and cur_price <= target)
+            if hit_target:
+                return self._close_position(pos, remaining_lots, cur_price, "止盈")
+
+        # 时间止盈：持仓超时 + 浮盈达标 → 全部止盈
+        if self.config.get("enable_time_exit", True):
+            hours_held = (time.time() - pos.get("open_ts", time.time())) / 3600.0
+            max_hours = self.config.get("time_exit_hours", 72)
+            min_profit = self.config.get("time_exit_min_profit_R", 1.0)
+            if hours_held >= max_hours and profit_R >= min_profit:
+                return self._close_position(pos, remaining_lots, cur_price, f"时间止盈({int(hours_held)}h/{profit_R:.1f}R)")
 
         # 移动止损检查
-        if pos.get("trailing_active") and self.config["enable_trailing"]:
-            # 更新移动止损线
-            new_stop = self._calc_trailing_stop(pos)
-            if new_stop:
-                current_ts = pos.get("trailing_stop")
-                if current_ts is None:
-                    # 首次设置移动止损
-                    pos["trailing_stop"] = new_stop
-                elif direction == "long":
-                    # 多头：只上移不下移
-                    pos["trailing_stop"] = max(current_ts, new_stop)
-                else:
-                    # 空头：只下移不上移
-                    pos["trailing_stop"] = min(current_ts, new_stop)
-                # 检查是否触发移动止损
-                if direction == "long" and cur_price <= pos["trailing_stop"]:
-                    return self._close_position(pos, remaining_lots, cur_price, "移动止损")
-                if direction == "short" and cur_price >= pos["trailing_stop"]:
-                    return self._close_position(pos, remaining_lots, cur_price, "移动止损")
+        if self.config.get("enable_trailing", True):
+            # 启动条件：浮盈 >= trailing_start_R 后启动（t1 后也会启动，两者取早）
+            start_r = self.config.get("trailing_start_R", 1.0)
+            if not pos.get("trailing_active") and profit_R >= start_r:
+                pos["trailing_active"] = True
+                pos["trailing_stop"] = self._calc_trailing_stop(pos)
+
+            if pos.get("trailing_active"):
+                # 更新移动止损线（只向有利方向移动）
+                new_stop = self._calc_trailing_stop(pos)
+                if new_stop:
+                    current_ts = pos.get("trailing_stop")
+                    if current_ts is None:
+                        pos["trailing_stop"] = new_stop
+                    elif direction == "long":
+                        pos["trailing_stop"] = max(current_ts, new_stop)
+                    else:
+                        pos["trailing_stop"] = min(current_ts, new_stop)
+                    # 检查是否触发移动止损
+                    if direction == "long" and cur_price <= pos["trailing_stop"]:
+                        return self._close_position(pos, remaining_lots, cur_price, "移动止损")
+                    if direction == "short" and cur_price >= pos["trailing_stop"]:
+                        return self._close_position(pos, remaining_lots, cur_price, "移动止损")
 
         return None
 
     def _calc_trailing_stop(self, pos: dict) -> float | None:
-        """计算移动止损价位。"""
+        """计算移动止损价位。
+        T1 前用 trailing_lock_R（较紧，保护利润），T1 后用 trailing_tail_lock_R（较宽，抓趋势）。"""
         direction = pos["direction_en"]
         peak = pos["peak_price"]
         stop_dist = pos["stop_dist"]
-        lock_R = self.config.get("trailing_lock_R", 0.5)
+        # T1 平半后切换到尾仓模式（更宽的跟踪止损）
+        if pos.get("t1_filled"):
+            lock_R = self.config.get("trailing_tail_lock_R", 1.5)
+        else:
+            lock_R = self.config.get("trailing_lock_R", 0.5)
 
         if direction == "long":
             return round(peak - stop_dist * lock_R, 4)
@@ -604,8 +727,22 @@ class PaperTradingEngine:
                 return False, "手数/价格无效", None
 
             dir_en = direction_en(direction)
-            stop_dist = abs(price - stop) if stop else price * 0.02
-            target_R = round(abs(target - price) / stop_dist, 2) if target else 2.0
+            # 止损距离：用户传入 stop 就用，否则用 ATR/DR（2% 兜底）
+            if stop:
+                stop_dist = abs(price - stop)
+            else:
+                stop_dist = self._calc_default_stop_dist(symbol, price)
+
+            # 自动推导 stop/target（未传入时用默认值）
+            default_rr = self.config.get("default_rr", 2.0)  # 默认盈亏比 2:1
+            if stop is None:
+                stop = price - stop_dist if dir_en == "long" else price + stop_dist
+            if target is None:
+                target = price + stop_dist * default_rr if dir_en == "long" else price - stop_dist * default_rr
+            target_R = round(abs(target - price) / stop_dist, 2)
+
+            # t1 = entry + 1R（默认，若未传）
+            t1_default = price + stop_dist * 1.0 if dir_en == "long" else price - stop_dist * 1.0
 
             position = {
                 "id": f"manual_{int(time.time())}",
@@ -615,10 +752,10 @@ class PaperTradingEngine:
                 "direction_en": dir_en,
                 "lots": lots,
                 "entry_price": round(price, 4),
-                "stop_price": round(float(stop), 4) if stop else None,
-                "target_price": round(float(target), 4) if target else None,
-                "t1_price": None,
-                "t2_price": None,
+                "stop_price": round(float(stop), 4),
+                "target_price": round(float(target), 4),
+                "t1_price": round(t1_default, 4),
+                "t2_price": round(float(target), 4),
                 "stop_dist": round(stop_dist, 4),
                 "target_R": target_R,
                 "open_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -690,6 +827,20 @@ class PaperTradingEngine:
                 pos_copy["current_price"] = round(cur_price, 4)
                 pos_copy["mtm"] = round(mtm, 2)
                 pos_copy["mtm_R"] = round(mtm_R, 3)
+                # 持仓时间
+                hours_held = (time.time() - pos.get("open_ts", time.time())) / 3600.0
+                pos_copy["hours_held"] = round(hours_held, 1)
+                # 时间止盈倒计时
+                if self.config.get("enable_time_exit"):
+                    max_h = self.config.get("time_exit_hours", 72)
+                    pos_copy["time_exit_hours_left"] = round(max(0, max_h - hours_held), 1)
+                # 移动止损模式
+                if pos.get("t1_filled"):
+                    pos_copy["trailing_mode"] = "tail"  # 尾仓模式（宽）
+                elif pos.get("trailing_active"):
+                    pos_copy["trailing_mode"] = "full"  # 全仓模式（紧）
+                else:
+                    pos_copy["trailing_mode"] = "inactive"
                 positions_list.append(pos_copy)
 
             equity = round(self.cash + self.realized_pnl + total_mtm, 2)
@@ -712,8 +863,13 @@ class PaperTradingEngine:
                     "max_lots_per_trade": self.config["max_lots_per_trade"],
                     "default_lots": self.config["default_lots"],
                     "cooldown_minutes": self.config["cooldown_minutes"],
-                    "enable_trailing": self.config["enable_trailing"],
-                    "trailing_lock_R": self.config["trailing_lock_R"],
+                    "enable_trailing": self.config.get("enable_trailing", True),
+                    "trailing_start_R": self.config.get("trailing_start_R", 1.0),
+                    "trailing_lock_R": self.config.get("trailing_lock_R", 0.5),
+                    "trailing_tail_lock_R": self.config.get("trailing_tail_lock_R", 1.5),
+                    "enable_time_exit": self.config.get("enable_time_exit", True),
+                    "time_exit_hours": self.config.get("time_exit_hours", 72),
+                    "time_exit_min_profit_R": self.config.get("time_exit_min_profit_R", 1.0),
                 },
                 "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
