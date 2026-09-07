@@ -174,16 +174,39 @@ def handle_api(handler) -> None:
             resp = {"ok": True, "enabled": result, "state": get_state()}
 
         elif action == "open":
-            ok, msg, pos = _engine.manual_open(
-                symbol=body_json.get("symbol", ""),
-                direction=body_json.get("direction", "多"),
-                lots=int(body_json.get("lots", 1)),
-                price=float(body_json.get("price", 0)),
-                stop=body_json.get("stop"),
-                target=body_json.get("target"),
-                strategy=body_json.get("strategy", "实盘导入"),
-            )
-            resp = {"ok": ok, "msg": msg, "position": pos, "state": get_state()}
+            # C 感知方向门检查（与主账户一致）
+            sym_open = body_json.get("symbol", "")
+            dir_open = body_json.get("direction", "多")
+            _dir_val = 1 if dir_open == "多" else (-1 if dir_open == "空" else 0)
+            _cg_blocked = False
+            _cg_reason = ""
+            try:
+                import four_dim_strategy as _fd_cg_tri
+                from four_dim_strategy import DEFAULT_CONFIG as _TRI_CFG
+                _cg_res = _fd_cg_tri.check_c_gate(sym_open, _dir_val, _TRI_CFG)
+                if not _cg_res["passed"]:
+                    _cg_blocked = True
+                    _cg_reason = _cg_res["reason"]
+            except Exception:
+                pass  # 异常放行
+            if _cg_blocked:
+                resp = {
+                    "ok": False,
+                    "msg": f"开仓被C感知门拦截: {_cg_reason}",
+                    "c_gate": {"passed": False, "reason": _cg_reason},
+                    "state": get_state(),
+                }
+            else:
+                ok, msg, pos = _engine.manual_open(
+                    symbol=sym_open,
+                    direction=dir_open,
+                    lots=int(body_json.get("lots", 1)),
+                    price=float(body_json.get("price", 0)),
+                    stop=body_json.get("stop"),
+                    target=body_json.get("target"),
+                    strategy=body_json.get("strategy", "实盘导入"),
+                )
+                resp = {"ok": ok, "msg": msg, "position": pos, "state": get_state()}
 
         elif action == "close":
             ok, msg, result = _engine.manual_close(

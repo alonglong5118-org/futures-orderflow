@@ -68,12 +68,13 @@
   },
   "backtest_FG_tail500": {
     "symbol": "FG",
-    "trades": 4,
-    "expR": -0.1392,
-    "win_rate": 0.25,
+    "trades": 6,
+    "expR": -0.0865,
+    "win_rate": 0.167,
     "roll_skipped": 0,
     "exit_reasons": {
-      "止损": 3,
+      "止损": 4,
+      "尾仓离场": 1,
       "期末平": 1
     },
     "by_regime_keys": [
@@ -83,22 +84,22 @@
     "trades_max": 8
   },
   "backtest_rb_cooldown5": {
-    "trades": 12,
-    "expR": -0.447,
-    "win_rate": 0.25,
-    "trades_min": 6,
+    "trades": 1,
+    "expR": 1.112,
+    "win_rate": 1.0,
+    "trades_min": 1,
     "trades_max": 24
   },
   "backtest_hc_tail500": {
     "symbol": "hc",
-    "trades": 26,
-    "expR": -0.1394,
-    "win_rate": 0.308,
+    "trades": 16,
+    "expR": 0.0556,
+    "win_rate": 0.375,
     "roll_skipped": 0,
     "exit_reasons": {
-      "止损": 18,
-      "止盈2R": 4,
-      "尾仓离场": 3,
+      "止损": 10,
+      "止盈2R": 3,
+      "尾仓离场": 2,
       "期末平": 1
     },
     "by_regime_keys": [
@@ -111,19 +112,18 @@
   },
   "backtest_rb_tail500": {
     "symbol": "rb",
-    "trades": 12,
-    "expR": -0.447,
-    "win_rate": 0.25,
+    "trades": 1,
+    "expR": 1.112,
+    "win_rate": 1.0,
     "roll_skipped": 2,
     "exit_reasons": {
-      "止损": 9,
-      "尾仓离场": 3
+      "尾仓离场": 1
     },
     "by_regime_keys": [
       "趋势",
       "过渡"
     ],
-    "trades_min": 6,
+    "trades_min": 1,
     "trades_max": 24
   },
   "risk_gate_rb_3500.0_80.0_held3": {

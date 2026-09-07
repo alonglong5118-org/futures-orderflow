@@ -45,10 +45,10 @@ class TestEffectiveParams(unittest.TestCase):
         T_base, bhd = effective_params("pg")
         # 能源 T_thresh = 22
         self.assertEqual(T_base, 22)
-        # 能源 bias_hard = 60 → 趋势=60, 波动=65, 震荡=70
-        self.assertEqual(bhd["趋势"], 60)
-        self.assertEqual(bhd["波动"], 65)
-        self.assertEqual(bhd["震荡"], 70)
+        # 能源 bias_hard_base = 50 → 趋势=50, 波动=55, 震荡=60
+        self.assertEqual(bhd["趋势"], 50)
+        self.assertEqual(bhd["波动"], 55)
+        self.assertEqual(bhd["震荡"], 60)
 
     def test_agriculture_group_lower_bias_hard(self):
         """农产品组 bias_hard 更低（50 vs 黑系 60）"""

@@ -11010,6 +11010,34 @@ def start_dashboard(state):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body.encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/cgate":
+                # C 感知方向门状态：GET ?symbol=ru&direction=1 查询指定品种的闸门状态
+                try:
+                    _q = self.path.split("?", 1)[1] if "?" in self.path else ""
+                    _p = dict(x.split("=", 1) for x in _q.split("&") if "=" in x)
+                    _sym = _p.get("symbol", "")
+                    _dir_raw = _p.get("direction", "1")
+                    try:
+                        _dir = int(_dir_raw)
+                    except (ValueError, TypeError):
+                        _dir = 1 if _dir_raw == "多" else (-1 if _dir_raw == "空" else 1)
+                    
+                    import four_dim_strategy as _fd_cg_api
+                    _cg = _fd_cg_api.check_c_gate(_sym, _dir, _STRAT_CFG)
+                    # 附加上下文：该品种的 c_gate 配置
+                    _mode, _thr = _fd_cg_api.get_c_gate_config(_sym, _STRAT_CFG)
+                    _kline_c = _fd_cg_api.get_kline_C(_sym)
+                    _cg["config"] = {"mode": _mode, "threshold": _thr}
+                    _cg["kline_C"] = _kline_c
+                    
+                    body = json.dumps(_cg, ensure_ascii=False, default=str)
+                except Exception as e:
+                    body = json.dumps({"error": str(e), "passed": True}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
             elif self.path.split("?")[0] == "/api/calibration":
                 # #120 概率校准 + 置信度分层命中率：方向命中率按 |bias_G| 分桶 + 可靠性图 + Brier
                 try:
@@ -12277,6 +12305,27 @@ def start_dashboard(state):
                                 print(f"[journal] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {lots} (系数={_scale})")
                         except Exception as _risk_e:
                             print(f"[journal] ⚠️ 风控检查异常(放行): {_risk_e}")
+                        
+                        # C 感知方向门（oppose_threshold）：T 方向与 kline C 反向时抑制开仓
+                        try:
+                            _dir_val = 1 if direction == "多" else (-1 if direction == "空" else 0)
+                            if _dir_val != 0:
+                                import four_dim_strategy as _fd_cg_j
+                                _cg = _fd_cg_j.check_c_gate(sym, _dir_val, _STRAT_CFG)
+                                if not _cg["passed"]:
+                                    print(f"[journal] 🚫 开仓被C感知门拦截: {_cg['reason']}")
+                                    body = json.dumps(
+                                        {"ok": False, "msg": f"开仓被C感知门拦截: {_cg['reason']}", "c_gate": _cg},
+                                        ensure_ascii=False,
+                                    )
+                                    self.send_response(200)
+                                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                                    self.send_header("Access-Control-Allow-Origin", "*")
+                                    self.end_headers()
+                                    self.wfile.write(body.encode("utf-8"))
+                                    return
+                        except Exception as _cg_e:
+                            print(f"[journal] ⚠️ C感知门检查异常(放行): {_cg_e}")
 
                         stop = body.get("stop")
                         target = body.get("target")
@@ -12488,6 +12537,27 @@ def start_dashboard(state):
                                     )
                             except Exception as _risk_e:
                                 print(f"[trade] ⚠️ 风控检查异常(放行): {_risk_e}")
+                            
+                            # C 感知方向门（oppose_threshold）：T 方向与 kline C 反向时抑制开仓
+                            try:
+                                _dir_val = 1 if body.get("direction") == "多" else (-1 if body.get("direction") == "空" else 0)
+                                if _dir_val != 0:
+                                    import four_dim_strategy as _fd_cg
+                                    _cg = _fd_cg.check_c_gate(sym, _dir_val, _STRAT_CFG)
+                                    if not _cg["passed"]:
+                                        print(f"[trade] 🚫 开仓被C感知门拦截: {_cg['reason']}")
+                                        body = json.dumps(
+                                            {"ok": False, "msg": f"开仓被C感知门拦截: {_cg['reason']}", "c_gate": _cg},
+                                            ensure_ascii=False,
+                                        )
+                                        self.send_response(200)
+                                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                                        self.send_header("Access-Control-Allow-Origin", "*")
+                                        self.end_headers()
+                                        self.wfile.write(body.encode("utf-8"))
+                                        return
+                            except Exception as _cg_e:
+                                print(f"[trade] ⚠️ C感知门检查异常(放行): {_cg_e}")
 
                         a_tail = None
                         _raw_price = body.get("price")

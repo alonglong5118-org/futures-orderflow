@@ -512,7 +512,15 @@ def save_state(st):
 
 
 def _dir_sign(direction):
-    return 1 if direction == "多" else (-1 if direction == "空" else 0)
+    """方向归一化：接受 long/short/多/空/做多/做空/bull/bear 等各种写法"""
+    if not direction:
+        return 0
+    s = str(direction).lower().strip()
+    if s in ("多", "long", "多头", "做多", "bull", "bullish", "buy"):
+        return 1
+    if s in ("空", "short", "空头", "做空", "sell", "bear", "bearish"):
+        return -1
+    return 0
 
 
 def _fmt_price(v):
@@ -1152,8 +1160,14 @@ def snapshot(prices=None):
     positions = []
     total_margin = 0.0
     float_total = 0.0
+    # ★ 2026-09-07 修复：state.positions 的 symbol 大小写可能和 specs 不一致
+    # (如 state["SS"] vs specs["ss"]). 用大小写不敏感查找表避免漏持仓
+    _pos_ci = {}
+    for _sk, _sv in st["positions"].items():
+        _pos_ci[_sk.lower()] = (_sk, _sv)
     for sym, sp in specs.items():
-        pos = st["positions"].get(sym)
+        # state 里的原始 symbol (保留大小写) 用于输出的 "symbol" 字段
+        _state_key, pos = _pos_ci.get(sym.lower(), (sym, None))
         lots = (pos or {}).get("lots", 0) if pos else 0
         mult = sp["multiplier"]
         mrate = sp["margin_rate"]
@@ -1216,7 +1230,7 @@ def snapshot(prices=None):
             cap_value = equity_synced * margin_cap_pct / 100
             positions.append(
                 {
-                    "symbol": sym,
+                    "symbol": _state_key,
                     "name": sp.get("name", sym),
                     "contract": _authoritative_contract(sym, sp.get("contract", sym)),
                     "direction": pos["direction"],
@@ -1236,22 +1250,6 @@ def snapshot(prices=None):
                     "margin_used": round(margin_used, 2),
                     "margin_pct": round(margin_used / equity_synced * 100, 2) if equity_synced > 0 else 0.0,
                     "dist_to_cap": round(cap_value - margin_used, 2) if equity_synced > 0 else 0.0,
-                }
-            )
-        else:
-            positions.append(
-                {
-                    "symbol": sym,
-                    "name": sp.get("name", sym),
-                    "contract": _authoritative_contract(sym, sp.get("contract", sym)),
-                    "direction": "—",
-                    "lots": 0,
-                    "avg": None,
-                    "price": px,
-                    "float_pnl": None,
-                    "margin_used": 0,
-                    "margin_pct": 0.0,
-                    "dist_to_cap": round(equity_synced * margin_cap_pct / 100, 2) if equity_synced > 0 else 0.0,
                 }
             )
     # ★ 所有账户：state 里有 CTP 真实保证金就用真实值覆盖（实盘/模拟盘通用）
@@ -1336,6 +1334,40 @@ def snapshot(prices=None):
     if usage_rate > 100:
         self_check_msg += f"[警告] 资金使用率超过100%: {usage_rate:.1f}%"
 
+
+    # ★ 2026-09-07 防御性断言：防止 direction/持仓/状态文件 3 类 Bug 复发
+    # 如果断言失败，runner 日志会打 WARNING，不会影响主流程
+    import logging as _logging
+    _log = _logging.getLogger('snapshot_invariant')
+    
+    # 检查 1: 所有持仓 direction 能被归一化
+    for _p in positions:
+        _d = str(_p.get('direction', ''))
+        _norm = _d.lower().strip()
+        if _norm not in ('多', '空', 'long', 'short', '中性', ''):
+            _log.warning(f"[INVARIANT] {acc}: {_p.get('symbol')} direction={_d!r} 无法归一化")
+    
+    # 检查 2: 不应有 lots=0 的垃圾 entries
+    _garbage = [_p['symbol'] for _p in positions if _p.get('lots', 0) == 0]
+    if _garbage:
+        _log.warning(f"[INVARIANT] {acc}: 有 {len(_garbage)} 个零持仓垃圾 entries: {_garbage[:5]}")
+    
+    # 检查 3: 输出持仓应该是 state positions 的子集
+    _state_syms = set(_pos_ci.keys())
+    _api_syms = set(_p.get('symbol', '') for _p in positions if _p.get('lots', 0) > 0)
+    _missing = _state_syms - _api_syms
+    if _missing:
+        _log.warning(f"[INVARIANT] {acc}: state 有但 API 没输出的持仓: {_missing}")
+    
+    # 检查 4: 如果有实时价，浮盈亏不应该是 0
+    for _p in positions:
+        if _p.get('lots', 0) > 0 and _p.get('price') is not None and _p.get('price', 0) != 0:
+            _avg = _p.get('avg', 0) or 0
+            if _p['price'] != _avg and _p.get('float_pnl') in (0, 0.0, None):
+                _log.warning(f"[INVARIANT] {acc}: {_p['symbol']} price={_p['price']} avg={_avg} 但 float_pnl={_p.get('float_pnl')}")
+    
+    # 注意: 不能 raise 异常 — 那样会让 API 返回 500，用户看不到数据
+    # 只打 WARNING，让 runner 主流程继续跑
     return {
         "equity": round(dynamic_equity, 2),
         "equity_synced_raw": round(dynamic_equity, 2),

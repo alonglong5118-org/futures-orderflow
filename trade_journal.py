@@ -180,6 +180,11 @@ _FEE_SCHEDULE = {
 }
 
 
+# 回退近似费率（旧口径，仅在 symbol 不在 _FEE_SCHEDULE 时使用）
+_FEE_RATE = {}  # 各品种近似费率（pct）；空 → 全部走 _FEE_DEFAULT
+_FEE_DEFAULT = 0.0001  # 未知品种默认费率（万分之一近似）
+
+
 def _leg_fee(symbol, price, lots, side="open", same_day=False):
     """单边（开或平）手续费。
 

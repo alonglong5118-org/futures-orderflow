@@ -7,6 +7,12 @@ papertrack 评分与状态机**，否则优雅降级为手动记账（不影响�
 
 后端可插拔（account_monitor.json 配 backend）：
   - "tqsdk"  : 天勤/快期 TqAccount（da龘 同款只读账户监控，需 pip install tqsdk）
+              ★ 天勤免费版拦截实盘账户查询（报"需要专业版"），查实盘需专业版 ¥9988/年
+  - "ctp"/"snapshot" : 只读 account_monitor_ctp.json 快照（0 元，绕开天勤付费墙）。
+              快照可由两种 feed 写入，格式一致：
+                · ctp_account_feed.py   —— 直连期货公司 CTP 柜台（需期货公司参数+Linux环境，你目前拿不到参数）
+                · cfmmc_statement_parser.py —— 解析「中国期货市场监控中心 cfmmc.com 每日结算单」
+                  ★ 推荐：完全免费、无需任何期货公司参数、一处查全你名下所有期货公司账户
   - "manual" / 未配置 : 不读取，四维维持手动记账
 
 自动同步逻辑（auto_sync）：
@@ -91,6 +97,8 @@ def get_account():
     backend = cfg.get("backend", "manual")
     if backend == "tqsdk":
         return _get_tqsdk_account(cfg)
+    if backend in ("ctp", "snapshot"):
+        return _get_snapshot_account(cfg)
     # 其他后端可在此扩展
     return None
 
@@ -99,12 +107,34 @@ def _get_tqsdk_account(cfg):
     """TqSdk 只读账户（da龘 同款逻辑）。失败/未装返回 None。"""
     global _last_account, _last_fetch
     try:
-        from tqsdk import TqAccount, TqApi
+        from tqsdk import TqAccount, TqAuth, TqApi
     except Exception:
         print("[账户监控] tqsdk 未安装，跳过自动读取（维持手动记账）")
         return None
     try:
-        api = TqApi(TqAccount(cfg.get("broker_id", ""), cfg.get("account_id", ""), cfg.get("password", "")))
+        # ★ 2026-09-07 修复：TqSdk 3.x 必须先 TqAuth（天勤行情账号）再 TqAccount（期货公司实盘）
+        # 从天勤配置文件读取行情账号（存在 tq_config.json 里）
+        _tq_cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tq_config.json")
+        _tq_username = None
+        _tq_password = None
+        if os.path.exists(_tq_cfg_path):
+            try:
+                _tqc = json.load(open(_tq_cfg_path))
+                _tq_username = _tqc.get("tq_username")
+                _tq_password = _tqc.get("tq_password")
+            except Exception:
+                pass
+        if not _tq_username or not _tq_password:
+            # 回退：从 cfg 本身读
+            _tq_username = cfg.get("tq_username")
+            _tq_password = cfg.get("tq_password")
+        if not _tq_username or not _tq_password:
+            raise Exception("缺少 TqAuth 认证：tq_config.json 里没有 tq_username/tq_password")
+        
+        api = TqApi(
+            auth=TqAuth(_tq_username, _tq_password),
+            account=TqAccount(cfg.get("broker_id", ""), cfg.get("account_id", ""), cfg.get("password", ""))
+        )
         acc = api.get_account()
         pos_obj = api.get_position()
         balance = float(acc.get("balance", 0) or 0)
@@ -199,6 +229,72 @@ def auto_sync(account, prices=None):
             _synced_open.update(synced)
     except Exception as e:
         print(f"[账户监控] 自动同步异常: {repr(e)[:120]}")
+
+
+def _get_snapshot_account(cfg):
+    """快照读取（0 元方案，绕开天勤专业版付费墙）。
+    读 account_monitor_ctp.json —— 该快照格式无关，可由两种 feed 写入：
+      · ctp_account_feed.py        （直连期货公司 CTP 柜台，需参数+Linux）
+      · cfmmc_statement_parser.py  （解析 cfmmc.com 每日结算单，免费、无需参数 ★）
+    不依赖 ctp-python / 天勤，Mac 上零编译风险。找不到快照则降级 None。
+    """
+    global _last_account, _last_fetch
+    ctp_path = cfg.get("ctp_snapshot") or os.path.join(HERE, "account_monitor_ctp.json")
+    if not os.path.exists(ctp_path):
+        print(f"[账户监控] 未找到 CTP 快照 {ctp_path}（ctp_account_feed.py 尚未运行？维持手动记账）")
+        return None
+    try:
+        snap = json.load(open(ctp_path, encoding="utf-8"))
+    except Exception as e:
+        print(f"[账户监控] CTP 快照读取失败: {repr(e)[:120]}（维持手动记账）")
+        return None
+    accounts = snap.get("accounts", [])
+    if not accounts:
+        return None
+    total_balance = total_avail = total_profit = 0.0
+    agg = {}  # (sym, direction) -> {"lots","cost","margin"}
+    for acc in accounts:
+        total_balance += float(acc.get("balance") or 0)
+        total_avail += float(acc.get("available") or 0)
+        total_profit += float(acc.get("profit") or 0)
+        for p in acc.get("positions_raw", []):
+            sym = _map_symbol(p.get("instrument", ""))
+            if not sym:
+                continue
+            direction = p.get("direction", "多")
+            key = (sym, direction)
+            lots = int(p.get("volume") or 0)
+            price = float(p.get("open_price") or 0)
+            margin = float(p.get("margin") or 0)
+            if key not in agg:
+                agg[key] = {"lots": 0, "cost": 0.0, "margin": 0.0}
+            agg[key]["cost"] += price * lots
+            agg[key]["lots"] += lots
+            agg[key]["margin"] += margin
+    positions = []
+    for (sym, direction), v in agg.items():
+        if v["lots"] <= 0:
+            continue
+        avg = (v["cost"] / v["lots"]) if v["lots"] else 0
+        positions.append({
+            "symbol": sym,
+            "pos": v["lots"],
+            "open_price": round(avg, 2),
+            "direction": direction,
+            "margin": round(v["margin"], 2),
+        })
+    snap_out = {
+        "balance": round(total_balance, 2),
+        "available": round(total_avail, 2),
+        "profit": round(total_profit, 2),
+        "positions": positions,
+        "updated": snap.get("updated", ""),
+        "backend": "ctp",
+    }
+    with _lock:
+        _last_account = snap_out
+        _last_fetch = time.time()
+    return snap_out
 
 
 def get_last():

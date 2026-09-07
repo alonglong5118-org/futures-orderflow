@@ -620,6 +620,8 @@ DEFAULT_CONFIG = {
         "fc_hard": 18,  # |bias_FC| 达此且反向 → 硬否决（替代原偏高的 bias_hard）P1-全局: 25→18 长期数据(Δ+0.001R)
         "fc_hard_regime_offset": {"趋势": 0, "波动": 5, "震荡": 10},
         "bias_g_min": 50,  # combined 模式：|bias_G| 达此且 T_5m 弱时亦可触发
+        "c_gate": None,  # C 感知方向门全局开关: None/关闭 | "same_sign" | "oppose_threshold"
+        "c_gate_threshold": 30.0,  # oppose_threshold 模式的 |C| 阈值
     },
     # 背景偏置合成权重（P2-④ 新增，供 OOS 扫参）。默认值与原硬编码 0.6/0.25/0.15 一致。
     "combine_weights": {"T": 0.6, "F": 0.25, "C": 0.15},
@@ -1053,8 +1055,10 @@ DEFAULT_CONFIG = {
             "T_thresh": 34,
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15},
-        },  # 🔧2026-09-07重校准: 28→34 全量数据(+0.779R, 57笔)
-        "sp": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 12→26 全量数据(+0.273R, 50笔)
+            "c_gate": "oppose_threshold",
+            "c_gate_threshold": 30.0,
+        },  # 🔧2026-09-07重校准: 28→34 全量数据(+0.779R, 57笔) + C感知门A档
+        "sp": {"T_thresh": 26, "bias_hard_base": 50, "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 12→26 全量数据(+0.273R, 50笔) + C感知门A档
         # sc: 交易数不足(原油) → 沿用 group 能源
         # ── 上期能源 INE ──
         # ec: 交易数不足(欧线) → 沿用 group 航运
@@ -1069,14 +1073,17 @@ DEFAULT_CONFIG = {
             "T_thresh": 16,
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
-        },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控 | P0: F权重OOS+0.276
+            "c_gate": "oppose_threshold",
+            "c_gate_threshold": 30.0,
+        },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控 | P0: F权重OOS+0.276 + C感知门A档
         "eg": {"T_thresh": 17, "bias_hard_base": 50,
                "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15}},  # P-F: F=0.30→0.15 长期数据(Δ+0.073R)
         "l": {"T_thresh": 34, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15}},  # 🔧2026-09-07重校准: 29→34 全量数据(+0.645R, 45笔)
+               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15},
+               "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 29→34 全量数据(+0.645R, 45笔) + C感知门A档
         "pp": {"T_thresh": 30, "bias_hard_base": 50,
                "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F: F=0.25→0.45 长期数据(Δ+0.127R)
-        "v": {"T_thresh": 20, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 28→20 全量数据(+0.327R, 74笔)
+        "v": {"T_thresh": 20, "bias_hard_base": 50, "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 28→20 全量数据(+0.327R, 74笔) + C感知门A档
         "pg": {"T_thresh": 22, "bias_hard_base": 50,
                "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F 新增: 长期数据(Δ+0.183R)
         "m": {"T_thresh": 12, "bias_hard_base": 50,
@@ -1096,11 +1103,12 @@ DEFAULT_CONFIG = {
         "FG": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 25→34 全量数据(+1.312R, 13笔)
         # SA: 交易数不足(纯碱) → 沿用 group 化工
         "MA": {"T_thresh": 16, "bias_hard_base": 50},  # ✅ OOS+0.161 胜42%
-        "TA": {"T_thresh": 30, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 31→30 全量数据(+0.580R, 108笔)
+        "TA": {"T_thresh": 30, "bias_hard_base": 50, "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 31→30 全量数据(+0.580R, 108笔) + C感知门A档
         "PF": {"T_thresh": 34, "bias_hard_base": 50,
                "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # 🔧2026-09-07重校准: 26→34 全量数据(+1.708R, 13笔)
         "PX": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 新增(+1.229R, 12笔)
-        # SH: 交易数不足(烧碱) → 沿用 group 化工
+        # SH: 交易数不足(烧碱) → 沿用 group 化工 + C感知门A档
+        "SH": {"c_gate": "oppose_threshold", "c_gate_threshold": 30.0},
         "UR": {
             "T_thresh": 12,
             "bias_hard_base": 50,
@@ -1626,6 +1634,111 @@ def precompute_C_array(symbol, date_strs=None, date_ints=None, c_source="dragon"
     except (ValueError, TypeError):
         pass
     return np.zeros(n, dtype=np.float64)
+
+
+# ----------------------------------------------------------------------------
+# C 感知方向门（实盘用）：基于 kline C 的方向闸门
+# ----------------------------------------------------------------------------
+def get_c_gate_config(symbol, cfg=None):
+    """获取品种的 c_gate 配置（品种级覆盖 > 全局 > 默认 None）。
+    返回 (mode, threshold)，mode=None 表示关闭。"""
+    if cfg is None:
+        cfg = DEFAULT_CONFIG
+    bs = cfg.get("bias_synthesis", {}) or {}
+    global_mode = bs.get("c_gate", None)
+    global_thr = float(bs.get("c_gate_threshold", 30.0))
+    
+    sym_cfg = (cfg.get("thresholds_by_symbol", {}) or {}).get(symbol, {}) or {}
+    if "c_gate" in sym_cfg:
+        mode = sym_cfg["c_gate"]
+    else:
+        mode = global_mode
+    if "c_gate_threshold" in sym_cfg:
+        thr = float(sym_cfg["c_gate_threshold"])
+    else:
+        thr = global_thr
+    return mode, thr
+
+
+def get_kline_C(symbol, date_str=None):
+    """获取 kline C 值（从 cflow_kline_cache.json）。
+    无数据返回 0.0，有数据返回 C_score ∈ [-100, 100]。"""
+    d = _load_cflow_kline_cached()
+    if not d:
+        return 0.0
+    try:
+        ckey = symbol.upper()
+        sym = d.get(ckey) or d.get(_CONTRACT_CPOS_KEY.get(symbol.upper(), symbol.upper()))
+        if not sym:
+            return 0.0
+        if date_str:
+            for h in sym.get("history", []):
+                if h.get("date") == date_str and h.get("C_score") is not None:
+                    return float(h["C_score"])
+        v = sym.get("C_score")
+        if v is not None:
+            return float(v)
+    except (ValueError, TypeError):
+        pass
+    return 0.0
+
+
+def check_c_gate(symbol, direction, cfg=None):
+    """C 感知方向门检查（实盘开仓前调用）。
+    
+    参数:
+        symbol: 品种代码
+        direction: 开仓方向 (+1 多 / -1 空)
+        cfg: 策略配置（含 bias_synthesis.c_gate 和品种级覆盖）
+    
+    返回: dict {
+        "passed": bool,       # True=放行, False=拦截
+        "mode": str|None,     # 门模式
+        "c_kline": float,     # 当前 kline C 值
+        "threshold": float,   # 阈值
+        "reason": str,        # 原因
+    }
+    """
+    mode, thr = get_c_gate_config(symbol, cfg)
+    
+    result = {
+        "passed": True,
+        "mode": mode,
+        "c_kline": 0.0,
+        "threshold": thr,
+        "reason": "",
+    }
+    
+    if not mode:
+        result["reason"] = "C感知门未启用"
+        return result
+    
+    c_val = get_kline_C(symbol)
+    result["c_kline"] = c_val
+    
+    if c_val == 0.0:
+        result["reason"] = "无kline C数据，门惰性（放行）"
+        return result
+    
+    blocked = False
+    if mode == "same_sign":
+        # C≠0 且 C 方向与 T 不同向 → 拦截
+        if (c_val > 0 and direction < 0) or (c_val < 0 and direction > 0):
+            blocked = True
+            result["reason"] = f"same_sign门: C={c_val:+.1f} 与方向{direction:+d}反向"
+    elif mode == "oppose_threshold":
+        # C 与 T 反向 且 |C| > 阈值 → 拦截
+        c_sign = 1 if c_val > 0 else -1
+        if c_sign != direction and abs(c_val) > thr:
+            blocked = True
+            result["reason"] = f"oppose门: C={c_val:+.1f} 与方向{direction:+d}反向 (|C|={abs(c_val):.1f}>{thr:.0f})"
+    
+    if blocked:
+        result["passed"] = False
+    else:
+        result["reason"] = f"C感知门通过 (C={c_val:+.1f})"
+    
+    return result
 
 
 # ----------------------------------------------------------------------------
@@ -3830,7 +3943,19 @@ def walk_forward_backtest(
             continue
         i += 1
     if not trades:
-        return {"symbol": symbol, "trades": 0, "note": "无触发信号", "roll_skipped": roll_skipped}
+        return {
+            "symbol": symbol,
+            "name": SYMBOLS[symbol]["name"],
+            "trades": 0,
+            "expR": 0.0,
+            "win_rate": 0.0,
+            "trades_detail": [],
+            "by_regime": {},
+            "exit_reasons": {},
+            "note": "无触发信号",
+            "roll_skipped": roll_skipped,
+            "c_gate_skipped": _c_gate_skipped,
+        }
     Rs = [t["R_adj"] for t in trades]
     wins = [r for r in Rs if r > 0]
     by_regime = {}

@@ -379,16 +379,16 @@ class TestExitPlanTrailingTail(unittest.TestCase):
     """exit_plan 尾仓参数。"""
 
     def test_tail_stop_dist_2R_by_default(self):
-        """尾仓跟踪距离 = 2R（默认 tail_trail_R = 2.0）"""
+        """尾仓跟踪距离 = 3R（默认 tail_trail_R = 3.0，P-S 全局最优）"""
         ep = exit_plan("rb", entry=3500, dir_T=1, atr_val=50, regime="趋势")
-        # 默认 tail_trail_R = 2.0 → tail_stop_dist = 2 * stop_dist
-        expected = 2.0 * ep["stop_dist"]
+        # 默认 tail_trail_R = 3.0 → tail_stop_dist = 3 * stop_dist
+        expected = 3.0 * ep["stop_dist"]
         self.assertAlmostEqual(ep["tail_stop_dist"], expected, places=1)
 
     def test_tail_pct_default_25(self):
-        """尾仓比例默认 25%"""
+        """尾仓比例默认 100%（tail_pct = 1.0）"""
         ep = exit_plan("rb", entry=3500, dir_T=1, atr_val=50, regime="趋势")
-        self.assertEqual(ep["tail_pct"], 0.25)
+        self.assertEqual(ep["tail_pct"], 1.0)
 
     def test_range_tail_disabled_by_trend_only(self):
         """震荡 + trend_only=True → tail_enabled=False"""
