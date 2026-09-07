@@ -3925,6 +3925,8 @@ def walk_forward_backtest(
                 "regime": pipe["regime"],
                 "entry_date": df.index[i + 1],
                 "exit_date": df.index[exit_j],
+                "entry_price": round(float(entry), 4),
+                "stop_dist": round(float(sd), 4),
                 "F": pipe["F"],
                 "T_D": pipe["T_D"],
                 "C": pipe["C"],
