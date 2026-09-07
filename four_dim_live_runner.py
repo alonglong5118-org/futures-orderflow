@@ -9667,6 +9667,8 @@ def _portfolio_recommend(signals, open_positions, state):
 #   "oppose_threshold"→ 仅 |C|>阈值 且反向 才不开（温和，推荐）
 # 缺省 None = 门关闭，零回归。
 _C_GATE_STATS = {"blocked": 0, "passed": 0, "last_blocked": [], "last_log": 0.0}
+# 聊天流去重：仅「新事件」(dir 翻转或 >30min) 推一条，避免门每轮轮询重复刷屏
+_C_GATE_CHAT_LAST = {}
 
 
 def _apply_c_gate(sym, dir_T, today, cfg, now_ts=None):
@@ -9900,6 +9902,47 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         pipe["c_gate_blocked"] = True
                         pipe["c_gate_c_kline"] = round(_cg_c, 1)
                         pipe["c_gate_mode"] = _cg_mode
+                        # —— 前端可见化：记录「资金流背离·已抑制」快照，供面板肉眼验收拦截质量 ——
+                        _dir_lbl = "多" if dir_T > 0 else "空"
+                        _cg_thr = float((_STRAT_CFG.get("bias_synthesis", {}) or {}).get("c_gate_threshold", 30.0))
+                        _cg_reason = ("资金流背离：kline C=%+.1f 与%s信号反向" % (_cg_c, _dir_lbl)) + (
+                            " 且 |C|>%.0f" % _cg_thr if _cg_mode == "oppose_threshold" else "")
+                        _supp = state.setdefault("c_gate_suppressions", {})
+                        _sp = _supp.get(sym)
+                        _supp[sym] = {
+                            "symbol": sym,
+                            "dir": dir_T,
+                            "dir_label": _dir_lbl,
+                            "price": round(float(price), 2) if price else None,
+                            "c_kline": round(_cg_c, 1),
+                            "mode": _cg_mode,
+                            "reason": _cg_reason,
+                            "time": datetime.now().strftime("%H:%M:%S"),
+                            "ts": time.time(),
+                            "count": (_sp.get("count", 0) + 1) if _sp else 1,
+                            "first_ts": _sp.get("first_ts", time.time()),
+                        }
+                        # 聊天流推送（仅「新事件」首条：dir 翻转或 >30min，避免每轮刷屏）
+                        _clast = _C_GATE_CHAT_LAST.get(sym)
+                        if (_clast is None) or (_clast[0] != dir_T) or (time.time() - _clast[1] > 1800):
+                            _C_GATE_CHAT_LAST[sym] = (dir_T, time.time())
+                            try:
+                                append_chat({
+                                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "symbol": sym,
+                                    "name": (SYMBOLS.get(sym) or {}).get("name", sym),
+                                    "direction": _dir_lbl,
+                                    "kind": "signal",
+                                    "signal_type": "资金流背离·已抑制",
+                                    "push_suppressed": True,
+                                    "c_gate_blocked": True,
+                                    "c_gate_c_kline": round(_cg_c, 1),
+                                    "c_gate_mode": _cg_mode,
+                                    "reason": _cg_reason,
+                                    "action_advice": "kline C=%+.1f 逆势，C门已抑制该%s信号（不推送建仓）" % (_cg_c, _dir_lbl),
+                                })
+                            except Exception:
+                                pass
                         # 周期日志（每 10 分钟），便于 live 监控门的实际拦截率
                         _now = time.time()
                         if _now - _C_GATE_STATS["last_log"] > 600:

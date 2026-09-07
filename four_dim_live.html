@@ -958,6 +958,10 @@
   .chat-msg.suppressed .chat-av{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4)}
   .chat-msg.suppressed .chat-bubble{border-color:rgba(245,158,11,.35);opacity:0.9}
   .chat-msg.suppressed .chat-body{color:#f59e0b}
+  .chat-msg.cgate-suppressed .chat-av{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.45)}
+  .chat-msg.cgate-suppressed .chat-bubble{border-color:rgba(239,68,68,.45);opacity:0.96}
+  .chat-msg.cgate-suppressed .chat-body{color:#ef4444}
+  .chat-msg.cgate-suppressed .chat-quick-open{display:none}
   .chat-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:4px}
   .chat-quick-open{
     display:inline-flex;align-items:center;gap:4px;
@@ -3656,6 +3660,13 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <script>/* P1-② 首屏渲染：若 runner 已注入数据则直接显示，否则异步加载 */ (function(){ var g=document.getElementById("gated-box"); if(g && g.innerHTML.indexOf("加载中")>=0){ refreshGatedNotices(); } })();</script>
       </div>
 
+<div class="card" style="margin-top:14px" id="cgate-card">
+        <h2>C门拦截记录 <span class="price">资金流背离·已抑制</span> <span class="price" id="cgate-sub"></span></h2>
+        <div class="stamp" style="margin-bottom:8px">C 感知方向门(oppose_threshold) live 拦截的「逆资金流」信号。门消费 17 年 1 分钟 K 线 proxy 的 kline C，与 T 方向反向且 |C|&gt;阈值(30) 即抑制开仓——用于肉眼验收拦截质量（被拦交易回测 68% 确为亏损单）。仅展示、不推送建仓。</div>
+        <div id="cgate-box">加载中…</div>
+        <script>(function(){ var g=document.getElementById("cgate-box"); if(g && g.innerHTML.indexOf("加载中")>=0){ refreshCGateSuppressions(); } })();</script>
+      </div>
+
       <div class="group-head gh-green gh-flow"><span class="gh-num">⑦</span><span class="gh-title">板块轮动 · 波动率目标 · 流动性</span><span class="gh-intro"><i class="gi-chip"><b>轮动</b>RS 强弱排序 · 四象限动能分类</i><i class="gi-chip"><b>目标</b>波动率目标反推手数建议</i><i class="gi-chip"><b>LaR</b>清仓冲击成本与天数预警</i></span></div>
       <div class="card" id="sector-card">
         <h2>板块强弱轮动排序 <span class="price" id="sector-sub"></span></h2>
@@ -5198,7 +5209,7 @@ function pbRender(){
       const r = p.running_pnl;
       const col = r==null?'#888':(r>=0?'var(--red)':'var(--green)');
       const rs = r==null?'—':((r>=0?'+':'')+r.toFixed(0));
-      const ico = p.dir==='多'?'🟢':'🔴';
+      const ico = _normDir(p.dir)==='多'?'🟢':'🔴';
       return '<div class="pb-li"><div style="font-size:16px;opacity:.9">'+ico+'</div><div class="pb-li-main">'+cc(p.symbol)+'<span style="color:var(--mut);font-weight:500;margin-left:6px">'+p.dir+' '+p.lots+'手</span><div class="pb-li-meta">开 '+p.entry+' · 收 '+(p.close_at_date==null?'—':p.close_at_date)+'</div></div><div class="pb-li-pnl" style="color:'+col+'">'+rs+'</div></div>';
     }).join('');
   }
@@ -5742,7 +5753,7 @@ async function refreshCposRank(){
     (d.bullish||[]).forEach((x,i)=>{
       const ccls=x.c_score>0?'pos':(x.c_score<0?'neg':'');
       const arrow=x.net_chg>0?'↑':(x.net_chg<0?'↓':'→');
-      const dcls=x.direction==='多'?'t-long':(x.direction==='空'?'t-short':'t-flat');
+      const d=_normDir(x.direction); const dcls=d==='多'?'t-long':(d==='空'?'t-short':'t-flat');
       up.insertAdjacentHTML('beforeend',
         `<li id="cpr-li-${x.sym}" class="rankli" onclick="locateCard('${x.sym}')"><span>#${i+1} ${symWithCode(x.sym, x.name)} <span class="tag ${dcls}">${x.direction}</span></span>`+
         `<span class="${ccls}"><b>${fmt(x.c_score,1)}</b> · 净${x.net>=0?'+':''}${fmt(x.net/10000,1)}万${arrow}</span></li>`);
@@ -5752,7 +5763,7 @@ async function refreshCposRank(){
     (d.bearish||[]).forEach((x,i)=>{
       const ccls=x.c_score>0?'pos':(x.c_score<0?'neg':'');
       const arrow=x.net_chg>0?'↑':(x.net_chg<0?'↓':'→');
-      const dcls=x.direction==='多'?'t-long':(x.direction==='空'?'t-short':'t-flat');
+      const d=_normDir(x.direction); const dcls=d==='多'?'t-long':(d==='空'?'t-short':'t-flat');
       dn.insertAdjacentHTML('beforeend',
         `<li id="cpr-li-${x.sym}" class="rankli" onclick="locateCard('${x.sym}')"><span>#${i+1} ${symWithCode(x.sym, x.name)} <span class="tag ${dcls}">${x.direction}</span></span>`+
         `<span class="${ccls}"><b>${fmt(x.c_score,1)}</b> · 净${x.net>=0?'+':''}${fmt(x.net/10000,1)}万${arrow}</span></li>`);
@@ -6083,6 +6094,48 @@ async function refreshGatedNotices(){
 }
 
 
+// C门拦截记录渲染（资金流背离·已抑制）：从 /api/state 读 state.c_gate_suppressions
+let _cgateRetry = 0;
+async function refreshCGateSuppressions(){
+  try{
+    const r=await _smartFetch('/api/state');const s=await r.json();
+    const box=document.getElementById('cgate-box');
+    if(!box) return;
+    const sup=(s.c_gate_suppressions)||{};
+    const keys=Object.keys(sup);
+    const sub=document.getElementById('cgate-sub');
+    if(!keys.length){
+      box.innerHTML='<div class="stamp">C门暂未拦截任何信号（今日所有触发均通过资金流校验）</div>';
+      if(sub) sub.textContent='';
+      return;
+    }
+    keys.sort((a,b)=> (sup[b].ts||0)-(sup[a].ts||0));  // 最近拦截靠前
+    box.innerHTML=keys.map(k=>{
+      const x=sup[k];
+      const c=x.c_kline||0;
+      const cColor=c>0?'var(--red)':'var(--green)';   // 涨红跌绿：C>0偏多→红
+      const dirLbl=x.dir_label||'';
+      return '<div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid var(--red);border-radius:8px;padding:10px;margin-bottom:8px">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+          '<span style="font-weight:600">'+x.symbol+'</span>'+
+          '<span style="font-size:12px;color:var(--mut)">'+dirLbl+'</span>'+
+          '<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--red);color:#fff;border:0.5px solid var(--red)">资金流背离·已抑制</span>'+
+        '</div>'+
+        '<div style="font-size:12px;color:var(--mut);line-height:1.6">'+
+          'kline C = <b style="color:'+cColor+'">'+(c>0?'+':'')+c+'</b> ｜ 与'+dirLbl+'信号反向 ｜ 模式 '+(x.mode||'')+'<br>'+
+          '<b style="color:var(--fg)">原因：</b>'+(x.reason||'')+'<br>'+
+          '<span style="font-size:11px;color:var(--mut)">最近 '+(x.time||'')+' ｜ 累计拦截 '+(x.count||1)+' 次</span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    if(sub) sub.textContent='已拦 '+keys.length+' 品种';
+    _cgateRetry=0;
+  }catch(e){
+    if(_cgateRetry<10){ _cgateRetry++; setTimeout(refreshCGateSuppressions,1000); }
+  }
+}
+
+
 // 交易记录相关函数（从Script2移到Script1，确保可用）
 // 防重复提交锁
 let _journalEntryBusy = false;
@@ -6156,9 +6209,18 @@ const DIR_CLS={多:'pos',空:'neg',中性:''};
 // 席位态度榜全局：所选交易日 + 最近一次排名结果（含 by_sym 覆盖卡片）
 let cposSelDate=""; let cposData={by_sym:{},trade_date:""};
 function fmt(v,d=2){return v===null||v===undefined?'—':Number(v).toFixed(d);}
+// ★ 2026-09-07 修复：后端返回 long/short/多/空 各种写法，统一归一化为 '多'/'空'
+function _normDir(d){
+  if(!d) return '中性';
+  const s = String(d).toLowerCase().trim();
+  if(['long','多头','多','做多','bull','bullish','buy'].includes(s)) return '多';
+  if(['short','空头','空','做空','sell','bear','bearish'].includes(s)) return '空';
+  return d;  // 已经是 '多'/'空'/'中性' 原样返回
+}
 function tag(dir){
-  if(dir==='多')return '<span class="tag t-long">多</span>';
-  if(dir==='空')return '<span class="tag t-short">空</span>';
+  const d = _normDir(dir);
+  if(d==='多')return '<span class="tag t-long">多</span>';
+  if(d==='空')return '<span class="tag t-short">空</span>';
   return '<span class="tag t-flat">中性</span>';
 }
 // 2026-08-14：商品名后补「当前生效合约代码」（动态主力/次主力，随换月滚动）。
@@ -6216,7 +6278,7 @@ function formatLevelTd(p, which){
   const price = targets[which];
   if(price == null || price === 0) return '<span class="stamp">—</span>';
   const state = _levelState(p, which);
-  const arrow = p.direction==='多' ? '▲' : '▼';
+  const arrow = _normDir(p.direction)==='多' ? '▲' : '▼';
   const badge = state==='done' ? '<span class="tp-badge done">✓</span>'
               : state==='current' ? '<span class="tp-badge current">●</span>' : '';
   const color_map = {done:'var(--green)', current:'var(--gold)', pending:'var(--txt)'};
@@ -6569,7 +6631,7 @@ function quickOpenPosition(sym, dir){
     // 方向选择器
     const dirSel = document.getElementById('t-dir');
     if(dirSel && dir){
-      const d = dir === '多' ? '多' : (dir === '空' ? '空' : dir);
+      const d = _normDir(dir);
       dirSel.value = d;
       console.log('  ✅ 方向已设置:', d);
     }
@@ -6813,6 +6875,8 @@ async function renderCockpit(){
       const col = (Number(f.score)||0)>=60?'var(--green)':((Number(f.score)||0)>=30?'var(--amber)':'var(--red)');
       return `<div class="ck-li" style="cursor:pointer" onclick="switchTab('focus')"><span class="ck-li-name">${f.name||f.symbol}${c ? ' <span class="ccode">'+c+'</span>' :''}</span><b style="color:${col}">${f.score}</b><span class="ck-li-sub">${f.dir||'—'} · ${(f.pnl_day!=null?((Number(f.pnl_day)>=0?'+':'')+fmt(Number(f.pnl_day))):'—')}</span></div>`;
     }).join('') || '<div class="stamp">无关注品种</div>';
+    // ★ C门拦截记录：随驾驶舱 5s 轮询刷新，肉眼验收资金流背离·已抑制
+    try{ refreshCGateSuppressions(); }catch(e){console.error(e);}
   }catch(e){console.error(e);}}
 function ckSet(id,v,color){ const el=document.getElementById(id); if(!el) return; el.textContent=v; if(color!=null) el.style.color=color; }
 
@@ -7227,7 +7291,7 @@ async function refreshAccount(force){
       let trigType='', trigLabel='';
       const ts = p.trail_state || '';
       if(p.price!=null){
-        const ds=p.direction==='多'?1:-1;
+        const ds=_normDir(p.direction)==='多'?1:-1;
         // 优先读取后端移动止损状态（避免 stop 与 t2 同价时误标为止损）
         if(ts.includes('t2') || ts.includes('达t2')){ trigType='t2'; trigLabel='达t2·全平'; }
         else if(ts.includes('t1') || ts.includes('达t1')){ trigType='t1'; trigLabel='达t1·平半'; }
@@ -7314,7 +7378,7 @@ async function refreshAccountSync(force){
   if(!d.positions||!d.positions.length){ pos.innerHTML='<div class="stamp">无持仓</div>'; }
   else{
     pos.innerHTML=d.positions.map(p=>{
-      const c=p.direction==='多'?'up':'down';
+      const c=_normDir(p.direction)==='多'?'up':'down';
       const fp=p.float_pnl==null?'—':((p.float_pnl>=0?'+':'')+fmt(p.float_pnl));
       const badge=p.mtm_ok?'<span style="color:#27c08a">✓ 实时</span>':`<span style="color:#e8b339">⚠ ${p.mtm_reason||'未盯市'}</span>`;
       return `<div class="logitem"><span class="${c}">${p.symbol} ${p.direction} ${p.lots}手</span> · 现价${fmt(p.price)}/均价${fmt(p.avg)} · 浮${fp} · ${badge}</div>`;
@@ -8284,16 +8348,18 @@ function renderChatFeed(chat){
     if(!isAlert && hc.held){
       const pnlColor=hc.float_pnl!=null?(hc.float_pnl>=0?'#22c55e':'#ef4444'):'#888';
       const pnlText=hc.float_pnl!=null?`${hc.float_pnl>=0?'+':''}${hc.float_pnl}元`:'';
-      holdBadge=`<span class="hold-badge" style="color:${hc.direction==='多'?'#ef4444':'#22c55e'};border:1px solid currentColor;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">📍 已持${hc.direction}${hc.lots}手 ${pnlText}</span>`;
+      holdBadge=`<span class="hold-badge" style="color:${_normDir(hc.direction)==='多'?'#ef4444':'#22c55e'};border:1px solid currentColor;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">📍 已持${_normDir(hc.direction)}${hc.lots}手 ${pnlText}</span>`;
     } else if(!isAlert && hc.held===false && hc.total_positions>0){
       holdBadge=`<span class="hold-badge" style="color:#888;border:1px solid #888;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">📊 组合${hc.total_positions}笔持仓</span>`;
     } else if(!isAlert && hc.held===false && hc.total_positions===0){
       holdBadge=`<span class="hold-badge" style="color:#888;border:1px solid #888;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">🎯 当前空仓</span>`;
     }
     const isSuppressed=!!m.push_suppressed;
+    const isCGateBlocked=!!m.c_gate_blocked;
     let suppReason='';
     if(isSuppressed){
-      if(hc.cross_dir_locked) suppReason='方向锁定';
+      if(isCGateBlocked) suppReason='资金流背离·已抑制';
+      else if(hc.cross_dir_locked) suppReason='方向锁定';
       else if(hc.cooldown) suppReason='平仓冷却期';
       else if(hc.whipsaw) suppReason='来回打脸(Whipsaw)';
       else if(hc.rate_limited) suppReason='频率限制';
@@ -8302,7 +8368,7 @@ function renderChatFeed(chat){
       else if(hc.conflict) suppReason='反向冲突';
       else if(hc.held) suppReason='仓位饱和';
     }
-    const suppBadge=isSuppressed?`<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">🔕 ${suppReason||'已抑制'}</span>`:'';
+    const suppBadge=isSuppressed?`<span style="background:${isCGateBlocked?'#ef4444':'#f59e0b'};color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px;">${isCGateBlocked?'🔴 资金流背离·已抑制':'🔕 '+(suppReason||'已抑制')}</span>`:'';
     const head=isAlert? (m.name + (mcode ? ' <span class="ccode">'+mcode+'</span>' : '') + ' ' + m.direction + ' ' + m.alert_type + suppBadge) : (m.name + (mcode ? ' <span class="ccode">'+mcode+'</span>' : '') + ' ' + m.direction + ' ' + (m.signal_type||'信号') + holdBadge + suppBadge);
     // ★ 2026-08-31: 推送→开仓联动按钮
     const _qoSym = m.symbol || mcode || m.contract || '';
@@ -8313,7 +8379,9 @@ function renderChatFeed(chat){
     const body=isAlert
       ? `持仓 ${m.lots}手，实盘价 ${fmt(m.price)} 触及你的${m.alert_label}位 ${fmt(m.alert_level||m.stop||m.target)}`
       : (isSuppressed
-         ? `<span style="color:#f59e0b;">🔒 信号已抑制 · ${suppReason||'持仓感知'}：${m.action_advice||m.reason||''}</span>`
+         ? (isCGateBlocked
+            ? `<span style="color:#ef4444;">🔴 资金流背离·已抑制：${m.reason||m.action_advice||''}</span>`
+            : `<span style="color:#f59e0b;">🔒 信号已抑制 · ${suppReason||'持仓感知'}：${m.action_advice||m.reason||''}</span>`)
          : `建议 ${m.lots}手 · 开仓 ${fmt(m.price)} / 止损 ${fmt(m.stop)} / t1 ${fmt(m.t1)} / t2 ${fmt(m.target)}`);
     // 行动建议卡片
     let adviceHtml='';
@@ -8346,7 +8414,7 @@ if(!isAlert && m.action_advice){
     const chatSym = m.symbol || m.name || '';
     const chatDir = m.direction || '';
     const chatTime = m.time || '';
-    return `<div class="chat-msg ${isAlert?'alert':'signal'}${isSuppressed?' suppressed':''}" data-sym="${chatSym}" data-dir="${chatDir}" data-time="${chatTime}">
+    return `<div class="chat-msg ${isAlert?'alert':'signal'}${isSuppressed?' suppressed':''}${isCGateBlocked?' cgate-suppressed':''}" data-sym="${chatSym}" data-dir="${chatDir}" data-time="${chatTime}">
       <div class="chat-av">${isAlert?'⚠️':'📡'}</div>
       <div class="chat-bubble">
         <div class="chat-head"><b>${head}</b><span class="chat-time">${m.time}</span>${quickOpenBtn}</div>
@@ -8930,7 +8998,7 @@ async function refreshPaper(){
     const mp=document.getElementById('pp-mtm'); mp.textContent=(d.mtm>=0?'+':'')+d.mtm.toFixed(0); mp.style.color=d.mtm>=0?'var(--red)':'var(--green)';
     const pos=d.positions||{}; const keys=Object.keys(pos);
     box.innerHTML = keys.length ? keys.map(s=>{
-      const p=pos[s]; const col=p.direction==='多'?'var(--red)':'var(--green)';
+      const p=pos[s]; const col=_normDir(p.direction)==='多'?'var(--red)':'var(--green)';
       const cur = (window.LAST_PRICES && LAST_PRICES[s]!=null)? LAST_PRICES[s] : null;
       const kid = 'ppk-'+s;
       return `<div style="border-bottom:.5px solid var(--border)">
