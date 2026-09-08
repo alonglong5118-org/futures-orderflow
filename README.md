@@ -1,63 +1,188 @@
-# Futures OrderFlow · 期货订单流策略系统
+# 三感参谋 · 期货信号决策系统（TriSense Advisor）
 
-> 基于订单流数据的多维度期货量化交易策略框架，集成四维策略、风控管理、回测验证与实盘执行。
+> 顾问式期货信号系统：对活跃品种做 **F / T / C 三维打分 → 四层风控**，
+> 输出「方向 + 手数 + 止损 + T1/T2」，**但绝不自动下单**。
 
-<!-- 项目状态徽章 -->
-<p align="center">
-  <a href="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/test.yml">
-    <img src="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/test.yml/badge.svg?branch=main" alt="Test">
-  </a>
-  <a href="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/code-quality.yml">
-    <img src="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/code-quality.yml/badge.svg?branch=main" alt="Code Quality">
-  </a>
-  <a href="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/security.yml">
-    <img src="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/security.yml/badge.svg?branch=main" alt="Security">
-  </a>
-  <a href="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/codeql.yml">
-    <img src="https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL">
-  </a>
-  <a href="https://codecov.io/gh/alonglong5118-org/futures-orderflow">
-    <img src="https://codecov.io/gh/alonglong5118-org/futures-orderflow/branch/main/graph/badge.svg" alt="codecov">
-  </a>
-  <a href="https://scorecard.dev/viewer/?uri=github.com/alonglong5118-org/futures-orderflow">
-    <img src="https://api.scorecard.dev/projects/github.com/alonglong5118-org/futures-orderflow/badge" alt="OpenSSF Scorecard">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
-  </a>
-</p>
+[![Test](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/test.yml)
+[![Code Quality](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/code-quality.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/code-quality.yml)
+[![Security](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/alonglong5118-org/futures-orderflow/actions/workflows/security.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+---
+
+## ⚠️ 先读这段：它不是什么
+
+**三感参谋不自动下单。** 主链路没有任何下单代码——`TqApi` 仅出现在取数与探针脚本中。
+系统的定位是「顾问」：把三维打分和四层风控的结论摆在你面前，
+**手指最后按下去的人是你**。这是半自动系统的底线，也是本项目的设计前提。
+
+## 📖 命名约定
+
+系统对外只有一个名字：**三感参谋（TriSense Advisor）**。
+
+| 层次 | 用法 |
+|---|---|
+| 对外名 / UI / 文档标题 | 一律「三感参谋」 |
+| 内部代号（`four_dim_*` 文件名、`four_dim` 标识符） | **保留不动**，仅作代码层标识 |
+| 历史文档标题（`四维风控模型 v5/v6.0/v6.1`） | **保留原名不断链**，正文旧称不回改 |
+
+> 说明：「三感参谋」是对外品牌名。代码内实际分层是 **F/T/C 三维打分 + 风控闸门**，
+> 内部仍沿用 `four_dim` 代号——改名收益为零、风险实打实，故不动。
 
 ---
 
 ## 📑 目录
 
-- [特性](#-特性)
-- [快速开始](#-快速开始)
+- [系统定位](#-系统定位)
+- [核心链路](#-核心链路)
+- [风控四层](#-风控四层)
+- [运行形态](#-运行形态)
 - [架构概览](#️-架构概览)
-- [核心模块](#-核心模块)
-- [快速示例](#-快速示例)
+- [品种覆盖](#-品种覆盖)
+- [快速开始](#-快速开始)
 - [测试体系](#-测试体系)
+- [🔒 策略改动铁律](#-策略改动铁律必读)
 - [开发工具](#-开发工具)
-- [CI/CD 流水线](#-cicd-流水线)
-- [性能基准](#-性能基准)
-- [路线图](#-路线图)
-- [常见问题](#-常见问题)
-- [安全](#-安全)
+- [CI/CD](#-cicd)
+- [已知问题](#-已知问题)
 - [贡献指南](#-贡献指南)
-- [社区与支持](#-社区与支持)
 - [许可证](#-许可证)
 
 ---
 
-## ✨ 特性
+## 🎯 系统定位
 
-- **四维策略引擎** — 基于成交量、持仓量、价格、时间四个维度的综合研判
-- **多层风控体系** — 风险门禁、价格保护、一致性监控、仓位管理多重保障
-- **遗传算法优化** — GA 因子挖掘、参数优化、OOS 验证一体化流程
-- **多经纪商适配** — 支持 TqSdk、其他主流期货经纪商接入
-- **回测验证系统** — 完整的回测框架 + 基准回归测试 + 性能基准
-- **实盘监控** — 实时健康检查、账户追踪、异常告警
-- **供应链安全** — SBOM + 漏洞扫描 + 依赖审计，保障软件供应链安全
+每 60 秒对全部活跃品种做一次三维打分与风控裁决，输出可执行的交易建议。
+
+- **品种覆盖**：54 个品种定义 / 7 大板块，11 个被硬禁 → **43 个活跃**
+- **输出**：方向（多/空）、建议手数、止损位、T1/T2 止盈位，附触发理由
+- **不输出**：任何形式的自动委托
+
+---
+
+## 🔬 核心链路
+
+```
+品种日线/5m 数据
+      │
+      ├─ F  基本面偏置 ── 库存/基差/持仓结构等
+      ├─ T  技术触发   ── T_5m 动量打分（主驱动）
+      └─ C  资金确认   ── 成交持仓、资金流向
+      │
+      ▼
+  bias_G = 0.6×T + 0.25×F + 0.15×C        ← 综合打分（combine_bias）
+      │
+      ▼
+  触发判定：|T_5m| ≥ T_thresh_eff
+      │        └─ 阈值经 6 段调制链：regime → HMM → GARCH → 情绪 → 支撑压力 → F/C 同向放宽(0.85)
+      ▼
+  风控四层裁决
+      │
+      ▼
+  输出：方向 + 手数 + 止损 + T1/T2
+```
+
+两个设计值得留意：
+
+1. **`bias_FC` 刻意排除 T**（`four_dim_strategy.py:3175`）——用纯 F/C 做独立否决，
+   避免技术面自我循环论证。
+2. **前视偏差防线干净**：HMM / GARCH / 情绪 / 宏观 / SR 五个调制器严格 live-only，
+   回测时传 `None` 且**永不进入回测路径**（`walk_forward_backtest` 有 assert 锁死）。
+
+---
+
+## 🛡️ 风控四层
+
+| 层次 | 触发条件 | 位置 | 后果 |
+|---|---|---|---|
+| **1. 品种级硬禁** | `DISABLED_SYMBOLS` | `four_dim_strategy.py:251` | 不参与信号评估 |
+| **2. 信号级闸门** | `risk_gate()` 多维度否决 | `four_dim_strategy.py` | 拒绝该笔信号 |
+| **3. 组合级** | VaR / 单笔 ≤1% / 相关性 / 板块集中度 | `portfolio_var` `portfolio_risk_check` `apply_phase4_filters` `dynamic_position_scale` | 缩减手数 |
+| **4. 账户级** | 回撤 15% / 日亏 8% / 连亏 6 笔 | `risk_state_machine.py` `drawdown_guard.py` | 停机 + KillSwitch |
+
+**KillSwitch**：自动触发，人工只能解除，**跨重启不洗白**。
+
+止损/止盈由 `exit_plan()` 计算，受 regime、ATR、支撑阻力、跟踪止损等因子调制。
+
+---
+
+## ⚙️ 运行形态
+
+| 组件 | 端口 | 说明 |
+|---|---|---|
+| **面板 + API** | **8741** | `four_dim_live_runner.py`，80 个 `/api/*` 端点，单端口 |
+| **行情后端** | **8742** | `backend_tqsdk.py`（TqSdk 行情），独立服务 |
+| **常驻** | — | launchd `com.a123.fourdim`，60s 评估周期 |
+
+```bash
+# 手动启动面板
+python3 four_dim_live_runner.py --port 8741
+```
+
+**账户体系**（三套并行，无全局 paper/live 开关）：
+
+| 文件 | 用途 |
+|---|---|
+| `account_state.json` | 真实持仓 |
+| `paper_account.json` | 手动沙盒 |
+| `pti` / `tri` | 模拟跟信号 / 三感参谋实盘跟踪 |
+
+---
+
+## 🏗️ 架构概览
+
+```
+fourd_run/
+├── 🧠 策略层
+│   ├── four_dim_strategy.py       # 核心引擎（内部代号，勿改文件名）
+│   ├── strategy_layer.py          # 策略层管理
+│   ├── sentiment_engine.py        # 情绪引擎
+│   └── ga_*.py                    # 遗传算法优化系列
+│
+├── 🛡️ 风控层
+│   ├── risk_state_machine.py      # 风控状态机（连亏/回撤/全平）
+│   ├── risk_gate_utils.py         # 风险门禁
+│   ├── drawdown_guard.py          # 回撤分档守卫
+│   ├── price_protection.py        # 价格保护
+│   ├── kelly_utils.py             # 凯利仓位
+│   ├── corr_gate_utils.py         # 相关性闸门
+│   └── gap_stop_utils.py          # 缺口止损
+│
+├── 🚀 运行层
+│   ├── four_dim_live_runner.py    # 主运行器 + HTTP 面板（8741）
+│   ├── backend_tqsdk.py           # TqSdk 行情后端（8742）
+│   ├── minishare_live.py          # 迷你行情源
+│   └── dir_utils.py               # 方向归一化唯一真源
+│
+├── 📊 分析层
+│   ├── sr_analyzer.py             # 支撑阻力
+│   ├── regime_hmm.py              # 市场状态 HMM
+│   ├── gbm_garch.py               # 波动率模型
+│   └── calibration.py             # 校准工具
+│
+├── 🔍 监控层
+│   ├── consistency_watchdog.py    # 一致性监控
+│   ├── live_health_check.py       # 实盘健康检查
+│   ├── account_tracker.py         # 账户追踪
+│   └── trade_journal.py           # 交易日志
+│
+├── 🔧 决策工具（tools_*.py）       # 见下方「策略改动铁律」
+├── 🧪 tests/                      # 3187 项测试
+└── ⚙️ .github/workflows/          # 12 个 CI Workflow
+```
+
+---
+
+## 📈 品种覆盖
+
+- 54 个品种定义，7 大板块
+- `DISABLED_SYMBOLS` 11 个（au / i / eg / m / a / b / rr / RM / hc / MA / PR）→ **43 活跃（配置层）**
+- 其中 40 个有足够本地日线数据可回测（2026-09-08 实测）
+- 禁用依据是 `calibration_params.json` 的样本外 `mean_oos`
+
+> 2026-09-08 已用 `tools_disabled_oos_recheck.py` 对 11 个禁用品种做同口径样本外复查，
+> 结论为**全部维持禁用**（禁用品种 pooled +0.1050R vs 活跃 +0.4920R）。
+> 详见 [`docs/禁用品种OOS复查_2026-09-08.md`](docs/禁用品种OOS复查_2026-09-08.md)。
 
 ---
 
@@ -65,494 +190,177 @@
 
 ### 环境要求
 
-- Python **3.10+**
+- Python **3.10+**（本项目在 3.13 上跑测试）
 - 推荐使用虚拟环境（venv / conda）
 
 ### 安装
 
 ```bash
-# 克隆仓库
 git clone https://github.com/alonglong5118-org/futures-orderflow.git
 cd futures-orderflow
-
-# 创建虚拟环境（推荐）
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
-# 安装依赖
-pip install -r requirements.txt      # 运行时依赖
-pip install -r requirements-dev.txt  # 开发依赖（测试、lint 等）
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-### 运行测试
+### 常用命令
 
 ```bash
-# 运行全部单元测试
-python run_tests.py unit --py-only
-
-# 或使用 Makefile
-make test
-
-# 冒烟测试（快速验证，< 1 秒）
-make smoke
+make help            # 查看全部命令
+make smoke           # 冒烟测试（< 1 秒，pre-commit 同款）
+make test            # 全部单元测试
+make all             # 含属性/基准/性能测试
+make quality         # lint + 格式检查
 ```
 
-### 快速体验
-
-```bash
-# 查看可用命令
-make help
-
-# 运行质量检查
-make quality
-
-# 生成覆盖率报告
-make coverage
-```
-
----
-
-## 🏗️ 架构概览
-
-```
-futures-orderflow/
-├── 🧠 策略层
-│   ├── four_dim_strategy.py       # 四维策略核心
-│   ├── strategy_layer.py          # 策略层管理
-│   ├── sentiment_engine.py        # 情绪引擎
-│   └── ga_*.py                    # 遗传算法优化系列
-│
-├── 🛡️  风控层
-│   ├── risk_gate_utils.py         # 风险门禁
-│   ├── risk_state_machine.py      # 风控状态机
-│   ├── price_protection.py        # 价格保护
-│   ├── kelly_utils.py             # 凯利公式仓位管理
-│   └── gap_stop_utils.py          # 缺口止损
-│
-├── 📊 分析层
-│   ├── sr_analyzer.py             # 支撑阻力分析
-│   ├── hidden_pivot.py            # 隐藏枢轴
-│   ├── t_score_utils.py           # T 分数统计
-│   ├── calibration.py             # 校准工具
-│   └── anomaly_scan.py            # 异常扫描
-│
-├── ⚡ 执行层
-│   ├── execution_planner.py       # 执行规划
-│   ├── backend_tqsdk.py           # TqSdk 后端
-│   ├── tick_orderflow.py          # Tick 订单流处理
-│   └── preflight_check.py         # 起飞前检查
-│
-├── 📡 数据层
-│   ├── akshare_live.py            # AkShare 数据源
-│   ├── tushare_live.py            # Tushare 数据源
-│   ├── minishare_feed.py          # 迷你行情源
-│   └── macro_context.py           # 宏观数据
-│
-├── 🔍 监控层
-│   ├── consistency_watchdog.py    # 一致性监控
-│   ├── live_health_check.py       # 实盘健康检查
-│   ├── account_tracker.py         # 账户追踪
-│   ├── trade_journal.py           # 交易日志
-│   └── drawdown_guard.py          # 回撤守护
-│
-├── 🧪 测试
-│   ├── tests/                     # 272+ 测试用例
-│   ├── run_tests.py               # 测试运行器
-│   └── scripts/                   # 工具脚本
-│
-└── ⚙️ CI/CD
-    └── .github/workflows/         # 12 个 CI Workflow
-```
-
----
-
-## 📦 核心模块
-
-### 四维策略
-
-| 模块 | 说明 |
-|---|---|
-| `four_dim_strategy.py` | 四维策略核心引擎 |
-| `four_dim_calibrate.py` | 策略参数校准 |
-| `four_dim_papertrack.py` | 模拟盘运行器 |
-| `four_dim_oos_compare.py` | OOS 样本外对比 |
-
-### 风控体系
-
-| 模块 | 说明 |
-|---|---|
-| `risk_gate_utils.py` | 风险门禁（多维度风险过滤） |
-| `risk_state_machine.py` | 风控状态机（状态驱动风控） |
-| `price_protection.py` | 价格保护（滑点/异常价格检测） |
-| `kelly_utils.py` | 凯利公式仓位计算 |
-| `gap_stop_utils.py` | 缺口止损逻辑 |
-
-### 分析工具
-
-| 模块 | 说明 |
-|---|---|
-| `sr_analyzer.py` | 支撑阻力分析 |
-| `hidden_pivot.py` | 隐藏枢轴点检测 |
-| `t_score_utils.py` | T 分数统计检验 |
-| `calibration.py` | 参数校准工具 |
-| `gbm_garch.py` | GBM-GARCH 波动率模型 |
-| `regime_hmm.py` | 市场状态 HMM 识别 |
-
-### 遗传算法优化
-
-| 模块 | 说明 |
-|---|---|
-| `ga_factor_miner.py` | 因子挖掘 |
-| `ga_six_factor.py` | 六因子模型 |
-| `ga_tpsl_optimizer.py` | 止盈止损优化 |
-| `ga_oos_validation.py` | OOS 验证 |
-| `ga_quality_filter.py` | 质量过滤 |
-
----
-
-## 💡 快速示例
-
-### 风险门禁检查
+### 跑一次单品种回测
 
 ```python
-from risk_gate_utils import RiskGate, RiskGateConfig
+from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
-# 配置风险门禁
-config = RiskGateConfig(
-    max_position=10,  # 最大持仓手数
-    max_daily_loss_pct=0.03,  # 日最大亏损比例 3%
-    max_drawdown_pct=0.10,  # 最大回撤 10%
-    corr_threshold=0.7,  # 相关性阈值
-)
-
-gate = RiskGate(config)
-
-# 检查是否允许开仓
-result = gate.check(
-    signal=my_signal,
-    position=current_position,
-    portfolio=portfolio,
-    market_data=market_data,
-)
-
-if result.passed:
-    execute_order(signal)
-else:
-    print(f"风险门禁拦截: {result.reasons}")
+r = walk_forward_backtest("cu", cfg=DEFAULT_CONFIG, df_in=load_daily("cu"))
+print(r["trades"], r["expR"], r["win_rate"])
 ```
-
-### 凯利仓位计算
-
-```python
-from kelly_utils import kelly_fraction, kelly_position_size
-
-# 计算凯利比例
-fraction = kelly_fraction(
-    win_rate=0.55,  # 胜率 55%
-    win_loss_ratio=1.5,  # 盈亏比 1.5:1
-)
-print(f"凯利仓位: {fraction:.2%}")  # 约 25%
-
-# 计算实际仓位手数
-position_size = kelly_position_size(
-    account_balance=100_000,
-    win_rate=0.55,
-    win_loss_ratio=1.5,
-    contract_value=50_000,
-    kelly_multiplier=0.5,  # 半凯利（更保守）
-)
-print(f"建议仓位: {position_size:.1f} 手")
-```
-
-### 支撑阻力分析
-
-```python
-from sr_analyzer import SRAnalyzer
-
-analyzer = SRAnalyzer(bar_count=200)
-levels = analyzer.detect(bars=kline_data)
-
-for level in levels:
-    print(f"{level.type}: {level.price:.2f} (强度: {level.strength}/5)")
-```
-
-> 💡 更多示例请参考 `tests/` 目录下的测试用例，它们也是很好的用法参考。
 
 ---
 
 ## 🧪 测试体系
 
-### 测试层级
+**3187 项测试，全绿。**
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  性能测试（performance）                        │
-│  基准回归（baseline regression）                │
-│  属性测试（property-based / Hypothesis）        │
+│  性能测试 / 基准回归 / 属性测试（Hypothesis）    │
 ├─────────────────────────────────────────────────┤
-│  集成测试（integration）                        │
-│  · 回测集成 · 管道集成 · 深度集成               │
+│  集成测试（回测 / 管道 / 深度）                  │
 ├─────────────────────────────────────────────────┤
-│  单元测试（unit）                               │
-│  · 90+ 测试模块 · 272+ 测试用例                 │
+│  单元测试（90+ 模块）                            │
 └─────────────────────────────────────────────────┘
 ```
 
-### 常用测试命令
-
 ```bash
-# 快速验证
-make smoke           # 冒烟测试
-make unit            # 单元测试
-
-# 完整测试
-make test            # 全部单元测试
-make integration     # 集成测试
-make all             # 全部测试（含属性/基准/性能）
-
-# 质量相关
-make coverage        # 覆盖率报告
-make quality         # lint + format 检查
+make smoke           # 冒烟
+make unit            # 单元
+make integration     # 集成
+make coverage        # 覆盖率
 make flake           # 不稳定测试检测（重跑 3 次）
 ```
 
 ---
 
-## 🔧 开发工具
+## 🔒 策略改动铁律（必读）
 
-### 代码质量
+本项目**改策略/配置前必须遵守**。每一条都是踩过的坑：
 
-```bash
-make lint            # Ruff 全量 lint
-make lint-critical   # 阻塞级 lint（CI 同款）
-make format          # 自动格式化
-make format-check    # 格式检查
-make typecheck       # Mypy 类型检查
-make quality         # 全套质量检查
-```
+1. **禁止用小窗口/单品种下结论**
+   rb 全历史 4207 根 bar 仅 **12 笔**成交；`backtest_rb_tail500` 基线 **trades=1**。
+   1–12 笔上的 expR 差异纯属噪声。
 
-### 安全扫描
+2. **任何策略行为改动，合入前必须跑 `tools_regime_ab.py`**
+   全品种合并 A/B 台，输出 pooled expR + 逐品种胜负 + 符号检验。
+   **p > 0.05 = 无证据 = 默认不改。**
 
-```bash
-make secretscan      # 密钥泄露检测（gitleaks）
-make bandit          # 代码安全扫描（高危）
-make depscan         # 依赖漏洞扫描（pip-audit）
-make security        # 全部安全检查
-```
+3. **「某信号无预测力」≠「删掉它更好」**
+   Layer0 审计只证明 regime 不预测后续收益，但 `regime_coef` 是长期调参的
+   **触发灵敏度**而非预测性倾斜；一并拍平 → 成交数 1658→956（−42%），
+   合并 expR +0.6140R→+0.2809R（**p=0.004 显著恶化**）。
 
-### Git Hooks
+4. **评估脚本必须显式构造双侧配置**
+   不能靠「不打补丁就用模块默认」——曾因回滚后模块默认变回旧值，
+   导致 V0=V1=V2=V3 全相同，A/B 静默失效。
 
-```bash
-make hooks           # 安装 pre-commit / pre-push 钩子
-```
+5. **对照基线必须真的「无处理」**
+   经典 bug：baseline 用 `DEFAULT_CONFIG`，而它自带被测特性 → 差值恒为 0 → 假结论。
 
-pre-commit：单元测试 + 格式检查
-pre-push：回归测试 + 质量检查
+6. **回撤类闸门不能用 R 空间无资本约束的曲线验证**
+   会饱和到 495%，所有成交挤进最高档。
+
+7. **评估口径必须与判死依据一致**
+   禁用依据是 `mean_oos`（样本外），就不能拿全历史实测（含样本内）去比较。
+
+### 决策工具
+
+| 工具 | 用途 |
+|---|---|
+| `tools_regime_ab.py` | **全品种合并配置 A/B 台（改动必跑）** |
+| `tools_ps_true_oos.py` | P-S 黑名单干净 OOS 三组对照 |
+| `tools_disabled_oos_recheck.py` | 禁用品种解禁复查台 |
+| `tools_oos_ps_revalidation.py` | P-S OOS 重验（已修基线污染 bug） |
+| `tools_roll_guardian_paper.py` | 移仓护卫历史回测 |
 
 ---
 
-## 🏭 CI/CD 流水线
+## 🔧 开发工具
 
-项目配置了 12 个 GitHub Actions Workflow：
+```bash
+# 代码质量
+make lint            # Ruff 全量 lint
+make format          # 自动格式化
+make typecheck       # Mypy
 
-| Workflow | 触发 | 说明 |
-|---|---|---|
-| **test.yml** | push / PR / merge_queue | 多平台 × 多 Python 版本测试矩阵 |
-| **code-quality.yml** | push / PR | Ruff lint、格式检查、命名规范 |
-| **security.yml** | push / PR | 密钥扫描、依赖审计、代码安全 |
-| **codeql.yml** | push / schedule | CodeQL 语义分析 |
-| **scorecard.yml** | schedule / push | OpenSSF Scorecard 安全评分 |
-| **benchmark.yml** | push / 手动 / PR 评论 | 性能基准测试 + 趋势追踪 |
-| **sbom.yml** | push / release | SBOM 生成 + 漏洞扫描 |
-| **release-drafter.yml** | push / PR / tag | 自动发布日志 + 版本管理 |
-| **pr-automation.yml** | PR | Size 标签、自动分配、标题检查 |
-| **nightly.yml** | schedule | 夜间全量测试 + 覆盖率检查 |
-| **stale.yml** | schedule | 过期 Issue/PR 清理 |
-| **cleanup-branches.yml** | push | 已合并分支清理 |
+# 安全扫描
+make secretscan      # 密钥泄露检测（gitleaks）
+make bandit          # 代码安全扫描
+make depscan         # 依赖漏洞扫描
+
+# Git Hooks
+make hooks           # 安装 pre-commit / pre-push
+```
+
+pre-commit：单元测试 + 格式检查　|　pre-push：回归测试 + 质量检查
+
+---
+
+## 🏭 CI/CD
+
+12 个 GitHub Actions Workflow：`test` / `code-quality` / `security` / `codeql` /
+`scorecard` / `benchmark` / `sbom` / `release-drafter` / `pr-automation` /
+`nightly` / `stale` / `cleanup-branches`。
 
 在 PR 中评论 `/benchmark` 可手动触发性能基准对比。
 
 ---
 
-## 📈 性能基准
+## ⚠️ 已知问题
 
-项目内置性能基准测试，追踪核心函数性能变化：
-
-```bash
-# 运行性能基准
-make perf
-
-# 严格模式（退化超过阈值则失败）
-make bench-strict
-
-# 更新性能基线
-make bench-update
-
-# 对比两次基准结果
-python scripts/compare_benchmarks.py \
-  --results new.json --baseline old.json
-
-# 查看性能趋势
-python scripts/perf_trend.py chart --trend trend.json --benchmark "risk_gate"
-```
+| 问题 | 状态 |
+|---|---|
+| **`feature_flags.json` 半接线** — `drawdown_guard` / `kill_switch` 两个开关无人读取，UI 切换无效（模块本身硬生效） | 待修 |
+| **`recovery_check` 自适应恢复形同虚设** — tail=250 窗口下 10/11 品种因 n<10 无法判定，且 `AUTO_RECOVER_SYMBOLS` 只有 `{"hc"}` | 待专项评估 |
+| **`calibration_params.json` 值陈旧** — 与当前配置脱节，驱动 `/api/edge` 展示 | 待重跑（展示层） |
+| **利润集中** — Top3 品种贡献约 42% 总利润 | 结构性风险 |
 
 ---
 
-## 🗺️ 路线图
+## 🤝 贡献指南
 
-以下是项目的发展规划，按优先级排列。欢迎通过 Issue/PR 参与讨论和贡献。
+请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。**策略类改动请务必先读上方「策略改动铁律」**，
+并附上 `tools_regime_ab.py` 的合并 A/B 结果。
 
-### ✅ 已完成
-
-- [x] 四维策略核心框架
-- [x] 多层风控体系（风险门禁 / 价格保护 / 一致性监控）
-- [x] 遗传算法优化工具链
-- [x] 回测系统 + 基准回归测试
-- [x] TqSdk 实盘接入
-- [x] 完整的 CI/CD 流水线
-- [x] 性能基准测试与趋势追踪
-- [x] SBOM + 供应链安全
-- [x] OpenSSF Scorecard 安全评分
-
-### 🚧 进行中 / 计划中
-
-- [ ] **实盘 Web 监控面板** — 实时行情 + 账户 + 信号可视化
-- [ ] **多策略组合管理** — 多品种/多策略资金分配与风控
-- [ ] **因子库扩展** — 更多订单流因子与情绪因子
-- [ ] **策略文档站** — MkDocs 搭建的完整文档站点
-- [ ] **Docker 化部署** — 一键启动实盘环境
-- [ ] **移动端通知** — 微信 / Telegram / 钉钉告警推送
-- [ ] **机器学习模型** — LSTM / Transformer 辅助信号判断
-
-### 💡 未来探索
-
-- [ ] **多账户管理** — 多账户资金分配与风控隔离
-- [ ] **社区策略市场** — 分享和订阅第三方策略
-- [ ] **云原生部署** — K8s 集群化运行与弹性扩缩
-
-> 有想法？欢迎通过 [Issue](https://github.com/alonglong5118-org/futures-orderflow/issues) 讨论！
+```bash
+git checkout -b feat/your-feature
+make test && make quality
+```
 
 ---
 
 ## ❓ 常见问题
 
-### 这是什么类型的项目？
+**可以直接用于实盘交易吗？**
+本项目是**顾问式决策系统**，不自动下单。信号仅供参考，实盘交易有风险，请充分验证后谨慎使用。
 
-这是一个期货订单流策略框架，基于成交量、持仓量、价格、时间四个维度进行交易决策。它包含策略引擎、风控系统、回测工具和实盘接入。
+**为什么代码里到处是 `four_dim`？**
+内部代号，见[命名约定](#-命名约定)。对外一律称「三感参谋」，代码层不改名。
 
-### 可以直接用于实盘交易吗？
+**支持哪些数据源？**
+TqSdk（`backend_tqsdk.py`）、AkShare（`akshare_live.py`）、Tushare（`tushare_live.py`）、
+迷你行情源（`minishare_live.py`）。
 
-本项目是策略研究和回测框架，实盘功能需要自行配置经纪商接口和参数。**实盘交易有风险，请充分回测和验证后谨慎使用**。
-
-### 支持哪些期货经纪商？
-
-目前主要适配 TqSdk（支持多家期货公司），架构上支持扩展其他经纪商后端。
-
-### 运行环境有什么要求？
-
-- Python 3.10+
-- 操作系统：Linux / macOS / Windows 均可
-- 内存：建议 4GB 以上（回测时需要更多）
-- 实盘需要稳定的网络连接
-
-### 如何贡献自己的策略？
-
-欢迎贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发流程。策略类贡献需要提供：
-1. 清晰的策略逻辑说明
-2. 配套的单元测试
-3. 回测结果验证
-4. 遵循项目代码风格
-
-### 项目使用什么许可证？
-
-MIT 许可证，可自由使用、修改和分发。详见 [LICENSE](LICENSE)。
-
-### 如何报告 Bug 或提出建议？
-
-通过 [GitHub Issues](https://github.com/alonglong5118-org/futures-orderflow/issues) 提交，尽量提供详细的复现步骤和环境信息。
-
----
-
-## 🔒 安全
-
-- **SBOM** — 每次发布生成 SPDX + CycloneDX 双格式软件物料清单
-- **漏洞扫描** — Grype + pip-audit 双重漏洞扫描，高危漏洞阻塞发布
-- **代码安全** — CodeQL + Bandit 静态安全分析
-- **密钥检测** — gitleaks 防止密钥泄露
-- **Scorecard** — OpenSSF Scorecard 供应链安全评分
-- **安全策略** — 参见 [SECURITY.md](SECURITY.md)
-
----
-
-## 📝 贡献指南
-
-我们欢迎所有形式的贡献！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发流程和规范。
-
-### 快速开始贡献
-
-```bash
-# 1. Fork 并克隆
-git clone your-fork-url
-cd futures-orderflow
-
-# 2. 安装开发依赖 + hooks
-make deps
-make hooks
-
-# 3. 创建分支
-git checkout -b feat/your-feature
-
-# 4. 开发 + 测试
-make test
-make quality
-
-# 5. 提交 PR
-```
-
----
-
-## 💬 社区与支持
-
-### 讨论与交流
-
-- **[GitHub Discussions](https://github.com/alonglong5118-org/futures-orderflow/discussions)** — 技术讨论、经验分享、问答
-- **[GitHub Issues](https://github.com/alonglong5118-org/futures-orderflow/issues)** — Bug 报告、功能建议
-
-### 寻求帮助
-
-如果你遇到问题，可以按以下途径寻求帮助：
-
-1. **先看文档** — 检查 README、CONTRIBUTING.md 和相关测试用例
-2. **搜索 Issue** — 搜索是否有人遇到过类似问题
-3. **发起讨论** — 在 Discussions 中发帖提问
-4. **提交 Issue** — 确认是 Bug 后，提交详细的 Issue
-
-提问时请尽量提供：
-- 你在做什么（预期行为）
-- 实际发生了什么
-- 复现步骤（最小可复现示例）
-- 环境信息（Python 版本、操作系统、依赖版本）
-
-### 项目状态
-
-- **维护状态**：活跃开发中
-- **主要维护者**：[@alonglong5118-org](https://github.com/alonglong5118-org)
-- **回复时间**：通常 1-3 个工作日内回复
+**如何报告 Bug？**
+通过 [GitHub Issues](https://github.com/alonglong5118-org/futures-orderflow/issues) 提交。
 
 ---
 
 ## 📄 许可证
 
-本项目基于 [MIT License](LICENSE) 开源。
-
----
-
-## 🙏 致谢
-
-感谢所有为这个项目做出贡献的开发者，以及开源社区提供的优秀工具和库。
-
----
-
-<div align="center">
-  <sub>Built with ❤️ by the futures-orderflow team</sub>
-</div>
+MIT License，详见 [LICENSE](LICENSE)。
