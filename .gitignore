@@ -109,3 +109,10 @@ ga_v*_result/
 
 # ---- MkDocs 文档站构建产物（不入库）----
 site/
+
+# ---- 单实例锁文件（fcntl.flock，进程退出自动释放；残留文件无意义）----
+.oos_lock
+.oos_*_lock
+
+# ---- 版本备份目录（不入库）----
+backup_v*/
