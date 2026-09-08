@@ -122,3 +122,6 @@ data_5m_long
 
 # ---- cfmmc 结算单运行时目录（含真实财务数据；脚本会自动 mkdir）----
 statements/
+
+# ---- data_daily 里的 5m 缓存（27M，data_5m 已有同数据；日线 _*0_daily.csv 需入库，勿忽略）----
+data_daily/*_min5.csv
