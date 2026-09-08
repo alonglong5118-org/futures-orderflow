@@ -137,7 +137,28 @@ def _is_risk_locked(risk_state=None):
 # ----------------------------------------------------------------------------
 # 路径与常量
 # ----------------------------------------------------------------------------
-BACKTEST_DIR = "/Users/ken/WorkBuddy/管住手/2026-07-28-12-52-27/管住手_实盘工作区_Ken/量化回测"
+# 日线 `_XX0_daily.csv` 的来源（54 品种主连日线，当前这份截止 2026-07-24）。
+# 原来是写死在别人 home 目录下的绝对路径：换机器/换账号即失效，干净 checkout 也无法指定数据
+# （pre-push 基线回归因此在任何全新环境必挂）。
+# 解析优先级：① 环境变量 FOURD_BACKTEST_DIR ② 仓库内 data_daily/（非空时）
+# ③ 历史绝对路径兜底 —— 现有部署不做任何设置时行为与改前完全一致。
+_DEFAULT_BACKTEST_DIR = "/Users/ken/WorkBuddy/管住手/2026-07-28-12-52-27/管住手_实盘工作区_Ken/量化回测"
+
+
+def _resolve_backtest_dir():
+    env_dir = os.environ.get("FOURD_BACKTEST_DIR")
+    if env_dir and os.path.isdir(env_dir):
+        return env_dir
+    local_dir = os.path.join(HERE, "data_daily")
+    try:
+        if os.path.isdir(local_dir) and any(f.endswith("0_daily.csv") for f in os.listdir(local_dir)):
+            return local_dir
+    except OSError:
+        pass
+    return _DEFAULT_BACKTEST_DIR
+
+
+BACKTEST_DIR = _resolve_backtest_dir()
 FUNDAMENTALS_JSON = os.path.join(HERE, "fundamentals.json")
 CPOS_JSON = os.path.join(HERE, "cpos_cache.json")
 # score_C 缓存（walk-forward 场景下每根 K 线都调用，缓存可省 40ms+/500bars）
