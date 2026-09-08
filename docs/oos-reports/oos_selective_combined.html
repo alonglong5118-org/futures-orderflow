@@ -1,0 +1,502 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>逐品种 IS/OOS 选择性启用 combined</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2129;--ink:#e6edf3;--mut:#8b98a5;--line:#2a323c;
+--red:#ff5c5c;--grn:#3fb950;--amber:#d29922;--blue:#58a6ff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;padding:24px}
+h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:28px 0 10px;color:var(--blue);border-left:3px solid var(--blue);padding-left:8px}
+.sub{color:var(--mut);font-size:11px}
+.kpis{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;min-width:150px}
+.kpi .v{font-size:24px;font-weight:700} .kpi .l{color:var(--mut);font-size:12px;margin-top:4px}
+.pos{color:var(--red)} .neg{color:var(--grn)}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+th,td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;position:sticky;top:0;background:var(--bg)}
+td.sym{font-weight:700;text-align:left} td.c{color:var(--amber)}
+.gain{color:var(--red);font-weight:700} .loss{color:var(--grn);font-weight:700} .flat{color:var(--mut)}
+td.dec.on{color:var(--red);font-weight:700} td.dec.off{color:var(--mut)}
+.note{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;color:var(--mut);margin:10px 0}
+.note b{color:var(--ink)} .wrap{max-width:1180px;margin:0 auto}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;background:#223;color:var(--blue);margin-right:6px}
+</style></head><body><div class="wrap">
+<h1>逐品种 IS/OOS 选择性启用 combined</h1>
+<div class="sub">三感参谋 · 四维信号系统 · direction_mode 改进候选验证 ｜ 生成于 2026-09-07 07:02</div>
+<div class="kpis">
+<div class="kpi"><div class="v">41</div><div class="l">有效评估品种</div></div>
+<div class="kpi"><div class="v">2</div><div class="l">IS 决定启用 combined</div></div>
+<div class="kpi"><div class="v">+0.756</div><div class="l">选择性策略 OOS 期望R(均值)</div></div>
+<div class="kpi"><div class="v">+0.787</div><div class="l">基线(永远 threshold)</div></div>
+<div class="kpi"><div class="v pos">-0.031</div><div class="l">Δ选择性 − 基线</div></div>
+</div>
+<div class="note">
+<b>方法</b>：对每个有效品种跑两遍 walk-forward 回测（ablate="C"，C=0 中性，纯测 F 参与定方向）。
+按交易日日历切 <b>IS(前 60%)</b> / <b>OOS(后 40%)</b>。
+<b>决策仅看 IS</b>：当 IS 期 combined 与 threshold 交易数均≥12、且 combined IS 期望R − threshold IS 期望R ≥ 0.06、且 combined IS 期望R&gt;0 时，
+才对该品种启用 combined；否则保持 threshold（当前生产默认）。<b>OOS 不参与决策，仅验证</b>。
+<span class="tag">防过拟合</span>护栏避免小样本噪声与"部署 IS 即亏的模式"。
+</div>
+
+<h2>一、组合层面结论</h2>
+<table><tr><th>指标</th><th>选择性策略</th><th>基线(永远 thr)</th><th>朴素(永远 comb)</th><th>Δ选−基</th><th>Δ选−朴素</th></tr>
+<tr><td>OOS 期望R 均值(逐品种)</td><td class="pos">+0.756</td><td>+0.787</td><td>+0.744</td><td class="neg">-0.031</td><td class="pos">+0.012</td></tr>
+<tr><td>OOS 总R 之和(全部品种)</td><td>+444.34</td><td>+449.51</td><td>+401.42</td><td></td><td></td></tr>
+</table>
+<div class="note">
+<b>读图</b>：选择性策略相对<b>基线</b>的 Δ = -0.031（为负=选择性更差）；相对<b>朴素 always-combined</b> 的 Δ = +0.012（为正=结构性优于朴素）。
+关键看 OOS 相对基线：<b class="pos">增益 0</b> / <b class="neg">有损 2</b> / 持平 39——
+本实验<b>增益 0、有损 2</b>，说明选择性策略在 OOS 上<b>未跑赢基线</b>。
+</div>
+
+<h2>二、逐品种明细（按 OOS Δ 排序）</h2>
+<table><thead><tr><th>品种</th><th>名称</th><th>板块</th><th>真实C</th><th>IS edge</th><th>IS决策</th>
+<th>OOS选</th><th>OOS基</th><th>OOS朴素</th><th>Δ选−基</th><th>OOS窗口</th></tr></thead>
+<tbody><tr>
+<td class="sym">rb</td><td>螺纹钢</td><td>黑系</td>
+<td class="">—</td>
+<td>+0.836</td>
+<td class="dec on">启用combined</td>
+<td>+1.078<br><span class="sub">14笔</span></td>
+<td>+1.677<br><span class="sub">9笔</span></td>
+<td>+1.078<br><span class="sub">14笔</span></td>
+<td class="loss">-0.599</td>
+<td class="sub">2019-09-06~2026-06-24</td>
+</tr><tr>
+<td class="sym">PF</td><td>短纤</td><td>化工</td>
+<td class="">—</td>
+<td>+0.060</td>
+<td class="dec on">启用combined</td>
+<td>+0.724<br><span class="sub">18笔</span></td>
+<td>+1.400<br><span class="sub">13笔</span></td>
+<td>+0.724<br><span class="sub">18笔</span></td>
+<td class="loss">-0.676</td>
+<td class="sub">2024-04-09~2026-06-04</td>
+</tr><tr>
+<td class="sym">cu</td><td>沪铜</td><td>有色</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.554<br><span class="sub">22笔</span></td>
+<td>+0.554<br><span class="sub">22笔</span></td>
+<td>+0.554<br><span class="sub">22笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2014-05-07~2020-05-19</td>
+</tr><tr>
+<td class="sym">al</td><td>沪铝</td><td>有色</td>
+<td class="">—</td>
+<td>+0.020</td>
+<td class="dec off">保持threshold</td>
+<td>-0.077<br><span class="sub">21笔</span></td>
+<td>-0.077<br><span class="sub">21笔</span></td>
+<td>-0.077<br><span class="sub">21笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-02-11~2026-07-09</td>
+</tr><tr>
+<td class="sym">zn</td><td>沪锌</td><td>有色</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.432<br><span class="sub">17笔</span></td>
+<td>+0.432<br><span class="sub">17笔</span></td>
+<td>-0.024<br><span class="sub">15笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-10-03~2026-04-10</td>
+</tr><tr>
+<td class="sym">ni</td><td>沪镍</td><td>有色</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>-0.027<br><span class="sub">32笔</span></td>
+<td>-0.027<br><span class="sub">32笔</span></td>
+<td>+0.021<br><span class="sub">35笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2022-02-14~2026-07-21</td>
+</tr><tr>
+<td class="sym">sn</td><td>沪锡</td><td>有色</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+6.547<br><span class="sub">4笔</span></td>
+<td>+6.547<br><span class="sub">4笔</span></td>
+<td>+6.547<br><span class="sub">4笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2019-11-10~2022-10-11</td>
+</tr><tr>
+<td class="sym">ao</td><td>氧化铝</td><td>有色</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.690<br><span class="sub">7笔</span></td>
+<td>+0.690<br><span class="sub">7笔</span></td>
+<td>+0.690<br><span class="sub">7笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2025-05-13~2026-06-22</td>
+</tr><tr>
+<td class="sym">ag</td><td>沪银</td><td>贵金属</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+2.194<br><span class="sub">15笔</span></td>
+<td>+2.194<br><span class="sub">15笔</span></td>
+<td>+2.194<br><span class="sub">15笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2020-07-25~2025-11-11</td>
+</tr><tr>
+<td class="sym">ss</td><td>不锈钢</td><td>黑系</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.141<br><span class="sub">15笔</span></td>
+<td>+0.141<br><span class="sub">15笔</span></td>
+<td>-0.037<br><span class="sub">17笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2023-09-11~2026-02-26</td>
+</tr><tr>
+<td class="sym">bu</td><td>沥青</td><td>能源</td>
+<td class="">—</td>
+<td>-0.047</td>
+<td class="dec off">保持threshold</td>
+<td>-0.191<br><span class="sub">31笔</span></td>
+<td>-0.191<br><span class="sub">31笔</span></td>
+<td>-0.191<br><span class="sub">31笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2021-07-13~2026-07-17</td>
+</tr><tr>
+<td class="sym">fu</td><td>燃油</td><td>能源</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.614<br><span class="sub">37笔</span></td>
+<td>+0.614<br><span class="sub">37笔</span></td>
+<td>+0.614<br><span class="sub">37笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2017-11-12~2026-03-03</td>
+</tr><tr>
+<td class="sym">ru</td><td>橡胶</td><td>化工</td>
+<td class="">—</td>
+<td>-0.003</td>
+<td class="dec off">保持threshold</td>
+<td>+0.308<br><span class="sub">36笔</span></td>
+<td>+0.308<br><span class="sub">36笔</span></td>
+<td>+0.309<br><span class="sub">39笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-01-07~2026-07-09</td>
+</tr><tr>
+<td class="sym">sp</td><td>纸浆</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>-0.274<br><span class="sub">31笔</span></td>
+<td>-0.274<br><span class="sub">31笔</span></td>
+<td>-0.273<br><span class="sub">29笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2023-07-20~2026-06-23</td>
+</tr><tr>
+<td class="sym">ec</td><td>欧线</td><td>航运</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.213<br><span class="sub">4笔</span></td>
+<td>+1.213<br><span class="sub">4笔</span></td>
+<td>+1.213<br><span class="sub">4笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2025-05-28~2026-05-15</td>
+</tr><tr>
+<td class="sym">J</td><td>焦炭</td><td>黑系</td>
+<td class="c">有</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>-1.106<br><span class="sub">1笔</span></td>
+<td>-1.106<br><span class="sub">1笔</span></td>
+<td>-1.106<br><span class="sub">1笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2015-07-11~2016-06-21</td>
+</tr><tr>
+<td class="sym">JM</td><td>焦煤</td><td>黑系</td>
+<td class="c">有</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.161<br><span class="sub">33笔</span></td>
+<td>+0.161<br><span class="sub">33笔</span></td>
+<td>+0.170<br><span class="sub">33笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2021-04-30~2026-07-23</td>
+</tr><tr>
+<td class="sym">eb</td><td>苯乙烯</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.907<br><span class="sub">11笔</span></td>
+<td>+1.907<br><span class="sub">11笔</span></td>
+<td>+1.907<br><span class="sub">11笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2023-12-08~2026-07-15</td>
+</tr><tr>
+<td class="sym">l</td><td>塑料</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.308<br><span class="sub">45笔</span></td>
+<td>+0.308<br><span class="sub">45笔</span></td>
+<td>+0.220<br><span class="sub">47笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-12-26~2026-06-03</td>
+</tr><tr>
+<td class="sym">pp</td><td>聚丙烯</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.434<br><span class="sub">17笔</span></td>
+<td>+0.434<br><span class="sub">17笔</span></td>
+<td>+0.354<br><span class="sub">18笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2021-06-03~2026-02-03</td>
+</tr><tr>
+<td class="sym">v</td><td>PVC</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.027<br><span class="sub">25笔</span></td>
+<td>+1.027<br><span class="sub">25笔</span></td>
+<td>+1.027<br><span class="sub">25笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2019-09-14~2026-05-13</td>
+</tr><tr>
+<td class="sym">pg</td><td>液化气</td><td>能源</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.112<br><span class="sub">11笔</span></td>
+<td>+0.112<br><span class="sub">11笔</span></td>
+<td>-0.165<br><span class="sub">11笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2024-02-14~2026-07-16</td>
+</tr><tr>
+<td class="sym">y</td><td>豆油</td><td>农产品</td>
+<td class="">—</td>
+<td>-0.059</td>
+<td class="dec off">保持threshold</td>
+<td>+0.161<br><span class="sub">74笔</span></td>
+<td>+0.161<br><span class="sub">74笔</span></td>
+<td>-0.044<br><span class="sub">88笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-06-03~2026-07-08</td>
+</tr><tr>
+<td class="sym">p</td><td>棕榈油</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.168<br><span class="sub">104笔</span></td>
+<td>+0.168<br><span class="sub">104笔</span></td>
+<td>+0.191<br><span class="sub">108笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2019-02-25~2026-07-20</td>
+</tr><tr>
+<td class="sym">c</td><td>玉米</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.179<br><span class="sub">15笔</span></td>
+<td>+1.179<br><span class="sub">15笔</span></td>
+<td>+1.305<br><span class="sub">15笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2017-10-03~2026-01-09</td>
+</tr><tr>
+<td class="sym">cs</td><td>淀粉</td><td>农产品</td>
+<td class="">—</td>
+<td>-0.178</td>
+<td class="dec off">保持threshold</td>
+<td>+0.698<br><span class="sub">20笔</span></td>
+<td>+0.698<br><span class="sub">20笔</span></td>
+<td>+0.452<br><span class="sub">21笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2022-01-01~2026-07-09</td>
+</tr><tr>
+<td class="sym">jd</td><td>鸡蛋</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.661<br><span class="sub">8笔</span></td>
+<td>+1.661<br><span class="sub">8笔</span></td>
+<td>+1.661<br><span class="sub">8笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2021-06-21~2026-04-23</td>
+</tr><tr>
+<td class="sym">lh</td><td>生猪</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.125<br><span class="sub">11笔</span></td>
+<td>+1.125<br><span class="sub">11笔</span></td>
+<td>+0.795<br><span class="sub">13笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2024-07-31~2026-06-30</td>
+</tr><tr>
+<td class="sym">FG</td><td>玻璃</td><td>化工</td>
+<td class="c">有</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.385<br><span class="sub">14笔</span></td>
+<td>+0.385<br><span class="sub">14笔</span></td>
+<td>+0.385<br><span class="sub">14笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2021-02-24~2026-06-08</td>
+</tr><tr>
+<td class="sym">SA</td><td>纯碱</td><td>化工</td>
+<td class="c">有</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+1.186<br><span class="sub">5笔</span></td>
+<td>+1.186<br><span class="sub">5笔</span></td>
+<td>+1.186<br><span class="sub">5笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2023-12-07~2026-06-05</td>
+</tr><tr>
+<td class="sym">TA</td><td>PTA</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.632<br><span class="sub">40笔</span></td>
+<td>+0.632<br><span class="sub">40笔</span></td>
+<td>+0.632<br><span class="sub">40笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-10-28~2026-07-09</td>
+</tr><tr>
+<td class="sym">PX</td><td>对二甲苯</td><td>化工</td>
+<td class="">—</td>
+<td>-0.062</td>
+<td class="dec off">保持threshold</td>
+<td>+2.171<br><span class="sub">4笔</span></td>
+<td>+2.171<br><span class="sub">4笔</span></td>
+<td>+4.396<br><span class="sub">3笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2025-07-25~2026-06-03</td>
+</tr><tr>
+<td class="sym">SH</td><td>烧碱</td><td>化工</td>
+<td class="">—</td>
+<td>+0.212</td>
+<td class="dec off">保持threshold</td>
+<td>+1.312<br><span class="sub">6笔</span></td>
+<td>+1.312<br><span class="sub">6笔</span></td>
+<td>+0.983<br><span class="sub">3笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2025-06-15~2026-05-21</td>
+</tr><tr>
+<td class="sym">UR</td><td>尿素</td><td>化工</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.040<br><span class="sub">21笔</span></td>
+<td>+0.040<br><span class="sub">21笔</span></td>
+<td>+0.143<br><span class="sub">19笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2023-10-17~2026-06-01</td>
+</tr><tr>
+<td class="sym">SR</td><td>白糖</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.590<br><span class="sub">14笔</span></td>
+<td>+0.590<br><span class="sub">14笔</span></td>
+<td>+0.295<br><span class="sub">16笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-06-16~2026-06-12</td>
+</tr><tr>
+<td class="sym">CF</td><td>棉花</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+2.188<br><span class="sub">30笔</span></td>
+<td>+2.188<br><span class="sub">30笔</span></td>
+<td>+1.929<br><span class="sub">31笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2017-10-24~2026-03-05</td>
+</tr><tr>
+<td class="sym">OI</td><td>菜油</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>-0.031<br><span class="sub">29笔</span></td>
+<td>-0.031<br><span class="sub">29笔</span></td>
+<td>+0.113<br><span class="sub">26笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2018-12-27~2026-07-08</td>
+</tr><tr>
+<td class="sym">PK</td><td>花生</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.156<br><span class="sub">18笔</span></td>
+<td>+0.156<br><span class="sub">18笔</span></td>
+<td>+0.156<br><span class="sub">18笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2024-06-24~2026-07-22</td>
+</tr><tr>
+<td class="sym">AP</td><td>苹果</td><td>农产品</td>
+<td class="">—</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+0.050<br><span class="sub">29笔</span></td>
+<td>+0.050<br><span class="sub">29笔</span></td>
+<td>+0.050<br><span class="sub">29笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2023-02-12~2026-05-13</td>
+</tr><tr>
+<td class="sym">si</td><td>工业硅</td><td>有色</td>
+<td class="">—</td>
+<td>+0.251</td>
+<td class="dec off">保持threshold</td>
+<td>-0.883<br><span class="sub">6笔</span></td>
+<td>-0.883<br><span class="sub">6笔</span></td>
+<td>-0.918<br><span class="sub">8笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2025-03-23~2026-07-22</td>
+</tr><tr>
+<td class="sym">lc</td><td>碳酸锂</td><td>有色</td>
+<td class="">—</td>
+<td>-0.062</td>
+<td class="dec off">保持threshold</td>
+<td>+1.431<br><span class="sub">16笔</span></td>
+<td>+1.431<br><span class="sub">16笔</span></td>
+<td>+1.053<br><span class="sub">17笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">2025-06-07~2026-07-08</td>
+</tr></tbody></table>
+<div class="sub">红=增益 / 绿=有损（A股惯例）。OOS选=选择性策略(启用则取combined，否则threshold)；OOS基=永远threshold；OOS朴素=永远combined。</div>
+
+<h2>三、启用 combined 的品种：IS 增益是否转移到 OOS</h2>
+<table><thead><tr><th>品种</th><th>IS comb</th><th>IS thr</th><th>IS edge</th><th>OOS comb</th><th>OOS thr</th><th>OOS edge</th></tr></thead><tbody><tr>
+<td class="sym">rb</td><td>+1.435<br><span class="sub">32笔</span></td>
+<td>+0.599<br><span class="sub">27笔</span></td>
+<td class="gain">+0.836</td>
+<td>+1.078<br><span class="sub">14笔</span></td>
+<td>+1.677<br><span class="sub">9笔</span></td>
+<td class="loss">-0.599</td>
+</tr><tr>
+<td class="sym">PF</td><td>+0.023<br><span class="sub">27笔</span></td>
+<td>-0.037<br><span class="sub">22笔</span></td>
+<td class="gain">+0.060</td>
+<td>+0.724<br><span class="sub">18笔</span></td>
+<td>+1.400<br><span class="sub">13笔</span></td>
+<td class="loss">-0.676</td>
+</tr></tbody></table>
+<div class="note">
+<b>真赢</b> 0 / <b>假阳</b>(启用却 OOS 不及基线) 2。
+护栏拦下 39 个；其中 6 个若"朴素 always-combined"本更优，但其 IS edge 并不支持启用——
+说明这些品种的 combined 优势同样<b>不可被 IS 预测</b>，进一步印证边缘非平稳（不是护栏误杀，而是根本无法提前识别）。
+</div>
+
+<h2>四、结论与下一步</h2>
+<div class="note">
+1. <b>不要全市场切 combined</b>：朴素 always-combined 的 OOS 期望R 均值 +0.744，弱于基线 +0.787（与前期全样本 Δ=−0.0129 一致）。<br>
+2. <b>选择性启用也救不了 combined</b>：即便加了「IS 决策 + 三道护栏」，选择性策略 OOS 期望R 均值 +0.756，反而<b>低于</b>基线 +0.787（Δ选−基 -0.031）。
+   41 个品种仅 2 个被放行(rb/PF)，而这 2 个在 OOS 全部<b>不及</b>阈值基线（真赢 0 / 假阳 2）——即 IS 增益<b>未转移到 OOS</b>。<br>
+3. <b>根因 = combined 的边缘是非平稳的</b>：以 rb 为例，IS 期 combined 比 threshold 高 <b>+0.836R</b>，OOS 期却低 <b>−0.599R</b>；前期全样本"rb +0.46"只是早段优势的<b>时间平均假象</b>。
+   说明 F/C 当方向决策者带来的增益集中在少数时段，无法被 IS 窗口稳定预测。<br>
+4. <b>生产建议：维持 threshold（现状）</b>。无论是全市场切、还是 IS 选择性启用，combined 都不能在 OOS 上稳定胜出；盲目上线只会拖累（本实验 Δ选−基 -0.031 即证据）。<br>
+5. <b>真正的资金面 C 应走盘中实时 C_flow（tick 订单流）</b>，而非日线龙虎榜回填——日线 C 区间太短无法严格验证，且本实验已 ablate="C" 隔离该短板，纯测 F 定方向仍无稳定增益。<br>
+6. <b>若仍想挖掘</b>：需做「regime-conditional combined」（仅在检测到的特定 regime 下启用）并重新走 IS/OOS 验证，或接实时 tick C_flow 后重测。当前证据不足以支撑任何 combined 上线。
+</div>
+</div></body></html>

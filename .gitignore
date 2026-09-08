@@ -116,3 +116,9 @@ site/
 
 # ---- 版本备份目录（不入库）----
 backup_v*/
+
+# ---- 外挂盘数据软链接（/Volumes/Expansion，他人机器上不一定存在）----
+data_5m_long
+
+# ---- cfmmc 结算单运行时目录（含真实财务数据；脚本会自动 mkdir）----
+statements/
