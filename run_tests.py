@@ -52,6 +52,7 @@ TEST_MODULES = {
     "params": "tests.test_params",
     "strategies": "tests.test_strategies",
     "config": "tests.test_config",
+    "feature_flags_wiring": "tests.test_feature_flags_wiring",
     "weights": "tests.test_weights",
     "flow_aggregator": "tests.test_flow_aggregator",
     "compute_strategy": "tests.test_compute_strategy",
