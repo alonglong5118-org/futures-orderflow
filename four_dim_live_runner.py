@@ -10936,11 +10936,19 @@ def start_dashboard(state):
                     snap["data_age_min"] = round(_age, 1) if _age is not None else None
                     # 组合风险热度（A1/B4）
                     snap["heat"] = compute_heat(prices)
-                    # 累计手续费（交易所基础费率重算后的全量已平仓手续费合计，与 /api/journal 同源）
+                    # ★ 累计手续费优先级：state.fee_total（CTP 同步值）> journal（本地计算）
+                    _state_fee = 0
                     try:
-                        snap["total_fee"] = tj.summary().get("total_fee", 0)
+                        _state_fee = at.load_state().get("fee_total", 0) or 0
                     except Exception:
-                        snap["total_fee"] = 0
+                        pass
+                    if _state_fee > 0:
+                        snap["total_fee"] = _state_fee  # CTP 同步值优先
+                    else:
+                        try:
+                            snap["total_fee"] = tj.summary().get("total_fee", 0)  # 回退 journal 计算
+                        except Exception:
+                            snap["total_fee"] = 0
                     # 换月预警（B2）：给每个持仓挂上距交割月天数与等级，持仓表内联显示
                     try:
                         for _p in snap.get("positions", []):

@@ -1049,8 +1049,12 @@ def snapshot(prices=None):
     positions = []
     total_margin = 0.0
     float_total = 0.0
+    # ★ 大小写不敏感查找表（state 里可能是 'SS' 大写，specs 里是 'ss' 小写）
+    _state_pos_ci = {k.lower(): v for k, v in st["positions"].items()}
     for sym, sp in specs.items():
-        pos = st["positions"].get(sym)
+        pos = st["positions"].get(sym)  # 先精确匹配
+        if pos is None and sym.lower() in _state_pos_ci:
+            pos = _state_pos_ci[sym.lower()]  # 回退：大小写不敏感
         lots = (pos or {}).get("lots", 0) if pos else 0
         mult = sp["multiplier"]
         mrate = sp["margin_rate"]
@@ -1106,7 +1110,7 @@ def snapshot(prices=None):
                     "symbol": sym,
                     "name": sp.get("name", sym),
                     "contract": _authoritative_contract(sym, sp.get("contract", sym)),
-                    "direction": pos["direction"],
+                    "direction": _dir_norm(pos["direction"]),
                     "lots": lots,
                     "avg": avg,
                     "stop": pos.get("stop"),
