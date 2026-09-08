@@ -213,13 +213,22 @@ class TestPipelineHardVeto(unittest.TestCase):
             self.assertTrue(result["hard_veto"], "P-C 回归 bug：F/C 强反向应该触发硬否决，但没有！")
             self.assertFalse(result["triggered"], "硬否决时 triggered 应该为 False")
 
-    def test_weak_fc_reverse_no_veto(self):
-        """F/C 弱反向 → 不触发硬否决"""
+    def test_dual_fc_reverse_veto(self):
+        """F 与 C 同时反向 → 触发硬否决（双因子背离），且**不看幅度**。
+
+        v1.4 起的规则：F、C 两个独立维度同时反向，说明方向判断失去支撑，
+        即便幅度很弱（|F|=|C|=5）也硬否决。原用例（弱反向不否决）已被此规则取代。"""
         df = _make_daily_df(slope=5)
-        # F/C 反向但很弱 → 不够硬否决阈值
-        result = pipeline("rb", df, F_override=-10, c_override=-10)
+        result = pipeline("rb", df, F_override=-5, c_override=-5)
         if result["dir_T"] == 1:
-            self.assertFalse(result["hard_veto"], "弱反向不应该触发硬否决")
+            self.assertTrue(result["hard_veto"], "F/C 双反向应触发硬否决（不论强弱）")
+
+    def test_single_weak_fc_reverse_no_veto(self):
+        """只有 F 或 C 单边弱反向 → 不否决（守住「不是任意反向都否决」的边界）"""
+        df = _make_daily_df(slope=5)
+        result = pipeline("rb", df, F_override=-10, c_override=10)
+        if result["dir_T"] == 1:
+            self.assertFalse(result["hard_veto"], "单边弱反向不应该触发硬否决")
 
     def test_same_direction_no_veto(self):
         """F/C 与 T 同向 → 不否决"""
