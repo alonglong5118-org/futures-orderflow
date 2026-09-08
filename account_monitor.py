@@ -55,34 +55,51 @@ def load_config():
 
 
 def _map_symbol(tqsdk_sym):
-    """tqsdk 合约代码 -> 四维内部 sym。
-    规则：① 优先按完整合约代码映射（CZCE.SA2701 -> 'SA01'，
-            实现逐合约持仓拆卡）；② 否则剥掉月份数字取品种字母
-            （CZCE.FG2609 -> 'FG'、CZCE.SA -> 'SA'、DCE.m|JM2609 -> 'JM'）。"""
+    """CTP/TqSdk 合约代码 -> 四维内部 sym。
+    兼容 3 种格式：①带交易所前缀(CZCE.SA2701/DCE.m|JM2609) ②纯合约(zn2610) ③品种码(SA/JM)。
+    SYMBOLS 是混合大小写字典(ru小写/SA大写)，所以逐轮尝试 upper/lower。"""
     try:
         import re
 
         import four_dim_strategy as fd
 
-        s = str(tqsdk_sym).upper()
-        # 去交易所前缀 (如 DCE.m| / CZCE. / KQ.m@)
-        if "|" in s:
-            s = s.split("|")[-1]
-        if "." in s:
-            s = s.split(".")[-1]
-        code = s.strip()  # e.g. SA2609 / SA / FG2609
-        # ① 逐合约优先：SA2701 -> SA01
-        if code in fd.CONTRACT_SYM_BY_CODE:
-            return fd.CONTRACT_SYM_BY_CODE[code]
-        # ② 品种级（剥月份数字）
-        m = re.match(r"([A-Za-z]+)", code)
+        s = str(tqsdk_sym).strip()
+        # 去交易所前缀
+        for sep in ["|", ".", "@"]:
+            if sep in s:
+                s = s.split(sep)[-1]
+        code_upper = s.upper()
+        code_lower = s.lower()
+        code_stripped = code_upper.strip()
+
+        # ① 逐合约精确映射
+        if code_stripped in fd.CONTRACT_SYM_BY_CODE:
+            return fd.CONTRACT_SYM_BY_CODE[code_stripped]
+
+        # ② 剥月份数字取品种字母（同时尝试 upper 和 lower）
+        m = re.match(r"([A-Za-z]+)", code_stripped)
         if m:
-            key = m.group(1).upper()
-            if key in fd.SYMBOLS:
-                return key
-            # 主连代码（如 JMM->JM, FGM->FG）
-            if key.endswith("M") and key[:-1] in fd.SYMBOLS:
-                return key[:-1]
+            key_upper = m.group(1).upper()
+            key_lower = key_upper.lower()
+            # 主连代码（仅 3+ 字母且以 M 结尾：JMM→JM, RBM→RB, 但不碰 JM/J/SA 等真实品种）
+            if len(key_upper) >= 3 and key_upper.endswith("M"):
+                key_upper = key_upper[:-1]
+                key_lower = key_upper.lower()
+            # 先试大写（SA/JM/J），再试小写（ru/zn/al）
+            if key_upper in fd.SYMBOLS:
+                return key_upper
+            if key_lower in fd.SYMBOLS:
+                return key_lower
+
+        # ③ 兜底：去掉所有数字后剩余字母在 SYMBOLS 里吗
+        letters = re.sub(r"\d+", "", code_stripped)
+        if letters:
+            if letters in fd.SYMBOLS:
+                return letters
+            if letters.upper() in fd.SYMBOLS:
+                return letters.upper()
+            if letters.lower() in fd.SYMBOLS:
+                return letters.lower()
     except Exception:
         pass
     return None
@@ -190,8 +207,15 @@ def _get_tqsdk_account(cfg):
         return None
 
 
-def auto_sync(account, prices=None):
-    """把账户权益/持仓自动同步进 account_tracker + trade_journal。"""
+def auto_sync(account, prices=None, account_id=None):
+    """把账户权益/持仓自动同步进 account_tracker + trade_journal。
+    修正版：同时处理「新开仓 / 已平仓 / 手数变化」三种情况。
+    
+    Args:
+        account: get_account() 返回的快照 dict
+        prices: {sym: price} 实时价 dict
+        account_id: 可选，指定同步到哪个账户（default/live）。None = 当前线程默认
+    """
     if not account:
         return
     prices = prices or {}
@@ -199,36 +223,105 @@ def auto_sync(account, prices=None):
         import account_tracker as at
         import trade_journal as tj
 
-        # 1) 权益同步
+        # 账户隔离：切换到目标账户
+        _prev_account = None
+        if account_id:
+            _prev_account = at.set_account(account_id)
+
+        # 1) 权益同步（覆盖为账户真实余额）
         at.set_equity(account["balance"])
-        # 2) 持仓镜像对账
+
+        # 2) 持仓镜像对账（完整重建：支持加仓/减仓/调仓/反手）
         current = {}  # (sym, direction) -> {lots, price}
         for p in account.get("positions", []):
             key = (p["symbol"], p["direction"])
             current[key] = {"lots": p["pos"], "price": p["open_price"]}
-        with _lock:
-            synced = dict(_synced_open)
-        # 新开仓：账户有、未镜像
-        for key, val in current.items():
+
+        # 也拉 account_state 当前持仓（用于比对和保留风控参数）
+        cur_state = {}
+        try:
+            _st = at.load_state()
+            for _sym, _p in (_st.get("positions") or {}).items():
+                _d = _p.get("direction", "多")
+                cur_state[(_sym, _d)] = _p
+        except Exception:
+            pass
+
+        # 3) 生成对账计划：按品种分组，处理手数变化
+        all_keys = set(current.keys()) | set(cur_state.keys())
+        actions = []  # [(action, key, old_lots, new_lots, info)]
+        for key in all_keys:
             sym, direction = key
-            if key not in synced:
-                tj.record_entry(sym, direction, val["lots"], val["price"], signal_id="auto_account")
-                at.record_trade(sym, "open", direction, val["lots"], val["price"])
-                synced[key] = val
-        # 已平仓：镜像有、账户无
-        for key, val in list(synced.items()):
-            if key not in current:
-                sym, direction = key
-                px = prices.get(sym)
-                if px is not None:
-                    tj.record_exit(sym, direction, val["lots"], px, reason="账户同步平仓")
-                    at.record_trade(sym, "close", direction, val["lots"], px)
-                del synced[key]
+            in_account = key in current
+            in_state = key in cur_state
+            acct_lots = current.get(key, {}).get("lots", 0)
+            state_lots = cur_state.get(key, {}).get("lots", 0)
+
+            if in_account and not in_state:
+                actions.append(("OPEN", key, 0, acct_lots, f"{sym} {direction} 新开 {acct_lots}手"))
+            elif not in_account and in_state:
+                px = prices.get(sym) or cur_state[key].get("avg", 0)
+                actions.append(("CLOSE", key, state_lots, 0, f"{sym} {direction} 全平 {state_lots}手 @{px}"))
+            elif in_account and in_state and acct_lots != state_lots:
+                diff = acct_lots - state_lots
+                px = prices.get(sym) or cur_state[key].get("avg", 0)
+                if diff > 0:
+                    actions.append(("ADD", key, state_lots, acct_lots, f"{sym} {direction} 加仓 +{diff}手 @{px}"))
+                else:
+                    actions.append(("REDUCE", key, state_lots, acct_lots, f"{sym} {direction} 减仓 {diff}手 @{px}"))
+            # else: 完全一致，跳过
+
+        # 4) 执行对账（先平后开，避免保证金不足）
+        closed_count = opened_count = adjusted_count = 0
+        for action in actions:
+            act, key, old_lots, new_lots, info = action
+            sym, direction = key
+            px = prices.get(sym)
+            if px is None and act in ("CLOSE", "REDUCE"):
+                px = cur_state.get(key, {}).get("avg", 0)
+            if act == "CLOSE":
+                if px:
+                    tj.record_exit(sym, direction, old_lots, px, reason="账户同步平仓")
+                    at.record_trade(sym, "close", direction, old_lots, px)
+                    closed_count += 1
+            elif act == "OPEN":
+                new_price = current[key]["price"]
+                tj.record_entry(sym, direction, new_lots, new_price, signal_id="auto_account")
+                at.record_trade(sym, "open", direction, new_lots, new_price)
+                opened_count += 1
+            elif act == "ADD":
+                diff = new_lots - old_lots
+                new_price = current[key]["price"]
+                tj.record_entry(sym, direction, diff, new_price, signal_id="auto_account加仓")
+                at.record_trade(sym, "open", direction, diff, new_price)
+                adjusted_count += 1
+            elif act == "REDUCE":
+                diff = old_lots - new_lots
+                if px:
+                    tj.record_exit(sym, direction, diff, px, reason="账户同步减仓")
+                    at.record_trade(sym, "close", direction, diff, px)
+                    adjusted_count += 1
+
+        if actions:
+            _account_tag = f"[{account_id or at.get_account()}] "
+            print(f"[账户监控] {_account_tag}对账: 新开{opened_count}/平{closed_count}/调整{adjusted_count} ({len(actions)}项)")
+            for a in actions:
+                print(f"    {a[4]}")
+
+        # 5) 更新镜像跟踪（_synced_open）
         with _lock:
             _synced_open.clear()
-            _synced_open.update(synced)
+            for key, val in current.items():
+                _synced_open[key] = val
+
+        # 恢复原账户
+        if _prev_account is not None:
+            at.set_account(_prev_account)
+
     except Exception as e:
-        print(f"[账户监控] 自动同步异常: {repr(e)[:120]}")
+        import traceback
+        print(f"[账户监控] 自动同步异常: {repr(e)[:160]}")
+        traceback.print_exc()
 
 
 def _get_snapshot_account(cfg):
@@ -260,6 +353,27 @@ def _get_snapshot_account(cfg):
         for p in acc.get("positions_raw", []):
             sym = _map_symbol(p.get("instrument", ""))
             if not sym:
+                continue
+            direction = p.get("direction", "多")
+            if "volume_long" in p or "volume_short" in p:
+                lv = int(p.get("volume_long") or 0)
+                sv = int(p.get("volume_short") or 0)
+                if lv > 0:
+                    k = (sym, "多")
+                    px2 = float(p.get("open_price_long") or 0)
+                    mg2 = float(p.get("margin_long") or 0)
+                    agg.setdefault(k, {"lots": 0, "cost": 0.0, "margin": 0.0})
+                    agg[k]["cost"] += px2 * lv
+                    agg[k]["lots"] += lv
+                    agg[k]["margin"] += mg2
+                if sv > 0:
+                    k = (sym, "空")
+                    px2 = float(p.get("open_price_short") or 0)
+                    mg2 = float(p.get("margin_short") or 0)
+                    agg.setdefault(k, {"lots": 0, "cost": 0.0, "margin": 0.0})
+                    agg[k]["cost"] += px2 * sv
+                    agg[k]["lots"] += sv
+                    agg[k]["margin"] += mg2
                 continue
             direction = p.get("direction", "多")
             key = (sym, direction)

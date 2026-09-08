@@ -444,17 +444,18 @@ class TestMapSymbol(unittest.TestCase):
         self.assertEqual(result, "FG")
 
     def test_dce_prefix(self):
-        """大商所前缀 → 转大写后查 SYMBOLS
-        注意：函数内部 .upper() 后匹配，小写品种可能找不到
-        DCE.m2609 → m2609 → M → M 不在 SYMBOLS → None"""
+        """大商所前缀 → 剥交易所与月份后，按 SYMBOLS 混合大小写字典匹配。
+        SYMBOLS 里豆粕是小写 'm'（大写 'M' 不是合法品种），所以逐轮 upper/lower 尝试：
+        DCE.m2609 → m2609 → 'M' 不在 SYMBOLS → 'm' 命中 → 'm'
+        （旧实现只 .upper() 一次 → 返回 None → 该品种持仓映射不上）"""
         result = _map_symbol("DCE.m2609")
-        self.assertIsNone(result)
+        self.assertEqual(result, "m")
 
     def test_shfe_prefix(self):
-        """上期所前缀 → 转大写后查 SYMBOLS
-        SHFE.rb2610 → rb2610 → RB → RB 不在 SYMBOLS → None"""
+        """上期所前缀 → 同理走 upper/lower 双尝试：
+        SHFE.rb2610 → rb2610 → 'RB' 不在 SYMBOLS → 'rb' 命中 → 'rb'"""
         result = _map_symbol("SHFE.rb2610")
-        self.assertIsNone(result)
+        self.assertEqual(result, "rb")
 
     def test_with_pipe_separator(self):
         """带 | 分隔符 → 取最后部分"""
