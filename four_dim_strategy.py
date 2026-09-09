@@ -3335,6 +3335,24 @@ def pipeline(
 # 避免 risk_gate/build_signal 因 KeyError 抛异常拖垮整轮 evaluate（曾致 SA01 崩溃循环）。
 _FALLBACK_SPEC = {"multiplier": 10, "margin_rate": 0.10, "limit_pct": 0.05, "fee": 3.0}
 
+
+def _spec_compat(cfg, symbol):
+    """取品种合约规格，兼容 live config 新版 contract_specs schema。
+
+    live config（trade_config.json）的 contract_specs 已升级为
+    fee_type/fee_exchange/broker_fee 新 schema，**没有旧 fee 键**（元/手口径）；
+    直接 sp["fee"] 会 KeyError → 所有传 live config 的回测全部 0 成交
+    （2026-09-09 /api/sensitivity 假绿根因：异常被吞 → 基线 0 笔 → 全部"稳健"）。
+    处理：缺旧键时用模块默认 spec 补齐（回测口径维持 DEFAULT fee，与历史一致），
+    live 新键照常保留。新 schema 手续费是否进回测属策略数值改动，须另做 A/B。
+    """
+    sp = cfg.get("contract_specs", {}).get(symbol, _FALLBACK_SPEC)
+    if "fee" not in sp or "multiplier" not in sp:
+        base = dict(DEFAULT_CONFIG["contract_specs"].get(symbol) or _FALLBACK_SPEC)
+        base.update(sp)
+        sp = base
+    return sp
+
 # —— #4 fractional-Kelly 仓位缩放：用 walk-forward edge(mean_oos) 放大/缩小风险预算仓位 ——
 _CALIB_CACHE = {}
 
@@ -3703,7 +3721,7 @@ def walk_forward_backtest(
     if len(df) < min_bars + 20:
         return {"symbol": symbol, "trades": 0, "note": "数据不足"}
     n = len(df)
-    sp = cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
+    sp = _spec_compat(cfg, symbol)
     mv, fee = sp["multiplier"], sp["fee"]
 
     # 预提取 numpy 数组：循环内用索引访问代替 .iloc，省 ~15%
@@ -4226,7 +4244,7 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     if len(df5) < 60:
         return {"symbol": symbol, "trades": 0, "note": "1h(resample)不足"}
     n = len(df)
-    sp = cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
+    sp = _spec_compat(cfg, symbol)
     mv, fee = sp["multiplier"], sp["fee"]
 
     # 预提取 numpy 数组：循环内用索引访问代替 .iloc
@@ -4592,7 +4610,7 @@ def _wf_trades_detail(symbol, cfg=DEFAULT_CONFIG, tail=250, min_bars=60, cooldow
             if exit_price is None:
                 exit_price = float(df["close"].iloc[-1])
             R = (exit_price - entry) / sd if dir_T > 0 else (entry - exit_price) / sd
-            sp = cfg["contract_specs"].get(symbol, _FALLBACK_SPEC)
+            sp = _spec_compat(cfg, symbol)
             slip_R = 2 * get_slip_pts(symbol, cfg) / sd if sd > 0 else 0
             fee_R = 2 * sp["fee"] / (sd * sp["multiplier"]) if sd > 0 else 0
             R_adj = R - slip_R - fee_R

@@ -2099,7 +2099,7 @@
     '/api/focus': 5000, '/api/crosscheck': 5000, '/api/health': 5000,
     '/api/notify': 5000, '/api/journal_list': 500, '/api/journal_session': 5000,
     '/api/fund_metrics': 5000, '/api/symbols_meta': 15000, '/api/chat': 15000,
-    '/api/chat_days': 15000, '/api/strategy': 15000, '/api/discipline': 30000,
+    '/api/chat_days': 15000, '/api/discipline': 30000,
     '/api/discipline?list=1': 30000, '/api/discipline?date=': 30000, '/api/discipline?week=': 30000,
     '/api/discipline?month=': 30000, '/api/playback': 30000, '/api/premarket': 30000,
     '/api/sentiment': 5000,
@@ -4220,9 +4220,10 @@ function switchAccount(accountId){
   if(typeof refreshState === 'function') refreshState();
   if(typeof loadAccount === 'function') loadAccount();
 
-  // 重新加载页面（最稳妥的方式，确保所有模块都用新账户数据）
+  // 重新加载页面（必须带账户参数，否则 URL ?account= 会覆盖 localStorage）
   setTimeout(function(){
-    window.location.reload();
+    var base = window.location.pathname;
+    window.location.href = base + '?account=' + accountId;
   }, 200);
 }
 
@@ -5312,6 +5313,7 @@ async function refreshSensitivity(force){
     }
     if(sensTimer){ clearInterval(sensTimer); sensTimer = null; }
     if(j.status === 'error' || !j.ok){ st.textContent = '⚠️ ' + (j.error || '计算失败'); return; }
+    if(j.status === 'empty'){ st.textContent = '⚠️ ' + (j.reason || '基线 0 笔成交，样本不足'); document.getElementById('sens-body').innerHTML = '<div style="opacity:.6">样本不足，结果无效</div>'; return; }
     st.textContent = '✅ 完成 · 聚焦 ' + (j.focus_symbols||[]).join(',');
     const bm = j.base_metrics || {};
     document.getElementById('sens-base').textContent =
@@ -7031,26 +7033,32 @@ function drawMcChart(d){
 async function refreshBacktestViz(){
   try{
     const d=await (await _smartFetch('/api/backtest_viz')).json();
-    document.getElementById('viz-sub').textContent='来源 '+d.source+' · '+d.n+' 笔';
-    document.getElementById('viz-sum').textContent=`${(d.win_rate*100).toFixed(1)}% / ${d.exp_R} / ${d.cum_R} · 最大回撤 ${d.max_dd_pct}%`;
-    drawUnderwater(d.equity||[]);drawScatter(d.scatter||[]);
+    // ★ 2026-09-09 契约修复：/api/backtest_viz 实际由 viz_upgrade.data() 提供，
+    // schema = {n_trades, win_rate(0-100 百分数), total_R, max_dd_R, equity_curve:[{R,cum_R,dd,symbol}]}。
+    // 旧代码按 backtest_viz schema（source/n/exp_R/cum_R/max_dd_pct/equity/scatter）取值 → 全 undefined、胜率×100 显示 3200%。
+    const n=d.n_trades||0, expR=n?d.total_R/n:0;
+    const wr=(d.win_rate!=null) ? (d.win_rate<=1 ? d.win_rate*100 : d.win_rate) : null; // 兼容小数/百分数两种口径
+    const wrStr=(wr==null)?'—':(wr.toFixed(1)+'%');
+    document.getElementById('viz-sub').textContent='来源 '+(d.source||'实盘成交')+' · '+n+' 笔';
+    document.getElementById('viz-sum').textContent=wrStr+' / '+expR.toFixed(3)+'R / '+(d.total_R||0).toFixed(2)+'R · 最大回撤 '+Math.abs(d.max_dd_R||0).toFixed(1)+'R';
+    drawUnderwater(d.equity_curve||[]);drawScatter(d.equity_curve||[]);
   }catch(e){console.error(e);}
 }
 function drawUnderwater(eq){
   const cv=document.getElementById('vizUnderwater');if(!cv||typeof Chart==='undefined')return;
-  const labels=eq.map(e=>e.step);
+  const labels=eq.map((e,i)=>i+1);
   if(window.vizUnderInst){window.vizUnderInst.destroy();}
   window.vizUnderInst=new Chart(cv,{type:'line',data:{labels,datasets:[
-    {label:'权益',data:eq.map(e=>e.eq),borderColor:'#2ed573',borderWidth:2,fill:false,pointRadius:0,yAxisID:'y'},
-    {label:'水下%',data:eq.map(e=>e.dd_pct),borderColor:'#ffa502',borderWidth:1,fill:true,backgroundColor:'rgba(255,165,2,.15)',pointRadius:0,yAxisID:'y1'},
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#aaa'}}},scales:{x:{ticks:{color:'#888'}},y:{position:'left',ticks:{color:'#888'}},y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#888'}}}}});
+    {label:'累计R',data:eq.map(e=>e.cum_R),borderColor:'#2ed573',borderWidth:2,fill:false,pointRadius:0,yAxisID:'y'},
+    {label:'水下R',data:eq.map(e=>e.dd),borderColor:'#ffa502',borderWidth:1,fill:true,backgroundColor:'rgba(255,165,2,.15)',pointRadius:0,yAxisID:'y1'},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#aaa'}}},scales:{x:{ticks:{color:'#888'},title:{display:true,text:'笔序',color:'#888'}},y:{position:'left',ticks:{color:'#888'}},y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#888'}}}}});
 }
-function drawScatter(sc){
+function drawScatter(eq){
   const cv=document.getElementById('vizScatter');if(!cv||typeof Chart==='undefined')return;
   if(window.vizScatterInst){window.vizScatterInst.destroy();}
   window.vizScatterInst=new Chart(cv,{type:'scatter',data:{datasets:[{
-    label:'逐笔R',data:sc.map(s=>({x:s.idx,y:s.R})),
-    pointBackgroundColor:sc.map(s=>s.R>=0?'#ff4757':'#2ed573'),pointRadius:3,
+    label:'逐笔R',data:eq.map((s,i)=>({x:i+1,y:s.R})),
+    pointBackgroundColor:eq.map(s=>s.R>=0?'#ff4757':'#2ed573'),pointRadius:3,
   }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#888'},title:{display:true,text:'笔序',color:'#888'}},y:{ticks:{color:'#888'},title:{display:true,text:'R',color:'#888'}}}}});
 }
 async function refreshPush(){

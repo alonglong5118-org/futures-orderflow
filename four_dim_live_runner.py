@@ -5509,15 +5509,20 @@ def _sens_set_path(cfg, key, val):
     cur[parts[-1]] = val
 
 
-def _sens_agg_backtest(symbols, cfg, tail):
-    """对一组品种跑 walk-forward，聚合组合期望R/累计R/笔数/胜率。"""
+def _sens_agg_backtest(symbols, cfg, tail, errors=None):
+    """对一组品种跑 walk-forward，聚合组合期望R/累计R/笔数/胜率。
+
+    errors: 传入 list 时逐品种异常记录其中（不再静默吞 —— 2026-09-09 教训：
+    KeyError 被吞 → 基线 0 笔 → 全部参数假"稳健"）。"""
     total_R = 0.0
     n_trades = 0
     wins = 0
     for s in symbols:
         try:
             r = fd.walk_forward_backtest(s, cfg, tail=tail)
-        except Exception:
+        except Exception as e:
+            if errors is not None:
+                errors.append(f"{s}: {repr(e)[:80]}")
             r = {"trades": 0}
         if r.get("trades"):
             total_R += r["expR"] * r["trades"]
@@ -5541,14 +5546,15 @@ def _sens_run_thread(symbols, tail):
                     cfg0[k] = v
         except Exception:
             pass
-        base_metrics = _sens_agg_backtest(symbols, cfg0, tail)
+        errors = []
+        base_metrics = _sens_agg_backtest(symbols, cfg0, tail, errors=errors)
         params_out = []
         for p in SENS_PARAMS:
             series = []
             for val in p["values"]:
                 cfg = _sens_deepcopy(cfg0)
                 _sens_set_path(cfg, p["key"], val)
-                m = _sens_agg_backtest(symbols, cfg, tail)
+                m = _sens_agg_backtest(symbols, cfg, tail, errors=errors)
                 series.append(
                     {
                         "value": val,
@@ -5583,6 +5589,12 @@ def _sens_run_thread(symbols, tail):
             "base_metrics": base_metrics,
             "params": params_out,
         }
+        # 诚实标记：基线 0 笔 = 扫描无效，不得呈现"全部稳健"假绿
+        if base_metrics.get("n_trades", 0) == 0:
+            result["status"] = "empty"
+            result["reason"] = "基线 0 笔成交，样本不足，敏感性结果无效" + (f"；异常: {'; '.join(errors[:3])}" if errors else "")
+        if errors:
+            result["errors"] = errors[:10]
         _SENS_CACHE["v"] = result
         _SENS_CACHE["t"] = time.time()
     except Exception as e:
@@ -10917,13 +10929,20 @@ def start_dashboard(state):
                         if _p.get("contract"):
                             _p["contract"] = ml.normalize_contract_code(_p["contract"])
                     # CTP 数据源状态（是否连接到真实账户）
+                    # 注意：account_monitor_ctp.json 只有一份，是 default/模拟盘的手动快照；
+                    # live 账户采用"手动操作→手动记录"模式，没有独立 CTP 快照，必须跳过
                     try:
-                        _ctp_acc = am.get_account()
-                        snap["ctp_connected"] = _ctp_acc is not None
-                        if _ctp_acc:
-                            snap["ctp_balance"] = _ctp_acc.get("balance", 0)
-                        else:
+                        _cur_acc = at.get_account()
+                        if _cur_acc == "live":
+                            snap["ctp_connected"] = False
                             snap["ctp_balance"] = None
+                        else:
+                            _ctp_acc = am.get_account()
+                            snap["ctp_connected"] = _ctp_acc is not None
+                            if _ctp_acc:
+                                snap["ctp_balance"] = _ctp_acc.get("balance", 0)
+                            else:
+                                snap["ctp_balance"] = None
                     except Exception:
                         snap["ctp_connected"] = False
                         snap["ctp_balance"] = None
