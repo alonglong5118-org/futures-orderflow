@@ -7194,6 +7194,20 @@ async function refreshAccount(force){
     const fetchUrl = '/api/account?_t=' + Date.now();
     const r=await _smartFetch(fetchUrl);const a=await r.json();
     _PS_DATA = await _psPromise;
+    // ★ 2026-09-13: account_state 快照 diff —— 手动改 account_state.json（如减仓/改手数）后，
+    // 触发与成交后相同的全量联动刷新，覆盖驾驶舱/持仓/风控/复盘书签同步路径。
+    // 指纹只取结构性字段（持仓 symbol:lots:avg），不取浮动/权益等行情驱动字段，避免行情波动误触发。
+    (function(){
+      var fp = (a.positions||[]).filter(function(p){ return Number(p.lots)>0; })
+        .map(function(p){ return p.symbol+':'+p.lots+':'+p.avg; }).join(',');
+      if(window._lastAccountFp && window._lastAccountFp !== fp){
+        clearTimeout(window._accountFpTimer);
+        window._accountFpTimer = setTimeout(function(){
+          if(typeof refreshAllAfterTrade === 'function') refreshAllAfterTrade(false);
+        }, 800);
+      }
+      window._lastAccountFp = fp;
+    })();
     document.getElementById('a-equity').textContent=fmt(a.equity,0);
     document.getElementById('a-usage').textContent=fmt(a.usage_rate)+'%';
     document.getElementById('a-margin').textContent=fmt(a.total_margin,0);
