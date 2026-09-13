@@ -3189,65 +3189,80 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">②</span><span class="gh-title">数据交叉校验 · 质量</span><span class="gh-intro"><i class="gi-chip"><b>校验</b>多源行情交叉比对 · 覆盖率与结论</i><i class="gi-chip"><b>健康度</b>数据质量监控 · 异常分布与最差品种</i></span></div>
-      <div class="decision-card st-info" id="adv-xs" style="margin-bottom:12px">
-        <h2>多源数据交叉校验 <span class="price">#126</span> <span class="price" id="xs-sub"></span></h2>
+      <details class="detail-card" id="adv-xs" style="margin-bottom:12px">
+        <summary>多源数据交叉校验 <span class="price">#126</span> <span class="price" id="xs-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>时段</span><span id="xs-phase" class="mv">—</span></div>
         <div class="row"><span>校验覆盖</span><span id="xs-cover" class="mv">—</span></div>
         <div class="row"><span>结论</span><span id="xs-summary" class="mv">—</span></div>
         <div id="xs-worst" style="margin-top:6px"></div>
         <div id="xs-table" style="margin-top:8px;font-size:12px"></div>
-      </div>
+        </div>
+      </details>
 
-      <div class="decision-card st-info" id="adv-dq" style="margin-bottom:12px">
-        <h2>数据质量监控 <span class="price">#14</span> <span class="price" id="dq-sub"></span></h2>
+      <details class="detail-card" id="adv-dq" style="margin-bottom:12px">
+        <summary>数据质量监控 <span class="price">#14</span> <span class="price" id="dq-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>整体健康度</span><span id="dq-health" class="mv">—</span></div>
         <div class="row"><span>异常分布</span><span id="dq-counts">—</span></div>
         <div id="dq-worst" style="margin-top:6px"></div>
-      </div>
+        </div>
+      </details>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">③</span><span class="gh-title">事件日历 · 纪律体检</span><span class="gh-intro"><i class="gi-chip"><b>日历</b>宏观数据/事件日历闸门建议</i><i class="gi-chip"><b>体检</b>纪律自动评分 · 违规分布列表</i></span></div>
-      <div class="decision-card st-info" id="adv-cal" style="margin-bottom:12px">
-        <h2>事件 / 数据日历闸门 <span class="price">#13</span> <span class="price" id="cal-sub"></span></h2>
+      <details class="detail-card" id="adv-cal" style="margin-bottom:12px">
+        <summary>事件 / 数据日历闸门 <span class="price">#13</span> <span class="price" id="cal-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>闸门建议</span><span id="cal-gate" class="stamp">—</span></div>
         <div id="cal-list" style="margin-top:6px"></div>
-      </div>
+        </div>
+      </details>
 
-      <div class="decision-card st-info" id="adv-blunder" style="margin-bottom:12px">
-        <h2>纪律自动体检 <span class="price">#12</span> <span class="price" id="blunder-sub"></span></h2>
+      <details class="detail-card" id="adv-blunder" style="margin-bottom:12px">
+        <summary>纪律自动体检 <span class="price">#12</span> <span class="price" id="blunder-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>评分 / 等级</span><span id="blunder-score" class="mv">—</span></div>
         <div class="row"><span>违规分布</span><span id="blunder-counts">—</span></div>
         <div id="blunder-list" style="margin-top:6px"></div>
-      </div>
+        </div>
+      </details>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">④</span><span class="gh-title">蒙特卡洛 · 回测可视化</span><span class="gh-intro"><i class="gi-chip"><b>MC</b>权益曲线 p5/p50/p95 置信区间 · 破产概率</i><i class="gi-chip"><b>回测</b>水下曲线 + 逐笔散点</i></span></div>
-      <div class="decision-card st-info" id="adv-mc" style="margin-bottom:12px">
-        <h2>蒙特卡洛 · 权益曲线置信区间 <span class="price">#11</span> <span class="price" id="mc-sub"></span></h2>
+      <details class="detail-card" id="adv-mc" style="margin-bottom:12px">
+        <summary>蒙特卡洛 · 权益曲线置信区间 <span class="price">#11</span> <span class="price" id="mc-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>终值区间(p5/p50/p95)</span><span id="mc-terminal">—</span></div>
         <div class="row"><span>最大回撤(中位/95分位)</span><span id="mc-maxdd">—</span></div>
         <div class="row"><span>盈利概率 / 破产概率</span><span id="mc-prob">—</span></div>
         <div style="position:relative;width:100%;height:240px"><canvas id="mcChart"></canvas></div>
-      </div>
+        </div>
+      </details>
 
-      <div class="decision-card st-info" id="adv-viz" style="margin-bottom:12px">
-        <h2>回测可视化 · 水下曲线 & 逐笔散点 <span class="price">#17</span> <span class="price" id="viz-sub"></span></h2>
+      <details class="detail-card" id="adv-viz" style="margin-bottom:12px">
+        <summary>回测可视化 · 水下曲线 & 逐笔散点 <span class="price">#17</span> <span class="price" id="viz-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>胜率 / 期望R / 累计R</span><span id="viz-sum">—</span></div>
         <div style="position:relative;width:100%;height:220px"><canvas id="vizUnderwater"></canvas></div>
         <div style="position:relative;width:100%;height:180px;margin-top:8px"><canvas id="vizScatter"></canvas></div>
-      </div>
+        </div>
+      </details>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">⑤</span><span class="gh-title">推送 · 工具箱</span><span class="gh-intro"><i class="gi-chip"><b>推送</b>Telegram/Bark/企业微信测试通道</i><i class="gi-chip"><b>工具</b>真重校准/漂移检测/回测HTML · 后台跑不阻塞</i></span></div>
-      <div class="decision-card st-info" id="adv-push" style="margin-bottom:12px">
-        <h2>手机推送 <span class="price">#15</span> <span class="price" id="push-sub"></span></h2>
+      <details class="detail-card" id="adv-push" style="margin-bottom:12px">
+        <summary>手机推送 <span class="price">#15</span> <span class="price" id="push-sub"></span></summary>
+        <div class="detail-body">
         <div class="row"><span>Telegram / Bark / 企业微信</span><span id="push-status">—</span></div>
         <div class="stamp" style="margin-top:6px">配置方式：在项目目录 push_config.json 填写 token/key，或点下面测试已启用通道。</div>
         <div class="trade" style="margin-top:8px">
           <button onclick="pushTest()">📲 发送测试推送</button>
           <span id="push-msg" class="stamp"></span>
         </div>
-      </div>
+        </div>
+      </details>
 
-      <div class="decision-card st-info" id="adv-tools" style="margin-bottom:12px">
-        <h2>工具箱 · 已接入 CLI <span class="price">#121</span> <span class="price" id="tools-sub"></span></h2>
+      <details class="detail-card" id="adv-tools" style="margin-bottom:12px">
+        <summary>工具箱 · 已接入 CLI <span class="price">#121</span> <span class="price" id="tools-sub"></span></summary>
+        <div class="detail-body">
         <div class="stamp" style="margin-bottom:8px">把原本「纯命令行、面板无入口」的校准/漂移/可视化工具接到面板，后台运行不阻塞面板</div>
         <div class="trade" style="margin-bottom:8px">
           <button onclick="runTool('calibrate')">🔧 真重校准扫描</button>
@@ -3255,7 +3270,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
           <button onclick="runTool('papertrack_html')">🔧 生成回测HTML</button>
         </div>
         <div id="tools-out" class="stamp" style="white-space:pre-wrap;max-height:180px;overflow:auto;background:var(--bg);border:0.5px solid var(--border);border-radius:6px;padding:8px;font-size:11px"></div>
-      </div>
+        </div>
+      </details>
     </section>
 
     <!-- ================= 利润·价差·比价（G1） ================= -->
