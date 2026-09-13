@@ -465,7 +465,33 @@ def _card(kind, now=None):
         "checks": checks,
         "open_positions": pm["positions"],
         "notes": notes,
+        # 2026-09-12：权益可信度前置自检（C3/C4/C5 的分母是否可信）
+        "data_integrity": _data_integrity(),
     }
+
+
+def _data_integrity():
+    """权益数据可信度前置自检（2026-09-12 新增）。
+
+    discipline_review 的 C3/C4/C5 三项（单品/组合/日亏线）全部以 dynamic_equity
+    为分母。若 journal 里有物理上不可能的盈亏，权益锚会被抬高 → 这三项会显示
+    "很安全"，而实际早已超限。所以复盘卡必须先声明权益可不可信。
+    """
+    out = {"equity_trustworthy": True, "data_alerts": [], "suspicious": []}
+    try:
+        import equity_history as eh
+
+        san = eh.journal_sanity()
+        susp = san.get("suspicious") or []
+        if susp:
+            out["equity_trustworthy"] = False
+            out["suspicious"] = susp
+            rec = {"date": datetime.now().strftime("%Y-%m-%d"),
+                   "ok": False, "suspicious": susp, "anchor": eh._anchor()}
+            out["data_alerts"] = eh.audit_alerts(rec)
+    except Exception:
+        pass
+    return out
 
 
 def get_all(now=None):

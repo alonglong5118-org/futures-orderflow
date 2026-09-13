@@ -1400,7 +1400,9 @@ def sample_equity(prices=None):
         live_eq = snap.get("equity")
         if live_eq is None:
             return None
-        floating = snap.get("floating_pnl", 0.0) or 0.0
+        # ★ 2026-09-12 修正：account_tracker.snapshot() 返回的键是 float_total，
+        # 不是 floating_pnl。此前取错键 → floating 恒为 0，日内曲线里该字段一直是死数据。
+        floating = snap.get("float_total", 0.0) or 0.0
     except Exception:
         return None
 

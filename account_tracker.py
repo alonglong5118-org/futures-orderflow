@@ -937,25 +937,48 @@ def heal_from_journal():
             st["realized_pnl"] = jrealized
             st["realized_pnl_at_sync"] = jrealized
         # ★ 清除 journal 中已平仓的僵尸持仓（防止 account_state 残留过期持仓）
-        _closed_syms = set()
+        # ★ 2026-09-11 v2 加固：双重检查防止 journal 不完整时误删 state 持仓
+        #   条件 A: journal OPEN == 0 但 state 有持仓 → 跳过（journal 完全空）
+        #   条件 B: state 有持仓，但 journal 对某些品种只有 CLOSED 没有 OPEN → 跳过（journal 部分缺失）
+        _all_open_in_journal = sum(1 for t in jdata.get("trades", []) if t.get("pnl") is None)
+        _state_has_positions = any((p.get("lots") or 0) > 0 for p in (st.get("positions") or {}).values())
+        _journal_incomplete = (_all_open_in_journal == 0 and _state_has_positions)
+        # 条件 B: state 持仓中有品种 journal 只记了 CLOSED 没记 OPEN（典型的跨账户 journal 污染）
+        _journal_syms_open = set()
         for t in jdata.get("trades", []):
-            if t.get("pnl") is not None:  # 已平仓
-                _closed_syms.add((t.get("symbol"), t.get("direction")))
-        for _csym, _cdir in _closed_syms:
-            _csym_norm = _normalize_sym_for_heal(_csym, specs)
-            if _csym_norm in st["positions"]:
-                _cpos = st["positions"][_csym_norm]
-                if _cpos.get("direction") == _cdir and (_cpos.get("lots") or 0) > 0:
-                    # 检查 journal 中该品种/方向是否还有未平仓记录（P1-11 fix: 标准化匹配）
-                    _has_open = any(
-                        _normalize_sym_for_heal(t.get("symbol", ""), specs) == _csym_norm
-                        and t.get("direction") == _cdir
-                        and t.get("pnl") is None
-                        for t in jdata.get("trades", [])
-                    )
-                    if not _has_open:
-                        del st["positions"][_csym_norm]
-                        changes.append(f"清除僵尸持仓: {_csym_norm} {_cdir}（journal 已平仓无剩余）")
+            if t.get("pnl") is None:
+                _s = _normalize_sym_for_heal(t.get("symbol", ""), specs)
+                _journal_syms_open.add((_s, t.get("direction")))
+        _journal_incomplete_b = False
+        for _sym, _pos in (st.get("positions") or {}).items():
+            if (_pos.get("lots") or 0) > 0:
+                _k = (_sym, _pos.get("direction"))
+                if _k not in _journal_syms_open:
+                    _journal_incomplete_b = True
+                    break
+        if _journal_incomplete or _journal_incomplete_b:
+            _reason = f"journal 无 OPEN ({_all_open_in_journal}条) vs state {sum(1 for p in (st.get('positions') or {}).values() if (p.get('lots') or 0) > 0)}个持仓" if _journal_incomplete else f"journal 对 state 持仓品种记录缺失"
+            changes.append(f"⚠️ 僵尸清除跳过: {_reason}")
+        else:
+            _closed_syms = set()
+            for t in jdata.get("trades", []):
+                if t.get("pnl") is not None:  # 已平仓
+                    _closed_syms.add((t.get("symbol"), t.get("direction")))
+            for _csym, _cdir in _closed_syms:
+                _csym_norm = _normalize_sym_for_heal(_csym, specs)
+                if _csym_norm in st["positions"]:
+                    _cpos = st["positions"][_csym_norm]
+                    if _cpos.get("direction") == _cdir and (_cpos.get("lots") or 0) > 0:
+                        # 检查 journal 中该品种/方向是否还有未平仓记录（P1-11 fix: 标准化匹配）
+                        _has_open = any(
+                            _normalize_sym_for_heal(t.get("symbol", ""), specs) == _csym_norm
+                            and t.get("direction") == _cdir
+                            and t.get("pnl") is None
+                            for t in jdata.get("trades", [])
+                        )
+                        if not _has_open:
+                            del st["positions"][_csym_norm]
+                            changes.append(f"清除僵尸持仓: {_csym_norm} {_cdir}（journal 已平仓无剩余）")
         for sym, pos in list(st["positions"].items()):  # list() 防止迭代时修改
             k = (sym, pos.get("direction"))
             je = javg.get(k)
@@ -1149,7 +1172,8 @@ def snapshot(prices=None):
     # ★★ 2026-08-31 v2: 正确公式 — 以 st.equity（用户同步基准）为锚
     #   equity = st.equity + (journal已实现增量) + (当前浮动 - 上次浮动)
     #   既覆盖手动入金/出金，又跟随行情实时波动
-    INIT_CAPITAL = 1000000.0
+    # 本金从账户状态文件读取（default=100600, 不同账户不同）
+    INIT_CAPITAL = float(st.get("initial_balance", 100600) or 100600)
     try:
         import trade_journal as _tj
         realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
@@ -1173,17 +1197,11 @@ def snapshot(prices=None):
     usage_rate = round(total_margin / dynamic_equity * 100, 2)
     portfolio_cap = round(dynamic_equity * portfolio_cap_pct / 100, 2)
 
-    # ── 自动刷新同步基准：每次 snapshot 都将「权益同步基准」推进到当前时刻 ──
-    # ★ 2026-08-28: 不再修改 st["equity"]，保持用户设定的同步权益不变
-    #   动态权益仅用于前端显示，不回写到基准权益，避免漂移
+    # ── 2026-09-09: 禁用自动刷新同步基准 ──
+    # 只更新 updated 时间戳，绝不修改 equity / realized_pnl_at_sync / float_at_sync
+    # anchor 三元组只在用户手动点「同步权益」(set_equity) 时才更新
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _LOCK:
-        # ★★ 2026-08-31 v2: 把 dynamic_equity 回写到 st.equity 作为下次 anchor
-        # 这样权益像滚动快照一样推进，永不漂移
-        st["equity"] = round(dynamic_equity, 2)
-        st["equity_synced"] = now_str
-        st["realized_pnl_at_sync"] = realized_pnl
-        st["float_at_sync"] = round(float_total, 2)
         st["updated"] = now_str
         save_state(st)
 

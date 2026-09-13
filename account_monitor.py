@@ -228,8 +228,9 @@ def auto_sync(account, prices=None, account_id=None):
         if account_id:
             _prev_account = at.set_account(account_id)
 
-        # 1) 权益同步（覆盖为账户真实余额）
-        at.set_equity(account["balance"])
+        # 1) 权益同步：已禁用！auto_sync 只做持仓对账，绝不覆盖用户手动设的 anchor
+        #    用户手动点「同步权益」按钮（调 set_equity）时才更新 anchor
+        # at.set_equity(account["balance"])  # ← 注释掉，防止 TqAccount 模拟盘余额覆盖 CTP 实盘 anchor
 
         # 2) 持仓镜像对账（完整重建：支持加仓/减仓/调仓/反手）
         current = {}  # (sym, direction) -> {lots, price}
