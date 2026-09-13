@@ -2915,12 +2915,13 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div class="stamp" id="pp-msg"></div>
       </div>
       <div class="group-head gh-amber gh-flow"><span class="gh-num">②</span><span class="gh-title">模拟持仓 · 成交</span><span class="gh-intro"><i class="gi-chip"><b>虚拟持仓</b>逐合约持仓实时盯市</i><i class="gi-chip"><b>流水</b>模拟成交流水完整回看</i></span></div>
-      <div class="decision-card st-info">
-        <h2>模拟持仓</h2>
+      <details class="detail-card">
+        <summary>模拟持仓 · 成交流水</summary>
+        <div class="detail-body">
         <div id="pp-positions" style="max-height:200px;overflow:auto;margin-bottom:10px">加载中…</div>
-        <h2>模拟成交流水</h2>
         <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
-      </div>
+        </div>
+      </details>
     </section></div>
     
     <div class="pane-group" id="group-position">
@@ -3325,7 +3326,9 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-gold gh-flow"><span class="gh-num">⑨</span><span class="gh-title">支撑压力位</span><span class="gh-intro"><i class="gi-chip"><b>SR</b>三重验证支撑压力位</i><i class="gi-chip"><b>分区</b>近位 ≤0.8% / 灰色地带 / 远位 ≥1.5%</i></span></div>
-      <div class="decision-card st-info" id="sr-card">
+      <details class="detail-card" id="sr-card">
+        <summary>支撑压力位</summary>
+        <div class="detail-body">
         <div class="sr-summary" style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
           <span>近位 <b id="sr-near-count" style="color:var(--green)">—</b></span>
           <span>灰色 <b id="sr-grey-count" style="color:var(--amber)">—</b></span>
@@ -3343,7 +3346,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
           </div>
         </div>
         <div id="sr-box" class="sr-list"><div class="muted-empty"><span class="dot"></span>等待 SR 数据...</div></div>
-      </div>
+        </div>
+      </details>
 
       <div class="group-head gh-purple gh-flow"><span class="gh-num">⑩</span><span class="gh-title">板块热力图</span><span class="gh-intro"><i class="gi-chip"><b>热力</b>板块风险调整强度色阶</i><i class="gi-chip"><b>轮动</b>领涨/筑底/钝化/领跌四象限</i></span></div>
       <div class="decision-card st-info" id="sector-card">
