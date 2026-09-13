@@ -2066,6 +2066,55 @@
   .decision-card.st-warn{border-left-color:var(--st-warn)}
   .decision-card.st-danger{border-left-color:var(--st-danger)}
   .decision-card h2{font-size:16px;font-weight:700;color:var(--txt);margin:0 0 12px}
+
+  /* ===== 每日复盘总览 (#daily-review-summary) ===== */
+  .daily-review-summary .review-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:14px 0}
+  .daily-review-summary .review-kpi{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:12px;position:relative;transition:.2s}
+  .daily-review-summary .review-kpi:hover{border-color:var(--gold-dim);transform:translateY(-1px)}
+  .daily-review-summary .review-kpi-label{font-size:11px;color:var(--mut);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+  .daily-review-summary .review-kpi-value{font-size:22px;font-weight:700;color:var(--txt);line-height:1.1}
+  .daily-review-summary .review-kpi-value.pos{color:var(--red)}
+  .daily-review-summary .review-kpi-value.neg{color:var(--green)}
+  .daily-review-summary .review-kpi-sub{font-size:10px;color:var(--mut2);margin-top:5px;line-height:1.4}
+  .daily-review-summary .review-kpi-tag{position:absolute;top:8px;right:8px;font-size:9px;padding:1px 6px;border-radius:9px;background:var(--gold-dim);color:#000;font-weight:600}
+  .daily-review-summary .review-kpi-tag.live{background:var(--green);color:#000}
+  .daily-review-summary .review-kpi-tag.record{background:var(--blue);color:#fff}
+  .daily-review-summary .review-badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)}
+  .daily-review-summary .review-badge{font-size:11px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:0.5px solid var(--border);color:var(--mut)}
+  .daily-review-summary .review-badge b{color:var(--txt);margin-left:4px}
+  .daily-review-summary .review-badge.warn{border-color:var(--amber);color:var(--amber);background:rgba(212,175,55,.08)}
+  .daily-review-summary .review-badge.danger{border-color:var(--red);color:var(--red);background:rgba(255,71,87,.08)}
+  .daily-review-summary .review-section-title{font-size:12px;color:var(--gold-light);font-weight:600;margin:16px 0 8px;border-left:3px solid var(--gold);padding-left:8px}
+  .daily-review-summary .review-mini-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+  .daily-review-summary .review-session-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:10px 0}
+  .daily-review-summary .review-session{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:12px}
+  .daily-review-summary .review-session-label{font-size:11px;color:var(--mut);margin-bottom:5px}
+  .daily-review-summary .review-session-value{font-size:18px;font-weight:700;color:var(--txt)}
+  .daily-review-summary .review-session-value.pos{color:var(--red)}
+  .daily-review-summary .review-session-value.neg{color:var(--green)}
+  .daily-review-summary .review-session-sub{font-size:10px;color:var(--mut2);margin-top:5px}
+  .daily-review-summary .review-compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin:10px 0}
+  .daily-review-summary .review-compare-col{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+  .daily-review-summary .review-compare-label{font-size:10px;color:var(--mut);margin-bottom:4px}
+  .daily-review-summary .review-compare-value{font-size:16px;font-weight:700;color:var(--txt)}
+  .daily-review-summary .review-compare-value.pos{color:var(--red)}
+  .daily-review-summary .review-compare-value.neg{color:var(--green)}
+  .daily-review-summary .review-strat-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;margin-bottom:6px}
+  .daily-review-summary .review-strat-name{font-size:12px;font-weight:600;flex:1}
+  .daily-review-summary .review-strat-bar{flex:2;height:8px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden}
+  .daily-review-summary .review-strat-bar>span{display:block;height:100%}
+  .daily-review-summary .review-strat-val{font-size:12px;font-weight:600;min-width:70px;text-align:right}
+  .daily-review-summary .review-pos-table{width:100%;border-collapse:collapse;font-size:11.5px}
+  .daily-review-summary .review-pos-table th{text-align:left;color:var(--mut);font-weight:500;padding:6px 8px;border-bottom:0.5px solid var(--border)}
+  .daily-review-summary .review-pos-table td{padding:6px 8px;border-bottom:0.5px solid rgba(255,255,255,.04)}
+  .daily-review-summary .review-timeline{position:relative;padding-left:14px;border-left:1.5px solid var(--border);margin:8px 0 8px 6px}
+  .daily-review-summary .review-timeline-item{position:relative;margin-bottom:12px;font-size:11.5px}
+  .daily-review-summary .review-timeline-item::before{content:'';position:absolute;left:-19px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--gold-dim)}
+  .daily-review-summary .review-timeline-item.entry::before{background:var(--red)}
+  .daily-review-summary .review-timeline-item.exit::before{background:var(--green)}
+  .daily-review-summary .review-timeline-time{color:var(--mut2);font-size:10px;margin-right:8px}
+  .daily-review-summary .review-timeline-meta{color:var(--mut);font-size:10px;margin-top:2px}
+
   /* 详情卡：默认折叠，可下钻辅助数据 */
   .detail-card{background:var(--card);border:1px solid var(--bd-card);border-radius:12px;margin-bottom:16px;overflow:hidden}
   .detail-card summary{font-size:16px;font-weight:600;color:var(--txt);padding:12px 16px;cursor:pointer;list-style:none;user-select:none}
@@ -3442,6 +3491,122 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <span class="gl-text">analyze</span>
       </div>
       <section class="pane" id="pane-disc">
+      <!-- DRS 每日复盘总览：聚合全维度当日数据，跨书签联动 -->
+      <div class="decision-card st-info daily-review-summary" id="daily-review-summary">
+        <h2>📊 每日复盘总览 <span class="price" id="review-date">—</span> <span id="review-status-tag" class="review-kpi-tag live">实时</span></h2>
+        <div class="review-kpi-grid">
+          <div class="review-kpi">
+            <div class="review-kpi-label">当日盈亏</div>
+            <div class="review-kpi-value" id="drs-day-pnl">—</div>
+            <div class="review-kpi-sub" id="drs-day-pnl-pct">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">累计盯市收益</div>
+            <div class="review-kpi-value" id="drs-realized">—</div>
+            <div class="review-kpi-sub" id="drs-realized-sub">含浮动</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">当前权益</div>
+            <div class="review-kpi-value" id="drs-equity">—</div>
+            <div class="review-kpi-sub" id="drs-equity-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">今日成交</div>
+            <div class="review-kpi-value" id="drs-trades">—</div>
+            <div class="review-kpi-sub" id="drs-trades-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">持仓数</div>
+            <div class="review-kpi-value" id="drs-positions">—</div>
+            <div class="review-kpi-sub" id="drs-positions-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">胜率 / 盈亏比</div>
+            <div class="review-kpi-value" id="drs-winrate">—</div>
+            <div class="review-kpi-sub" id="drs-profitfactor">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">当前回撤</div>
+            <div class="review-kpi-value" id="drs-drawdown">—</div>
+            <div class="review-kpi-sub" id="drs-drawdown-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">纪律评分</div>
+            <div class="review-kpi-value" id="drs-discipline">—</div>
+            <div class="review-kpi-sub" id="drs-discipline-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">组合 VaR95</div>
+            <div class="review-kpi-value" id="drs-var95">—</div>
+            <div class="review-kpi-sub" id="drs-var95-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">市场情绪</div>
+            <div class="review-kpi-value" id="drs-sentiment">—</div>
+            <div class="review-kpi-sub" id="drs-sentiment-sub">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">最强板块</div>
+            <div class="review-kpi-value" id="drs-sector-strong">—</div>
+            <div class="review-kpi-sub" id="drs-sector-weak">—</div>
+          </div>
+          <div class="review-kpi">
+            <div class="review-kpi-label">风控状态</div>
+            <div class="review-kpi-value" id="drs-risk">—</div>
+            <div class="review-kpi-sub" id="drs-risk-sub">—</div>
+          </div>
+        </div>
+        <div class="review-section-title">当日关键信号</div>
+        <div class="review-mini-grid" id="drs-highlights">
+          <div class="review-badge">日亏进度 <b id="drs-daily-loss">—</b></div>
+          <div class="review-badge">资金使用率 <b id="drs-usage">—</b></div>
+          <div class="review-badge">平均 R <b id="drs-avgr">—</b></div>
+          <div class="review-badge">利润因子 <b id="drs-pf">—</b></div>
+          <div class="review-badge" id="drs-gate-badge">门控品种 <b id="drs-gate">—</b></div>
+          <div class="review-badge" id="drs-cgate-badge">C门拦截 <b id="drs-cgate">—</b></div>
+        </div>
+        <div class="review-badges" id="drs-alerts">
+          <span class="review-badge">等待数据…</span>
+        </div>
+
+        <div class="review-section-title">日盘 / 夜盘绩效分解</div>
+        <div class="review-session-grid" id="drs-session">
+          <div class="review-session">
+            <div class="review-session-label">☀️ 日盘</div>
+            <div class="review-session-value" id="drs-day-pnl-session">—</div>
+            <div class="review-session-sub" id="drs-day-stats">—</div>
+          </div>
+          <div class="review-session">
+            <div class="review-session-label">🌙 夜盘</div>
+            <div class="review-session-value" id="drs-night-pnl-session">—</div>
+            <div class="review-session-sub" id="drs-night-stats">—</div>
+          </div>
+        </div>
+
+        <div class="review-section-title">策略表现 · 当日贡献</div>
+        <div id="drs-strategy">
+          <div class="muted-empty"><span class="dot"></span>等待数据…</div>
+        </div>
+
+        <div class="review-section-title">当前持仓快照</div>
+        <div id="drs-positions-snapshot">
+          <div class="muted-empty"><span class="dot"></span>等待数据…</div>
+        </div>
+
+        <div class="review-section-title">今日操作时间线</div>
+        <div id="drs-timeline">
+          <div class="muted-empty"><span class="dot"></span>等待数据…</div>
+        </div>
+
+        <div class="review-section-title">近 5 日对比</div>
+        <div class="review-compare-grid" id="drs-compare">
+          <div class="review-compare-col"><div class="review-compare-label">今日</div><div class="review-compare-value" id="drs-cmp-today">—</div></div>
+          <div class="review-compare-col"><div class="review-compare-label">昨日</div><div class="review-compare-value" id="drs-cmp-yesterday">—</div></div>
+          <div class="review-compare-col"><div class="review-compare-label">5日平均</div><div class="review-compare-value" id="drs-cmp-avg5">—</div></div>
+          <div class="review-compare-col"><div class="review-compare-label">趋势</div><div class="review-compare-value" id="drs-cmp-trend">—</div></div>
+        </div>
+      </div>
+
       <!-- #133 交互式历史回放（时间机器） -->
       <div class="group-head gh-green gh-flow"><span class="gh-num">①</span><span class="gh-title">交互式历史回放</span><span class="gh-intro"><i class="gi-chip"><b>时间机器</b>逐日回放 · 播放/步进/拖动</i><i class="gi-chip"><b>联动</b>权益/持仓/事件/K线开平仓标记同步复盘</i></span></div>
       <div class="decision-card st-info" id="playback" style="margin-bottom:12px">
@@ -6633,7 +6798,17 @@ function switchTab(name){
   // ★ 按需刷新（保持原有 refresh 调用，不删不增）
   if(name==='adv'){ if(typeof refreshAdv==='function') refreshAdv(); if(typeof refreshMetrics==='function') refreshMetrics(); }
   if(name==='cockpit'){ if(typeof renderCockpit==='function') renderCockpit(); }
-  if(name==='disc'){ if(typeof refreshStrategy==='function') refreshStrategy(); if(typeof refreshPlayback==='function') refreshPlayback(); if(typeof refreshJournalSession==='function') refreshJournalSession(); if(typeof refreshJournal==='function') refreshJournal(); }
+  if(name==='disc'){
+    if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
+    if(typeof refreshStrategy==='function') refreshStrategy();
+    if(typeof refreshPlayback==='function') refreshPlayback();
+    if(typeof refreshJournalSession==='function') refreshJournalSession();
+    if(typeof refreshJournal==='function') refreshJournal();
+  }
+  if(name==='metrics'){
+    if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
+    if(typeof refreshMetrics==='function') refreshMetrics();
+  }
   if(name==='paper'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
@@ -6666,6 +6841,7 @@ function switchTab(name){
   }
   if(name==='seat'){ if(typeof refreshCposRank==='function') refreshCposRank(); }
   if(name==='perf'){
+    if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
     if(typeof refreshPerformance==='function') refreshPerformance();
     if(typeof refreshDiscipline==='function') refreshDiscipline();
     if(typeof refreshRules==='function') refreshRules();
@@ -6677,6 +6853,14 @@ function switchTab(name){
     if(typeof refreshCorrStress==='function') refreshCorrStress();
     if(typeof refreshGbm==='function') refreshGbm();
     if(typeof refreshPlayback==='function') refreshPlayback();
+    if(typeof refreshJournalSession==='function') refreshJournalSession();
+    if(typeof refreshCalibration==='function') refreshCalibration();
+    if(typeof refreshSector==='function') refreshSector();
+    if(typeof refreshVolTarget==='function') refreshVolTarget();
+    if(typeof refreshLiqRisk==='function') refreshLiqRisk();
+    if(typeof refreshGatedNotices==='function') refreshGatedNotices();
+    if(typeof refreshCGateSuppressions==='function') refreshCGateSuppressions();
+    if(typeof refreshSensitivity==='function') refreshSensitivity();
   }
   // ===== group 模式下：同时刷新该组内所有 pane =====
   if(isGroup){
@@ -6684,8 +6868,48 @@ function switchTab(name){
       // 调一次单 pane 的刷新逻辑
       if(pid==='cockpit') renderCockpit && renderCockpit();
       if(pid==='adv'){ refreshAdv && refreshAdv(); refreshMetrics && refreshMetrics(); }
+      if(pid==='disc'){
+        refreshDailyReviewSummary && refreshDailyReviewSummary(true);
+        refreshStrategy && refreshStrategy();
+        refreshPlayback && refreshPlayback();
+        refreshJournalSession && refreshJournalSession();
+        refreshJournal && refreshJournal();
+      }
+      if(pid==='perf'){
+        refreshDailyReviewSummary && refreshDailyReviewSummary(true);
+        refreshPerformance && refreshPerformance();
+        refreshDiscipline && refreshDiscipline();
+        refreshRules && refreshRules();
+        refreshAttribution && refreshAttribution();
+        refreshCorrelation && refreshCorrelation();
+        refreshStress && refreshStress();
+        refreshVar && refreshVar();
+        refreshSpread && refreshSpread();
+        refreshCorrStress && refreshCorrStress();
+        refreshGbm && refreshGbm();
+        refreshPlayback && refreshPlayback();
+        refreshJournalSession && refreshJournalSession();
+        refreshCalibration && refreshCalibration();
+        refreshSector && refreshSector();
+        refreshVolTarget && refreshVolTarget();
+        refreshLiqRisk && refreshLiqRisk();
+        refreshGatedNotices && refreshGatedNotices();
+        refreshCGateSuppressions && refreshCGateSuppressions();
+        refreshSensitivity && refreshSensitivity();
+      }
+      if(pid==='metrics'){
+        refreshDailyReviewSummary && refreshDailyReviewSummary(true);
+        refreshMetrics && refreshMetrics();
+      }
       // 其他走原有的单 pane 刷新（上面已经调过的会重复，但没关系，幂等）
     }
+  }
+
+  // ★ 复盘分析书签激活态自动轮询启停
+  if(activeGroup === 'analyze'){
+    startAnalyzeAutoRefresh();
+  } else {
+    stopAnalyzeAutoRefresh();
   }
 }
 
@@ -7714,6 +7938,14 @@ async function refreshAllAfterTrade(force){
       await _batch(['refreshVar','refreshStress','refreshAdv','refreshMetrics','refreshPlayback','refreshCorrelation']);
     }
   }, 2000);
+  // ★ 交易后触发数据域事件总线，驱动复盘分析书签内跨模块联动
+  setTimeout(() => {
+    if(window._DATABUS){
+      window._DATABUS.emit('account');
+      window._DATABUS.emit('journal');
+      window._DATABUS.emit('risk');
+    }
+  }, 100);
 }
 /* ===== 信号卡片：按商品大类分组（黑色系/建材化工/农产品/有色贵金属/能源） ===== */
 const SECTOR_ORDER = ["黑色系","建材化工","农产品","有色贵金属","能源","其他"];
@@ -8629,6 +8861,8 @@ if(!_IS_MOBILE){
       if(typeof refreshSectorHeatmap==='function') refreshSectorHeatmap();
       if(typeof refreshScan==='function') refreshScan();
       if(typeof refreshScreener==='function') refreshScreener();
+      // 行情域变化广播 → 驱动复盘分析书签内市场相关模块联动
+      if(window._DATABUS) window._DATABUS.emit('market');
     }, 45000);
   }, 3000);
 }
@@ -8738,6 +8972,7 @@ window._DATABUS.subscribe('refreshStress', ['account'], 2);
 window._DATABUS.subscribe('refreshAttribution', ['account'], 2);
 // journal 域：成交记录
 window._DATABUS.subscribe('refreshJournal', ['journal'], 0);
+window._DATABUS.subscribe('refreshJournalList', ['journal'], 0);
 window._DATABUS.subscribe('refreshPerformance', ['journal'], 1);
 window._DATABUS.subscribe('refreshDiscipline', ['journal'], 1);
 // risk 域：风控/回撤/killswitch
@@ -8751,6 +8986,81 @@ window._DATABUS.subscribe('refreshSentiment', ['market'], 1);
 window._DATABUS.subscribe('refreshSR', ['market'], 1);
 // meta 域：元数据/合约
 window._DATABUS.subscribe('loadSymMeta', ['meta'], 1);
+
+// ===== 复盘分析书签全模块联动注册（2026-09-13）=====
+// 目标：account/journal/risk/market/meta 任一域变化 → 自动刷新复盘分析内所有相关模块
+// account 域（权益/持仓/盈亏）
+window._DATABUS.subscribe('refreshDailyReviewSummary', ['account'], 1);
+window._DATABUS.subscribe('refreshDiscipline', ['account'], 1);     // 复盘体检卡
+window._DATABUS.subscribe('refreshStrategy', ['account'], 1);
+window._DATABUS.subscribe('refreshPlayback', ['account'], 1);
+window._DATABUS.subscribe('refreshJournalSession', ['account'], 1);
+window._DATABUS.subscribe('refreshJournalList', ['account'], 0);    // 成交明细
+window._DATABUS.subscribe('refreshJournal', ['account'], 0);        // 成交统计
+window._DATABUS.subscribe('refreshVolTarget', ['account'], 1);
+window._DATABUS.subscribe('refreshLiqRisk', ['account'], 1);
+window._DATABUS.subscribe('refreshGatedNotices', ['account'], 1);
+window._DATABUS.subscribe('refreshCGateSuppressions', ['account'], 1);
+window._DATABUS.subscribe('refreshCorrStress', ['account'], 2);
+window._DATABUS.subscribe('refreshGbm', ['account'], 2);
+window._DATABUS.subscribe('refreshCalibration', ['account'], 2);
+window._DATABUS.subscribe('refreshSensitivity', ['account'], 2);
+window._DATABUS.subscribe('refreshMetrics', ['account'], 2);
+// journal 域（成交记录）
+window._DATABUS.subscribe('refreshDailyReviewSummary', ['journal'], 1);
+window._DATABUS.subscribe('refreshDiscipline', ['journal'], 1);
+window._DATABUS.subscribe('refreshStrategy', ['journal'], 1);
+window._DATABUS.subscribe('refreshPlayback', ['journal'], 1);
+window._DATABUS.subscribe('refreshJournalSession', ['journal'], 1);
+window._DATABUS.subscribe('refreshJournalList', ['journal'], 0);
+window._DATABUS.subscribe('refreshJournal', ['journal'], 0);
+window._DATABUS.subscribe('refreshCalibration', ['journal'], 2);
+window._DATABUS.subscribe('refreshSensitivity', ['journal'], 2);
+// risk 域（风控/回撤/killswitch）
+window._DATABUS.subscribe('refreshDailyReviewSummary', ['risk'], 1);
+window._DATABUS.subscribe('refreshDiscipline', ['risk'], 1);
+window._DATABUS.subscribe('refreshPerformance', ['risk'], 1);
+window._DATABUS.subscribe('refreshVar', ['risk'], 2);
+window._DATABUS.subscribe('refreshStress', ['risk'], 2);
+window._DATABUS.subscribe('refreshCorrStress', ['risk'], 2);
+// market 域（行情/市场状态）
+window._DATABUS.subscribe('refreshDailyReviewSummary', ['market'], 1);
+window._DATABUS.subscribe('refreshGbm', ['market'], 2);
+window._DATABUS.subscribe('refreshVolTarget', ['market'], 1);
+window._DATABUS.subscribe('refreshLiqRisk', ['market'], 1);
+window._DATABUS.subscribe('refreshMetrics', ['market'], 1);
+window._DATABUS.subscribe('refreshSpread', ['market'], 1);      // 已注册，显式保留
+window._DATABUS.subscribe('refreshCorrelation', ['market'], 1);  // 已注册，显式保留
+window._DATABUS.subscribe('refreshSectorHeatmap', ['market'], 1);// 已注册，显式保留
+// meta 域（合约/元数据）
+window._DATABUS.subscribe('refreshPlayback', ['meta'], 1);
+window._DATABUS.subscribe('refreshGatedNotices', ['meta'], 1);
+
+// ===== 复盘分析书签激活态自动轮询 =====
+// 当用户位于 analyze 标签且页面可见时，每 30s 自动刷新 DRS 与关联模块，保证复盘视图实时性
+window._ANALYZE_REFRESH_TIMER = null;
+function isAnalyzeTabActive(){
+  const g = document.getElementById('group-analyze');
+  return g && g.classList.contains('active');
+}
+function tickAnalyzeAutoRefresh(){
+  if(document.hidden || !isAnalyzeTabActive() || _userActionInProgress || _refreshBusy) return;
+  if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(false);
+  if(typeof refreshDiscipline==='function') refreshDiscipline();
+  if(typeof refreshJournalList==='function') refreshJournalList();
+}
+function startAnalyzeAutoRefresh(){
+  if(window._ANALYZE_REFRESH_TIMER) return;
+  window._ANALYZE_REFRESH_TIMER = setInterval(tickAnalyzeAutoRefresh, 30000);
+  console.log('[analyze] 自动轮询已启动 (30s)');
+}
+function stopAnalyzeAutoRefresh(){
+  if(window._ANALYZE_REFRESH_TIMER){ clearInterval(window._ANALYZE_REFRESH_TIMER); window._ANALYZE_REFRESH_TIMER = null; }
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden){ stopAnalyzeAutoRefresh(); }
+  else if(isAnalyzeTabActive()){ startAnalyzeAutoRefresh(); tickAnalyzeAutoRefresh(); }
+});
 
 initNotify();
 if('serviceWorker' in navigator){
@@ -8957,6 +9267,8 @@ async function refreshJournalList(force){
     if(window._lastJournalTradeCount !== tradeCount){
       console.log("[refreshJournalList] trades:", tradeCount);
       window._lastJournalTradeCount = tradeCount;
+      // 成交记录变化 → 广播 journal 域，驱动复盘分析联动
+      if(window._DATABUS) window._DATABUS.emit('journal');
     }
     const el=document.getElementById('journal-list'); if(!el) return;
     const ts=(d.trades||[]).slice().reverse();
@@ -9630,6 +9942,294 @@ async function refreshPerformance(){
     }
   }catch(e){document.getElementById('perf-note').textContent='加载失败: '+e;}
 }
+
+// ===== 每日复盘总览：跨书签聚合 =====
+// 依赖 account / journal / risk / market 域；由 _DATABUS 级联触发
+window._DRS_CACHE = null;
+async function refreshDailyReviewSummary(force){
+  try{
+    const box = document.getElementById('daily-review-summary');
+    if(!box) return;
+    // 简单缓存：非 force 且 10s 内已刷新则跳过
+    if(!force && window._DRS_CACHE && (Date.now() - window._DRS_CACHE.ts < 10000)) return;
+
+    // 并行拉取各维度数据（优先失败隔离）
+    const [jRes, dRes, rRes, vRes, sRes, secRes, stRes, jsRes, stratRes, jlRes, pbRes] = await Promise.all([
+      _smartFetch('/api/journal').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/discipline').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/risk').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/var').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/sentiment').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/sector_rotation').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/state').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/journal_session').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/journal_strategy?group_by=strategy').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/journal_list').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/playback?force=1').then(r=>r.json()).catch(e=>({error:e}))
+    ]);
+
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    document.getElementById('review-date').textContent = dateStr;
+
+    // 1) 绩效维度（来自 /api/journal）
+    const jSummary = (jRes && jRes.summary) || {};
+    const jPerf = (jRes && jRes.performance) || {};
+    const jEquity = (jRes && jRes.equity_curve) || {};
+    const jIntra = (jRes && jRes.intraday) || {};
+    const dayPnl = jIntra.day_pnl != null ? jIntra.day_pnl : (jSummary.day_pnl || 0);
+    const dayPnlPct = jIntra.day_pnl_pct != null ? jIntra.day_pnl_pct : 0;
+    const totalPnl = jSummary.total_pnl || 0;
+    const equity = (jEquity.last_equity != null ? jEquity.last_equity : (jRes && jRes.equity)) || 0;
+    const winRate = jSummary.win_rate || 0;
+    const profitFactor = jPerf.profit_factor || 0;
+    const avgR = jSummary.avg_R || 0;
+    const totalTrades = jPerf.trades || jSummary.trades || 0;
+    const dayTrades = jSummary.day_trades || 0;
+
+    _setDrsText('drs-day-pnl', (dayPnl>=0?'+':'')+fmt(dayPnl,0), dayPnl>=0?'pos':'neg');
+    document.getElementById('drs-day-pnl-pct').textContent = '日 '+ (dayPnlPct>=0?'+':'') + fmt(dayPnlPct,2) + '%';
+    _setDrsText('drs-realized', (totalPnl>=0?'+':'')+fmt(totalPnl,0), totalPnl>=0?'pos':'neg');
+    document.getElementById('drs-realized-sub').textContent = '累计 · ' + totalTrades + ' 笔';
+    _setDrsText('drs-equity', fmt(equity,0));
+    document.getElementById('drs-equity-sub').textContent = equity ? '最新净值' : '—';
+    _setDrsText('drs-trades', String(dayTrades || 0));
+    document.getElementById('drs-trades-sub').textContent = '今日成交';
+    _setDrsText('drs-winrate', fmt(winRate,0)+'%');
+    document.getElementById('drs-profitfactor').textContent = 'PF ' + fmt(profitFactor,2) + ' · 平均 ' + fmt(avgR,2) + 'R';
+
+    // 2) 账户维度（来自 /api/state 或 journal）
+    const st = stRes || {};
+    const positions = (st.positions || (stRes && stRes.positions)) || [];
+    const activePos = positions.filter(p => Number(p.lots) > 0);
+    _setDrsText('drs-positions', String(activePos.length));
+    document.getElementById('drs-positions-sub').textContent = positions.length ? ('总 ' + positions.length + ' 条 · 占用 ' + fmt(st.usage_rate||0,1) + '%') : '无持仓';
+    document.getElementById('drs-usage').textContent = fmt(st.usage_rate||0,1) + '%';
+
+    // 3) 回撤维度
+    const cdd = jEquity.current_dd_pct || 0;
+    const cddDays = jEquity.dd_days || 0;
+    _setDrsText('drs-drawdown', fmt(cdd,2)+'%', cdd>0?'neg':'');
+    document.getElementById('drs-drawdown-sub').textContent = cddDays ? ('已 ' + cddDays + ' 天') : '无回撤';
+
+    // 4) 纪律评分
+    const discDaily = (dRes && dRes.daily) || dRes || {};
+    const discScore = discDaily.score != null ? discDaily.score : (dRes && dRes.score);
+    const discGrade = discDaily.grade || (dRes && dRes.grade) || '—';
+    _setDrsText('drs-discipline', discScore != null ? String(discScore) : '—');
+    document.getElementById('drs-discipline-sub').textContent = discGrade ? (discGrade + '级 · ' + (discDaily.adoption_rate||0) + '% 采纳') : '—';
+
+    // 5) VaR
+    const var95 = (vRes && vRes.ok) ? vRes.var_95 : null;
+    const var95pct = (vRes && vRes.ok) ? vRes.var_95_pct : null;
+    _setDrsText('drs-var95', var95 != null ? '-'+fmt(var95,0) : '—');
+    document.getElementById('drs-var95-sub').textContent = var95pct != null ? ('占权益 ' + fmt(var95pct,2) + '%') : (vRes.reason || '无持仓');
+
+    // 6) 市场情绪
+    const sentScore = sRes.score != null ? sRes.score : 50;
+    const sentLabel = sRes.label || '中性';
+    _setDrsText('drs-sentiment', fmt(sentScore,0));
+    document.getElementById('drs-sentiment-sub').textContent = sentLabel;
+
+    // 7) 板块轮动
+    const sectors = (secRes && secRes.ok) ? secRes : {};
+    const strong = sectors.strongest || '—';
+    const weak = sectors.weakest || '—';
+    _setDrsText('drs-sector-strong', strong);
+    document.getElementById('drs-sector-weak').textContent = '最弱 ' + weak;
+
+    // 8) 风控状态
+    const rState = (rRes.state || 'NORMAL');
+    const rScale = rRes.scale != null ? rRes.scale : 1;
+    const dailyLossPct = (rRes.daily_loss_pct || 0) * 100;
+    const dailyLossStop = (rRes.daily_loss_stop || 0.05) * 100;
+    _setDrsText('drs-risk', rState, rState==='NORMAL'?'pos':(rState==='WARNING'?'warn':'neg'));
+    document.getElementById('drs-risk-sub').textContent = '缩放 ×' + fmt(rScale,2) + (rRes.lock_reason ? ' · ' + rRes.lock_reason : '');
+    const ddProgress = dailyLossStop > 0 ? Math.min(100, dailyLossPct / dailyLossStop * 100) : 0;
+    document.getElementById('drs-daily-loss').textContent = fmt(dailyLossPct,1) + '% / ' + fmt(dailyLossStop,1) + '%';
+    const ddBadge = document.getElementById('drs-daily-loss').parentElement;
+    ddBadge.className = 'review-badge' + (ddProgress>=80?' danger':(ddProgress>=50?' warn':''));
+
+    // 9) 关键信号
+    _setDrsText('drs-avgr', fmt(avgR,2)+'R', avgR>=0?'pos':'neg');
+    _setDrsText('drs-pf', fmt(profitFactor,2));
+
+    // 门控品种 & C门拦截
+    const gated = (st.gated_notices || []);
+    document.getElementById('drs-gate').textContent = gated.length ? (gated.length + ' 个') : '无';
+    document.getElementById('drs-gate-badge').className = 'review-badge' + (gated.length ? ' warn' : '');
+    const cgate = (st.cgate_suppressions_count != null ? st.cgate_suppressions_count : (st.cgate_suppressions || []).length);
+    document.getElementById('drs-cgate').textContent = cgate ? String(cgate) : '无';
+
+    // 10) 预警摘要（风险/板块/情绪）
+    const alerts = [];
+    if(ddProgress >= 80) alerts.push({t:'日亏逼近熔断', c:'danger'});
+    else if(ddProgress >= 50) alerts.push({t:'日亏进度超半', c:'warn'});
+    if(cdd > 5) alerts.push({t:'回撤超 5%', c:'warn'});
+    if(rState === 'LOCKED') alerts.push({t:'风控已锁仓', c:'danger'});
+    if(gated.length) alerts.push({t:'关注品种被门控', c:'warn'});
+    if(winRate > 0 && winRate < 40 && totalTrades >= 5) alerts.push({t:'近期胜率偏低', c:'warn'});
+    if(profitFactor > 0 && profitFactor < 1 && totalTrades >= 5) alerts.push({t:'利润因子 < 1', c:'warn'});
+
+    const alertsBox = document.getElementById('drs-alerts');
+    if(alerts.length){
+      alertsBox.innerHTML = alerts.map(a => '<span class="review-badge '+a.c+'">'+a.t+'</span>').join('');
+    } else {
+      alertsBox.innerHTML = '<span class="review-badge">✅ 当日无明显异常</span>';
+    }
+
+    // 11) 日盘/夜盘绩效分解
+    renderDRSSession(jsRes);
+
+    // 12) 策略表现贡献
+    renderDRSStrategy(stratRes);
+
+    // 13) 当前持仓快照
+    renderDRSPositions(stRes);
+
+    // 14) 今日操作时间线
+    renderDRSTimeline(jlRes);
+
+    // 15) 近 5 日对比（基于 playback 逐日帧）
+    renderDRSCompare(pbRes, dayPnl);
+
+    // 状态标签
+    const tag = document.getElementById('review-status-tag');
+    if(discDaily && discDaily.date){
+      tag.textContent = '已落账';
+      tag.className = 'review-kpi-tag record';
+    } else {
+      tag.textContent = '实时';
+      tag.className = 'review-kpi-tag live';
+    }
+
+    window._DRS_CACHE = { ts: Date.now(), data: { j:jRes, d:dRes, r:rRes, v:vRes, s:sRes, sec:secRes, st:stRes, js:jsRes, strat:stratRes, jl:jlRes, pb:pbRes } };
+    console.log('[refreshDailyReviewSummary] 每日复盘总览已更新');
+  }catch(e){ console.error('[refreshDailyReviewSummary] 错误:', e); }
+}
+function _setDrsText(id, text, cls){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text;
+  el.className = 'review-kpi-value' + (cls ? ' '+cls : '');
+}
+function _setDrsValText(id, text, cls){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text;
+  el.className = 'review-session-value' + (cls ? ' '+cls : '');
+}
+function _setDrsCmpText(id, text, cls){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = text;
+  el.className = 'review-compare-value' + (cls ? ' '+cls : '');
+}
+function renderDRSSession(jsRes){
+  const day = (jsRes && jsRes.day) || {};
+  const night = (jsRes && jsRes.night) || {};
+  const dayPnl = parseFloat(day.pnl || 0);
+  const nightPnl = parseFloat(night.pnl || 0);
+  _setDrsValText('drs-day-pnl-session', (dayPnl>=0?'+':'')+fmt(dayPnl,0), dayPnl>=0?'pos':'neg');
+  document.getElementById('drs-day-stats').textContent = (day.trades||0)+'笔 · 胜率'+fmt((day.win_rate||0)*100,0)+'%';
+  _setDrsValText('drs-night-pnl-session', (nightPnl>=0?'+':'')+fmt(nightPnl,0), nightPnl>=0?'pos':'neg');
+  document.getElementById('drs-night-stats').textContent = (night.trades||0)+'笔 · 胜率'+fmt((night.win_rate||0)*100,0)+'%';
+}
+function renderDRSStrategy(stratRes){
+  const box = document.getElementById('drs-strategy');
+  if(!box) return;
+  const arr = (stratRes && stratRes.groups) || [];
+  if(!arr.length){ box.innerHTML = '<div class="stamp">暂无带标签成交；开仓时选择策略即可在此分组</div>'; return; }
+  const mapped = arr.map(g => ({
+    name: g.group || g.name || '未分类',
+    trades: parseInt(g.total || g.trades || 0) || 0,
+    wins: parseInt(g.wins || 0) || 0,
+    pnl: parseFloat(g.pnl || g.net_pnl || 0) || 0
+  })).sort((a,b) => Math.abs(b.pnl) - Math.abs(a.pnl)).slice(0, 5);
+  const maxP = Math.max(1, ...mapped.map(g => Math.abs(g.pnl)));
+  box.innerHTML = mapped.map(g => {
+    const col = g.pnl >= 0 ? 'var(--red)' : 'var(--green)';
+    const w = Math.max(4, Math.round(Math.abs(g.pnl)/maxP*100));
+    return `<div class="review-strat-row">
+      <div class="review-strat-name">${g.name}</div>
+      <div class="review-strat-bar"><span style="width:${w}%;background:${col}"></span></div>
+      <div class="review-strat-val" style="color:${col}">${(g.pnl>=0?'+':'')+fmt(g.pnl,0)}</div>
+      <div class="review-strat-val" style="color:var(--mut);font-size:10px">${g.trades}笔/${fmt((g.trades?g.wins/g.trades:0)*100,0)}%</div>
+    </div>`;
+  }).join('');
+}
+function renderDRSPositions(stRes){
+  const box = document.getElementById('drs-positions-snapshot');
+  if(!box) return;
+  const st = stRes || {};
+  const positions = (st.positions || []) || [];
+  const active = positions.filter(p => Number(p.lots) > 0);
+  if(!active.length){ box.innerHTML = '<div class="stamp">当前无持仓</div>'; return; }
+  let h = '<table class="review-pos-table"><thead><tr><th>品种</th><th>方向</th><th>手数</th><th>均价</th><th>浮动</th><th>占用</th></tr></thead><tbody>';
+  for(const p of active){
+    const mtm = p.float_pnl != null ? p.float_pnl : (p.mtm || 0);
+    const col = mtm >= 0 ? 'var(--red)' : 'var(--green)';
+    h += `<tr><td>${p.name||''} <span class="ccode">${cc(p.symbol)}</span></td>`+
+         `<td>${p.direction||'—'}</td><td>${p.lots||0}</td>`+
+         `<td>${p.avg!=null?fmt(p.avg,(p.avg%1)?2:0):'—'}</td>`+
+         `<td style="color:${col};font-weight:600">${(mtm>=0?'+':'')+fmt(mtm,0)}</td>`+
+         `<td>${p.margin_pct!=null?p.margin_pct+'%':'—'}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  box.innerHTML = h;
+}
+function renderDRSTimeline(jlRes){
+  const box = document.getElementById('drs-timeline');
+  if(!box) return;
+  const trades = (jlRes && jlRes.trades) || [];
+  const today = new Date().toISOString().slice(0,10);
+  const todayTrades = trades.filter(t => (t.time||'').slice(0,10) === today).slice().reverse();
+  if(!todayTrades.length){ box.innerHTML = '<div class="stamp">今日暂无成交记录</div>'; return; }
+  box.innerHTML = '<div class="review-timeline">' + todayTrades.map(t => {
+    const isEntry = (t.action || t.direction || '').indexOf('开') >= 0 || (t.exit_price == null && t.pnl == null);
+    const cls = isEntry ? 'entry' : 'exit';
+    const pnl = t.pnl;
+    const pnlTxt = pnl == null ? '' : ` · 盈亏 <b style="color:${pnl>=0?'var(--red)':'var(--green)'}">${(pnl>=0?'+':'')+fmt(pnl,0)}</b>`;
+    const act = t.action || (isEntry ? '开仓' : '平仓');
+    return `<div class="review-timeline-item ${cls}">
+      <span class="review-timeline-time">${t.time ? t.time.slice(11,16) : '—'}</span>
+      <b>${act}</b> ${t.symbol||''} ${t.direction||''} ${t.lots||0}手 @${t.price!=null?fmt(t.price):''}
+      ${pnlTxt}
+      <div class="review-timeline-meta">${t.name||''}${t.note ? ' · '+t.note : ''}</div>
+    </div>`;
+  }).join('') + '</div>';
+}
+function renderDRSCompare(pbRes, todayPnl){
+  const frames = (pbRes && pbRes.frames) || [];
+  const n = frames.length;
+  const todayVal = todayPnl || 0;
+  let yesterdayVal = 0, avg5 = 0, trend = '—';
+  if(n >= 2){
+    const f = frames[n-2];
+    yesterdayVal = (f.day_pnl != null ? f.day_pnl : (f.realized_pnl_to_date || 0));
+  }
+  if(n >= 5){
+    const last5 = frames.slice(-5);
+    const sum = last5.reduce((a,b) => a + (b.day_pnl != null ? b.day_pnl : 0), 0);
+    avg5 = sum / 5;
+  } else if(n > 0){
+    const sum = frames.reduce((a,b) => a + (b.day_pnl != null ? b.day_pnl : 0), 0);
+    avg5 = sum / n;
+  }
+  if(n >= 2){
+    const recent = frames.slice(-3).map(f => f.day_pnl || 0);
+    const up = recent.filter(v => v > 0).length;
+    const down = recent.filter(v => v < 0).length;
+    if(up >= 2 && down <= 1) trend = '↑ 偏强';
+    else if(down >= 2 && up <= 1) trend = '↓ 偏弱';
+    else trend = '→ 震荡';
+  }
+  _setDrsCmpText('drs-cmp-today', (todayVal>=0?'+':'')+fmt(todayVal,0), todayVal>=0?'pos':'neg');
+  _setDrsCmpText('drs-cmp-yesterday', (yesterdayVal>=0?'+':'')+fmt(yesterdayVal,0), yesterdayVal>=0?'pos':'neg');
+  _setDrsCmpText('drs-cmp-avg5', (avg5>=0?'+':'')+fmt(avg5,0), avg5>=0?'pos':'neg');
+  document.getElementById('drs-cmp-trend').textContent = trend;
+}
+
 function exportCsv(type,kind){
   const u='/api/export?type='+type+(kind?('&kind='+kind):'');
   window.open(u,'_blank');
