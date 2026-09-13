@@ -25,8 +25,12 @@ import os
 import sys
 import unittest
 
-from hypothesis import assume, given, settings
-from hypothesis import strategies as st
+try:
+    from hypothesis import assume, given, settings
+    from hypothesis import strategies as st
+    _HAS_HYPOTHESIS = True
+except ImportError:
+    _HAS_HYPOTHESIS = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -88,6 +92,7 @@ _limit_ptss = st.floats(min_value=0.0, max_value=500.0, allow_nan=False, allow_i
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestRiskLotsProperty(unittest.TestCase):
     """calc_risk_lots 属性测试。"""
 
@@ -131,6 +136,7 @@ class TestRiskLotsProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestMinLotFloorProperty(unittest.TestCase):
     """calc_min_lot_floor 属性测试。"""
 

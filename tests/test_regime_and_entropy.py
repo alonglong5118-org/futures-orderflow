@@ -35,7 +35,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from ga_group_six_factor_robust import _weight_entropy
+try:
+    from ga_group_six_factor_robust import _weight_entropy
+    _HAS_DEAP = True
+except ImportError:
+    _weight_entropy = None
+    _HAS_DEAP = False
 from strategy_layer import classify_regime
 
 
@@ -200,6 +205,7 @@ class TestClassifyRegime(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_DEAP, "deap 未安装，跳过权重熵测试")
 class TestWeightEntropy(unittest.TestCase):
     """_weight_entropy 权重归一化熵。"""
 
