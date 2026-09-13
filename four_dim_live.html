@@ -7194,17 +7194,18 @@ async function refreshAccount(force){
     const fetchUrl = '/api/account?_t=' + Date.now();
     const r=await _smartFetch(fetchUrl);const a=await r.json();
     _PS_DATA = await _psPromise;
-    // ★ 2026-09-13: account_state 快照 diff —— 手动改 account_state.json（如减仓/改手数）后，
-    // 触发与成交后相同的全量联动刷新，覆盖驾驶舱/持仓/风控/复盘书签同步路径。
-    // 指纹只取结构性字段（持仓 symbol:lots:avg），不取浮动/权益等行情驱动字段，避免行情波动误触发。
+    // ★ 2026-09-13: account 域变化检测（数据域事件总线）
+    // 权益 / 可用资金 / 持仓指纹(品种×方向×手数×均价) / 总盈亏 diff → 命中即 _DATABUS.emit('account')
     (function(){
-      var fp = (a.positions||[]).filter(function(p){ return Number(p.lots)>0; })
-        .map(function(p){ return p.symbol+':'+p.lots+':'+p.avg; }).join(',');
+      var fp = [
+        a.equity,
+        (a.available != null ? a.available : ''),
+        (a.total_pnl != null ? a.total_pnl : (a.realized_pnl != null ? a.realized_pnl : '')),
+        (a.positions||[]).filter(function(p){ return Number(p.lots)>0; })
+          .map(function(p){ return p.symbol+':'+(p.direction||'')+':'+p.lots+':'+p.avg; }).join(',')
+      ].join('|');
       if(window._lastAccountFp && window._lastAccountFp !== fp){
-        clearTimeout(window._accountFpTimer);
-        window._accountFpTimer = setTimeout(function(){
-          if(typeof refreshAllAfterTrade === 'function') refreshAllAfterTrade(false);
-        }, 800);
+        if(window._DATABUS) window._DATABUS.emit('account');
       }
       window._lastAccountFp = fp;
     })();
@@ -8548,6 +8549,125 @@ if(!_IS_MOBILE){
     }, 45000);
   }, 3000);
 }
+
+// ===== 数据域事件总线（2026-09-13）=====
+// 数据域 → API 端点归类见交付报告。总线职责：域数据变化 → 三级级联刷新订阅者。
+// 放在同一 <script> 块内（_userActionInProgress/_refreshBusy 是顶层 let，跨 script 不可见）。
+window._DATABUS = (function(){
+  var DEBOUNCE_MS = 500;              // 同域去抖窗口
+  var STORM_LIMIT = 30;               // 一轮级联 refresh 调用数告警阈值
+  var CASCADE_TIERS = [0, 300, 2000]; // 三级级联延迟（对齐 refreshAllAfterTrade 分批节奏）
+  var BATCH = 3;                      // 每批并发数
+
+  var _schedule = {};                 // domain -> {0:[],1:[],2:[]}
+  var _pending = {};                  // domain -> true（待刷；后台只积累，回前台一次 flush）
+  var _timer = null;
+
+  function _ensure(d){ if(!_schedule[d]) _schedule[d] = {0:[],1:[],2:[]}; }
+
+  // 模块声明依赖域：subscribe('renderCockpit', ['account'], 1)
+  function subscribe(name, domains, tier){
+    tier = (tier == null) ? 1 : tier;
+    if(tier < 0) tier = 0; if(tier > 2) tier = 2;
+    (domains || []).forEach(function(d){
+      _ensure(d);
+      var list = _schedule[d][tier];
+      if(list.indexOf(name) < 0) list.push(name);
+    });
+  }
+
+  // 域数据变化广播（去抖合并；后台 tab 只积累不刷）
+  function emit(domain){
+    _pending[domain] = true;
+    if(document.hidden) return;
+    if(_timer) clearTimeout(_timer);
+    _timer = setTimeout(_flush, DEBOUNCE_MS);
+  }
+
+  // 回前台一次刷（把后台期间积累的 pending 全部处理）
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && Object.keys(_pending).length){
+      if(_timer) clearTimeout(_timer);
+      _timer = setTimeout(_flush, 0);
+    }
+  });
+
+  function _flush(){
+    _timer = null;
+    var doms = Object.keys(_pending);
+    _pending = {};
+    doms.forEach(_run);
+  }
+
+  function _safeCall(name, force){
+    var fn = (typeof window[name] === 'function') ? window[name] : null;
+    if(!fn) return Promise.resolve();
+    try{
+      var r = fn(force);
+      return (r && typeof r.then === 'function') ? r : Promise.resolve(r);
+    }catch(e){ console.error('[databus] '+name+' 执行失败:', e); return Promise.resolve(); }
+  }
+
+  function _run(domain){
+    var s = _schedule[domain];
+    if(!s) return;
+    var t0 = s[0].filter(function(n){ return typeof window[n] === 'function'; });
+    var t1 = s[1].filter(function(n){ return typeof window[n] === 'function'; });
+    var t2 = s[2].filter(function(n){ return typeof window[n] === 'function'; });
+    var total = t0.length + t1.length + t2.length;
+    // 防风暴告警（一轮级联 refresh 调用数超阈值）
+    if(total > STORM_LIMIT){
+      console.warn('[databus] 风暴告警: domain='+domain+' 一轮级联 '+total+' 个 refresh 超阈值 '+STORM_LIMIT+'，请排查注册表');
+    }
+    console.log('[databus] emit('+domain+') → '+total+' 模块级联: '+t0.concat(t1,t2).join(', '));
+    // tier 0 阻塞串行（force=true 绕过缓存）
+    var p = Promise.resolve();
+    t0.forEach(function(n){ p = p.then(function(){ return _safeCall(n, true); }); });
+    // tier 1 / tier 2 后台批量（遵守交互锁/并发锁）
+    [1,2].forEach(function(t){
+      setTimeout(function(){
+        if(_userActionInProgress || _refreshBusy) return;
+        var batch = s[t].filter(function(n){ return typeof window[n] === 'function'; });
+        for(var i=0;i<batch.length;i+=BATCH){
+          (function(grp){ Promise.all(grp.map(function(n){ return _safeCall(n, false); })); })(batch.slice(i,i+BATCH));
+        }
+      }, CASCADE_TIERS[t]);
+    });
+  }
+
+  return { subscribe: subscribe, emit: emit, _flush: _flush, _schedule: _schedule };
+})();
+
+// ===== 依赖注册表（域 → 模块级联；tier: 0 阻塞 / 1 中频 300ms / 2 重型 2000ms）=====
+// account 域：权益/可用/持仓/盈亏（优先注册，核心验收闭环）
+window._DATABUS.subscribe('refreshAccountSync', ['account'], 0);
+window._DATABUS.subscribe('refreshJournalList', ['account'], 0);
+window._DATABUS.subscribe('refreshRisk', ['account'], 0);
+window._DATABUS.subscribe('renderCockpit', ['account'], 1);
+window._DATABUS.subscribe('refreshDrawdown', ['account'], 1);
+window._DATABUS.subscribe('refreshKill', ['account'], 1);
+window._DATABUS.subscribe('refreshPerformance', ['account'], 1);
+window._DATABUS.subscribe('refreshSentiment', ['account'], 1);
+window._DATABUS.subscribe('refreshSR', ['account'], 1);
+window._DATABUS.subscribe('refreshDiscipline', ['account'], 1);
+window._DATABUS.subscribe('refreshVar', ['account'], 2);
+window._DATABUS.subscribe('refreshStress', ['account'], 2);
+window._DATABUS.subscribe('refreshAttribution', ['account'], 2);
+// journal 域：成交记录
+window._DATABUS.subscribe('refreshJournal', ['journal'], 0);
+window._DATABUS.subscribe('refreshPerformance', ['journal'], 1);
+window._DATABUS.subscribe('refreshDiscipline', ['journal'], 1);
+// risk 域：风控/回撤/killswitch
+window._DATABUS.subscribe('refreshDrawdown', ['risk'], 1);
+window._DATABUS.subscribe('refreshKill', ['risk'], 1);
+// market 域：行情/市场状态（行情驱动）
+window._DATABUS.subscribe('refreshCorrelation', ['market'], 1);
+window._DATABUS.subscribe('refreshSpread', ['market'], 1);
+window._DATABUS.subscribe('refreshSectorHeatmap', ['market'], 1);
+window._DATABUS.subscribe('refreshSentiment', ['market'], 1);
+window._DATABUS.subscribe('refreshSR', ['market'], 1);
+// meta 域：元数据/合约
+window._DATABUS.subscribe('loadSymMeta', ['meta'], 1);
 
 initNotify();
 if('serviceWorker' in navigator){
