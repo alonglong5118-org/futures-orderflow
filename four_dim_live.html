@@ -2923,13 +2923,15 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     
     <div class="pane-group" id="group-position">
       <section class="pane" id="pane-trade2"><div class="group-head gh-gold gh-flow"><span class="gh-num">②</span><span class="gh-title">持仓 · 下单 · 批量指令</span><span class="gh-intro"><i class="gi-chip"><b>持仓</b>权益实时推算 · 止盈止损盯市 · 参谋三块分析</i><i class="gi-chip"><b>下单</b>开/加/减/平仓记账 · 策略账户标签 · 权益同步</i><i class="gi-chip"><b>批量指令</b>全平/反手出清单 · 不代下单 · 成交回灌</i></span></div>
-      <div class="card" id="account">
+      <div class="pane-status">
+        <div class="kpi st-info kpi-focus"><b id="a-equity">—</b><i>账户权益</i></div>
+        <div class="kpi st-info"><b id="a-margin">—</b><i>持仓保证金</i></div>
+        <div class="kpi st-info"><b id="a-float">—</b><i>浮动盈亏合计</i></div>
+        <div class="kpi st-info"><b id="a-usage">—</b><i>资金使用率</i></div>
+      </div>
+      <div class="decision-card st-info" id="account">
         <h2>我的账户 <span class="price" id="acc-sub"></span></h2>
-        <div class="row"><span>账户权益（实时推算）</span><span id="a-equity">—</span></div>
-        <div class="row"><span>资金使用率</span><span id="a-usage">—</span></div>
-        <div class="row"><span>持仓保证金</span><span id="a-margin">—</span></div>
         <div class="row"><span>距组合上限</span><span id="a-dist">—</span></div>
-        <div class="row"><span>浮动盈亏合计</span><span id="a-float">—</span></div>
         <div class="row"><span>盯市收益</span><span id="a-realized">—</span></div>
         <div class="row"><span>累计手续费</span><span id="a-fee">—</span></div>
         <div class="row"><span>权益同步基准</span><span id="a-synced" class="stamp">—</span></div>
