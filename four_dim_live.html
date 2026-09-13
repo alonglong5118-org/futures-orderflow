@@ -3104,8 +3104,9 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
       <!-- B1 自选到价提醒 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">②</span><span class="gh-title">条件触发提醒</span><span class="gh-intro"><i class="gi-chip"><b>B1 到价</b>非持仓品种挂条件 · 弹窗+语音+消息</i><i class="gi-chip"><b>B2 换月</b>主力合约移仓预警</i><i class="gi-chip"><b>B3 跳空</b>隔夜跳空风险预警</i></span></div>
-      <div class="decision-card st-warn" id="alerts-watch" style="margin-bottom:14px">
-        <h2>自选到价提醒 <span class="price">B1</span> <span class="price" id="watch-sub"></span></h2>
+      <details class="detail-card" id="alerts-watch" style="margin-bottom:14px">
+        <summary>自选到价提醒 <span class="price">B1</span> <span class="price" id="watch-sub"></span></summary>
+        <div class="detail-body">
         <div class="trade" style="margin-bottom:10px">
           <select id="w-sym"></select>
           <select id="w-op">
@@ -3119,26 +3120,33 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         </div>
         <div class="stamp" style="margin-bottom:8px">非持仓品种也能挂条件，触发即弹窗+语音+消息；非该品种交易时段不误报。最多 60 条。</div>
         <div id="watch-box"><div class="stamp">加载中…</div></div>
-      </div>
+        </div>
+      </details>
 
       <!-- B2 换月预警 -->
-      <div class="decision-card st-warn" id="alerts-rollover" style="margin-bottom:14px">
-        <h2>换月预警 <span class="price">B2</span> <span class="price" id="roll-sub"></span></h2>
+      <details class="detail-card" id="alerts-rollover" style="margin-bottom:14px">
+        <summary>换月预警 <span class="price">B2</span> <span class="price" id="roll-sub"></span></summary>
+        <div class="detail-body">
         <div id="roll-box"><div class="stamp">加载中…</div></div>
-      </div>
+        </div>
+      </details>
 
       <!-- B3 跳空风险预警 -->
-      <div class="decision-card st-warn" id="alerts-gap" style="margin-bottom:14px">
-        <h2>跳空风险预警 <span class="price">B3</span> <span class="price" id="gap-sub"></span></h2>
+      <details class="detail-card" id="alerts-gap" style="margin-bottom:14px">
+        <summary>跳空风险预警 <span class="price">B3</span> <span class="price" id="gap-sub"></span></summary>
+        <div class="detail-body">
         <div id="gap-box"><div class="stamp">加载中…</div></div>
-      </div>
+        </div>
+      </details>
 
       <!-- C2/C3 分品种 Edge + 波动率 Regime -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">③</span><span class="gh-title">分品种 Edge / 波动率 Regime</span><span class="gh-intro"><i class="gi-chip"><b>Edge</b>分品种优势衰退监控</i><i class="gi-chip"><b>Regime</b>波动率状态切换预警</i></span></div>
-      <div class="decision-card st-warn" id="alerts-edge">
-        <h2>分品种 Edge + 波动率 Regime <span class="price">C2/C3</span> <span class="price" id="edge-sub"></span></h2>
+      <details class="detail-card" id="alerts-edge">
+        <summary>分品种 Edge + 波动率 Regime <span class="price">C2/C3</span> <span class="price" id="edge-sub"></span></summary>
+        <div class="detail-body">
         <div id="edge-box"><div class="stamp">加载中…</div></div>
-      </div>
+        </div>
+      </details>
 
       <!-- C4 报警历史 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">④</span><span class="gh-title">报警历史</span><span class="gh-intro"><i class="gi-chip"><b>历史</b>触价/移动止损/风险超标全记录</i><i class="gi-chip"><b>筛选</b>按类型过滤 · 一键刷新</i></span></div>
