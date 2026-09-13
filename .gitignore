@@ -4,6 +4,7 @@ _*.py
 # 备份
 *.bak
 *.bak_*
+*.broken_*
 # 运行期状态/缓存
 *.log
 .oos_lock
@@ -116,6 +117,7 @@ site/
 
 # ---- 版本备份目录（不入库）----
 backup_v*/
+backup_clean*/
 
 # ---- 外挂盘数据软链接（/Volumes/Expansion，他人机器上不一定存在）----
 data_5m_long
