@@ -2814,7 +2814,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     <div class="pane-group" id="group-execution">
       <section class="pane" id="pane-trade">
       <div class="group-head gh-amber gh-flow"><span class="gh-num">①</span><span class="gh-title">成交记录 · 跟单分析</span><span class="gh-intro"><i class="gi-chip"><b>记账</b>开仓/平仓表单录入 · 策略账户标签 · CSV 导入</i><i class="gi-chip"><b>跟单分析</b>跟单率/采纳率/胜率对比 · 成交 vs 信号明细</i></span></div>
-      <div class="card" id="journal" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="journal" style="margin-bottom:12px">
         <h2>成交记录器 <span class="price" id="j-sub"></span></h2>
         <div class="trade" style="margin-bottom:8px">
           <span style="font-size:11px;color:var(--amber)">开仓：</span>
@@ -2889,7 +2889,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
       <section class="pane" id="pane-paper">
       <div class="group-head gh-amber gh-flow"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-intro"><i class="gi-chip"><b>沙盒</b>100 万虚拟资金 · 手动/按信号模拟开平仓</i><i class="gi-chip"><b>隔离</b>独立核算盈亏 · 不碰真实账户</i></span></div>
-      <div class="card" id="paper-card" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="paper-card" style="margin-bottom:12px">
         <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
         <div class="stamp" style="margin-bottom:10px">初始虚拟资金 1,000,000，可手动或一键按当前信号模拟开平仓，独立核算盈亏。仅供策略验证，与真实账户隔离。</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px">
@@ -3090,7 +3090,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
       <!-- #132 组合预警规则引擎 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">①</span><span class="gh-title">组合预警规则引擎</span><span class="gh-intro"><i class="gi-chip"><b>收口</b>热度/状态机/回撤/熔断/日亏/连亏/集中度统一规则</i><i class="gi-chip"><b>分级</b>分级告警 + 动作建议 · trade_config.json 可覆盖</i></span></div>
-      <div class="card" id="rules-card" style="margin-bottom:14px">
+      <div class="decision-card st-danger" id="rules-card" style="margin-bottom:14px">
         <h2>组合预警规则引擎 <span class="price">#132</span> <span class="price" id="rules-grade"></span> <span class="price" id="rules-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">把风险热度 / 状态机 / 回撤 / 硬熔断 / 日亏 / 连亏 / 集中度 / 持仓数 统一收口为「一套可配置规则」：分级告警 + 动作建议。规则可在 trade_config.json 的 risk_rules 段覆盖（非投资建议）。</div>
         <div id="rules-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
