@@ -2041,6 +2041,39 @@
   }
 }
 
+  /* ===== 三层布局框架（2026-09-13 面板重构：状态条/决策区/详情区）===== */
+  :root{
+    --bd-card:#2a3340; --bd-card-hover:#3a4758;
+    --st-ok:#3fb950; --st-warn:#f0883e; --st-danger:#f85149; --st-info:#58a6ff;
+  }
+  /* 顶部状态条：核心 KPI 横排（模块间 12px） */
+  .pane-status{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .kpi{flex:1 1 150px;min-width:120px;background:var(--card);border:1px solid var(--bd-card);border-radius:12px;padding:12px 14px;transition:border-color .15s}
+  .kpi:hover{border-color:var(--bd-card-hover)}
+  .kpi b{display:block;font-size:24px;font-weight:700;line-height:1.25;color:var(--txt)}
+  .kpi i{display:block;font-size:12px;color:var(--mut2);margin-top:4px;font-style:normal}
+  .kpi.st-ok{border-left:4px solid var(--st-ok)}
+  .kpi.st-warn{border-left:4px solid var(--st-warn)}
+  .kpi.st-danger{border-left:4px solid var(--st-danger)}
+  .kpi.st-info{border-left:4px solid var(--st-info)}
+  /* 视觉焦点：每个书签仅 1 个，最大仪表卡 */
+  .kpi-focus{flex:2 1 220px}
+  .kpi-focus b{font-size:28px}
+  /* 决策卡：左侧 4px 色边，主判断信息（卡片内 16px） */
+  .decision-card{background:var(--card);border:1px solid var(--bd-card);border-left:4px solid var(--st-info);border-radius:12px;padding:16px;margin-bottom:16px}
+  .decision-card:hover{border-color:var(--bd-card-hover)}
+  .decision-card.st-ok{border-left-color:var(--st-ok)}
+  .decision-card.st-warn{border-left-color:var(--st-warn)}
+  .decision-card.st-danger{border-left-color:var(--st-danger)}
+  .decision-card h2{font-size:16px;font-weight:700;color:var(--txt);margin:0 0 12px}
+  /* 详情卡：默认折叠，可下钻辅助数据 */
+  .detail-card{background:var(--card);border:1px solid var(--bd-card);border-radius:12px;margin-bottom:16px;overflow:hidden}
+  .detail-card summary{font-size:16px;font-weight:600;color:var(--txt);padding:12px 16px;cursor:pointer;list-style:none;user-select:none}
+  .detail-card summary::-webkit-details-marker{display:none}
+  .detail-card summary::before{content:'▸ ';color:var(--mut2)}
+  .detail-card[open] summary::before{content:'▾ '}
+  .detail-card .detail-body{padding:0 16px 16px}
+
 </style>
 
 <!-- 请求管理器 v5：优先队列 + 自适应节流 + body stream 修复 -->
@@ -2665,14 +2698,14 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
       <section class="pane" id="pane-cockpit">
       <div class="cockpit">
-        <div class="cockpit-status" id="ck-status">
-          <div class="ck-stat"><b id="ck-feed">—</b><i>行情</i></div>
-          <div class="ck-stat"><b id="ck-sys">—</b><i>系统</i></div>
-          <div class="ck-stat"><b id="ck-grade" style="color:var(--green)">—</b><i>风控等级</i></div>
-          <div class="ck-stat"><b id="ck-eq">—</b><i>权益</i></div>
-          <div class="ck-stat"><b id="ck-float">—</b><i>浮动盈亏</i></div>
-          <div class="ck-stat"><b id="ck-pos">—</b><i>持仓数</i></div>
-          <div class="ck-stat"><b id="ck-xs" style="color:var(--green)">校验中</b><i>数据一致性</i></div>
+        <div class="pane-status" id="ck-status">
+          <div class="kpi st-ok"><b id="ck-feed">—</b><i>行情</i></div>
+          <div class="kpi st-ok"><b id="ck-sys">—</b><i>系统</i></div>
+          <div class="kpi st-info"><b id="ck-grade" style="color:var(--green)">—</b><i>风控等级</i></div>
+          <div class="kpi st-info kpi-focus"><b id="ck-eq">—</b><i>权益</i></div>
+          <div class="kpi st-info"><b id="ck-float">—</b><i>浮动盈亏</i></div>
+          <div class="kpi st-info"><b id="ck-pos">—</b><i>持仓数</i></div>
+          <div class="kpi st-ok"><b id="ck-xs" style="color:var(--green)">校验中</b><i>数据一致性</i></div>
         </div>
 
         
@@ -2695,7 +2728,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 </style>
 
         <div class="cockpit-grid">
-          <div class="ck-card ck-gold">
+          <div class="decision-card st-info">
             <div class="ckc-head"><span class="gh-num">总</span><span class="ckc-title">账户 · 风控总览</span><button class="ckc-go" onclick="switchTab('account')">进入 →</button></div>
             <div class="ckc-body">
               <div class="ckc-kpi clickable" onclick="switchTab('account')"><b id="ckc-eq">—</b><i>权益</i></div>
@@ -2705,7 +2738,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
             </div>
           </div>
 
-          <div class="ck-card ck-blue">
+          <div class="decision-card st-info">
             <div class="ckc-head"><span class="gh-num">研</span><span class="ckc-title">行情研判</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
             <div class="ckc-body">
               <div class="ckc-kpi clickable" onclick="switchTab('signals')"><b id="ckc-sig">—</b><i>活跃信号</i></div>
@@ -2715,7 +2748,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
             </div>
           </div>
 
-          <div class="ck-card ck-red">
+          <div class="decision-card st-danger">
             <div class="ckc-head"><span class="gh-num">警</span><span class="ckc-title">风险预警</span><button class="ckc-go" onclick="switchTab('alerts')">进入 →</button></div>
             <div class="ckc-body">
               <div class="ckc-kpi clickable" onclick="switchTab('alerts')"><b id="ckc-ntr">—</b><i>触发规则</i></div>
@@ -2725,7 +2758,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
             </div>
           </div>
 
-          <div class="ck-card ck-amber">
+          <div class="decision-card st-warn">
             <div class="ckc-head"><span class="gh-num">易</span><span class="ckc-title">交易执行</span><button class="ckc-go" onclick="switchTab('trade')">进入 →</button></div>
             <div class="ckc-body">
               <div class="ckc-kpi clickable" onclick="switchTab('trade')"><b id="ckc-trades">—</b><i>今日成交</i></div>
@@ -2733,7 +2766,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
             </div>
           </div>
 
-          <div class="ck-card ck-green">
+          <div class="decision-card st-ok">
             <div class="ckc-head"><span class="gh-num">绩</span><span class="ckc-title">复盘绩效</span><button class="ckc-go" onclick="switchTab('perf')">进入 →</button></div>
             <div class="ckc-body">
               <div class="ckc-kpi clickable" onclick="switchTab('perf')"><b id="ckc-pnl">—</b><i>总盈亏</i></div>
@@ -2741,7 +2774,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
             </div>
           </div>
 
-          <div class="ck-card ck-violet">
+          <div class="decision-card st-info">
             <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">我的聚焦</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
             <div class="ckc-body">
               <div class="ckc-kpi clickable" onclick="switchTab('focus')"><b id="ckc-focusn">—</b><i>关注品种</i></div>
@@ -2750,16 +2783,21 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
           </div>
         </div>
 
-        <div class="cockpit-cols">
-          <div class="ck-list-card ck-blue">
-            <div class="ckc-head"><span class="gh-num">信</span><span class="ckc-title">信号速览</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
-            <div id="ck-signals" class="ck-list"></div>
+        <details class="detail-card">
+          <summary>详情 · 信号速览 / 关注品种盯盘</summary>
+          <div class="detail-body">
+            <div class="cockpit-cols">
+              <div class="ck-list-card ck-blue">
+                <div class="ckc-head"><span class="gh-num">信</span><span class="ckc-title">信号速览</span><button class="ckc-go" onclick="switchTab('signals')">进入 →</button></div>
+                <div id="ck-signals" class="ck-list"></div>
+              </div>
+              <div class="ck-list-card ck-violet">
+                <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">关注品种盯盘</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
+                <div id="ck-focus" class="ck-list"></div>
+              </div>
+            </div>
           </div>
-          <div class="ck-list-card ck-violet">
-            <div class="ckc-head"><span class="gh-num">聚</span><span class="ckc-title">关注品种盯盘</span><button class="ckc-go" onclick="switchTab('focus')">进入 →</button></div>
-            <div id="ck-focus" class="ck-list"></div>
-          </div>
-        </div>
+        </details>
         <div class="stamp" style="margin-top:14px;text-align:center">总览驾驶舱聚合自各功能域实时接口 · 点击「进入 →」直达对应书签页（非投资建议）</div>
       </div>
     </section>
