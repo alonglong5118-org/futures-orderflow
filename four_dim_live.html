@@ -3093,6 +3093,13 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
       <section class="pane" id="pane-alerts">
 
+      <div class="pane-status">
+        <div class="kpi st-danger"><b id="rs-dd">—</b><i>当前回撤</i></div>
+        <div class="kpi st-warn"><b id="rs-tier">—</b><i>dd_tier 档位</i></div>
+        <div class="kpi st-ok"><b id="rs-kill">—</b><i>killswitch</i></div>
+        <div class="kpi st-info"><b id="rs-margin">—</b><i>资金使用率</i></div>
+      </div>
+
       <!-- #132 组合预警规则引擎 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">①</span><span class="gh-title">组合预警规则引擎</span><span class="gh-intro"><i class="gi-chip"><b>收口</b>热度/状态机/回撤/熔断/日亏/连亏/集中度统一规则</i><i class="gi-chip"><b>分级</b>分级告警 + 动作建议 · trade_config.json 可覆盖</i></span></div>
       <div class="decision-card st-danger" id="rules-card" style="margin-bottom:14px">
@@ -8857,6 +8864,26 @@ async function killReset(){
   if(!confirm('确认已按清单全部平仓、并解除硬熔断？\n解除后系统将恢复发信号。'))return;
   try{await _smartFetch('/api/killswitch?action=reset');refreshKill();refreshRisk();refreshDrawdown();}catch(e){console.error(e);}
 }
+// ★ 2026-09-13: 风控状态条（当前回撤/dd_tier/killswitch/资金使用率）——只读复用 /api/drawdown + /api/killswitch + /api/account
+async function refreshRiskBar(){
+  try{
+    const [d, k, a] = await Promise.all([
+      _smartFetch('/api/drawdown').then(r=>r.json()).catch(()=>null),
+      _smartFetch('/api/killswitch').then(r=>r.json()).catch(()=>null),
+      _smartFetch('/api/account').then(r=>r.json()).catch(()=>null),
+    ]);
+    const ddEl=document.getElementById('rs-dd');
+    if(d && ddEl){ const p=(d.dd_pct||0); ddEl.textContent=p.toFixed(2)+'%'; ddEl.style.color=p>0?'var(--st-warn)':'var(--st-ok)'; }
+    const tierEl=document.getElementById('rs-tier');
+    if(d && tierEl){ tierEl.textContent=d.tier?('第'+d.tier+'档'):'基准'; }
+    const killEl=document.getElementById('rs-kill');
+    if(k && killEl){ killEl.textContent=k.halted?'已熔断':'正常'; killEl.style.color=k.halted?'var(--st-danger)':'var(--st-ok)'; }
+    const mEl=document.getElementById('rs-margin');
+    if(a && mEl){ mEl.textContent=(a.usage_rate!=null?a.usage_rate:'—')+'%'; }
+  }catch(e){console.error(e);}
+}
+setTimeout(()=>{ if(!_userActionInProgress) refreshRiskBar(); }, 800);
+setInterval(()=>{ if(!_userActionInProgress && !_refreshBusy) refreshRiskBar(); }, 5000);
 async function refreshAnomaly(){
   try{
     const r=await _smartFetch('/api/anomaly');const a=await r.json();
