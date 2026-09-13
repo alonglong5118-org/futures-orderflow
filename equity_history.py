@@ -538,13 +538,20 @@ def audit_alerts(rec):
 # 查询
 # ============================================================
 
-def history(days=60):
-    """返回最近 days 天的归档条目（升序）。days<=0 表示全部。"""
+def history(days=60, clean_only=False):
+    """返回最近 days 天的归档条目（升序）。days<=0 表示全部。
+
+    clean_only=True 时跳过 pre_reset_polluted（09-12 账户重置前旧口径）条目，
+    供 σ_port 等需要「同口径干净序列」的消费方使用——否则跨口径算波动率会被污染放大。
+    """
     d = _load_hist()["days"]
     keys = sorted(d.keys())
     if days and days > 0:
         keys = keys[-days:]
-    return [d[k] for k in keys]
+    rows = [d[k] for k in keys]
+    if clean_only:
+        rows = [r for r in rows if not r.get("pre_reset_polluted")]
+    return rows
 
 
 def latest():
@@ -552,9 +559,9 @@ def latest():
     return h[-1] if h else None
 
 
-def summary():
-    """汇总：归档天数、区间、累计盈亏、最大单日回撤。"""
-    rows = history(0)
+def summary(clean_only=False):
+    """汇总：归档天数、区间、累计盈亏、最大单日回撤。clean_only 语义同 history()。"""
+    rows = history(0, clean_only=clean_only)
     if not rows:
         return {"days": 0}
     total = sum(r.get("pnl", 0) or 0 for r in rows)
