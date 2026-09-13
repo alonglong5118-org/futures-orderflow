@@ -3344,7 +3344,13 @@ def _spec_compat(cfg, symbol):
     直接 sp["fee"] 会 KeyError → 所有传 live config 的回测全部 0 成交
     （2026-09-09 /api/sensitivity 假绿根因：异常被吞 → 基线 0 笔 → 全部"稳健"）。
     处理：缺旧键时用模块默认 spec 补齐（回测口径维持 DEFAULT fee，与历史一致），
-    live 新键照常保留。新 schema 手续费是否进回测属策略数值改动，须另做 A/B。
+    live 新键照常保留。
+    ── 2026-09-09 全品种 A/B 定档（ab_fee_unify.py，43 活跃品种/1693 笔）──
+    统一到 live 新 schema 折算费：total_R 1089.0 → 1073.6（Δ=−15.42R,
+    95%CI[−23.0,−9.4], P(Δ<0)=1.000），expR 0.6432→0.6341（−1.4%）。
+    新费率多为"推算"且整体偏高（al/zn 6→12 等），仅 ag/cu 等少数偏低；
+    n 不变印证费率只缩放 R。按铁律"恶化不改 / 无证据不改"→ **维持 DEFAULT fee，不统一**。
+    若要重估，须先实测"推算"品种真实手续费再议。
     """
     sp = cfg.get("contract_specs", {}).get(symbol, _FALLBACK_SPEC)
     if "fee" not in sp or "multiplier" not in sp:
