@@ -2891,15 +2891,15 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     </section>
       <section class="pane" id="pane-paper">
       <div class="group-head gh-amber gh-flow"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-intro"><i class="gi-chip"><b>沙盒</b>100 万虚拟资金 · 手动/按信号模拟开平仓</i><i class="gi-chip"><b>隔离</b>独立核算盈亏 · 不碰真实账户</i></span></div>
+      <div class="pane-status">
+        <div class="kpi st-info kpi-focus"><b id="pp-eq" class="mv">—</b><i>虚拟权益</i></div>
+        <div class="kpi st-info"><b id="pp-cash" class="mv">—</b><i>可用资金</i></div>
+        <div class="kpi st-info"><b id="pp-real" class="mv">—</b><i>盯市收益</i></div>
+        <div class="kpi st-info"><b id="pp-mtm" class="mv">—</b><i>浮动盈亏</i></div>
+      </div>
       <div class="decision-card st-info" id="paper-card" style="margin-bottom:12px">
         <h2>🧪 模拟盘沙盒 <span class="price">F8</span></h2>
         <div class="stamp" style="margin-bottom:10px">初始虚拟资金 1,000,000，可手动或一键按当前信号模拟开平仓，独立核算盈亏。仅供策略验证，与真实账户隔离。</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px">
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">虚拟权益</div><b id="pp-eq" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">可用资金</div><b id="pp-cash" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">盯市收益</div><b id="pp-real" class="mv" style="font-size:20px">—</b></div>
-          <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--mut)">浮动盈亏</div><b id="pp-mtm" class="mv" style="font-size:20px">—</b></div>
-        </div>
         <div class="trade" style="margin-bottom:8px">
           <span style="font-size:11px;color:var(--amber)">模拟开仓：</span>
           <div class="sym-picker" id="pp-sym-picker" data-target="pp-sym" data-onchange="(typeof window.refreshPaperSyms==='function'?window.refreshPaperSyms():null)">
