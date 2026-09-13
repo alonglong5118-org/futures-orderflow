@@ -10919,6 +10919,23 @@ def start_dashboard(state):
                     for _sym, _pos in _acc_pos.items():
                         if isinstance(_pos, dict) and _pos.get("lots", 0) > 0:
                             state["positions"][_sym] = _pos
+                    # ★ 2026-09-13: 静态快照模式下，/api/state 的顶层账户字段也以截图为准
+                    if _acc_st.get("snapshot_mode"):
+                        from datetime import datetime
+                        try:
+                            _until = datetime.strptime(str(_acc_st.get("snapshot_until", "")), "%Y-%m-%d %H:%M:%S")
+                            if datetime.now() < _until:
+                                _snap = _acc_st.get("snapshot", {})
+                                state["equity"] = float(_snap.get("equity", _acc_st.get("equity", state.get("equity", 0))))
+                                state["available"] = float(_snap.get("available", _acc_st.get("available", state.get("available", 0))))
+                                state["total_margin"] = float(_snap.get("total_margin", _acc_st.get("margin_occupied", state.get("total_margin", 0))))
+                                state["float_total"] = float(_snap.get("float_total", _snap.get("mtm_pnl", _acc_st.get("mtm_pnl", state.get("float_total", 0)))))
+                                state["mtm_pnl"] = state["float_total"]
+                                state["usage_rate"] = float(_snap.get("usage_rate", _acc_st.get("usage_rate", 0) * 100))
+                                state["snapshot_mode"] = True
+                                state["snapshot_until"] = _acc_st.get("snapshot_until")
+                        except Exception:
+                            pass
                 except Exception:
                     pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))

@@ -1055,6 +1055,84 @@ def snapshot(prices=None):
     acc = cfg.get("account", {})
     specs = cfg.get("contract_specs", {})
     st = load_state()
+
+    # ★ 2026-09-13: 静态快照模式（以用户最新模拟盘截图为唯一基准）
+    # 在 snapshot_until 之前，直接返回 account_state.json 中的快照数据，不动态计算。
+    # 到期后自动恢复实时联动，无需手动干预。
+    if st.get("snapshot_mode"):
+        try:
+            _until = datetime.strptime(str(st.get("snapshot_until", "")), "%Y-%m-%d %H:%M:%S")
+            if datetime.now() < _until:
+                _snap = st.get("snapshot", {})
+                _snap_positions = _snap.get("positions", [])
+                _pos_dict = st.get("positions", {}) if isinstance(st.get("positions"), dict) else {}
+                _merged_positions = []
+                for _p in _snap_positions:
+                    _sym = _p.get("symbol", "")
+                    _stored = _pos_dict.get(_sym, {}) if isinstance(_pos_dict, dict) else {}
+                    _merged_positions.append({
+                        "symbol": _sym,
+                        "name": _p.get("name", _stored.get("name", _sym)),
+                        "contract": _p.get("contract", _stored.get("contract", _sym)),
+                        "direction": _p.get("direction", _stored.get("direction", "多")),
+                        "lots": _p.get("lots", _stored.get("lots", 0)),
+                        "avg": _p.get("avg", _stored.get("avg", 0)),
+                        "stop": _stored.get("stop"),
+                        "target": _stored.get("target"),
+                        "t1": _stored.get("t1"),
+                        "t2": _stored.get("t2"),
+                        "tp_level": _stored.get("tp_level", "tp_none"),
+                        "tp_targets": _stored.get("tp_targets"),
+                        "trailing_stop": _stored.get("trailing_stop"),
+                        "trail_state": _stored.get("trail_state"),
+                        "init_qty": _stored.get("init_qty", _p.get("lots", 0)),
+                        "price": _p.get("price"),
+                        "float_pnl": _p.get("float_pnl"),
+                        "margin_used": _p.get("margin_used", 0),
+                        "margin_pct": _p.get("margin_pct", 0),
+                        "dist_to_cap": 0,
+                    })
+                _eq = float(_snap.get("equity", st.get("equity", 0)))
+                _avail = float(_snap.get("available", st.get("available", 0)))
+                _margin = float(_snap.get("total_margin", st.get("margin_occupied", 0)))
+                _float = float(_snap.get("float_total", _snap.get("mtm_pnl", st.get("mtm_pnl", 0))))
+                _usage = float(_snap.get("usage_rate", st.get("usage_rate", 0) * 100))
+                _now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                return {
+                    "equity": _eq,
+                    "equity_synced_raw": _eq,
+                    "available": _avail,
+                    "realized_pnl": float(st.get("realized_pnl", 0)),
+                    "realized_pnl_at_sync": float(st.get("realized_pnl_at_sync", 0)),
+                    "float_total": _float,
+                    "mtm_pnl": _float,
+                    "total_margin": _margin,
+                    "usage_rate": _usage,
+                    "portfolio_cap": 0,
+                    "dist_to_portfolio_cap": 0,
+                    "margin_cap_pct": acc.get("margin_cap_pct", 30),
+                    "portfolio_margin_cap_pct": acc.get("portfolio_margin_cap_pct", 60),
+                    "max_lots": acc.get("max_lots", 6),
+                    "max_total_lots": acc.get("max_total_lots", 15),
+                    "risk_pct": acc.get("risk_pct", 1.5),
+                    "equity_synced": _now,
+                    "updated": _now,
+                    "positions": _merged_positions,
+                    "init_capital": float(st.get("initial_balance", 1000000)),
+                    "self_check": {
+                        "ok": True,
+                        "msg": "静态快照模式生效中，到期自动恢复实时联动",
+                        "equity_verified": _eq,
+                        "realized_computed": float(st.get("realized_pnl", 0)),
+                        "float_computed": _float,
+                        "total_verified": 0,
+                    },
+                    "snapshot_mode": True,
+                    "snapshot_until": st.get("snapshot_until"),
+                }
+        except Exception as _e:
+            print(f"[snapshot] 静态快照模式解析异常，回退实时计算: {_e}")
+
     # 兼容 positions 格式：list -> dict（key=symbol）
     _raw_positions = st.get("positions", {})
     if isinstance(_raw_positions, list):
