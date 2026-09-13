@@ -1197,6 +1197,15 @@ def snapshot(prices=None):
     usage_rate = round(total_margin / dynamic_equity * 100, 2)
     portfolio_cap = round(dynamic_equity * portfolio_cap_pct / 100, 2)
 
+    # ★ 2026-09-13: 以 CTP 截图为唯一基准的静态展示字段（人工授权一次性写入 account_state.json）
+    #   usage_rate 存小数（0.1888=18.88%），mtm_pnl=盯市浮盈。仅覆盖展示值，不动持仓结构。
+    _stored_usage = st.get("usage_rate")
+    if _stored_usage is not None:
+        usage_rate = round(float(_stored_usage) * 100, 2)
+    _mtm_pnl = st.get("mtm_pnl")
+    if _mtm_pnl is None:
+        _mtm_pnl = st.get("float_at_sync")
+
     # ── 2026-09-09: 禁用自动刷新同步基准 ──
     # 只更新 updated 时间戳，绝不修改 equity / realized_pnl_at_sync / float_at_sync
     # anchor 三元组只在用户手动点「同步权益」(set_equity) 时才更新
@@ -1238,6 +1247,7 @@ def snapshot(prices=None):
         "realized_pnl": round(realized_pnl, 2),
         "realized_pnl_at_sync": round(realized_pnl, 2),
         "float_total": round(float_total, 2),
+        "mtm_pnl": round(float(_mtm_pnl or 0.0), 2),
         "total_margin": round(total_margin, 2),
         "usage_rate": usage_rate,
         "portfolio_cap": portfolio_cap,

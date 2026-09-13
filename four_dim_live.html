@@ -7217,8 +7217,10 @@ async function refreshAccount(force){
     fp.textContent=(a.float_total>=0?'+':'')+fmt(a.float_total);
     fp.className=a.float_total>=0?'pos':'neg';
     const rp=document.getElementById('a-realized');
-    rp.textContent=(a.total_pnl>=0?'+':'')+fmt(a.total_pnl);
-    rp.className=a.total_pnl>=0?'pos':'neg';
+    // ★ 2026-09-13: 盯市收益=盯市浮盈(mtm)，优先读 mtm_pnl（CTP 截图基准 -12340），回退 total_pnl
+    const _mtm = (a.mtm_pnl != null) ? a.mtm_pnl : a.total_pnl;
+    rp.textContent=(_mtm>=0?'+':'')+fmt(_mtm);
+    rp.className=_mtm>=0?'pos':'neg';
     const feeEl=document.getElementById('a-fee');
     if(feeEl) feeEl.textContent='-'+fmt(a.total_fee||0,0);   // 手续费是成本，负号呈现
     const synced=a.equity_synced||'';
