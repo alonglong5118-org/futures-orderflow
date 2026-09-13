@@ -10921,7 +10921,6 @@ def start_dashboard(state):
                             state["positions"][_sym] = _pos
                     # ★ 2026-09-13: 静态快照模式下，/api/state 的顶层账户字段也以截图为准
                     if _acc_st.get("snapshot_mode"):
-                        from datetime import datetime
                         try:
                             _until = datetime.strptime(str(_acc_st.get("snapshot_until", "")), "%Y-%m-%d %H:%M:%S")
                             if datetime.now() < _until:
