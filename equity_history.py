@@ -30,6 +30,8 @@ equity_history.py — 日终权益归档（P0）
   python equity_history.py --show --days 30        # 查看最近 30 天归档
   python equity_history.py --audit                 # 每日 journal 前置自检（打印告警）
   python equity_history.py --audit --gate          # 前置自检门：命中可疑盈亏则 exit 1
+  python equity_history.py --backfill              # 从 trade_journal 反推逐日权益（只读预演）
+  python equity_history.py --backfill --apply      # 真正回填（幂等，冲突保留真实归档）
 """
 
 from __future__ import annotations
@@ -572,6 +574,136 @@ def summary():
 
 
 # ============================================================
+# 回填：从 trade_journal 已平仓成交反推逐日权益
+# ============================================================
+
+def backfill_from_journal(account_id="default", apply=False, now=None):
+    """从 trade_journal 已平仓成交反推逐日权益，回填 equity_history.json 的 days。
+
+    口径（与 trade_journal.equity_curve() 完全一致）：
+      base  = 账户权益锚（account_state 的 equity）
+      start = base - 全部已平仓盈亏之和（即「首笔成交前」的权益）
+      再按平仓日期逐笔累计已实现盈亏，聚成日频 open/close/high/low/pnl。
+
+    规则：
+      · 只读 trade_journal（显式传 account_id，默认 default=模拟盘；绝不碰 live）。
+      · 幂等：days 里已有该日期的条目视为「真实归档」，一律保留，进冲突清单。
+      · apply=False 只预演（返回派生结果，不写盘）；apply=True 才把新增日写盘。
+      · 回填条目打 source='journal_backfill' 标记，与真实日内归档可区分。
+      · 口径断点（_REGIME_BREAKS）之前的历史日属旧本金口径，回填值仅供参考。
+
+    返回 {"account","base_equity","closed_trades","total_closed_pnl","start_equity",
+          "derived","added","conflicts"}。
+    """
+    now = now or datetime.now()
+    # equity_history.json 非账户隔离（固定文件，锚也读 default），回填只允许 default=模拟盘，
+    # 禁止把 live 等其它账户混入同一份归档。
+    if account_id != "default":
+        return {"error": "回填仅支持 default（模拟盘）；equity_history.json 非账户隔离，禁止混入账户 %s" % account_id}
+    try:
+        import account_tracker as at
+        import trade_journal as tj
+    except Exception as e:
+        return {"error": "import 失败: %s" % e}
+
+    # 显式切到指定账户读 journal 与锚（线程局部，退出自动恢复），确保不串到 live
+    with at.account_context(account_id):
+        data = tj._load()
+        trades = data.get("trades") or []
+        closed = sorted(
+            [t for t in trades if isinstance(t, dict) and t.get("pnl") is not None],
+            key=lambda t: t.get("exit_time") or t.get("time") or "",
+        )
+        base = tj._base_equity()
+
+    total = sum(float(t["pnl"]) for t in closed)
+    start = base - total
+
+    def _date(ts):
+        ts = ts or ""
+        return ts[:10] if len(ts) >= 10 else None
+
+    # 按平仓日期聚合，逐笔累计当日权益轨迹（算 high/low/日内回撤）
+    from collections import OrderedDict
+
+    by_day = OrderedDict()
+    for t in closed:
+        d = _date(t.get("exit_time") or t.get("time"))
+        if not d:
+            continue
+        by_day.setdefault(d, []).append(float(t["pnl"]))
+
+    prev_close = start
+    derived = []
+    for d, pnls in by_day.items():
+        day_open = prev_close
+        running = day_open
+        high = running
+        low = running
+        peak = running
+        max_dd = 0.0
+        for p in pnls:
+            running += p
+            high = max(high, running)
+            low = min(low, running)
+            if running > peak:
+                peak = running
+            if peak > 0:
+                dd = (peak - running) / peak
+                max_dd = max(max_dd, dd)
+        day_close = running
+        pnl = day_close - day_open
+        derived.append({
+            "date": d,
+            "archived_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "open_equity": round(day_open, 2),
+            "close_equity": round(day_close, 2),
+            "high": round(high, 2),
+            "low": round(low, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl / day_open * 100, 3) if day_open else 0.0,
+            "range_pct": round((high - low) / day_open * 100, 3) if day_open else 0.0,
+            "intraday_max_dd_pct": round(max_dd * 100, 3),
+            "samples": len(pnls),
+            "source": "journal_backfill",
+            "base_equity": round(base, 2),
+        })
+        prev_close = day_close
+
+    hist = _load_hist()
+    added = []
+    conflicts = []
+    for e in derived:
+        if e["date"] in hist["days"]:
+            real = hist["days"][e["date"]]
+            conflicts.append({
+                "date": e["date"],
+                "real_close": real.get("close_equity"),
+                "derived_close": e["close_equity"],
+                "kept": "real",
+            })
+        else:
+            if apply:
+                hist["days"][e["date"]] = e
+            added.append(e)
+
+    if apply and added:
+        hist["_updated"] = now.strftime("%Y-%m-%d %H:%M:%S")
+        _save_hist(hist)
+
+    return {
+        "account": account_id,
+        "base_equity": round(base, 2),
+        "closed_trades": len(closed),
+        "total_closed_pnl": round(total, 2),
+        "start_equity": round(start, 2),
+        "derived": derived,
+        "added": added,
+        "conflicts": conflicts,
+    }
+
+
+# ============================================================
 # CLI
 # ============================================================
 
@@ -585,7 +717,29 @@ def _main():
     ap.add_argument("--days", type=int, default=30, help="--show 的天数，默认 30")
     ap.add_argument("--audit", action="store_true", help="跑 journal 物理校验（前置自检门）")
     ap.add_argument("--gate", action="store_true", help="配合 --audit：命中则 exit 1（供日报管线拦截）")
+    ap.add_argument("--backfill", action="store_true", help="从 trade_journal 反推逐日权益并回填（缺省只预演）")
+    ap.add_argument("--apply", action="store_true", help="配合 --backfill：真正写盘")
+    ap.add_argument("--account", type=str, default="default", help="--backfill 的账户 ID（默认 default=模拟盘）")
     args = ap.parse_args()
+
+    if args.backfill:
+        res = backfill_from_journal(account_id=args.account, apply=args.apply)
+        if "error" in res:
+            print("❌ %s" % res["error"])
+            return 2
+        print("回填（账户=%s）：已平仓 %d 笔，总盈亏 %+.2f，锚 %s，起点权益 %s"
+              % (res["account"], res["closed_trades"], res["total_closed_pnl"],
+                 res["base_equity"], res["start_equity"]))
+        print("派生 %d 条；新增 %d 条；冲突 %d 条（冲突以真实归档为准）"
+              % (len(res["derived"]), len(res["added"]), len(res["conflicts"])))
+        for c in res["conflicts"]:
+            print("  ⚠️ 冲突 %s：真实收盘 %s vs 反推收盘 %s → 保留真实"
+                  % (c["date"], c["real_close"], c["derived_close"]))
+        if not args.apply:
+            print("【只读预演】未写任何文件。确认无误后加 --apply 回填。")
+        else:
+            print("✅ 已回填 %d 条。" % len(res["added"]))
+        return 0
 
     if args.audit:
         rec = journal_audit(force=True)
