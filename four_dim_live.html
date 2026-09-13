@@ -2881,11 +2881,13 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
           </div>
         </div>
       <div class="group-head gh-amber gh-flow"><span class="gh-num">②</span><span class="gh-title">成交明细 · 备注</span><span class="gh-intro"><i class="gi-chip"><b>明细</b>逐笔成交列表 · 存 trade_journal.json</i><i class="gi-chip"><b>备注</b>点「备注」写离场逻辑/复盘要点</i></span></div>
-      <div class="decision-card st-info" id="jlist-card">
-        <h2>成交明细 · 备注 <span class="price">G2</span></h2>
+      <details class="detail-card" id="jlist-card">
+        <summary>成交明细 · 备注 <span class="price">G2</span></summary>
+        <div class="detail-body">
         <div class="stamp" style="margin-bottom:8px">点击「备注」可给该笔成交写文字标注（如离场逻辑/复盘要点）；数据存于 trade_journal.json</div>
         <div id="journal-list" style="max-height:320px;overflow:auto"></div><div id="global-errors" style="margin-top:6px;max-height:80px;overflow:auto"></div>
-      </div>
+        </div>
+      </details>
     </section>
       <section class="pane" id="pane-paper">
       <div class="group-head gh-amber gh-flow"><span class="gh-num">①</span><span class="gh-title">模拟盘 · 回测沙盒</span><span class="gh-intro"><i class="gi-chip"><b>沙盒</b>100 万虚拟资金 · 手动/按信号模拟开平仓</i><i class="gi-chip"><b>隔离</b>独立核算盈亏 · 不碰真实账户</i></span></div>
@@ -3025,10 +3027,12 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
       <div class="heat-wrap">
         <div id="sector-heat"></div>
-        <div class="decision-card st-info" id="sig-history-card">
-          <h2>当日触发历史 <span class="price" id="sig-hist-sub"></span></h2>
+        <details class="detail-card" id="sig-history-card">
+          <summary>当日触发历史 <span class="price" id="sig-hist-sub"></span></summary>
+          <div class="detail-body">
           <div id="sig-history"><div class="logitem stamp">加载中…</div></div>
-        </div>
+          </div>
+        </details>
       </div>
       <div id="cards"></div>
     </section>
@@ -3100,7 +3104,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
       <!-- B1 自选到价提醒 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">②</span><span class="gh-title">条件触发提醒</span><span class="gh-intro"><i class="gi-chip"><b>B1 到价</b>非持仓品种挂条件 · 弹窗+语音+消息</i><i class="gi-chip"><b>B2 换月</b>主力合约移仓预警</i><i class="gi-chip"><b>B3 跳空</b>隔夜跳空风险预警</i></span></div>
-      <div class="decision-card st-info" id="alerts-watch" style="margin-bottom:14px">
+      <div class="decision-card st-warn" id="alerts-watch" style="margin-bottom:14px">
         <h2>自选到价提醒 <span class="price">B1</span> <span class="price" id="watch-sub"></span></h2>
         <div class="trade" style="margin-bottom:10px">
           <select id="w-sym"></select>
@@ -3118,28 +3122,29 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <!-- B2 换月预警 -->
-      <div class="decision-card st-info" id="alerts-rollover" style="margin-bottom:14px">
+      <div class="decision-card st-warn" id="alerts-rollover" style="margin-bottom:14px">
         <h2>换月预警 <span class="price">B2</span> <span class="price" id="roll-sub"></span></h2>
         <div id="roll-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <!-- B3 跳空风险预警 -->
-      <div class="decision-card st-info" id="alerts-gap" style="margin-bottom:14px">
+      <div class="decision-card st-warn" id="alerts-gap" style="margin-bottom:14px">
         <h2>跳空风险预警 <span class="price">B3</span> <span class="price" id="gap-sub"></span></h2>
         <div id="gap-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <!-- C2/C3 分品种 Edge + 波动率 Regime -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">③</span><span class="gh-title">分品种 Edge / 波动率 Regime</span><span class="gh-intro"><i class="gi-chip"><b>Edge</b>分品种优势衰退监控</i><i class="gi-chip"><b>Regime</b>波动率状态切换预警</i></span></div>
-      <div class="decision-card st-info" id="alerts-edge">
+      <div class="decision-card st-warn" id="alerts-edge">
         <h2>分品种 Edge + 波动率 Regime <span class="price">C2/C3</span> <span class="price" id="edge-sub"></span></h2>
         <div id="edge-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <!-- C4 报警历史 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">④</span><span class="gh-title">报警历史</span><span class="gh-intro"><i class="gi-chip"><b>历史</b>触价/移动止损/风险超标全记录</i><i class="gi-chip"><b>筛选</b>按类型过滤 · 一键刷新</i></span></div>
-      <div class="decision-card st-info" id="alerts-history">
-        <h2>报警历史 <span class="price">C4</span> <span class="price" id="hist-sub"></span></h2>
+      <details class="detail-card" id="alerts-history">
+        <summary>报警历史 <span class="price">C4</span> <span class="price" id="hist-sub"></span></summary>
+        <div class="detail-body">
         <div class="trade" style="margin-bottom:8px">
           <label class="chat-date-label" style="font-size:12px;color:var(--mut)">类型</label>
           <select id="hist-kind" onchange="refreshAlertHistory()">
@@ -3153,7 +3158,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
           <button class="amber" onclick="refreshAlertHistory()">刷新</button>
         </div>
         <div id="hist-box"><div class="stamp">加载中…</div></div>
-      </div>
+        </div>
+      </details>
 
     </section>
 
