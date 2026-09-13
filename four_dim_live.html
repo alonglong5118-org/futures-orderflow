@@ -2060,7 +2060,7 @@
   .kpi-focus{flex:2 1 220px}
   .kpi-focus b{font-size:28px}
   /* 决策卡：左侧 4px 色边，主判断信息（卡片内 16px） */
-  .decision-card{background:var(--card);border:1px solid var(--bd-card);border-left:4px solid var(--st-info);border-radius:12px;padding:16px;margin-bottom:16px}
+  .decision-card{background:var(--card);border:1px solid var(--bd-card);border-left:4px solid var(--st-info);border-radius:12px;padding:16px;margin-bottom:16px;position:relative;overflow:hidden}
   .decision-card:hover{border-color:var(--bd-card-hover)}
   .decision-card.st-ok{border-left-color:var(--st-ok)}
   .decision-card.st-warn{border-left-color:var(--st-warn)}
@@ -2881,7 +2881,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
           </div>
         </div>
       <div class="group-head gh-amber gh-flow"><span class="gh-num">②</span><span class="gh-title">成交明细 · 备注</span><span class="gh-intro"><i class="gi-chip"><b>明细</b>逐笔成交列表 · 存 trade_journal.json</i><i class="gi-chip"><b>备注</b>点「备注」写离场逻辑/复盘要点</i></span></div>
-      <div class="card" id="jlist-card">
+      <div class="decision-card st-info" id="jlist-card">
         <h2>成交明细 · 备注 <span class="price">G2</span></h2>
         <div class="stamp" style="margin-bottom:8px">点击「备注」可给该笔成交写文字标注（如离场逻辑/复盘要点）；数据存于 trade_journal.json</div>
         <div id="journal-list" style="max-height:320px;overflow:auto"></div><div id="global-errors" style="margin-top:6px;max-height:80px;overflow:auto"></div>
@@ -2913,7 +2913,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div class="stamp" id="pp-msg"></div>
       </div>
       <div class="group-head gh-amber gh-flow"><span class="gh-num">②</span><span class="gh-title">模拟持仓 · 成交</span><span class="gh-intro"><i class="gi-chip"><b>虚拟持仓</b>逐合约持仓实时盯市</i><i class="gi-chip"><b>流水</b>模拟成交流水完整回看</i></span></div>
-      <div class="card">
+      <div class="decision-card st-info">
         <h2>模拟持仓</h2>
         <div id="pp-positions" style="max-height:200px;overflow:auto;margin-bottom:10px">加载中…</div>
         <h2>模拟成交流水</h2>
@@ -3025,7 +3025,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
       <div class="heat-wrap">
         <div id="sector-heat"></div>
-        <div class="card" id="sig-history-card">
+        <div class="decision-card st-info" id="sig-history-card">
           <h2>当日触发历史 <span class="price" id="sig-hist-sub"></span></h2>
           <div id="sig-history"><div class="logitem stamp">加载中…</div></div>
         </div>
@@ -3037,7 +3037,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     
 <section class="pane" id="pane-seat">
       <div class="group-head gh-blue gh-flow"><span class="gh-num">①</span><span class="gh-title">席位态度榜 · 龙虎榜</span><span class="gh-intro"><i class="gi-chip"><b>龙虎榜</b>按 C_score 排名多空席位态度</i><i class="gi-chip"><b>联动</b>历史交易日可选 · 榜单与卡片互点定位</i></span></div>
-      <div class="card" id="cpos-rank" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="cpos-rank" style="margin-bottom:12px">
         <h2>席位态度榜 · 龙虎榜 <span class="price" id="cpr-sub"></span></h2>
         <div style="margin:4px 0 10px;font-size:12.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <label style="color:var(--mut)">历史交易日：</label>
@@ -3068,7 +3068,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         </div>
       </div>
       <div class="group-head gh-blue gh-flow"><span class="gh-num">②</span><span class="gh-title">近期信号（限时有效）</span><span class="gh-intro"><i class="gi-chip"><b>限时</b>信号默认 120 分钟有效 · 超时自动灰显</i><i class="gi-chip"><b>提示</b>仅供参考 · 不建议直接跟单</i></span></div>
-      <div class="card">
+      <div class="decision-card st-info">
         <h2>近期信号</h2>
         <div class="stamp" style="margin-bottom:6px">信号生成后限时有效（默认 120 分钟，可在 trade_config.json 的 signal_ttl_minutes 调整）；超时自动灰显「已过期」，仅供参考、不建议直接跟单。</div>
         <div id="signals"><div class="logitem stamp">暂无</div></div>
@@ -3100,7 +3100,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
       <!-- B1 自选到价提醒 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">②</span><span class="gh-title">条件触发提醒</span><span class="gh-intro"><i class="gi-chip"><b>B1 到价</b>非持仓品种挂条件 · 弹窗+语音+消息</i><i class="gi-chip"><b>B2 换月</b>主力合约移仓预警</i><i class="gi-chip"><b>B3 跳空</b>隔夜跳空风险预警</i></span></div>
-      <div class="card" id="alerts-watch" style="margin-bottom:14px">
+      <div class="decision-card st-info" id="alerts-watch" style="margin-bottom:14px">
         <h2>自选到价提醒 <span class="price">B1</span> <span class="price" id="watch-sub"></span></h2>
         <div class="trade" style="margin-bottom:10px">
           <select id="w-sym"></select>
@@ -3118,27 +3118,27 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <!-- B2 换月预警 -->
-      <div class="card" id="alerts-rollover" style="margin-bottom:14px">
+      <div class="decision-card st-info" id="alerts-rollover" style="margin-bottom:14px">
         <h2>换月预警 <span class="price">B2</span> <span class="price" id="roll-sub"></span></h2>
         <div id="roll-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <!-- B3 跳空风险预警 -->
-      <div class="card" id="alerts-gap" style="margin-bottom:14px">
+      <div class="decision-card st-info" id="alerts-gap" style="margin-bottom:14px">
         <h2>跳空风险预警 <span class="price">B3</span> <span class="price" id="gap-sub"></span></h2>
         <div id="gap-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <!-- C2/C3 分品种 Edge + 波动率 Regime -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">③</span><span class="gh-title">分品种 Edge / 波动率 Regime</span><span class="gh-intro"><i class="gi-chip"><b>Edge</b>分品种优势衰退监控</i><i class="gi-chip"><b>Regime</b>波动率状态切换预警</i></span></div>
-      <div class="card" id="alerts-edge">
+      <div class="decision-card st-info" id="alerts-edge">
         <h2>分品种 Edge + 波动率 Regime <span class="price">C2/C3</span> <span class="price" id="edge-sub"></span></h2>
         <div id="edge-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <!-- C4 报警历史 -->
       <div class="group-head gh-red gh-flow"><span class="gh-num">④</span><span class="gh-title">报警历史</span><span class="gh-intro"><i class="gi-chip"><b>历史</b>触价/移动止损/风险超标全记录</i><i class="gi-chip"><b>筛选</b>按类型过滤 · 一键刷新</i></span></div>
-      <div class="card" id="alerts-history">
+      <div class="decision-card st-info" id="alerts-history">
         <h2>报警历史 <span class="price">C4</span> <span class="price" id="hist-sub"></span></h2>
         <div class="trade" style="margin-bottom:8px">
           <label class="chat-date-label" style="font-size:12px;color:var(--mut)">类型</label>
@@ -3161,7 +3161,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     
 <section class="pane" id="pane-adv">
       <div class="group-head gh-red gh-flow"><span class="gh-num">①</span><span class="gh-title">盘前作战清单</span><span class="gh-intro"><i class="gi-chip"><b>清单</b>动态权益/风险水位/硬熔断状态一站速览</i><i class="gi-chip"><b>价位</b>关注品种关键价位 + 开盘自检项</i></span></div>
-      <div class="card" id="adv-premkt" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-premkt" style="margin-bottom:12px">
         <h2>📋 盘前作战清单 <span class="price">#125</span> <span class="price" id="premkt-phase"></span> <span class="price" id="premkt-time"></span></h2>
         <div class="row"><span>动态权益</span><span id="premkt-equity" class="mv">—</span></div>
         <div class="row"><span>风险热度 / 回撤水位线</span><span id="premkt-risk" class="mv">—</span></div>
@@ -3174,7 +3174,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">②</span><span class="gh-title">数据交叉校验 · 质量</span><span class="gh-intro"><i class="gi-chip"><b>校验</b>多源行情交叉比对 · 覆盖率与结论</i><i class="gi-chip"><b>健康度</b>数据质量监控 · 异常分布与最差品种</i></span></div>
-      <div class="card" id="adv-xs" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-xs" style="margin-bottom:12px">
         <h2>多源数据交叉校验 <span class="price">#126</span> <span class="price" id="xs-sub"></span></h2>
         <div class="row"><span>时段</span><span id="xs-phase" class="mv">—</span></div>
         <div class="row"><span>校验覆盖</span><span id="xs-cover" class="mv">—</span></div>
@@ -3183,7 +3183,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="xs-table" style="margin-top:8px;font-size:12px"></div>
       </div>
 
-      <div class="card" id="adv-dq" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-dq" style="margin-bottom:12px">
         <h2>数据质量监控 <span class="price">#14</span> <span class="price" id="dq-sub"></span></h2>
         <div class="row"><span>整体健康度</span><span id="dq-health" class="mv">—</span></div>
         <div class="row"><span>异常分布</span><span id="dq-counts">—</span></div>
@@ -3191,13 +3191,13 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">③</span><span class="gh-title">事件日历 · 纪律体检</span><span class="gh-intro"><i class="gi-chip"><b>日历</b>宏观数据/事件日历闸门建议</i><i class="gi-chip"><b>体检</b>纪律自动评分 · 违规分布列表</i></span></div>
-      <div class="card" id="adv-cal" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-cal" style="margin-bottom:12px">
         <h2>事件 / 数据日历闸门 <span class="price">#13</span> <span class="price" id="cal-sub"></span></h2>
         <div class="row"><span>闸门建议</span><span id="cal-gate" class="stamp">—</span></div>
         <div id="cal-list" style="margin-top:6px"></div>
       </div>
 
-      <div class="card" id="adv-blunder" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-blunder" style="margin-bottom:12px">
         <h2>纪律自动体检 <span class="price">#12</span> <span class="price" id="blunder-sub"></span></h2>
         <div class="row"><span>评分 / 等级</span><span id="blunder-score" class="mv">—</span></div>
         <div class="row"><span>违规分布</span><span id="blunder-counts">—</span></div>
@@ -3205,7 +3205,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">④</span><span class="gh-title">蒙特卡洛 · 回测可视化</span><span class="gh-intro"><i class="gi-chip"><b>MC</b>权益曲线 p5/p50/p95 置信区间 · 破产概率</i><i class="gi-chip"><b>回测</b>水下曲线 + 逐笔散点</i></span></div>
-      <div class="card" id="adv-mc" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-mc" style="margin-bottom:12px">
         <h2>蒙特卡洛 · 权益曲线置信区间 <span class="price">#11</span> <span class="price" id="mc-sub"></span></h2>
         <div class="row"><span>终值区间(p5/p50/p95)</span><span id="mc-terminal">—</span></div>
         <div class="row"><span>最大回撤(中位/95分位)</span><span id="mc-maxdd">—</span></div>
@@ -3213,7 +3213,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div style="position:relative;width:100%;height:240px"><canvas id="mcChart"></canvas></div>
       </div>
 
-      <div class="card" id="adv-viz" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-viz" style="margin-bottom:12px">
         <h2>回测可视化 · 水下曲线 & 逐笔散点 <span class="price">#17</span> <span class="price" id="viz-sub"></span></h2>
         <div class="row"><span>胜率 / 期望R / 累计R</span><span id="viz-sum">—</span></div>
         <div style="position:relative;width:100%;height:220px"><canvas id="vizUnderwater"></canvas></div>
@@ -3221,7 +3221,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-red gh-flow"><span class="gh-num">⑤</span><span class="gh-title">推送 · 工具箱</span><span class="gh-intro"><i class="gi-chip"><b>推送</b>Telegram/Bark/企业微信测试通道</i><i class="gi-chip"><b>工具</b>真重校准/漂移检测/回测HTML · 后台跑不阻塞</i></span></div>
-      <div class="card" id="adv-push" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-push" style="margin-bottom:12px">
         <h2>手机推送 <span class="price">#15</span> <span class="price" id="push-sub"></span></h2>
         <div class="row"><span>Telegram / Bark / 企业微信</span><span id="push-status">—</span></div>
         <div class="stamp" style="margin-top:6px">配置方式：在项目目录 push_config.json 填写 token/key，或点下面测试已启用通道。</div>
@@ -3231,7 +3231,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         </div>
       </div>
 
-      <div class="card" id="adv-tools" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="adv-tools" style="margin-bottom:12px">
         <h2>工具箱 · 已接入 CLI <span class="price">#121</span> <span class="price" id="tools-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">把原本「纯命令行、面板无入口」的校准/漂移/可视化工具接到面板，后台运行不阻塞面板</div>
         <div class="trade" style="margin-bottom:8px">
@@ -3261,7 +3261,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div class="dd-bar-head"><span>今日日亏</span><span id="dd-pct">0.0%</span><span class="dd-limit">/ 5% 停机线（达线全市场冻结）</span></div>
         <div class="dd-bar"><div id="dd-fill" class="dd-fill"></div></div>
       </div>
-      <div class="card" id="dd-water" style="margin-top:12px">
+      <div class="decision-card st-info" id="dd-water" style="margin-top:12px">
         <h2>回撤水位线 <span class="price" id="ddw-sub" style="font-size:12px;font-weight:400"></span></h2>
         <div class="row"><span>当前回撤（自峰值）</span><span id="ddw-dd">—</span></div>
         <div class="row"><span>当前档位</span><span id="ddw-tier">—</span></div>
@@ -3269,7 +3269,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="ddw-ladder" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
       </div>
       <div class="group-head gh-amber gh-flow"><span class="gh-num">⑧</span><span class="gh-title">市场情绪指数</span><span class="gh-intro"><i class="gi-chip"><b>情绪</b>7 因子加权 0–100 · 恐惧贪婪五档</i><i class="gi-chip"><b>联动</b>极端模式硬过滤 · 仓位缩放与 T 阈值自动调节</i></span></div>
-      <div class="card" id="sent-card">
+      <div class="decision-card st-info" id="sent-card">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span id="sent-score-big" style="font-size:28px;font-weight:800;color:var(--txt);line-height:1">—</span>
           <span id="sent-label-big" class="sent-chip sent-neutral">中性</span>
@@ -3311,7 +3311,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-gold gh-flow"><span class="gh-num">⑨</span><span class="gh-title">支撑压力位</span><span class="gh-intro"><i class="gi-chip"><b>SR</b>三重验证支撑压力位</i><i class="gi-chip"><b>分区</b>近位 ≤0.8% / 灰色地带 / 远位 ≥1.5%</i></span></div>
-      <div class="card" id="sr-card">
+      <div class="decision-card st-info" id="sr-card">
         <div class="sr-summary" style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
           <span>近位 <b id="sr-near-count" style="color:var(--green)">—</b></span>
           <span>灰色 <b id="sr-grey-count" style="color:var(--amber)">—</b></span>
@@ -3332,7 +3332,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-purple gh-flow"><span class="gh-num">⑩</span><span class="gh-title">板块热力图</span><span class="gh-intro"><i class="gi-chip"><b>热力</b>板块风险调整强度色阶</i><i class="gi-chip"><b>轮动</b>领涨/筑底/钝化/领跌四象限</i></span></div>
-      <div class="card" id="sector-card">
+      <div class="decision-card st-info" id="sector-card">
         <div class="sector-summary">
           <span>上涨 <b id="sec-breadth">—</b></span>
           <span>领涨 <b id="sec-leading">—</b></span>
@@ -3351,7 +3351,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-blue gh-flow"><span class="gh-num">⑪</span><span class="gh-title">全市场扫描</span><span class="gh-intro"><i class="gi-chip"><b>扫描</b>全品种并行扫描 · 信号强度排序</i><i class="gi-chip"><b>概览</b>上涨/下跌/中性计数 + 扫描耗时</i></span></div>
-      <div class="card" id="scan-card">
+      <div class="decision-card st-info" id="scan-card">
         <div class="scan-summary">
           <span>上涨 <b id="scan-up">—</b></span>
           <span>下跌 <b id="scan-down">—</b></span>
@@ -3362,7 +3362,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">⑫</span><span class="gh-title">品种筛选</span><span class="gh-intro"><i class="gi-chip"><b>筛选</b>5 维条件加权评分</i><i class="gi-chip"><b>输出</b>通过品种清单 + 通过率</i></span></div>
-      <div class="card" id="screener-card">
+      <div class="decision-card st-info" id="screener-card">
         <div class="screener-summary">
           <span>通过 <b id="scr-pass">—</b> / <span id="scr-total">—</span></span>
           <span>通过率 <b id="scr-rate">—</b></span>
@@ -3370,7 +3370,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="screener-box" class="screener-list"><div class="muted-empty"><span class="dot"></span>等待筛选...</div></div>
       </div>
       <div class="group-head gh-amber gh-flow"><span class="gh-num">⑬</span><span class="gh-title">信号瀑布流</span><span class="gh-intro"><i class="gi-chip"><b>瀑布</b>实时信号时间线 · 增量刷新</i><i class="gi-chip"><b>记录</b>最新信号时间与累计计数</i></span></div>
-      <div class="card" id="feed-card">
+      <div class="decision-card st-info" id="feed-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span class="stamp" id="feed-count">加载中…</span>
           <span class="stamp" id="feed-time">—</span>
@@ -3380,7 +3380,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         </div>
       </div>
       <div class="group-head gh-gold gh-flow"><span class="gh-num">③</span><span class="gh-title">账户只读同步</span><span class="gh-intro"><i class="gi-chip"><b>只读</b>minishare 盯市 · 不接券商 API 不代下单</i><i class="gi-chip"><b>对账</b>动态权益/浮盈/使用率 · 漂移一致性检查</i></span></div>
-      <div class="card" id="accountsync">
+      <div class="decision-card st-info" id="accountsync">
         <h2>账户只读同步 <span class="price" id="sync-ro">只读·不代下单</span></h2>
         <div class="stamp" id="sync-sub">minishare 实时盯市 · 只读视图（不接券商 API）</div>
         <div class="row"><span>数据时效</span><span id="sync-age" class="stamp">—</span></div>
@@ -3403,7 +3403,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       <section class="pane" id="pane-disc">
       <!-- #133 交互式历史回放（时间机器） -->
       <div class="group-head gh-green gh-flow"><span class="gh-num">①</span><span class="gh-title">交互式历史回放</span><span class="gh-intro"><i class="gi-chip"><b>时间机器</b>逐日回放 · 播放/步进/拖动</i><i class="gi-chip"><b>联动</b>权益/持仓/事件/K线开平仓标记同步复盘</i></span></div>
-      <div class="card" id="playback" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="playback" style="margin-bottom:12px">
         <h2>🎬 交互式历史回放 <span class="price">#133</span></h2>
 
         <!-- 播放控制工具栏 -->
@@ -3520,7 +3520,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
       <!-- F1 多策略 / 多账户表现 -->
       <div class="group-head gh-green gh-flow"><span class="gh-num">③</span><span class="gh-title">多策略 · 多账户表现</span><span class="gh-intro"><i class="gi-chip"><b>拆分</b>按策略或账户分组对比</i><i class="gi-chip"><b>定位</b>笔数/胜率/盈亏/手续费 · 找最赚与最拉胯</i></span></div>
-      <div class="card" id="strat-card">
+      <div class="decision-card st-info" id="strat-card">
         <h2>🧩 多策略 · 多账户表现 <span class="price">F1</span></h2>
         <div class="trade" style="margin-bottom:10px">
           <label style="font-size:12px;color:var(--mut)">分组维度</label>
@@ -3536,7 +3536,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 
       <!-- F3 自动化日报 / 周报 -->
       <div class="group-head gh-green gh-flow"><span class="gh-num">④</span><span class="gh-title">自动化日报 · 周报</span><span class="gh-intro"><i class="gi-chip"><b>报告</b>一键合成账户/交易/风控/纪律复盘 Markdown</i><i class="gi-chip"><b>导出</b>弹窗复制或下载 .md</i></span></div>
-      <div class="card" id="report-card">
+      <div class="decision-card st-info" id="report-card">
         <h2>📝 自动化日报 · 周报 <span class="price">F3</span></h2>
         <div class="trade" style="margin-bottom:8px">
           <button class="amber" onclick="openReport('daily')">📄 生成日报</button>
@@ -3552,7 +3552,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
 <section class="pane" id="pane-perf">
       <!-- #134 参数鲁棒性敏感性地图 -->
       <div class="group-head gh-green gh-flow"><span class="gh-num">①</span><span class="gh-title">参数鲁棒性诊断</span><span class="gh-intro"><i class="gi-chip"><b>敏感性</b>滑点/阈值扰动地图</i><i class="gi-chip"><b>诊断</b>识别参数过拟合脆弱区</i></span></div>
-      <div class="card" id="sens" style="margin-bottom:12px">
+      <div class="decision-card st-info" id="sens" style="margin-bottom:12px">
         <h2>🧭 参数鲁棒性敏感性地图 <span class="price">#134</span></h2>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
           <button onclick="refreshSensitivity(true)" style="background:rgba(0,0,0,.3);color:#e8e8e8;border:1px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer">🔄 重新计算</button>
@@ -3562,7 +3562,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="sens-body" style="display:flex;flex-direction:column;gap:6px">—</div>
       </div>
       <div class="group-head gh-green gh-flow"><span class="gh-num">②</span><span class="gh-title">绩效总览 · 净值曲线</span><span class="gh-intro"><i class="gi-chip"><b>KPI</b>总盈亏/胜率/回撤/Sharpe/Calmar 等 11 项</i><i class="gi-chip"><b>曲线</b>净值曲线 + 今日盈亏双向条 · CSV 导出</i></span></div>
-      <div class="card" id="perf">
+      <div class="decision-card st-info" id="perf">
         <h2>绩效分析 <span class="price" id="perf-sub"></span></h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <button class="amber" onclick="exportCsv('journal')">导出成交CSV</button>
@@ -3607,33 +3607,33 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">③</span><span class="gh-title">日盘 / 夜盘时段分解</span><span class="gh-intro"><i class="gi-chip"><b>时段</b>按平仓时段拆盈亏/胜率/笔数</i><i class="gi-chip"><b>提示</b>鸡蛋生猪无夜盘 · 其余 21:00–23:00</i></span></div>
-      <div class="card" id="session-card">
+      <div class="decision-card st-info" id="session-card">
         <h2>🕐 日盘 / 夜盘绩效分解 <span class="price">G4</span></h2>
         <div class="stamp" style="margin-bottom:8px">按平仓时段拆分盈亏/胜率/笔数；鸡蛋·生猪无夜盘，其余有夜盘(21:00–23:00)</div>
         <div id="session-body" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">④</span><span class="gh-title">组合 · 套利 · 压力测试</span><span class="gh-intro"><i class="gi-chip"><b>相关</b>持仓相关性矩阵 · 红集中绿分散</i><i class="gi-chip"><b>套利</b>价差 z 偏离监控</i><i class="gi-chip"><b>压力</b>不利冲击后权益与击穿止损数</i></span></div>
-      <div class="card" id="corr-card">
+      <div class="decision-card st-info" id="corr-card">
         <h2>组合相关性矩阵 <span class="price" id="corr-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">红=高度同向(集中风险) · 绿=反向(分散) · 基于持仓品种日收益率</div>
         <div id="corr-box"><div class="stamp">加载中…</div></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="spread-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="spread-card">
         <h2>价差套利监控 <span class="price" id="spread-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">当前价差 / 60日均值 / z-score / 趋势(扩大·收窄)；z 偏离大=套利机会</div>
         <div id="spread-box"><div class="stamp">加载中…</div></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="stress-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="stress-card">
         <h2>情景压力测试 <span class="price" id="stress-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">对当前持仓施加不利冲击，估算冲击后动态权益与击穿止损数（非投资建议）</div>
         <div id="stress-box"><div class="stamp">加载中…</div></div>
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">⑤</span><span class="gh-title">概率校准 · 维度归因</span><span class="gh-intro"><i class="gi-chip"><b>校准</b>置信分层命中率 + Brier · 识别过度自信</i><i class="gi-chip"><b>归因</b>实盘盈亏拆 F/T/C 三维来源</i></span></div>
-      <div class="card" id="calib-card">
+      <div class="decision-card st-info" id="calib-card">
         <h2>概率校准 · 置信度分层命中率 <span class="price" id="calib-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">信号后 4h 方向命中率按自信度(|bias_G|)分桶；名义=模型自以为胜率，实际=经验命中率；二者背离=模型在该档「过度/不足自信」</div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
@@ -3645,7 +3645,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">⑥</span><span class="gh-title">风险度量 VaR / 危机趋同</span><span class="gh-intro"><i class="gi-chip"><b>VaR</b>95%/99% VaR/CVaR + 成分贡献</i><i class="gi-chip"><b>危机</b>相关性崩溃放大倍数 · GBM/GARCH 前向情景</i></span></div>
-      <div class="card" id="var-card">
+      <div class="decision-card st-info" id="var-card">
         <h2>组合 VaR / CVaR <span class="price" id="var-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">参数法（正态、均值=0）1 日 VaR：一天内组合以 95%/99% 置信的最大可能亏损；CVaR=期望短缺(ES)=超过 VaR 的平均极端损失。与「计划风险R(基于止损)」互补——此处是市值暴露逐日盯市 VaR（非投资建议）。</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
@@ -3658,7 +3658,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="var-contrib" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="attr-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="attr-card">
         <h2>实盘盈亏 F/T/C 维度归因 <span class="price" id="attr-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">把每笔已平仓成交按其关联信号的 F(基本面)/T(触发)/C(资金确认) 三维得分，拆解实盘净盈亏来自哪个维度。主导维度=与交易方向对齐后强度最大者；比例贡献=按三维度对齐强度归一化拆分(三者之和=信号驱动盈亏)。无信号成交计入「无信号驱动」。强信号阈值 |score|≥<span id="attr-thr">20</span>（非投资建议）。</div>
         <div class="stamp" style="margin-bottom:6px">① 主导维度分桶（每笔仅计入一个维度）</div>
@@ -3669,7 +3669,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="attr-strong" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px"></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="corrbrk-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="corrbrk-card">
         <h2>相关性崩溃 / 危机趋同 Stress <span class="price" id="corrbrk-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">在正常观察协方差之外，把全部非对角相关性抬升至危机相关 ρ，重算 VaR，量化「分散化保护在危机中蒸发多少」；并给出波动率放大+对冲失效的危机趋同情景(美元)。与「情景压力测试」(均匀百分比冲击) 互补——此处是「相关性维度」的崩溃（非投资建议）。</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
@@ -3688,19 +3688,19 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="cb-contrib" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="gbm-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="gbm-card">
         <h2>GBM/GARCH 波动率动力学 · 前向情景 <span class="price" id="gbm-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">GARCH(1,1) 波动率动力学 + GBM 蒙特卡洛前向情景（live 专属，不喂回测）。逐品种给出波动率状态、风险系数（高波动自动降仓）、5日期望收益 / 下行 VaR / 上行概率 / 价格区间情景带。与「组合 VaR/CVaR」（市值暴露逐日盯市）互补——此处是「单品种波动率维度」的前向推演（非投资建议）。</div>
         <div id="gbm-box" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
 
-<div class="card" style="margin-top:14px" id="gated-card">
+<div class="decision-card st-info" style="margin-top:14px" id="gated-card">
         <h2>门控品种提示 <span class="price">P1-②</span> <span class="price" id="gated-sub"></span></h2>
         <div id="gated-box">__GATED_CONTENT__</div>
         <script>/* P1-② 首屏渲染：若 runner 已注入数据则直接显示，否则异步加载 */ (function(){ var g=document.getElementById("gated-box"); if(g && g.innerHTML.indexOf("加载中")>=0){ refreshGatedNotices(); } })();</script>
       </div>
 
-<div class="card" style="margin-top:14px" id="cgate-card">
+<div class="decision-card st-info" style="margin-top:14px" id="cgate-card">
         <h2>C门拦截记录 <span class="price">资金流背离·已抑制</span> <span class="price" id="cgate-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">C 感知方向门(oppose_threshold) live 拦截的「逆资金流」信号。门消费 17 年 1 分钟 K 线 proxy 的 kline C，与 T 方向反向且 |C|&gt;阈值(30) 即抑制开仓——用于肉眼验收拦截质量（被拦交易回测 68% 确为亏损单）。仅展示、不推送建仓。</div>
         <div id="cgate-box">加载中…</div>
@@ -3708,21 +3708,21 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">⑦</span><span class="gh-title">板块轮动 · 波动率目标 · 流动性</span><span class="gh-intro"><i class="gi-chip"><b>轮动</b>RS 强弱排序 · 四象限动能分类</i><i class="gi-chip"><b>目标</b>波动率目标反推手数建议</i><i class="gi-chip"><b>LaR</b>清仓冲击成本与天数预警</i></span></div>
-      <div class="card" id="sector-card">
+      <div class="decision-card st-info" id="sector-card">
         <h2>板块强弱轮动排序 <span class="price" id="sector-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">全市场品种按板块聚合风险调整相对强度(RS=20日收益/20日波动)排名；轮动象限按「中期动能(20d)正负 × 加速(20d−60d)正负」分 4 类。★=聚焦板块(含你关注的 黑系/农产品)。只读日线，不接券商 API（非投资建议）。</div>
         <div id="sector-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
         <div id="sector-rows" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="voltgt-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="voltgt-card">
         <h2>波动率目标化头寸 <span class="price" id="voltgt-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">每个品种按「目标日度盈亏波动 = 权益 × <input id="voltgt-pct" type="number" step="0.1" min="0.1" max="5" value="1.0" style="width:54px;background:#11161d;color:var(--fg);border:1px solid #2a3340;border-radius:4px;padding:1px 4px">%」反推目标手数，与当前持仓对比给调仓建议。只建议、不代下单（非投资建议）。</div>
         <div id="voltgt-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
         <div id="voltgt-rows" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
-      <div class="card" style="margin-top:14px" id="lar-card">
+      <div class="decision-card st-info" style="margin-top:14px" id="lar-card">
         <h2>流动性风险 Liquidity-at-Risk <span class="price" id="lar-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">平方根冲击模型：清仓冲击成本 ≈ 名义金额 × β×√(平仓量/ADV)×日波动。给出各持仓退出成本、清仓所需天数与低流动性预警（非投资建议）。</div>
         <div id="lar-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
@@ -3734,7 +3734,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     
 <section class="pane" id="pane-metrics">
       <div class="group-head gh-violet gh-flow"><span class="gh-num">①</span><span class="gh-title">利润 · 价差 · 比价</span><span class="gh-intro"><i class="gi-chip"><b>结构</b>加工/养殖利润 · 跨品种比价</i><i class="gi-chip"><b>信号</b>价差 z 偏离大 = 结构性机会</i></span></div>
-      <div class="card">
+      <div class="decision-card st-info">
         <h2>📐 利润 · 价差 · 比价监控 <span class="price">G1</span> <span class="price" id="fm-updated"></span></h2>
         <div class="stamp" style="margin-bottom:8px">加工/养殖利润 · 跨品种比价 · 价差；z 偏离大=结构性机会（非投资建议）</div>
         <div id="metrics-body" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3754,7 +3754,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       </div>
       <section class="pane" id="pane-focus">
       <div class="group-head gh-violet gh-flow"><span class="gh-num">①</span><span class="gh-title">我的品种盯盘板</span><span class="gh-intro"><i class="gi-chip"><b>关注度</b>信号30+波动20+持仓20+价差15+热度15</i><i class="gi-chip"><b>盯盘</b>0–100 评分排序 · 越高越值得盯</i></span></div>
-      <div class="card">
+      <div class="decision-card st-info">
         <h2>⭐ 我的品种盯盘板 <span class="price">G5</span> <span class="price" id="focus-updated"></span></h2>
         <div class="stamp" style="margin-bottom:8px">关注度评分 = 信号活跃30% + 波动20% + 持仓20% + 价差偏离15% + 热度15%（0–100，越高越值得盯）</div>
         <div id="focus-body" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3763,7 +3763,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
     
 <section class="pane" id="pane-features">
       <div class="group-head gh-violet gh-flow"><span class="gh-num">①</span><span class="gh-title">🎛 特性开关管理</span><span class="gh-intro"><i class="gi-chip"><b>开关</b>功能特性集中管理 · 运行时热切换</i><i class="gi-chip"><b>日志</b>变更留痕 · 面板即时生效</i></span></div>
-      <div class="card" id="feat-card">
+      <div class="decision-card st-info" id="feat-card">
         <h2>特性开关总览 <span class="price" id="feat-updated"></span></h2>
         <div class="stamp" style="margin-bottom:12px">
           修改 <code>feature_flags.json</code> 后自动热加载（60s 内），或点击下方开关即时切换。
