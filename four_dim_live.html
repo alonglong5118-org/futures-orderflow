@@ -3664,7 +3664,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <h2>C门拦截记录 <span class="price">资金流背离·已抑制</span> <span class="price" id="cgate-sub"></span></h2>
         <div class="stamp" style="margin-bottom:8px">C 感知方向门(oppose_threshold) live 拦截的「逆资金流」信号。门消费 17 年 1 分钟 K 线 proxy 的 kline C，与 T 方向反向且 |C|&gt;阈值(30) 即抑制开仓——用于肉眼验收拦截质量（被拦交易回测 68% 确为亏损单）。仅展示、不推送建仓。</div>
         <div id="cgate-box">加载中…</div>
-        <script>(function(){ var g=document.getElementById("cgate-box"); if(g && g.innerHTML.indexOf("加载中")>=0){ refreshCGateSuppressions(); } })();</script>
+        <script>(function(){ var g=document.getElementById("cgate-box"); if(g && g.innerHTML.indexOf("加载中")>=0){ if(typeof refreshCGateSuppressions==="function"){ refreshCGateSuppressions(); } else { setTimeout(arguments.callee, 500); } } })();</script>
       </div>
 
       <div class="group-head gh-green gh-flow"><span class="gh-num">⑦</span><span class="gh-title">板块轮动 · 波动率目标 · 流动性</span><span class="gh-intro"><i class="gi-chip"><b>轮动</b>RS 强弱排序 · 四象限动能分类</i><i class="gi-chip"><b>目标</b>波动率目标反推手数建议</i><i class="gi-chip"><b>LaR</b>清仓冲击成本与天数预警</i></span></div>
@@ -6811,7 +6811,7 @@ async function renderCockpit(){
         else if((s.warn||0) > 0){ xe.textContent='疑点 '+(s.warn); xe.style.color='var(--amber)'; }
         else { xe.textContent='一致'; xe.style.color='var(--green)'; }
       }
-    }catch(e){console.error(e);}
+    }catch(e){ console.error(e); if(window._clearCache) window._clearCache('/api/crosscheck'); }
     // 状态条
     const feed = health && health.feed_available;
     ckSet('ck-feed', feed? '正常':'离线', feed? 'var(--green)':'var(--red)');

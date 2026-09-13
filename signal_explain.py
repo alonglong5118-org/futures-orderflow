@@ -302,6 +302,10 @@ def _ollama_explain(prompt):
                 "prompt": prompt,
                 "stream": False,
                 "keep_alive": _ka,
+                # think=False：Qwen3 系（含 qwen3:8b）默认套思维链模板，
+                # 会把 num_predict 预算全花在 thinking 上导致 response 为空
+                # （done_reason=length）；显式关闭后直接产出干净结论。
+                "think": False,
                 "options": {
                     "temperature": 0.3,
                     "num_predict": int(os.environ.get("OLLAMA_NUM_PREDICT", 800)),
@@ -319,6 +323,10 @@ def _ollama_explain(prompt):
             import re as _re
 
             resp = _re.sub(r"<think>.*?</think>", "", resp, flags=_re.S).strip()
+        # Qwen3 系兜底：即使 think=False，个别模板仍会把内容塞进 thinking 字段、
+        # response 留空；此时取 thinking 作为结论（避免静默丢失）。
+        if not resp:
+            resp = (data.get("thinking") or "").strip()
         return resp or None
     except Exception:
         return None

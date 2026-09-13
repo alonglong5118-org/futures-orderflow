@@ -10342,14 +10342,31 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             sig["contract"] = ml.normalize_contract_code(_code)
                     except Exception:
                         pass
-                # #4 信号解释：确定性 driver 解释（必出）；若配置了 DEEPSEEK_API_KEY 再叠加 LLM 增强层
+                # #4 信号解释：确定性 driver 解释必出（零延迟）；
+                #    LLM 增强层改后台异步补推——本地模型冷启/生成较慢，
+                #    同步调用会把信号推送整体拖慢，对剥头皮不可接受。
                 try:
                     _exp = sexp.explain_signal(sig, pipe)
-                    if os.environ.get("DEEPSEEK_API_KEY"):
-                        _llm_txt = sexp.llm_explain(_exp.get("llm_prompt", ""))
-                        if _llm_txt:
-                            _exp["llm"] = _llm_txt
                     sig["explanation"] = _exp
+                    if sexp.llm_enabled():
+
+                        def _llm_async(_s=sig, _e=_exp):
+                            try:
+                                _txt = sexp.llm_explain(_e.get("llm_prompt", ""))
+                                if not _txt:
+                                    return
+                                _s["explanation"]["llm"] = _txt
+                                try:
+                                    pn.push(
+                                        _txt,
+                                        title=f"🧠 AI解读 {_s.get('name') or _s.get('symbol', '')} {_s.get('direction', '')}",
+                                    )
+                                except Exception:
+                                    pass
+                            except Exception:
+                                pass
+
+                        threading.Thread(target=_llm_async, daemon=True).start()
                 except Exception as _e:
                     sig["explanation"] = {
                         "summary": sig.get("reason", ""),
@@ -11046,7 +11063,16 @@ def start_dashboard(state):
                 # #126 多源数据交叉校验：minishare 实时价 / 日线 / 持仓均价 / 信号价 四源比对
                 force = "force=1" in self.path
                 try:
-                    body = json.dumps(cross_source_check(force=force), ensure_ascii=False, default=str)
+                    _cc = cross_source_check(force=force)
+                    def _sanitize_nan(o):
+                        if isinstance(o, float) and (math.isnan(o) or math.isinf(o)):
+                            return None
+                        if isinstance(o, dict):
+                            return {k: _sanitize_nan(v) for k, v in o.items()}
+                        if isinstance(o, list):
+                            return [_sanitize_nan(v) for v in o]
+                        return o
+                    body = json.dumps(_sanitize_nan(_cc), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -14522,6 +14548,17 @@ def main():
                     if px:
                         prices[sym] = px
             tj.sample_equity(prices)
+            # 日终权益归档（P0）：幂等——每天 15:00 收盘后只归档一次，盘中调用不写文件。
+            # 归档写入独立文件 equity_history.json（intraday_equity.json 只保留 7 天会被滚动删掉）。
+            # 同时跑每日 journal 物理校验（journal_audit.json）：权益锚被脏数据污染时，
+            # 曲线会整条虚高却不报错，必须每日留痕，供 21:00 日报做前置自检。
+            try:
+                import equity_history as _eh
+
+                _eh.maybe_snapshot(now)
+                _eh.maybe_audit(now)
+            except Exception:
+                pass
         except Exception:
             pass
         state["updated"] = now.strftime("%Y-%m-%d %H:%M:%S")
