@@ -21,10 +21,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))
 
 from four_dim_strategy import (
-    DEFAULT_CONFIG, ROLL_GAP_MULT, ROLL_GAP_PCT, _atr_array, exit_plan,
-    get_slip_pts, load_daily,
+    DEFAULT_CONFIG,
+    _atr_array,
+    load_daily,
 )
-from pyramid_addon import PYRAMID_LADDER, PYRAMID_TRAIL_DIST_R, PYRAMID_TRAIL_START_R, PYRAMID_WHITELIST
+from pyramid_addon import PYRAMID_WHITELIST
 from tools_oos_pyramid import GATE_LABELS, GATE_REGIME, replay
 
 LABELS_FILE = Path(__file__).parent / "backtest_strategy_labels.json"
@@ -37,7 +38,7 @@ def main():
     cfg = DEFAULT_CONFIG
 
     print("金字塔 OOS · 品种级 5 折验证")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     keep, drop = [], []
     print(f"{'品种':<5} {'n':>4} {'Δ合计':>8} {'Δ均值':>9} {'正折':>5} {'折Δ(1..5)':>34} {'判定':>6}")
@@ -93,7 +94,9 @@ def main():
         ok = pos_folds >= 3 and total > 0
         (keep if ok else drop).append(sym)
         folds_str = " ".join(f"{s:+7.2f}" for s in fold_sums)
-        print(f"{sym:<5} {n:>4} {total:>+8.2f} {d_arr.mean():>+9.4f} {pos_folds:>3}/5 {folds_str:>34} {'保留' if ok else '剔除':>6}")
+        print(
+            f"{sym:<5} {n:>4} {total:>+8.2f} {d_arr.mean():>+9.4f} {pos_folds:>3}/5 {folds_str:>34} {'保留' if ok else '剔除':>6}"
+        )
 
     print()
     print(f"白名单 v2（品种级 OOS 通过）: {sorted(keep)}")
@@ -140,7 +143,7 @@ def main():
         e = (f + 1) * fold_size if f < N_FOLDS - 1 else n
         fold_sums.append(float(d_arr[s:e].sum()))
     pos_folds = sum(1 for s in fold_sums if s > 0)
-    print(f"  n={n}, Δ合计 {d_arr.sum():+.2f}R, 均值 {d_arr.mean():+.4f}R/笔, 改善比例 {(d_arr>0).mean():.1%}")
+    print(f"  n={n}, Δ合计 {d_arr.sum():+.2f}R, 均值 {d_arr.mean():+.4f}R/笔, 改善比例 {(d_arr > 0).mean():.1%}")
     print(f"  折Δ: {' '.join(f'{s:+.2f}' for s in fold_sums)}  → 正折 {pos_folds}/5")
     print(f"  判定: {'PASS ✅' if pos_folds >= 3 and d_arr.sum() > 0 else 'FAIL ❌'}")
 

@@ -20,6 +20,7 @@
       derived_test <= base_test → 黑名单不泛化，in-sample 增益是假象。
       **以上任一判定在 p > 0.05 时均不成立，不得据此改动生产配置。**
 """
+
 import copy
 import json
 import os
@@ -82,7 +83,7 @@ def _sign_test(w_a, w_b):
     if m == 0:
         return None
     k = min(w_a, w_b)
-    return min(2 * sum(comb(m, i) for i in range(k + 1)) / (2 ** m), 1.0)
+    return min(2 * sum(comb(m, i) for i in range(k + 1)) / (2**m), 1.0)
 
 
 def main():
@@ -125,11 +126,24 @@ def main():
             win_d += 1
         elif base_test > derived_test:
             win_b += 1
-        rows.append({"sym": sym, "base_test": round(base_test, 4), "derived_test": round(derived_test, 4),
-                     "prod_test": round(prod_test, 4), "d_is": round(d_is, 4), "p_is": round(p_is, 4),
-                     "derived_bl": derived, "prod_bl": prod, "n_test": n_test, "verdict": verdict})
-        print(f"{sym:4} base={base_test:+.3f} derived(OOS)={derived_test:+.3f} ({d_is:+.3f}) "
-              f"prod={prod_test:+.3f} ({p_is:+.3f}) n={n_test:3d} {verdict} | 重推={derived}")
+        rows.append(
+            {
+                "sym": sym,
+                "base_test": round(base_test, 4),
+                "derived_test": round(derived_test, 4),
+                "prod_test": round(prod_test, 4),
+                "d_is": round(d_is, 4),
+                "p_is": round(p_is, 4),
+                "derived_bl": derived,
+                "prod_bl": prod,
+                "n_test": n_test,
+                "verdict": verdict,
+            }
+        )
+        print(
+            f"{sym:4} base={base_test:+.3f} derived(OOS)={derived_test:+.3f} ({d_is:+.3f}) "
+            f"prod={prod_test:+.3f} ({p_is:+.3f}) n={n_test:3d} {verdict} | 重推={derived}"
+        )
     n_gen = sum(1 for r in rows if r["verdict"].startswith("✅"))
     n_neg = sum(1 for r in rows if r["verdict"].startswith("⚠️"))
     print("=" * 92)
@@ -142,14 +156,20 @@ def main():
     print(f"  derived − base = {pd_ - pb:+.4f}R     prod − base = {pp - pb:+.4f}R")
     p = _sign_test(win_d, win_b)
     if p is not None:
-        print(f"  符号检验（derived vs base）p ≈ {p:.3f}"
-              + ("  → 无统计证据，不得据此改动生产配置" if p > 0.05 else "  → 方向显著"))
+        print(
+            f"  符号检验（derived vs base）p ≈ {p:.3f}"
+            + ("  → 无统计证据，不得据此改动生产配置" if p > 0.05 else "  → 方向显著")
+        )
     print("  ⚠️ 逐品种判定仅供参考：单品种测试集成交常为个位数（rb n=6），不具统计意义。")
     print(f"耗时 {time.time() - t0:.0f}s")
     out = "/tmp/ps_oos_reval_result.json"
     with open(out, "w") as f:
-        json.dump({"rows": rows, "pooled": {"base": pb, "derived": pd_, "prod": pp},
-                   "sign_test_p": p}, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {"rows": rows, "pooled": {"base": pb, "derived": pd_, "prod": pp}, "sign_test_p": p},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
     print(f"结果写入 {out}")
 
 

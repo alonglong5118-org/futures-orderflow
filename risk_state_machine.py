@@ -619,7 +619,7 @@ def list_risk_accounts():
         for fn in os.listdir(_HERE):
             # 只匹配 killswitch_*.json（跳过默认 killswitch_state.json）
             if fn.startswith("killswitch_") and fn.endswith(".json"):
-                aid = fn[len("killswitch_"):-len(".json")]
+                aid = fn[len("killswitch_") : -len(".json")]
                 # 排除状态文件本身（killswitch_state.json → "state" 是误匹配）
                 if aid == "state":
                     continue

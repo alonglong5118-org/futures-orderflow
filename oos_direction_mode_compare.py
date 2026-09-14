@@ -18,6 +18,7 @@
 用法：
   python3 oos_direction_mode_compare.py
 """
+
 import copy
 import fcntl
 import json
@@ -122,7 +123,7 @@ def _build_out(targets, rows, c_mode, window_note):
         "c_mode": c_mode,
         "window_note": window_note,
         "note": "threshold=direction_mode='threshold'(F/C仅调阈值)  vs  combined=direction_mode='combined'(F/C定方向)；"
-                "walk-forward 不调参=OOS口径；其余同DEFAULT_CONFIG",
+        "walk-forward 不调参=OOS口径；其余同DEFAULT_CONFIG",
         "rows": [
             {
                 "symbol": s,
@@ -135,8 +136,11 @@ def _build_out(targets, rows, c_mode, window_note):
                 "delta_total_R": round(b["total_R"] - a["total_R"], 2),
                 "delta_win": round(b["win_rate"] - a["win_rate"], 3),
                 "delta_dd": round(b["max_dd_R"] - a["max_dd_R"], 3),
-                "delta_pf": (round(b["profit_factor"] - a["profit_factor"], 2)
-                             if b["profit_factor"] is not None and a["profit_factor"] is not None else None),
+                "delta_pf": (
+                    round(b["profit_factor"] - a["profit_factor"], 2)
+                    if b["profit_factor"] is not None and a["profit_factor"] is not None
+                    else None
+                ),
                 "delta_trades": b["trades"] - a["trades"],
             }
             for s, a, b in rows
@@ -168,6 +172,7 @@ def _build_out(targets, rows, c_mode, window_note):
     # 分组：有C真实 vs 无C长历史
     real_c = [x for x in valid if x["has_real_C"]]
     no_c = [x for x in valid if not x["has_real_C"]]
+
     def _mini(xs):
         if not xs:
             return {"n": 0}
@@ -178,6 +183,7 @@ def _build_out(targets, rows, c_mode, window_note):
             "avg_delta_expR": round(sum(x["delta_expR"] for x in xs) / len(xs), 4),
             "avg_delta_total_R": round(sum(x["delta_total_R"] for x in xs) / len(xs), 2),
         }
+
     out["summary"] = {
         "n_total": len(rs),
         "n_valid": len(valid),
@@ -214,8 +220,7 @@ def main():
     print(f"品种池 = 系统有效覆盖（SYMBOLS−DISABLED，有日线）：{len(targets)} 个")
     print("主对比：两模式均 ablate='C'(C=0 中性) → 纯测 F 参与定方向的价值", flush=True)
     print("=" * 90, flush=True)
-    hdr = (f"{'品种':5}{'板块':5}{'模式':8}{'笔':>4}{'期望R':>9}{'总R':>10}"
-           f"{'PF':>7}{'胜率':>8}{'最大回撤R':>10}")
+    hdr = f"{'品种':5}{'板块':5}{'模式':8}{'笔':>4}{'期望R':>9}{'总R':>10}{'PF':>7}{'胜率':>8}{'最大回撤R':>10}"
     print(hdr)
     print("-" * 90)
 
@@ -238,23 +243,30 @@ def main():
         rows_main.append((sym, r_thr, r_comb))
         for tag, r in (("thr ", r_thr), ("comb", r_comb)):
             pf = r["profit_factor"] if r["profit_factor"] is not None else "∞"
-            print(f"{sym:5}{fd.SYMBOLS.get(sym,{}).get('group','?'):5}{tag:8}{r['trades']:>4}"
-                  f"{r['expR']:>9}{r['total_R']:>10}{str(pf):>7}{r['win_rate']*100:>7.1f}%{r['max_dd_R']:>10}",
-                  flush=True)
+            print(
+                f"{sym:5}{fd.SYMBOLS.get(sym, {}).get('group', '?'):5}{tag:8}{r['trades']:>4}"
+                f"{r['expR']:>9}{r['total_R']:>10}{str(pf):>7}{r['win_rate'] * 100:>7.1f}%{r['max_dd_R']:>10}",
+                flush=True,
+            )
         de = r_comb["expR"] - r_thr["expR"]
         verdict = "▲增益" if de > 0.01 else ("▼有损" if de < -0.01 else "=持平")
-        print(f"   └ ΔexpR={de:+.3f}  Δ总R={r_comb['total_R']-r_thr['total_R']:+.2f}  "
-              f"Δ笔={r_comb['trades']-r_thr['trades']:+d}  → combined {verdict}  ({time.time()-t0:.1f}s)",
-              flush=True)
+        print(
+            f"   └ ΔexpR={de:+.3f}  Δ总R={r_comb['total_R'] - r_thr['total_R']:+.2f}  "
+            f"Δ笔={r_comb['trades'] - r_thr['trades']:+d}  → combined {verdict}  ({time.time() - t0:.1f}s)",
+            flush=True,
+        )
 
     out_main = _build_out(targets, rows_main, "ablate=C (C=0 中性)", "全样本 walk-forward OOS")
     with open(MAIN_OUT, "w", encoding="utf-8") as f:
         json.dump(out_main, f, ensure_ascii=False, indent=2)
     print("=" * 90, flush=True)
-    print(f"[主对比] 已写入 {MAIN_OUT}  （{time.time()-t_all:.1f}s）", flush=True)
+    print(f"[主对比] 已写入 {MAIN_OUT}  （{time.time() - t_all:.1f}s）", flush=True)
     s = out_main["summary"]
-    print(f"  有效 {s['n_valid']} 个：{s['n_improve']} 增益 / {s['n_degrade']} 有损 / {s['n_flat']} 持平 ｜ "
-          f"平均ΔexpR={s['avg_delta_expR']:+.4f} ｜ 平均Δ总R={s['avg_delta_total_R']:+.2f}", flush=True)
+    print(
+        f"  有效 {s['n_valid']} 个：{s['n_improve']} 增益 / {s['n_degrade']} 有损 / {s['n_flat']} 持平 ｜ "
+        f"平均ΔexpR={s['avg_delta_expR']:+.4f} ｜ 平均Δ总R={s['avg_delta_total_R']:+.2f}",
+        flush=True,
+    )
 
     # ── 补充对比：6 个真实 C 品种，真实 C + slice ──
     print("\n" + "=" * 90, flush=True)
@@ -282,13 +294,18 @@ def main():
         rows_creal.append((sym, r_thr, r_comb))
         for tag, r in (("thr ", r_thr), ("comb", r_comb)):
             pf = r["profit_factor"] if r["profit_factor"] is not None else "∞"
-            print(f"{sym:5}{fd.SYMBOLS.get(sym,{}).get('group','?'):5}{tag:8}{r['trades']:>4}"
-                  f"{r['expR']:>9}{r['total_R']:>10}{str(pf):>7}{r['win_rate']*100:>7.1f}%{r['max_dd_R']:>10}",
-                  flush=True)
+            print(
+                f"{sym:5}{fd.SYMBOLS.get(sym, {}).get('group', '?'):5}{tag:8}{r['trades']:>4}"
+                f"{r['expR']:>9}{r['total_R']:>10}{str(pf):>7}{r['win_rate'] * 100:>7.1f}%{r['max_dd_R']:>10}",
+                flush=True,
+            )
         de = r_comb["expR"] - r_thr["expR"]
         verdict = "▲增益" if de > 0.01 else ("▼有损" if de < -0.01 else "=持平")
-        print(f"   └ ΔexpR={de:+.3f}  Δ总R={r_comb['total_R']-r_thr['total_R']:+.2f}  "
-              f"→ combined {verdict}  (C窗口 {cmin}→{cmax}, {time.time()-t0:.1f}s)", flush=True)
+        print(
+            f"   └ ΔexpR={de:+.3f}  Δ总R={r_comb['total_R'] - r_thr['total_R']:+.2f}  "
+            f"→ combined {verdict}  (C窗口 {cmin}→{cmax}, {time.time() - t0:.1f}s)",
+            flush=True,
+        )
 
     out_creal = _build_out(LONG_C, rows_creal, "真实C (cpos_cache长历史)", "slice 到 C 真实区间")
     with open(CREAL_OUT, "w", encoding="utf-8") as f:
@@ -297,9 +314,12 @@ def main():
     print(f"[补充] 已写入 {CREAL_OUT}", flush=True)
     sc = out_creal["summary"]
     if sc["n_valid"]:
-        print(f"  有效 {sc['n_valid']} 个：{sc['n_improve']} 增益 / {sc['n_degrade']} 有损 / {sc['n_flat']} 持平 ｜ "
-              f"平均ΔexpR={sc['avg_delta_expR']:+.4f}", flush=True)
-    print(f"\n[总耗时] {time.time()-t_all:.1f}s", flush=True)
+        print(
+            f"  有效 {sc['n_valid']} 个：{sc['n_improve']} 增益 / {sc['n_degrade']} 有损 / {sc['n_flat']} 持平 ｜ "
+            f"平均ΔexpR={sc['avg_delta_expR']:+.4f}",
+            flush=True,
+        )
+    print(f"\n[总耗时] {time.time() - t_all:.1f}s", flush=True)
 
 
 if __name__ == "__main__":

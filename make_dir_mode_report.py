@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """读取 oos_dir_mode_main.json / oos_dir_mode_c_real.json，生成全市场 direction_mode OOS 对比 HTML 报告。"""
+
 import json
 import os
 
@@ -34,10 +35,10 @@ for r in main["rows"]:
     c = cls(de)
     trs += (
         f'<tr class="{c}"><td class="sym">{r["symbol"]}</td><td>{r["name"]}</td><td>{r["group"]}</td>'
-        f'<td>{th["trades"]}</td><td>{th["expR"]}</td><td>{th["total_R"]}</td>'
-        f'<td>{th["win_rate"]*100:.1f}%</td><td>{th["max_dd_R"]}</td>'
-        f'<td>{co["trades"]}</td><td>{co["expR"]}</td><td>{co["total_R"]}</td>'
-        f'<td>{co["win_rate"]*100:.1f}%</td><td>{co["max_dd_R"]}</td>'
+        f"<td>{th['trades']}</td><td>{th['expR']}</td><td>{th['total_R']}</td>"
+        f"<td>{th['win_rate'] * 100:.1f}%</td><td>{th['max_dd_R']}</td>"
+        f"<td>{co['trades']}</td><td>{co['expR']}</td><td>{co['total_R']}</td>"
+        f"<td>{co['win_rate'] * 100:.1f}%</td><td>{co['max_dd_R']}</td>"
         f'<td class="delta {c}">{de:+.3f}</td><td>{r["delta_total_R"]:+.1f}</td>'
         f'<td>{r["delta_trades"]:+d}</td><td class="v">{verdict(de)}</td></tr>'
     )
@@ -49,7 +50,7 @@ for g, gs in sorted(main["summary"]["by_group"].items(), key=lambda kv: kv[1]["a
     grp_rows += (
         f'<tr class="{gc}"><td>{g}</td><td>{gs["n"]}</td><td>{gs["n_imp"]}</td>'
         f'<td>{gs["n_dec"]}</td><td class="delta {gc}">{gs["avg_delta_expR"]:+.3f}</td>'
-        f'<td>{gs["avg_delta_total_R"]:+.1f}</td></tr>'
+        f"<td>{gs['avg_delta_total_R']:+.1f}</td></tr>"
     )
 
 # ---------- C 覆盖分组 ----------
@@ -63,8 +64,8 @@ for key, label in (("has_real_C", "有真实长C历史(6品种)"), ("no_real_C",
     gc = cls(x.get("avg_delta_expR", 0))
     c_cov_rows += (
         f'<tr class="{gc}"><td>{label}</td><td>{x["n"]}</td><td>{x["n_imp"]}</td>'
-        f'<td>{x["n_dec"]}</td><td class="delta {gc}">{x.get("avg_delta_expR",0):+.3f}</td>'
-        f'<td>{x.get("avg_delta_total_R",0):+.1f}</td></tr>'
+        f'<td>{x["n_dec"]}</td><td class="delta {gc}">{x.get("avg_delta_expR", 0):+.3f}</td>'
+        f"<td>{x.get('avg_delta_total_R', 0):+.1f}</td></tr>"
     )
 
 # ---------- 补充对比（真实C） ----------
@@ -75,7 +76,7 @@ for r in creal["rows"]:
     c = cls(de)
     creal_rows += (
         f'<tr class="{c}"><td class="sym">{r["symbol"]}</td><td>{r["name"]}</td>'
-        f'<td>{th["trades"]}</td><td>{th["expR"]}</td><td>{co["trades"]}</td>'
+        f"<td>{th['trades']}</td><td>{th['expR']}</td><td>{co['trades']}</td>"
         f'<td>{co["expR"]}</td><td class="delta {c}">{de:+.3f}</td>'
         f'<td>{r["delta_total_R"]:+.1f}</td><td class="v">{verdict(de)}</td></tr>'
     )
@@ -121,17 +122,17 @@ small{{color:#999}}
 <div class="sub">候选改进 <span class="code">combined</span> 模式 vs 当前默认 <span class="code">threshold</span> 模式 · 生成于 {date_str} · 数据：本地日线 + fundamentals.json(F) + cpos_cache(C)</div>
 
 <div class="cards">
-  <div class="kpi gray"><div class="v">{s['n_valid']}</div><div class="l">有效对比品种</div></div>
-  <div class="kpi red"><div class="v">{s['n_improve']}</div><div class="l">combined 增益 ▲</div></div>
-  <div class="kpi green"><div class="v">{s['n_degrade']}</div><div class="l">combined 有损 ▼</div></div>
-  <div class="kpi gray"><div class="v">{s['n_flat']}</div><div class="l">持平 =</div></div>
-  <div class="kpi green"><div class="v">{s['avg_delta_expR']:+.4f}</div><div class="l">平均Δ期望R/笔</div></div>
+  <div class="kpi gray"><div class="v">{s["n_valid"]}</div><div class="l">有效对比品种</div></div>
+  <div class="kpi red"><div class="v">{s["n_improve"]}</div><div class="l">combined 增益 ▲</div></div>
+  <div class="kpi green"><div class="v">{s["n_degrade"]}</div><div class="l">combined 有损 ▼</div></div>
+  <div class="kpi gray"><div class="v">{s["n_flat"]}</div><div class="l">持平 =</div></div>
+  <div class="kpi green"><div class="v">{s["avg_delta_expR"]:+.4f}</div><div class="l">平均Δ期望R/笔</div></div>
 </div>
 
 <div class="card">
 <h2>一句话结论</h2>
-<p><b>combined 模式<b>不应</b>全市场一刀切切换。</b>在剔除资金面 C 泄漏的严格 OOS 下，combined（F 参与定方向）相对 threshold（F 仅调制阈值）<b class="bad">平均轻微负向（{s['avg_delta_expR']:+.4f} R/笔）</b>，
-变差品种数（{s['n_degrade']}）是增益品种数（{s['n_improve']}）的两倍以上。F/C 作为<b>方向调制器</b>稳定有效，作为<b>方向决策者</b>反而引入噪声——与前期"C 维度在 threshold 下零贡献"的消融结论一致。</p>
+<p><b>combined 模式<b>不应</b>全市场一刀切切换。</b>在剔除资金面 C 泄漏的严格 OOS 下，combined（F 参与定方向）相对 threshold（F 仅调制阈值）<b class="bad">平均轻微负向（{s["avg_delta_expR"]:+.4f} R/笔）</b>，
+变差品种数（{s["n_degrade"]}）是增益品种数（{s["n_improve"]}）的两倍以上。F/C 作为<b>方向调制器</b>稳定有效，作为<b>方向决策者</b>反而引入噪声——与前期"C 维度在 threshold 下零贡献"的消融结论一致。</p>
 <p>个别品种（<span class="good">rb / ru / c / UR / OI / PX</span>）combined 确有真实增益，可考虑<b>逐品种选择性启用</b>（需 IS/OOS 分离防过拟合）；真实资金面 C 维度的贡献在当前回测框架下<b>无法严格验证</b>（见补充对比）。</p>
 </div>
 
@@ -139,7 +140,7 @@ small{{color:#999}}
 <h2>方法论</h2>
 <ul>
 <li><b>OOS 口径</b>：<span class="code">walk_forward_backtest</span> 不调参滚动（window=300 预热），逐 bar 用截至当日数据算 pipeline，下一根开盘入场，stop/2R 出场，扣费扣滑点。</li>
-<li><b>主对比（全市场有效品种 = SYMBOLS − DISABLED，共 {s['n_total']} 个有日线）</b>：两模式均 <span class="code">ablate="C"</span>（C=0 中性），<b>剔除无 C 长历史品种回测早期的"最新值回落"泄漏</b>，从而纯测 <b>F 维度参与定方向</b> 的价值（这恰是多数无 C 数据品种的现实假设）。</li>
+<li><b>主对比（全市场有效品种 = SYMBOLS − DISABLED，共 {s["n_total"]} 个有日线）</b>：两模式均 <span class="code">ablate="C"</span>（C=0 中性），<b>剔除无 C 长历史品种回测早期的"最新值回落"泄漏</b>，从而纯测 <b>F 维度参与定方向</b> 的价值（这恰是多数无 C 数据品种的现实假设）。</li>
 <li><b>补充对比（6 真实 C 品种）</b>：用真实 C + <span class="code">slice_c_window</span> 切到 C 真实区间，看 F+C 共同定方向增益。</li>
 <li><b>判定的差异来源</b>：combined 仅在 <span class="code">dir_T_raw≠0 或 |bias_G|≥bias_g_min(50)</span> 时启用 F/C 定方向，多数 bar 退化为 threshold —— 这解释了为何多数品种 Δ=0。</li>
 </ul>
@@ -180,7 +181,7 @@ small{{color:#999}}
 <div class="card">
 <h2>结论与建议</h2>
 <ol>
-<li><b>不要全市场切 combined。</b> 全市场 OOS 平均 ΔexpR={s['avg_delta_expR']:+.4f}（轻微负向），变差({s['n_degrade']})≫增益({s['n_improve']})；F/C 作为方向调制器稳定，作为方向决策者引入噪声。</li>
+<li><b>不要全市场切 combined。</b> 全市场 OOS 平均 ΔexpR={s["avg_delta_expR"]:+.4f}（轻微负向），变差({s["n_degrade"]})≫增益({s["n_improve"]})；F/C 作为方向调制器稳定，作为方向决策者引入噪声。</li>
 <li><b>逐品种选择性启用（候选路径）。</b> rb/ru/c/UR/OI/PX 等个别品种 combined 有真实增益，可跑「训练期决定开/关 combined → 测试期验证」的 IS/OOS 分离实验，避免样本窥探式过拟合。</li>
 <li><b>真实 C 维度贡献无法用日线龙虎榜严格验证。</b> 需①拉长 C 历史至 &gt;380 根（~18 个月，天勤更久回溯或合成）；②或下调 walk_forward window；③<b>或改走实时 C_flow 路径（盘中 tick 订单流）</b>——那才是资金面 C 真正发挥威力的场景，而非日线龙虎榜回填。</li>
 <li><b>C 维度定位维持。</b> 日线龙虎榜 C 当前更适合做 threshold 模式下的「阈值调制 + 硬否决」角色；要释放其「定方向」价值，应接实时盘中 C_flow 而非依赖历史龙虎榜。</li>
@@ -191,7 +192,7 @@ small{{color:#999}}
 </div></body></html>"""
 
 os.makedirs(WS, exist_ok=True)
-out = os.path.join(WS, f"全市场_direction_mode_OOS对比_{date_str.replace('-','')}.html")
+out = os.path.join(WS, f"全市场_direction_mode_OOS对比_{date_str.replace('-', '')}.html")
 with open(out, "w", encoding="utf-8") as f:
     f.write(html)
 print("written:", out, "bytes:", len(html))

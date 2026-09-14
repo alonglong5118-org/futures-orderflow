@@ -101,7 +101,14 @@ class PaperTradingEngine:
         engine.check_positions(current_prices)
     """
 
-    def __init__(self, config: dict | None = None, price_feed=None, contract_specs: dict | None = None, state_file: str | None = None, stop_vol_fn=None):
+    def __init__(
+        self,
+        config: dict | None = None,
+        price_feed=None,
+        contract_specs: dict | None = None,
+        state_file: str | None = None,
+        stop_vol_fn=None,
+    ):
         """
         Args:
             config: 配置字典，覆盖默认配置
@@ -564,7 +571,9 @@ class PaperTradingEngine:
             max_hours = self.config.get("time_exit_hours", 72)
             min_profit = self.config.get("time_exit_min_profit_R", 1.0)
             if hours_held >= max_hours and profit_R >= min_profit:
-                return self._close_position(pos, remaining_lots, cur_price, f"时间止盈({int(hours_held)}h/{profit_R:.1f}R)")
+                return self._close_position(
+                    pos, remaining_lots, cur_price, f"时间止盈({int(hours_held)}h/{profit_R:.1f}R)"
+                )
 
         # 移动止损检查
         if self.config.get("enable_trailing", True):

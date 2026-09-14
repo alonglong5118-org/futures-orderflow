@@ -284,12 +284,12 @@ def apply_portfolio_risk(symbol, base_lots, cfg=DEFAULT_CONFIG):
 
 DYNAMIC_POS_DEFAULT = {
     "enabled": True,
-    "ls_threshold": 0.75,       # 多空失衡阈值：单边占比超过则触发
-    "ls_strength": 1.5,         # 多空失衡强度：失衡越严重降仓越多
-    "n_pos_strength": 0.8,      # 持仓数强度：持仓越多降仓越多
-    "sector_strength": 0.5,     # 板块集中强度：集中度越高该板块降仓越多
-    "min_scale": 0.3,           # 最低仓位乘数（防止过度降仓）
-    "min_positions": 5,         # 最少持仓数（低于此数不触发持仓数/多空失衡规则）
+    "ls_threshold": 0.75,  # 多空失衡阈值：单边占比超过则触发
+    "ls_strength": 1.5,  # 多空失衡强度：失衡越严重降仓越多
+    "n_pos_strength": 0.8,  # 持仓数强度：持仓越多降仓越多
+    "sector_strength": 0.5,  # 板块集中强度：集中度越高该板块降仓越多
+    "min_scale": 0.3,  # 最低仓位乘数（防止过度降仓）
+    "min_positions": 5,  # 最少持仓数（低于此数不触发持仓数/多空失衡规则）
 }
 
 
@@ -439,17 +439,11 @@ def dynamic_position_scale(open_positions, sym=None, cfg=None):
     # 说明文字
     details_parts = []
     if ls_scale < 0.99:
-        details_parts.append(
-            f"多空失衡({ls_ratio:.0%}, 阈值{ls_threshold:.0%})→{ls_scale:.0%}"
-        )
+        details_parts.append(f"多空失衡({ls_ratio:.0%}, 阈值{ls_threshold:.0%})→{ls_scale:.0%}")
     if n_pos_scale < 0.99:
-        details_parts.append(
-            f"持仓数({n_total})→{n_pos_scale:.0%}"
-        )
+        details_parts.append(f"持仓数({n_total})→{n_pos_scale:.0%}")
     if sym is not None and sector_scale < 0.99:
-        details_parts.append(
-            f"板块集中({sym_group})→{sector_scale:.0%}"
-        )
+        details_parts.append(f"板块集中({sym_group})→{sector_scale:.0%}")
 
     if not details_parts:
         details = "无动态调整"

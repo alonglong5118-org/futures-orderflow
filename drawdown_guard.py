@@ -47,6 +47,7 @@ _CONFIG_LOCK = threading.RLock()  # 保护全局水位线配置
 # DrawdownGuard 类（单账户实例）
 # ==========================================================================
 
+
 class DrawdownGuard:
     """单账户回撤水位线管理器。
 
@@ -212,7 +213,7 @@ def list_dd_accounts():
     try:
         for fn in os.listdir(HERE):
             if fn.startswith("drawdown_state_") and fn.endswith(".json"):
-                aid = fn[len("drawdown_state_"):-len(".json")]
+                aid = fn[len("drawdown_state_") : -len(".json")]
                 if aid and not aid.endswith(".tmp") and not aid.endswith(".bak"):
                     accounts.add(aid)
     except Exception:
@@ -223,6 +224,7 @@ def list_dd_accounts():
 # ==========================================================================
 # 模块级函数（向后兼容：默认操作 default 账户，可传 account_id 指定账户）
 # ==========================================================================
+
 
 def init_from_config():
     """从 trade_config.json 读取 risk_gate.drawdown_waterlines（可选覆盖）。

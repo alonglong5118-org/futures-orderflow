@@ -122,7 +122,7 @@ def wilcoxon_signed_rank(diffs):
 
 
 def binom_test(k, n, p0=0.5):
-    p_ge = sum(math.comb(n, i) * p0 ** i * (1 - p0) ** (n - i) for i in range(k, n + 1))
+    p_ge = sum(math.comb(n, i) * p0**i * (1 - p0) ** (n - i) for i in range(k, n + 1))
     return min(1.0, 2 * p_ge)
 
 
@@ -156,9 +156,11 @@ def main():
         be = [e for e, _, _ in b]
         te = [e for e, _, _ in t]
         wins = sum(1 for x, y in zip(be, te) if y > x)
-        print(f"{sym:<5}{' / '.join(f'{e:+.3f}' for e in be):<40}{np.mean(be):>+8.4f}  "
-              f"{' / '.join(f'{e:+.3f}' for e in te):<40}{np.mean(te):>+8.4f}  "
-              f"{np.mean(te) - np.mean(be):>+8.4f} {wins}/{len(be):<3}")
+        print(
+            f"{sym:<5}{' / '.join(f'{e:+.3f}' for e in be):<40}{np.mean(be):>+8.4f}  "
+            f"{' / '.join(f'{e:+.3f}' for e in te):<40}{np.mean(te):>+8.4f}  "
+            f"{np.mean(te) - np.mean(be):>+8.4f} {wins}/{len(be):<3}"
+        )
     print()
 
     # ── 组合级 ──
@@ -173,7 +175,9 @@ def main():
     print(f"  ATR 基线： expR {base_port:+.4f} · {base_trades} 笔 · 胜率 {base_wr:.1%}")
     print(f"  DR/√N：    expR {test_port:+.4f} · {test_trades} 笔 · 胜率 {test_wr:.1%}")
     diff = test_port - base_port
-    print(f"  ΔexpR {diff:+.4f}（相对 {diff / abs(base_port):+.0%}）· Δ笔数 {test_trades - base_trades:+d} · Δ胜率 {test_wr - base_wr:+.1%}")
+    print(
+        f"  ΔexpR {diff:+.4f}（相对 {diff / abs(base_port):+.0%}）· Δ笔数 {test_trades - base_trades:+d} · Δ胜率 {test_wr - base_wr:+.1%}"
+    )
     print()
 
     # ── 折级配对检验 ──

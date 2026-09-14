@@ -243,7 +243,9 @@ def nested_rolling_validation(
 
     # 生成所有网格组合
     combos = _grid_combinations(
-        base_params["T"], base_params["stop"], base_params["rr"],
+        base_params["T"],
+        base_params["stop"],
+        base_params["rr"],
         T_range=T_range,
         stop_range=stop_range,
         rr_range=rr_range,
@@ -252,7 +254,9 @@ def nested_rolling_validation(
     # 全量基线（用基线参数跑整段数据）
     base_full = _evaluate_params(
         symbol,
-        base_params["T"], base_params["stop"], base_params["rr"],
+        base_params["T"],
+        base_params["stop"],
+        base_params["rr"],
         df_slice=df,
     )
 
@@ -277,7 +281,11 @@ def nested_rolling_validation(
 
         for T, stop, rr in combos:
             result = _evaluate_params(
-                symbol, T, stop, rr, df_slice=train_df,
+                symbol,
+                T,
+                stop,
+                rr,
+                df_slice=train_df,
             )
             if result["trades"] >= 5 and result["expR"] > best_expR:
                 best_expR = result["expR"]
@@ -295,12 +303,16 @@ def nested_rolling_validation(
 
         base_oos = _evaluate_params(
             symbol,
-            base_params["T"], base_params["stop"], base_params["rr"],
+            base_params["T"],
+            base_params["stop"],
+            base_params["rr"],
             df_slice=oos_df,
         )
         opt_oos = _evaluate_params(
             symbol,
-            best_params[0], best_params[1], best_params[2],
+            best_params[0],
+            best_params[1],
+            best_params[2],
             df_slice=oos_df,
         )
 
@@ -309,15 +321,17 @@ def nested_rolling_validation(
         oos_base_trades += base_oos["trades"]
         oos_opt_trades += opt_oos["trades"]
 
-        yearly_results.append({
-            "period_start": period_start,
-            "period_end": period_end,
-            "params": {"T": best_params[0], "stop": best_params[1], "rr": best_params[2]},
-            "opt_expR": round(opt_oos["expR"], 4),
-            "base_expR": round(base_oos["expR"], 4),
-            "opt_trades": opt_oos["trades"],
-            "base_trades": base_oos["trades"],
-        })
+        yearly_results.append(
+            {
+                "period_start": period_start,
+                "period_end": period_end,
+                "params": {"T": best_params[0], "stop": best_params[1], "rr": best_params[2]},
+                "opt_expR": round(opt_oos["expR"], 4),
+                "base_expR": round(base_oos["expR"], 4),
+                "opt_trades": opt_oos["trades"],
+                "base_trades": base_oos["trades"],
+            }
+        )
 
         period_start = period_end
 
@@ -336,10 +350,7 @@ def nested_rolling_validation(
     delta = avg_opt_expR - avg_base_expR
     trades_ratio = oos_opt_trades / oos_base_trades if oos_base_trades > 0 else 1.0
 
-    passes = (
-        delta >= min_delta
-        and min_trades_ratio <= trades_ratio <= max_trades_ratio
-    )
+    passes = delta >= min_delta and min_trades_ratio <= trades_ratio <= max_trades_ratio
 
     return {
         "symbol": symbol,
@@ -423,7 +434,7 @@ def run_quarterly_reoptimization(
     passing_symbols = []
 
     for i, sym in enumerate(symbols):
-        print(f"[{i+1}/{len(symbols)}] {sym}...", end=" ", flush=True)
+        print(f"[{i + 1}/{len(symbols)}] {sym}...", end=" ", flush=True)
 
         try:
             base_params = _get_baseline_params(sym)
@@ -450,11 +461,13 @@ def run_quarterly_reoptimization(
 
         except Exception as e:
             print(f"✗ 错误: {e}")
-            results.append({
-                "symbol": sym,
-                "passes_validation": False,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "symbol": sym,
+                    "passes_validation": False,
+                    "error": str(e),
+                }
+            )
 
     elapsed = time.time() - start_time
 
@@ -462,16 +475,12 @@ def run_quarterly_reoptimization(
     passing_results = [r for r in results if r.get("passes_validation")]
     n_total = len(results)
     n_passing = len(passing_results)
-    avg_delta = (
-        sum(r["oos"]["delta"] for r in passing_results) / n_passing
-        if n_passing > 0
-        else 0
-    )
+    avg_delta = sum(r["oos"]["delta"] for r in passing_results) / n_passing if n_passing > 0 else 0
 
     print()
     print(f"=== 重优化完成 ===")
     print(f"总品种数: {n_total}")
-    print(f"通过验证: {n_passing} ({n_passing/n_total*100:.1f}%)")
+    print(f"通过验证: {n_passing} ({n_passing / n_total * 100:.1f}%)")
     print(f"平均 OOS ΔexpR: {avg_delta:+.4f}")
     print(f"耗时: {elapsed:.1f}s")
 
@@ -558,7 +567,9 @@ def run_quarterly_reoptimization(
 def main():
     parser = argparse.ArgumentParser(description="季度参数重优化")
     parser.add_argument(
-        "--symbols", nargs="*", default=None,
+        "--symbols",
+        nargs="*",
+        default=None,
         help="要优化的品种列表（空=全部）",
     )
     parser.add_argument("--T-range", type=float, default=DEFAULT_T_RANGE, help="T 搜索范围 (±)")

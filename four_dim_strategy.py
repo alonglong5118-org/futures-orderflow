@@ -414,8 +414,7 @@ DEFAULT_CONFIG = {
             # OOS: -0.364 → -0.161 (+0.203), 60% 胜率
             # cluster_w（P2 第三批）：均值簇失效（11笔 expR=-0.306），趋势簇健康（82笔 expR=+0.267）
             # OOS: +0.188 → +0.294 (+0.106), 胜率 4/5 (80%)；过渡 regime 未验证不覆盖
-            "趋势": {"T": 0.80, "stop": 0.85, "note": "降T阈值+收紧止损，趋势市增效",
-                     "cluster_w": {"mean": 0.3}},
+            "趋势": {"T": 0.80, "stop": 0.85, "note": "降T阈值+收紧止损，趋势市增效", "cluster_w": {"mean": 0.3}},
             "过渡": {"T": 0.80, "stop": 1.00, "note": "降T阈值，过渡市增加有效信号"},
             "震荡": {"cluster_w": {"mean": 0.3}},
             "波动": {"cluster_w": {"mean": 0.3}},
@@ -424,6 +423,7 @@ DEFAULT_CONFIG = {
             # 豆二：趋势市小亏(-0.105) + 波动市小亏(-0.203)
             # OOS: -0.385 → -0.300 (+0.085), 60% 胜率
             "趋势": {"T": 1.00, "stop": 1.30, "note": "放宽止损，趋势市避免震荡出局"},
+            "波动": {"T": 1.30, "note": "P2: 波动市T 1.15→1.30 长期数据(Δ+0.033R, 严格)"},
         },
         # ========== 黑系专项（2026-08-29 走步法 OOS 验证）==========
         # 诊断：黑系胜率仅35%，波动市/过渡市是主要亏损来源
@@ -450,12 +450,14 @@ DEFAULT_CONFIG = {
             # OOS: +0.104 → +0.082（-21%，仍正）
             # cluster_w（P2 第三批）：均值簇失效（13笔 expR=-0.512），趋势簇健康（48笔 expR=+0.652）
             # OOS: +0.133 → +0.308 (+0.175), 胜率 4/5 (80%)
-            "波动": {"T": 1.8, "stop": 0.7, "note": "黑系专项：提T门槛+收紧止损，回避波动市假突破",
-                     "cluster_w": {"mean": 0.3}},
-            "趋势": {"stop": 1.2, "note": "黑系专项：放宽止损，趋势市拿住大行情",
-                     "cluster_w": {"mean": 0.3}},
-            "震荡": {"stop": 1.2, "note": "黑系专项：放宽止损，震荡市增加容错",
-                     "cluster_w": {"mean": 0.3}},
+            "波动": {
+                "T": 1.8,
+                "stop": 0.7,
+                "note": "黑系专项：提T门槛+收紧止损，回避波动市假突破",
+                "cluster_w": {"mean": 0.3},
+            },
+            "趋势": {"stop": 1.2, "note": "黑系专项：放宽止损，趋势市拿住大行情", "cluster_w": {"mean": 0.3}},
+            "震荡": {"stop": 1.2, "note": "黑系专项：放宽止损，震荡市增加容错", "cluster_w": {"mean": 0.3}},
         },
         # ========== 品种级簇权重（策略标签体系 P2，2026-08-31）==========
         # 数据来源：54 品种 4498 笔回测标签分布（backtest_strategy_labels.json）
@@ -465,11 +467,19 @@ DEFAULT_CONFIG = {
             # 菜粕：趋势簇失效（161笔 expR=-0.227），均值簇有效（10笔 expR=+0.564）
             # OOS: -0.090 → +0.064 (+0.154), 胜率 3/5 (60%)
             # 原有 T/stop 覆盖保留（P2 第一批），新增 cluster_w 覆盖
-            "趋势": {"T": 0.80, "stop": 1.30, "note": "降T阈值+放宽止损，趋势市提升胜率",
-                     "cluster_w": {"trend": 0.3, "mean": 2.0}},
+            "趋势": {
+                "T": 0.80,
+                "stop": 1.30,
+                "note": "降T阈值+放宽止损，趋势市提升胜率",
+                "cluster_w": {"trend": 0.3, "mean": 2.0},
+            },
             "震荡": {"cluster_w": {"trend": 0.3, "mean": 2.0}},
-            "波动": {"T": 0.80, "stop": 0.85, "note": "降T阈值+收紧止损，波动市减亏",
-                     "cluster_w": {"trend": 0.3, "mean": 2.0}},
+            "波动": {
+                "T": 0.80,
+                "stop": 0.85,
+                "note": "降T阈值+收紧止损，波动市减亏",
+                "cluster_w": {"trend": 0.3, "mean": 2.0},
+            },
         },
         "m": {
             # 豆粕：趋势簇失效（180笔 expR=-0.104），均值簇边际有效
@@ -510,7 +520,7 @@ DEFAULT_CONFIG = {
             # OOS: +0.107 → +0.190 (+0.083), 胜率 3/5 (60%)
             "趋势": {"cluster_w": {"mean": 0.3}},
             "震荡": {"cluster_w": {"mean": 0.3}},
-            "波动": {"cluster_w": {"mean": 0.3}},
+            "波动": {"cluster_w": {"mean": 0.3}, "T": 1.30, "note": "P2: 波动市T 1.15→1.30 长期数据(Δ+0.041R, 严格)"},
         },
         "y": {
             # 豆油：均值簇轻度失效（34笔 expR=-0.074），趋势簇健康（143笔 expR=+0.359）
@@ -518,27 +528,19 @@ DEFAULT_CONFIG = {
             # 注：与 TA/al 同构模式（趋势健康+均值轻度负→降均值），但结果相反，见第三批教训
             "趋势": {"cluster_w": {"mean": 0.3}},
             "震荡": {"cluster_w": {"mean": 0.3}},
-            "波动": {"cluster_w": {"mean": 0.3}},
+            "波动": {"cluster_w": {"mean": 0.3}, "T": 1.30, "note": "P2: 波动市T 1.15→1.30 长期数据(Δ+0.086R, 严格)"},
         },
         # ========== P2 波动市 T 乘数（2026-09-06 长期数据普查）==========
         # 来源：38品种波动市T乘数扫描，Δ≥0.03R 且 交易≥20 才纳入
+        # 注：y/ag/b 的波动市 T 乘数已并入各自上方 regime 配置段（避免重复 key）
         "PF": {
             "波动": {"T": 0.85, "note": "P2: 波动市T 1.15→0.85 长期数据(Δ+0.180R, 宽松)"},
-        },
-        "y": {
-            "波动": {"T": 1.30, "note": "P2: 波动市T 1.15→1.30 长期数据(Δ+0.086R, 严格)"},
         },
         "ni": {
             "波动": {"T": 1.00, "note": "P2: 波动市T 1.15→1.00 长期数据(Δ+0.054R, 宽松)"},
         },
         "p": {
             "波动": {"T": 0.85, "note": "P2: 波动市T 1.15→0.85 长期数据(Δ+0.051R, 宽松)"},
-        },
-        "ag": {
-            "波动": {"T": 1.30, "note": "P2: 波动市T 1.15→1.30 长期数据(Δ+0.041R, 严格)"},
-        },
-        "b": {
-            "波动": {"T": 1.30, "note": "P2: 波动市T 1.15→1.30 长期数据(Δ+0.033R, 严格)"},
         },
     },
     # 合约参数（§2.1 占位；fee=单边每手元近似，回测扣费用）
@@ -675,7 +677,7 @@ DEFAULT_CONFIG = {
         "eg": {"T": 0.55, "F": 0.30, "C": 0.15},  # Δ=+0.025
         # ── 农产品（板块级F=0.35，这些品种调整）──
         "lh": {"T": 0.60, "F": 0.25, "C": 0.15},  # Δ=+0.345
-        "a": {"T": 0.60, "F": 0.25, "C": 0.15},   # Δ=+0.068（减亏）
+        "a": {"T": 0.60, "F": 0.25, "C": 0.15},  # Δ=+0.068（减亏）
         "SR": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.029
         # ── 有色（板块级F=0.30，这些品种调整）──
         "lc": {"T": 0.50, "F": 0.35, "C": 0.15},  # Δ=+0.258
@@ -702,26 +704,26 @@ DEFAULT_CONFIG = {
     #   每个品种列出要排除的子策略名（来自 STRATS）。被排除的策略不参与簇投票。
     #   来源：逐策略 ablation + 贪心验证（全品种平均 +0.12R，14 个品种全部提升）。
     "strat_blacklist": {
-        "fu": ["rsi", "pullback"],     # +1.74R (贪心搜索v2)
-        "ag": ["rsi", "seasonal"],     # +0.60R (贪心搜索v2)
-        "c": ["ma_break"],             # +0.51R
-        "m": ["rsi", "pullback"],      # +0.38R (贪心搜索v2)
-        "y": ["boll"],                 # +0.37R
-        "eg": ["seasonal"],            # +0.33R (贪心搜索v2)
-        "rb": ["ma_break"],            # +0.33R
-        "FG": ["pullback"],            # +0.31R
-        "MA": ["rsi"],                 # +0.27R
-        "eb": ["seasonal"],            # +0.17R (贪心搜索v2)
-        "sp": ["boll"],                # +0.17R
+        "fu": ["rsi", "pullback"],  # +1.74R (贪心搜索v2)
+        "ag": ["rsi", "seasonal"],  # +0.60R (贪心搜索v2)
+        "c": ["ma_break"],  # +0.51R
+        "m": ["rsi", "pullback"],  # +0.38R (贪心搜索v2)
+        "y": ["boll"],  # +0.37R
+        "eg": ["seasonal"],  # +0.33R (贪心搜索v2)
+        "rb": ["ma_break"],  # +0.33R
+        "FG": ["pullback"],  # +0.31R
+        "MA": ["rsi"],  # +0.27R
+        "eb": ["seasonal"],  # +0.17R (贪心搜索v2)
+        "sp": ["boll"],  # +0.17R
         "b": ["ma_break", "pullback", "dma"],  # +0.36R (v1验证有效，组合效应>贪心)
-        "lc": ["donchian"],            # +0.14R
-        "pp": ["seasonal"],            # +0.13R (贪心搜索v2)
-        "AP": ["seasonal"],            # +0.13R (贪心搜索v2)
-        "zn": ["boll"],                # +0.13R (贪心搜索v2)
-        "p": ["donchian", "turtle"],   # +0.13R (贪心搜索v2)
-        "PK": ["boll"],                # +0.06R
-        "UR": ["seasonal"],            # +0.06R (贪心搜索v2)
-        "TA": ["rsi"],                 # +0.05R
+        "lc": ["donchian"],  # +0.14R
+        "pp": ["seasonal"],  # +0.13R (贪心搜索v2)
+        "AP": ["seasonal"],  # +0.13R (贪心搜索v2)
+        "zn": ["boll"],  # +0.13R (贪心搜索v2)
+        "p": ["donchian", "turtle"],  # +0.13R (贪心搜索v2)
+        "PK": ["boll"],  # +0.06R
+        "UR": ["seasonal"],  # +0.06R (贪心搜索v2)
+        "TA": ["rsi"],  # +0.05R
     },
     # 策略权重（P-W，2026-09-07）：簇内策略的相对权重。
     #   为空 dict 时=等权（默认行为，向后兼容）。
@@ -786,119 +788,224 @@ DEFAULT_CONFIG = {
     "per_symbol_tail": {
         # === 宽跟踪组（tail_trail_R ≥ 4R，趋势品种）===
         # 这些品种趋势性强，尾仓需要更宽的跟踪止损才能抓住大行情
-        "au": {"tail_trail_R": 5.0, "min_profit_R": 2.5, "tail_breakeven_R": 0.5,
-               "note": "P-S:5.0R(Δ+1.515R) + P0-3:2.5R + P0-5:0.5R(Δ+0.302R)"},
-        "CF": {"tail_trail_R": 5.0, "min_profit_R": 5.0, "tail_tighten_R": 5.0, "tail_tighten_pct": 0.4,
-               "note": "P-S:5.0R + P0-3:5.0R + P0-8:5.0R/40%(深化Δ+0.136R)"},
-        "ag": {"tail_trail_R": 5.0, "min_profit_R": 5.0,
-               "note": "P-S:5.0R(Δ+0.506R) + P0-3:5.0R"},
-        "SH": {"tail_trail_R": 5.0,
-               "note": "P-S:5.0R(Δ+0.388R)"},
-        "al": {"tail_trail_R": 5.0, "min_profit_R": 5.0, "tail_breakeven_R": 2.0,
-               "partial_take_R": 1.0, "partial_take_pct": 0.7,
-               "partial_take2_R": 3.0, "partial_take2_pct": 0.5,
-               "tail_tighten_R": 2.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:5.0R + P0-3:5.0R + P0-5:2.0R + P0-6:1R70% + P0-7:3R50% + P0-8:2R(Δ+0.058R)"},
-        "ru": {"tail_trail_R": 5.0, "min_profit_R": 0.5, "tail_breakeven_R": 3.0,
-               "note": "P-S:5.0R + P0-3:0.5R(普查Δ+0.446R) + P0-5:3.0R"},
-        "c":  {"tail_trail_R": 5.0, "min_profit_R": 4.0,
-               "note": "P-S:5.0R(Δ+0.196R) + P0-3:4.0R"},
-        "OI": {"tail_trail_R": 5.0, "min_profit_R": 3.0, "tail_tighten_R": 3.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:5.0R(Δ+0.181R) + P0-3:3.0R + P0-8:3.0R(Δ+0.056R)"},
-        "AP": {"tail_trail_R": 5.0, "min_profit_R": 5.0, "partial_take2_R": 4.0, "partial_take2_pct": 0.5,
-               "note": "P-S:5.0R(Δ+0.072R) + P0-3:5.0R + P0-7:4.0R(Δ+0.039R)"},
-        "FG": {"tail_trail_R": 5.0, "min_profit_R": 5.0, "partial_take2_R": 0.5, "partial_take2_pct": 0.5,
-               "note": "P-S:5.0R(Δ+0.060R) + P0-3:5.0R + P0-7:0.5R(Δ+0.030R)"},
-        "eb": {"tail_trail_R": 4.0, "tail_breakeven_R": 3.0, "tail_tighten_R": 5.0, "tail_tighten_pct": 0.4,
-               "note": "P-S:4.0R + P0-5:3.0R + P0-8:5.0R/40%(深化Δ+0.050R)"},
-        "eg": {"tail_trail_R": 4.0, "tail_breakeven_R": 2.0,
-               "note": "P-S:4.0R(Δ+0.298R) + P0-5:2.0R(Δ+0.298R)"},
-        "lc": {"tail_trail_R": 4.0, "min_profit_R": 4.0,
-               "note": "P-S:4.0R(Δ+0.278R) + P0-3:4.0R"},
-        "sn": {"tail_trail_R": 4.0, "min_profit_R": 5.0,
-               "note": "P-S:4.0R(Δ+0.111R) + P0-3:5.0R"},
-        "MA": {"tail_trail_R": 4.0, "min_profit_R": 2.5,
-               "note": "P-S:4.0R(Δ+0.065R) + P0-3:2.5R"},
-        "JM": {"tail_trail_R": 4.0, "min_profit_R": 0.5,
-               "partial_take2_R": 4.0, "partial_take2_pct": 0.5,
-               "tail_tighten_R": 5.0, "tail_tighten_pct": 0.4,
-               "note": "P-S:4.0R + P0-3:0.5R + P0-7:4.0R + P0-8:5.0R/40%(深化Δ+0.029R)"},
-
+        "au": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 2.5,
+            "tail_breakeven_R": 0.5,
+            "note": "P-S:5.0R(Δ+1.515R) + P0-3:2.5R + P0-5:0.5R(Δ+0.302R)",
+        },
+        "CF": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 5.0,
+            "tail_tighten_R": 5.0,
+            "tail_tighten_pct": 0.4,
+            "note": "P-S:5.0R + P0-3:5.0R + P0-8:5.0R/40%(深化Δ+0.136R)",
+        },
+        "ag": {"tail_trail_R": 5.0, "min_profit_R": 5.0, "note": "P-S:5.0R(Δ+0.506R) + P0-3:5.0R"},
+        "SH": {"tail_trail_R": 5.0, "note": "P-S:5.0R(Δ+0.388R)"},
+        "al": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 5.0,
+            "tail_breakeven_R": 2.0,
+            "partial_take_R": 1.0,
+            "partial_take_pct": 0.7,
+            "partial_take2_R": 3.0,
+            "partial_take2_pct": 0.5,
+            "tail_tighten_R": 2.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:5.0R + P0-3:5.0R + P0-5:2.0R + P0-6:1R70% + P0-7:3R50% + P0-8:2R(Δ+0.058R)",
+        },
+        "ru": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 0.5,
+            "tail_breakeven_R": 3.0,
+            "note": "P-S:5.0R + P0-3:0.5R(普查Δ+0.446R) + P0-5:3.0R",
+        },
+        "c": {"tail_trail_R": 5.0, "min_profit_R": 4.0, "note": "P-S:5.0R(Δ+0.196R) + P0-3:4.0R"},
+        "OI": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 3.0,
+            "tail_tighten_R": 3.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:5.0R(Δ+0.181R) + P0-3:3.0R + P0-8:3.0R(Δ+0.056R)",
+        },
+        "AP": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 5.0,
+            "partial_take2_R": 4.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:5.0R(Δ+0.072R) + P0-3:5.0R + P0-7:4.0R(Δ+0.039R)",
+        },
+        "FG": {
+            "tail_trail_R": 5.0,
+            "min_profit_R": 5.0,
+            "partial_take2_R": 0.5,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:5.0R(Δ+0.060R) + P0-3:5.0R + P0-7:0.5R(Δ+0.030R)",
+        },
+        "eb": {
+            "tail_trail_R": 4.0,
+            "tail_breakeven_R": 3.0,
+            "tail_tighten_R": 5.0,
+            "tail_tighten_pct": 0.4,
+            "note": "P-S:4.0R + P0-5:3.0R + P0-8:5.0R/40%(深化Δ+0.050R)",
+        },
+        "eg": {"tail_trail_R": 4.0, "tail_breakeven_R": 2.0, "note": "P-S:4.0R(Δ+0.298R) + P0-5:2.0R(Δ+0.298R)"},
+        "lc": {"tail_trail_R": 4.0, "min_profit_R": 4.0, "note": "P-S:4.0R(Δ+0.278R) + P0-3:4.0R"},
+        "sn": {"tail_trail_R": 4.0, "min_profit_R": 5.0, "note": "P-S:4.0R(Δ+0.111R) + P0-3:5.0R"},
+        "MA": {"tail_trail_R": 4.0, "min_profit_R": 2.5, "note": "P-S:4.0R(Δ+0.065R) + P0-3:2.5R"},
+        "JM": {
+            "tail_trail_R": 4.0,
+            "min_profit_R": 0.5,
+            "partial_take2_R": 4.0,
+            "partial_take2_pct": 0.5,
+            "tail_tighten_R": 5.0,
+            "tail_tighten_pct": 0.4,
+            "note": "P-S:4.0R + P0-3:0.5R + P0-7:4.0R + P0-8:5.0R/40%(深化Δ+0.029R)",
+        },
         # === 中跟踪组（tail_trail_R = 2-3R，全局默认 3.0R）===
         # 3.0R 是全局默认，此处仅配置同时有 P0-3/P0-6 优化的品种
-        "ss": {"tail_trail_R": 2.0, "min_profit_R": 5.0,
-               "note": "P-S:2.0R(Δ+0.337R) + P0-3:5.0R"},
-        "pp": {"tail_trail_R": 2.0, "min_profit_R": 5.0, "partial_take_R": 0.5, "partial_take_pct": 0.7,
-               "tail_tighten_R": 1.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:2.0R(Δ+0.237R) + P0-3:5.0R + P0-6:0.5R平70% + P0-8:1.0R(Δ+0.031R)"},
-        "UR": {"tail_trail_R": 2.0, "partial_take2_R": 1.5, "partial_take2_pct": 0.5,
-               "note": "P-S:2.0R(Δ+0.231R) + P0-7:1.5R(Δ+0.078R)"},
-        "jd": {"tail_trail_R": 2.0, "min_profit_R": 2.5,
-               "note": "P-S:2.0R(Δ+0.227R) + P0-3:2.5R"},
-        "pg": {"tail_trail_R": 2.0, "min_profit_R": 4.0,
-               "note": "P-S:2.0R + P0-3:4.0R(普查Δ+0.077R)"},
-        "v":  {"tail_trail_R": 2.5, "min_profit_R": 3.0, "tail_breakeven_R": 0.5,
-               "note": "P-S:2.5R(Δ+0.183R) + P0-3:3.0R + P0-5:0.5R(Δ+0.053R)"},
-        "SR": {"tail_trail_R": 1.0, "min_profit_R": 2.5,
-               "note": "P-S:1.0R(Δ+0.161R) + P0-3:2.5R"},
-        "cu": {"tail_trail_R": 2.5, "min_profit_R": 5.0,
-               "note": "P-S:2.5R(Δ+0.158R) + P0-3:5.0R"},
-        "PX": {"tail_trail_R": 2.5, "min_profit_R": 3.0,
-               "note": "P-S:2.5R(Δ+0.125R) + P0-3:3.0R"},
-        "sp": {"tail_trail_R": 2.5, "min_profit_R": 3.0, "tail_breakeven_R": 1.0,
-               "note": "P-S:2.5R + P0-3:3.0R(普查Δ+0.145R) + P0-5:1.0R"},
-        "si": {"tail_trail_R": 3.0, "tail_tighten_R": 4.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:3.0R(默认) + P0-8:4.0R(Δ+0.135R)"},
-        "PF": {"tail_trail_R": 3.0, "min_profit_R": 3.0, "tail_tighten_R": 4.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:3.0R(默认) + P0-3:3.0R + P0-8:4.0R(Δ+0.071R)"},
-        "cs": {"tail_trail_R": 3.0, "min_profit_R": 5.0,
-               "partial_take2_R": 4.0, "partial_take2_pct": 0.5,
-               "note": "P-S:3.0R + P0-3:5.0R(普查Δ+0.236R) + P0-7:4.0R"},
-        "rb": {"tail_trail_R": 3.0, "min_profit_R": 5.0,
-               "partial_take2_R": 4.0, "partial_take2_pct": 0.5,
-               "note": "P-S:3.0R + P0-3:5.0R(普查Δ+0.031R) + P0-7:4.0R"},
-        "RM": {"tail_trail_R": 3.0,
-               "tail_tighten_R": 3.0, "tail_tighten_pct": 0.5,
-               "note": "P-S:3.0R + P0-8:3.0R/50%(深化Δ+0.033R)"},
-        "y":  {"tail_trail_R": 3.0, "partial_take2_R": 3.0, "partial_take2_pct": 0.5,
-               "note": "P-S:3.0R(默认) + P0-7:3.0R(Δ+0.043R)"},
-        "TA": {"tail_trail_R": 3.0, "min_profit_R": 2.0,
-               "note": "P-S:3.0R + P0-3:2.0R(全量回归最优) | P0-5已移除(全量回归为负)"},
-        "bu": {"tail_trail_R": 3.0, "min_profit_R": 3.0, "partial_take_R": 2.0, "partial_take_pct": 0.7,
-               "partial_take2_R": 1.0, "partial_take2_pct": 0.5,
-               "note": "P-S:3.0R(默认) + P0-3:3.0R + P0-6:2R平70% + P0-7:1R平50%(Δ+0.109R)"},
-        "l":  {"tail_trail_R": 1.5, "min_profit_R": 2.5, "partial_take_R": 0.5, "partial_take_pct": 0.7,
-               "tail_tighten_R": 1.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:1.5R(Δ+0.020R) + P0-3:2.5R + P0-6:0.5R平70% + P0-8:1.0R(Δ+0.036R)"},
-        "a":  {"tail_trail_R": 3.0, "min_profit_R": 2.0,
-               "partial_take2_R": 3.0, "partial_take2_pct": 0.5,
-               "note": "P-S:3.0R + P0-3:2.0R(全量回归最优) + P0-7:3R平50%"},
-        "b":  {"tail_trail_R": 3.0, "min_profit_R": 1.0, "partial_take_R": 2.0, "partial_take_pct": 0.7,
-               "partial_take2_R": 1.5, "partial_take2_pct": 0.5,
-               "note": "P-S:3.0R(默认) + P0-3:1.0R + P0-6:2R平70% + P0-7:1.5R平50%(Δ+0.031R)"},
-        "SA": {"tail_trail_R": 1.5, "min_profit_R": 1.0,
-               "note": "P-S:1.5R(Δ≈0) + P0-3:1.0R"},
-        "i":  {"tail_trail_R": 3.0, "min_profit_R": 5.0,
-               "note": "P-S:3.0R(默认) + P0-3:5.0R"},
-        "hc": {"tail_trail_R": 1.0, "min_profit_R": 3.0, "tail_breakeven_R": 0.5, "tail_max_bars": 72,
-               "note": "P-S:1.0R(Δ+0.055R) + P0-3:3.0R + P0-5:0.5R + P0-9:72bars(Δ+0.148R)"},
-        "fu": {"tail_trail_R": 1.0, "min_profit_R": 3.0, "tail_tighten_R": 3.0, "tail_tighten_pct": 0.3,
-               "note": "P-S:1.0R(Δ+0.085R) + P0-3:3.0R + P0-8:3.0R(Δ+0.039R)"},
-
+        "ss": {"tail_trail_R": 2.0, "min_profit_R": 5.0, "note": "P-S:2.0R(Δ+0.337R) + P0-3:5.0R"},
+        "pp": {
+            "tail_trail_R": 2.0,
+            "min_profit_R": 5.0,
+            "partial_take_R": 0.5,
+            "partial_take_pct": 0.7,
+            "tail_tighten_R": 1.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:2.0R(Δ+0.237R) + P0-3:5.0R + P0-6:0.5R平70% + P0-8:1.0R(Δ+0.031R)",
+        },
+        "UR": {
+            "tail_trail_R": 2.0,
+            "partial_take2_R": 1.5,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:2.0R(Δ+0.231R) + P0-7:1.5R(Δ+0.078R)",
+        },
+        "jd": {"tail_trail_R": 2.0, "min_profit_R": 2.5, "note": "P-S:2.0R(Δ+0.227R) + P0-3:2.5R"},
+        "pg": {"tail_trail_R": 2.0, "min_profit_R": 4.0, "note": "P-S:2.0R + P0-3:4.0R(普查Δ+0.077R)"},
+        "v": {
+            "tail_trail_R": 2.5,
+            "min_profit_R": 3.0,
+            "tail_breakeven_R": 0.5,
+            "note": "P-S:2.5R(Δ+0.183R) + P0-3:3.0R + P0-5:0.5R(Δ+0.053R)",
+        },
+        "SR": {"tail_trail_R": 1.0, "min_profit_R": 2.5, "note": "P-S:1.0R(Δ+0.161R) + P0-3:2.5R"},
+        "cu": {"tail_trail_R": 2.5, "min_profit_R": 5.0, "note": "P-S:2.5R(Δ+0.158R) + P0-3:5.0R"},
+        "PX": {"tail_trail_R": 2.5, "min_profit_R": 3.0, "note": "P-S:2.5R(Δ+0.125R) + P0-3:3.0R"},
+        "sp": {
+            "tail_trail_R": 2.5,
+            "min_profit_R": 3.0,
+            "tail_breakeven_R": 1.0,
+            "note": "P-S:2.5R + P0-3:3.0R(普查Δ+0.145R) + P0-5:1.0R",
+        },
+        "si": {
+            "tail_trail_R": 3.0,
+            "tail_tighten_R": 4.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:3.0R(默认) + P0-8:4.0R(Δ+0.135R)",
+        },
+        "PF": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 3.0,
+            "tail_tighten_R": 4.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:3.0R(默认) + P0-3:3.0R + P0-8:4.0R(Δ+0.071R)",
+        },
+        "cs": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 5.0,
+            "partial_take2_R": 4.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:3.0R + P0-3:5.0R(普查Δ+0.236R) + P0-7:4.0R",
+        },
+        "rb": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 5.0,
+            "partial_take2_R": 4.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:3.0R + P0-3:5.0R(普查Δ+0.031R) + P0-7:4.0R",
+        },
+        "RM": {
+            "tail_trail_R": 3.0,
+            "tail_tighten_R": 3.0,
+            "tail_tighten_pct": 0.5,
+            "note": "P-S:3.0R + P0-8:3.0R/50%(深化Δ+0.033R)",
+        },
+        "y": {
+            "tail_trail_R": 3.0,
+            "partial_take2_R": 3.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:3.0R(默认) + P0-7:3.0R(Δ+0.043R)",
+        },
+        "TA": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 2.0,
+            "note": "P-S:3.0R + P0-3:2.0R(全量回归最优) | P0-5已移除(全量回归为负)",
+        },
+        "bu": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 3.0,
+            "partial_take_R": 2.0,
+            "partial_take_pct": 0.7,
+            "partial_take2_R": 1.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:3.0R(默认) + P0-3:3.0R + P0-6:2R平70% + P0-7:1R平50%(Δ+0.109R)",
+        },
+        "l": {
+            "tail_trail_R": 1.5,
+            "min_profit_R": 2.5,
+            "partial_take_R": 0.5,
+            "partial_take_pct": 0.7,
+            "tail_tighten_R": 1.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:1.5R(Δ+0.020R) + P0-3:2.5R + P0-6:0.5R平70% + P0-8:1.0R(Δ+0.036R)",
+        },
+        "a": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 2.0,
+            "partial_take2_R": 3.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:3.0R + P0-3:2.0R(全量回归最优) + P0-7:3R平50%",
+        },
+        "b": {
+            "tail_trail_R": 3.0,
+            "min_profit_R": 1.0,
+            "partial_take_R": 2.0,
+            "partial_take_pct": 0.7,
+            "partial_take2_R": 1.5,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:3.0R(默认) + P0-3:1.0R + P0-6:2R平70% + P0-7:1.5R平50%(Δ+0.031R)",
+        },
+        "SA": {"tail_trail_R": 1.5, "min_profit_R": 1.0, "note": "P-S:1.5R(Δ≈0) + P0-3:1.0R"},
+        "i": {"tail_trail_R": 3.0, "min_profit_R": 5.0, "note": "P-S:3.0R(默认) + P0-3:5.0R"},
+        "hc": {
+            "tail_trail_R": 1.0,
+            "min_profit_R": 3.0,
+            "tail_breakeven_R": 0.5,
+            "tail_max_bars": 72,
+            "note": "P-S:1.0R(Δ+0.055R) + P0-3:3.0R + P0-5:0.5R + P0-9:72bars(Δ+0.148R)",
+        },
+        "fu": {
+            "tail_trail_R": 1.0,
+            "min_profit_R": 3.0,
+            "tail_tighten_R": 3.0,
+            "tail_tighten_pct": 0.3,
+            "note": "P-S:1.0R(Δ+0.085R) + P0-3:3.0R + P0-8:3.0R(Δ+0.039R)",
+        },
         # === 紧跟踪组（tail_trail_R ≤ 1.5R，震荡/快反品种）===
         # 这些品种波动大或趋势短，尾仓需要紧跟踪快速锁定利润
-        "PK": {"tail_trail_R": 1.5, "tail_breakeven_R": 0.5, "partial_take2_R": 2.0, "partial_take2_pct": 0.5,
-               "note": "P-S:1.5R(Δ+0.347R) + P0-5:0.5R(Δ+0.046R) + P0-7:2.0R(Δ+0.031R)"},
-        "m":  {"tail_trail_R": 1.5, "min_profit_R": 2.0,
-               "note": "P-S:1.5R(Δ+0.336R) + P0-3:2.0R"},
-        "zn": {"tail_trail_R": 1.5, "min_profit_R": 5.0,
-               "note": "P-S:1.5R(Δ+0.333R) + P0-3:5.0R"},
-        "lh": {"tail_trail_R": 1.0, "min_profit_R": 5.0,
-               "note": "P-S:1.0R + P0-3:5.0R(普查Δ+0.288R)"},
-        "ni": {"tail_trail_R": 1.0, "min_profit_R": 5.0,
-               "note": "P-S:1.0R(Δ+0.226R) + P0-3:5.0R"},
-        "p":  {"tail_trail_R": 1.5, "min_profit_R": 5.0,
-               "note": "P-S:1.5R + P0-3:5.0R(普查Δ+0.114R)"},
+        "PK": {
+            "tail_trail_R": 1.5,
+            "tail_breakeven_R": 0.5,
+            "partial_take2_R": 2.0,
+            "partial_take2_pct": 0.5,
+            "note": "P-S:1.5R(Δ+0.347R) + P0-5:0.5R(Δ+0.046R) + P0-7:2.0R(Δ+0.031R)",
+        },
+        "m": {"tail_trail_R": 1.5, "min_profit_R": 2.0, "note": "P-S:1.5R(Δ+0.336R) + P0-3:2.0R"},
+        "zn": {"tail_trail_R": 1.5, "min_profit_R": 5.0, "note": "P-S:1.5R(Δ+0.333R) + P0-3:5.0R"},
+        "lh": {"tail_trail_R": 1.0, "min_profit_R": 5.0, "note": "P-S:1.0R + P0-3:5.0R(普查Δ+0.288R)"},
+        "ni": {"tail_trail_R": 1.0, "min_profit_R": 5.0, "note": "P-S:1.0R(Δ+0.226R) + P0-3:5.0R"},
+        "p": {"tail_trail_R": 1.5, "min_profit_R": 5.0, "note": "P-S:1.5R + P0-3:5.0R(普查Δ+0.114R)"},
     },
     # P4 分品种连亏锁定参数覆盖（2026-09-06）：按品种覆盖连亏锁定阈值和冷却天数。
     # 全局参数：risk_gate.consec_loss_lock = 2（L2C30，经滚动OOS验证全局最优）
@@ -912,27 +1019,24 @@ DEFAULT_CONFIG = {
         # 验证方法：walk-forward 5m 主连回测，测试 lock=[0,2,3] × cooldown=[15,30,45]
         # 仅保留 Δ≥0.03R 且交易数≥20 的分品种配置。
         # 注：lock=0=禁用连亏锁定；lock=N=连亏N笔后暂停；cooldown=冷却M天。
-
         # === 长冷却组（cooldown=45天，趋势品种需要更长恢复期）===
         # 这些品种趋势性强，连亏后需要更长时间冷却，避免在震荡期反复被锁
-        "c":  {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.168R)"},
+        "c": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.168R)"},
         "ru": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.132R)"},
         "ag": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.116R)"},
         "rb": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.097R)"},
         "OI": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.071R)"},
         "PF": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.051R)"},
-        "i":  {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.046R)"},
-        "a":  {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期验证确认)"},
+        "i": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.046R)"},
+        "a": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期验证确认)"},
         "pg": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期验证确认)"},
         "lh": {"lock": 2, "cooldown": 45, "note": "P4: L2C45(长期Δ+0.195R)"},
-
         # === 中冷却组（cooldown=30天，全局默认）===
         "MA": {"lock": 2, "cooldown": 30, "note": "P4: L2C30(长期Δ+0.121R, 原禁用已修正)"},
         "UR": {"lock": 3, "cooldown": 30, "note": "P4: L3C30(长期Δ+0.057R, 原L2C7修正)"},
         "TA": {"lock": 3, "cooldown": 30, "note": "P4: L3C30(长期Δ+0.051R, 原L2C15修正)"},
         "JM": {"lock": 3, "cooldown": 30, "note": "P4: L3C30(长期验证确认)"},
         "SH": {"lock": 2, "cooldown": 30, "note": "P4: L2C30(长期验证确认, 18笔)"},
-
         # === 短冷却组（cooldown=15天，敏感品种需要快速恢复）===
         # 这些品种连亏后快速恢复有效，短冷却即可
         "CF": {"lock": 2, "cooldown": 15, "note": "P4: L2C15(长期Δ+0.161R, 原禁用已修正)"},
@@ -942,17 +1046,15 @@ DEFAULT_CONFIG = {
         "hc": {"lock": 2, "cooldown": 15, "note": "P4: L2C15(长期Δ+0.047R)"},
         "si": {"lock": 2, "cooldown": 15, "note": "P4: L2C15(长期验证确认)"},
         "sp": {"lock": 2, "cooldown": 15, "note": "P4: L2C15(长期验证确认)"},
-        "y":  {"lock": 2, "cooldown": 15, "note": "P4: L2C15(长期验证确认)"},
+        "y": {"lock": 2, "cooldown": 15, "note": "P4: L2C15(长期验证确认)"},
         "FG": {"lock": 3, "cooldown": 15, "note": "P4: L3C15(长期Δ+0.053R)"},
-        "m":  {"lock": 3, "cooldown": 15, "note": "P4: L3C15(长期Δ+0.048R)"},
+        "m": {"lock": 3, "cooldown": 15, "note": "P4: L3C15(长期Δ+0.048R)"},
         "pp": {"lock": 3, "cooldown": 15, "note": "P4: L3C15(长期Δ+0.222R)"},
-
         # === 宽松阈值组（lock=3笔，连亏容忍度更高）===
-        "v":  {"lock": 3, "cooldown": 45, "note": "P4: L3C45(长期Δ+0.095R)"},
-        "p":  {"lock": 3, "cooldown": 45, "note": "P4: L3C45(长期验证确认)"},
+        "v": {"lock": 3, "cooldown": 45, "note": "P4: L3C45(长期Δ+0.095R)"},
+        "p": {"lock": 3, "cooldown": 45, "note": "P4: L3C45(长期验证确认)"},
         "sn": {"lock": 3, "cooldown": 20, "note": "P4: L3C20(长期验证确认)"},
         "PK": {"lock": 2, "cooldown": 60, "note": "P4: L2C60(长期验证确认)"},
-
         # 待验证（交易数不足或数据缺失，暂保留原配置）
         "ao": {"lock": 3, "cooldown": 60, "note": "P4: 待长期验证（数据不足）"},
         "rr": {"lock": 3, "cooldown": 20, "note": "P4: 待长期验证（数据不足）"},
@@ -1059,8 +1161,11 @@ DEFAULT_CONFIG = {
         # ao: 交易数不足(氧化铝) → 沿用 group 有色
         "au": {"T_thresh": 26, "bias_hard_base": 50},  # P6: 22→26 GA优化 (滚动OOS+0.064, 交易82%)
         "ag": {"T_thresh": 21, "bias_hard_base": 50},  # P1: 16→21 长期数据普查(Δ+0.387R)
-        "rb": {"T_thresh": 34, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15}},  # 🔧2026-09-07重校准: 22→34 全量数据(+1.498R, 17笔)
+        "rb": {
+            "T_thresh": 34,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15},
+        },  # 🔧2026-09-07重校准: 22→34 全量数据(+1.498R, 17笔)
         "hc": {
             "T_thresh": 12,
             "bias_hard_base": 50,
@@ -1079,7 +1184,12 @@ DEFAULT_CONFIG = {
             "c_gate": "oppose_threshold",
             "c_gate_threshold": 30.0,
         },  # 🔧2026-09-07重校准: 28→34 全量数据(+0.779R, 57笔) + C感知门A档
-        "sp": {"T_thresh": 26, "bias_hard_base": 50, "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 12→26 全量数据(+0.273R, 50笔) + C感知门A档
+        "sp": {
+            "T_thresh": 26,
+            "bias_hard_base": 50,
+            "c_gate": "oppose_threshold",
+            "c_gate_threshold": 30.0,
+        },  # 🔧2026-09-07重校准: 12→26 全量数据(+0.273R, 50笔) + C感知门A档
         # sc: 交易数不足(原油) → 沿用 group 能源
         # ── 上期能源 INE ──
         # ec: 交易数不足(欧线) → 沿用 group 航运
@@ -1097,36 +1207,71 @@ DEFAULT_CONFIG = {
             "c_gate": "oppose_threshold",
             "c_gate_threshold": 30.0,
         },  # 🔧2026-08-13重校准: 模型健康(+0.62/胜55%)，实盘连亏为近期运气→解除门控 | P0: F权重OOS+0.276 + C感知门A档
-        "eg": {"T_thresh": 17, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15}},  # P-F: F=0.30→0.15 长期数据(Δ+0.073R)
-        "l": {"T_thresh": 34, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15},
-               "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 29→34 全量数据(+0.645R, 45笔) + C感知门A档
-        "pp": {"T_thresh": 30, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F: F=0.25→0.45 长期数据(Δ+0.127R)
-        "v": {"T_thresh": 20, "bias_hard_base": 50, "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 28→20 全量数据(+0.327R, 74笔) + C感知门A档
-        "pg": {"T_thresh": 22, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # P-F 新增: 长期数据(Δ+0.183R)
-        "m": {"T_thresh": 12, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.60, "F": 0.25, "C": 0.15}},  # P-F: F=0.35→0.25 长期数据(Δ+0.110R)
+        "eg": {
+            "T_thresh": 17,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15},
+        },  # P-F: F=0.30→0.15 长期数据(Δ+0.073R)
+        "l": {
+            "T_thresh": 34,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.30, "F": 0.55, "C": 0.15},
+            "c_gate": "oppose_threshold",
+            "c_gate_threshold": 30.0,
+        },  # 🔧2026-09-07重校准: 29→34 全量数据(+0.645R, 45笔) + C感知门A档
+        "pp": {
+            "T_thresh": 30,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15},
+        },  # P-F: F=0.25→0.45 长期数据(Δ+0.127R)
+        "v": {
+            "T_thresh": 20,
+            "bias_hard_base": 50,
+            "c_gate": "oppose_threshold",
+            "c_gate_threshold": 30.0,
+        },  # 🔧2026-09-07重校准: 28→20 全量数据(+0.327R, 74笔) + C感知门A档
+        "pg": {
+            "T_thresh": 22,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15},
+        },  # P-F 新增: 长期数据(Δ+0.183R)
+        "m": {
+            "T_thresh": 12,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.60, "F": 0.25, "C": 0.15},
+        },  # P-F: F=0.35→0.25 长期数据(Δ+0.110R)
         "y": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 14→34 全量数据(+0.326R, 49笔)
         "a": {"T_thresh": 14, "bias_hard_base": 50},  # ⚠️ OOS−0.084(无稳健)
         "b": {"T_thresh": 16, "bias_hard_base": 50},  # ⚠️ OOS−0.099(无稳健)
         "p": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 11→34 全量数据(+0.241R, 209笔)
         "c": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 24→34 全量数据(+0.521R, 28笔)
-        "cs": {"T_thresh": 34, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # 🔧2026-09-07重校准: 14→34 全量数据(+0.608R, 24笔)
-        "jd": {"T_thresh": 39, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15}},  # P-F: F=0.35→0.15 长期数据(Δ+0.420R)
+        "cs": {
+            "T_thresh": 34,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15},
+        },  # 🔧2026-09-07重校准: 14→34 全量数据(+0.608R, 24笔)
+        "jd": {
+            "T_thresh": 39,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.70, "F": 0.15, "C": 0.15},
+        },  # P-F: F=0.35→0.15 长期数据(Δ+0.420R)
         # lh: 交易数不足(生猪) → 沿用 group 农产品
         "rr": {"T_thresh": 12, "bias_hard_base": 50},  # ⚠️ OOS−0.261(无稳健)
         # ── 郑商所 CZCE ──
         "FG": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 25→34 全量数据(+1.312R, 13笔)
         # SA: 交易数不足(纯碱) → 沿用 group 化工
         "MA": {"T_thresh": 16, "bias_hard_base": 50},  # ✅ OOS+0.161 胜42%
-        "TA": {"T_thresh": 30, "bias_hard_base": 50, "c_gate": "oppose_threshold", "c_gate_threshold": 30.0},  # 🔧2026-09-07重校准: 31→30 全量数据(+0.580R, 108笔) + C感知门A档
-        "PF": {"T_thresh": 34, "bias_hard_base": 50,
-               "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15}},  # 🔧2026-09-07重校准: 26→34 全量数据(+1.708R, 13笔)
+        "TA": {
+            "T_thresh": 30,
+            "bias_hard_base": 50,
+            "c_gate": "oppose_threshold",
+            "c_gate_threshold": 30.0,
+        },  # 🔧2026-09-07重校准: 31→30 全量数据(+0.580R, 108笔) + C感知门A档
+        "PF": {
+            "T_thresh": 34,
+            "bias_hard_base": 50,
+            "combine_weights": {"T": 0.40, "F": 0.45, "C": 0.15},
+        },  # 🔧2026-09-07重校准: 26→34 全量数据(+1.708R, 13笔)
         "PX": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 新增(+1.229R, 12笔)
         # SH: 交易数不足(烧碱) → 沿用 group 化工 + C感知门A档
         "SH": {"c_gate": "oppose_threshold", "c_gate_threshold": 30.0},
@@ -1143,12 +1288,11 @@ DEFAULT_CONFIG = {
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
         },  # ✅ OOS+0.231 胜44% | P0: F权重OOS+0.251
         "RM": {
-            "T_thresh": 28,
+            "T_thresh": 24,
             "bias_hard_base": 50,
             "combine_weights": {"T": 0.45, "F": 0.40, "C": 0.15},
-        },  # ⚠️ OOS−0.073(无稳健) | P0: F权重OOS+0.084
+        },  # P6: GA优化 T_thresh 28→24 (滚动OOS+0.069, 交易106%) | P0: F权重OOS+0.084
         "OI": {"T_thresh": 34, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 23→34 全量数据(+0.575R, 38笔)
-        "RM": {"T_thresh": 24, "bias_hard_base": 50},  # P6: GA优化新增 (滚动OOS+0.069, 交易106%)
         "PK": {"T_thresh": 30, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 新增(+0.133R, 41笔)
         "AP": {"T_thresh": 26, "bias_hard_base": 50},  # 🔧2026-09-07重校准: 14→26 全量数据(+0.192R, 53笔)
         # ── 广期所 GFEX ──
@@ -1301,8 +1445,10 @@ def _tqsdk_api():
         return _TQ_API
     _TQ_API_TRIED = True
     try:
-        from tqsdk import TqApi, TqAuth
         import json as _json
+
+        from tqsdk import TqApi, TqAuth
+
         _u = os.environ.get("TQ_USERNAME", "")
         _p = os.environ.get("TQ_PASSWORD", "")
         if not _u:
@@ -1328,6 +1474,7 @@ def _tq_executor():
     global _TQ_EXECUTOR
     if _TQ_EXECUTOR is None:
         from concurrent.futures import ThreadPoolExecutor
+
         _TQ_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tqsdk_daily")
     return _TQ_EXECUTOR
 
@@ -1358,6 +1505,7 @@ def _fetch_daily_tqsdk(symbol):
         if api is None:
             return None
         import time as _t
+
         try:
             ks = api.get_kline_serial(tq_code, 86400, _TQ_DAILY_LEN)
             dl = _t.time() + 45
@@ -1494,7 +1642,7 @@ def load_min5(code, fetch_if_missing=True, live=False, long=False):
                 if len(new_bars) > 0:
                     long_df = pd.concat([long_df, new_bars]).sort_index()
                     # 去重
-                    long_df = long_df[~long_df.index.duplicated(keep='first')]
+                    long_df = long_df[~long_df.index.duplicated(keep="first")]
 
             return long_df
 
@@ -1585,6 +1733,7 @@ def _load_cpos_cached():
 CFLOW_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cflow_kline_cache.json")
 _CFLOW_CACHE = {"mtime": 0.0, "data": None}
 
+
 def _load_cflow_kline_cached():
     """带 mtime 缓存加载 cflow_kline_cache.json（键大写 SYM）。"""
     global _CFLOW_CACHE
@@ -1673,8 +1822,7 @@ def precompute_C_array(symbol, date_strs=None, date_ints=None, c_source="dragon"
         if not history:
             v = sym.get("C_score")
             return np.full(n, float(v), dtype=np.float64) if v is not None else np.zeros(n, dtype=np.float64)
-        c_list = [(h["date"], float(h["C_score"])) for h in history
-                  if h.get("C_score") is not None and h.get("date")]
+        c_list = [(h["date"], float(h["C_score"])) for h in history if h.get("C_score") is not None and h.get("date")]
         c_list.sort(key=lambda x: x[0])
         if not c_list:
             return np.zeros(n, dtype=np.float64)
@@ -1776,7 +1924,7 @@ def get_c_gate_config(symbol, cfg=None):
     bs = cfg.get("bias_synthesis", {}) or {}
     global_mode = bs.get("c_gate", None)
     global_thr = float(bs.get("c_gate_threshold", 30.0))
-    
+
     sym_cfg = (cfg.get("thresholds_by_symbol", {}) or {}).get(symbol, {}) or {}
     if "c_gate" in sym_cfg:
         mode = sym_cfg["c_gate"]
@@ -1814,12 +1962,12 @@ def get_kline_C(symbol, date_str=None):
 
 def check_c_gate(symbol, direction, cfg=None):
     """C 感知方向门检查（实盘开仓前调用）。
-    
+
     参数:
         symbol: 品种代码
         direction: 开仓方向 (+1 多 / -1 空)
         cfg: 策略配置（含 bias_synthesis.c_gate 和品种级覆盖）
-    
+
     返回: dict {
         "passed": bool,       # True=放行, False=拦截
         "mode": str|None,     # 门模式
@@ -1829,7 +1977,7 @@ def check_c_gate(symbol, direction, cfg=None):
     }
     """
     mode, thr = get_c_gate_config(symbol, cfg)
-    
+
     result = {
         "passed": True,
         "mode": mode,
@@ -1837,18 +1985,18 @@ def check_c_gate(symbol, direction, cfg=None):
         "threshold": thr,
         "reason": "",
     }
-    
+
     if not mode:
         result["reason"] = "C感知门未启用"
         return result
-    
+
     c_val = get_kline_C(symbol)
     result["c_kline"] = c_val
-    
+
     if c_val == 0.0:
         result["reason"] = "无kline C数据，门惰性（放行）"
         return result
-    
+
     blocked = False
     if mode == "same_sign":
         # C≠0 且 C 方向与 T 不同向 → 拦截
@@ -1861,12 +2009,12 @@ def check_c_gate(symbol, direction, cfg=None):
         if c_sign != direction and abs(c_val) > thr:
             blocked = True
             result["reason"] = f"oppose门: C={c_val:+.1f} 与方向{direction:+d}反向 (|C|={abs(c_val):.1f}>{thr:.0f})"
-    
+
     if blocked:
         result["passed"] = False
     else:
         result["reason"] = f"C感知门通过 (C={c_val:+.1f})"
-    
+
     return result
 
 
@@ -1942,7 +2090,7 @@ STRAT_CLUSTERS = {
 
 def get_active_clusters(symbol=None, cfg=None):
     """获取当前品种的活跃策略簇（排除黑名单策略后）。
-    
+
     返回: dict {cluster_name: tuple of strat names}
     如果 symbol 为空或无黑名单，直接返回 STRAT_CLUSTERS 共享引用。
     """
@@ -1961,7 +2109,7 @@ def get_active_clusters(symbol=None, cfg=None):
 
 def get_strat_weights(active_clusters, cfg=None):
     """获取各策略的权重（用于簇内加权投票）。
-    
+
     active_clusters: get_active_clusters() 返回的簇结构
     返回: dict {strat_name: weight}，包含所有活跃策略的权重。
     未在 strat_weights 中配置的策略默认权重 1.0。
@@ -2067,8 +2215,9 @@ def cluster_weights(regime, cfg=None, group=None, feat_mgr=None):
 _DECORR_OFF_WARNED = [False]  # P2a 守卫：decorrelate.enabled=False 时一次性告警
 
 
-def precompute_T_array(sig_arrays, regime_codes, cfg=DEFAULT_CONFIG, group=None, feat_mgr=None,
-                       export_evidence=False, symbol=None):
+def precompute_T_array(
+    sig_arrays, regime_codes, cfg=DEFAULT_CONFIG, group=None, feat_mgr=None, export_evidence=False, symbol=None
+):
     """向量化预计算完整 T 值序列（簇投票 + 拥挤降权 + 反向阻尼 + 归一化）。
     返回 T_arr (float64 数组, 已 round 到 1 位小数)。
     与 compute_T 逐点结果一致（decorrelate.enabled=True 路径）。
@@ -2247,8 +2396,9 @@ def derive_strategy_label(contrib):
     return "背离"
 
 
-def build_strat_evidence(cluster_votes, cluster_contrib, agree_trend, crowd_factor_val,
-                         trend_contrib_val, mean_contrib_val):
+def build_strat_evidence(
+    cluster_votes, cluster_contrib, agree_trend, crowd_factor_val, trend_contrib_val, mean_contrib_val
+):
     """构建标准化 strat_evidence dict（回测与实盘共用 schema）。
 
     cluster_votes: {"trend": float, "mean": float, "seasonal": float}（簇投票原始值）
@@ -2263,9 +2413,7 @@ def build_strat_evidence(cluster_votes, cluster_contrib, agree_trend, crowd_fact
         "agree_trend": round(float(agree_trend), 3),
         "crowd_damped": bool(crowd_factor_val < 1.0),
         "contrarian_damped": bool(
-            abs(trend_contrib_val) > 0
-            and abs(mean_contrib_val) > 0
-            and trend_contrib_val * mean_contrib_val < 0
+            abs(trend_contrib_val) > 0 and abs(mean_contrib_val) > 0 and trend_contrib_val * mean_contrib_val < 0
         ),
     }
     return ev
@@ -3467,6 +3615,7 @@ def _spec_compat(cfg, symbol):
         sp = base
     return sp
 
+
 # —— #4 fractional-Kelly 仓位缩放：用 walk-forward edge(mean_oos) 放大/缩小风险预算仓位 ——
 _CALIB_CACHE = {}
 
@@ -3671,11 +3820,19 @@ def exit_plan(symbol, entry, dir_T, atr_val, regime, cfg=DEFAULT_CONFIG, feat_mg
     tt = dict(cfg.get("trailing_tail", {}))
     # P-S：分品种尾仓参数覆盖（优先级高于全局）
     sym_tail = cfg.get("per_symbol_tail", {}).get(symbol, {})
-    for _k in ("tail_pct", "tail_trail_R", "min_profit_R", "tail_breakeven_R",
-               "partial_take_R", "partial_take_pct",
-               "partial_take2_R", "partial_take2_pct",
-               "tail_tighten_R", "tail_tighten_pct",
-               "tail_max_bars"):
+    for _k in (
+        "tail_pct",
+        "tail_trail_R",
+        "min_profit_R",
+        "tail_breakeven_R",
+        "partial_take_R",
+        "partial_take_pct",
+        "partial_take2_R",
+        "partial_take2_pct",
+        "tail_tighten_R",
+        "tail_tighten_pct",
+        "tail_max_bars",
+    ):
         if _k in sym_tail:
             tt[_k] = sym_tail[_k]
     # 开关优先级：特性开关 > 旧配置 > 默认关闭
@@ -3849,9 +4006,7 @@ def walk_forward_backtest(
     # 止损通道波动估计（2026-08-31 OOS 采纳）：白名单品种用双差值 DR/√N，regime 分类仍用 ATR
     # （_atr14_arr 继续喂 3058 行 classify_regime_array 与 _prec；此处只换 risk_gate/exit_plan 的输入）
     _stop_atr_arr = (
-        _dual_range_array(_high, _low, _close, 14)
-        if symbol in cfg.get("dual_range_stop_symbols", ())
-        else _atr14_arr
+        _dual_range_array(_high, _low, _close, 14) if symbol in cfg.get("dual_range_stop_symbols", ()) else _atr14_arr
     )
     # 预计算收益率序列：O(n) 一次算出，s_seasonal 直接用切片，省逐次 np.diff
     _rets_arr = np.empty(n)
@@ -3915,12 +4070,16 @@ def walk_forward_backtest(
     _group = SYMBOLS.get(symbol, {}).get("group")
     if export_evidence:
         _T_arr, _evidence_arrays = precompute_T_array(
-            _sig_arrays, _regime_codes_arr, cfg, _group, feat_mgr=None,
-            export_evidence=True, symbol=symbol,
+            _sig_arrays,
+            _regime_codes_arr,
+            cfg,
+            _group,
+            feat_mgr=None,
+            export_evidence=True,
+            symbol=symbol,
         )
     else:
-        _T_arr = precompute_T_array(_sig_arrays, _regime_codes_arr, cfg, _group, feat_mgr=None,
-                                    symbol=symbol)
+        _T_arr = precompute_T_array(_sig_arrays, _regime_codes_arr, cfg, _group, feat_mgr=None, symbol=symbol)
         _evidence_arrays = None
 
     # 预计算 F 分数数组：O(n) 一次算出，循环内直接索引（代替每根 bisect+load 重复查基本面）
@@ -4221,8 +4380,14 @@ def _sim_exit_5m(df5_seg, dir_T, entry, ep, sd):
                 exit_price = _taken_sum + cl * (1.0 - _taken_pct)
                 return exit_price, "尾仓时间止盈", j
             # P0-6 一级分批止盈
-            if (partial_take_R > 0 and partial_take_pct > 0 and partial_take_pct < 1.0
-                and not partial_taken and tail_entry is not None and sd > 0):
+            if (
+                partial_take_R > 0
+                and partial_take_pct > 0
+                and partial_take_pct < 1.0
+                and not partial_taken
+                and tail_entry is not None
+                and sd > 0
+            ):
                 if dir_T > 0:
                     if hi >= partial_trigger_price:
                         _taken_sum += partial_trigger_price * partial_take_pct
@@ -4234,8 +4399,14 @@ def _sim_exit_5m(df5_seg, dir_T, entry, ep, sd):
                         _taken_pct += partial_take_pct
                         partial_taken = True
             # P0-7 二级分级止盈（更高阈值，平掉剩余仓位的一部分）
-            if (partial_take2_R > 0 and partial_take2_pct > 0 and partial_take2_pct < 1.0
-                and not partial2_taken and tail_entry is not None and sd > 0):
+            if (
+                partial_take2_R > 0
+                and partial_take2_pct > 0
+                and partial_take2_pct < 1.0
+                and not partial2_taken
+                and tail_entry is not None
+                and sd > 0
+            ):
                 # 有效二级止盈比例 = partial_take2_pct * (1 - _taken_pct)
                 _eff_pct = partial_take2_pct * (1.0 - _taken_pct)
                 if _eff_pct <= 0:
@@ -4318,8 +4489,7 @@ def _sim_exit_5m(df5_seg, dir_T, entry, ep, sd):
     return exit_price, "期末平", len(df5_seg) - 1
 
 
-def _weighted_exit(partial_price, partial_pct, final_price, partial_taken,
-                   tail_entry, entry, dir_T, sd, min_profit_R):
+def _weighted_exit(partial_price, partial_pct, final_price, partial_taken, tail_entry, entry, dir_T, sd, min_profit_R):
     """计算分批止盈后的加权平均出场价（用于 R 计算）。
 
     尾仓占总仓位的比例隐含在逻辑中：此处假设全部仓位都是尾仓（tail_pct 已在外部处理）。
@@ -4336,7 +4506,9 @@ def _weighted_exit(partial_price, partial_pct, final_price, partial_taken,
     return avg_price
 
 
-def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, cooldown_bars=5, ablate=None, tf="5m", long=False):
+def walk_forward_backtest_5m_exit(
+    symbol, cfg=DEFAULT_CONFIG, min_bars=60, cooldown_bars=5, ablate=None, tf="5m", long=False
+):
     """日线定信号 + 细粒度(5m/1h)出场的 P-G 尾仓验证。
 
     信号仍由日线 T_D 决定（pipeline 用日线），但出场模拟下沉到 5m/1h bar 序列，
@@ -4373,9 +4545,7 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     _atr14_arr = _atr_array(_high, _low, _close, 14)
     # 止损通道波动估计（2026-08-31 OOS 采纳）：白名单品种用双差值 DR/√N，regime 分类仍用 ATR
     _stop_atr_arr = (
-        _dual_range_array(_high, _low, _close, 14)
-        if symbol in cfg.get("dual_range_stop_symbols", ())
-        else _atr14_arr
+        _dual_range_array(_high, _low, _close, 14) if symbol in cfg.get("dual_range_stop_symbols", ()) else _atr14_arr
     )
 
     trades = []
@@ -4384,7 +4554,11 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
     rg_global = cfg.get("risk_gate", {})
     sym_consec = cfg.get("per_symbol_consec_loss", {}).get(symbol, {})
     # lock: 连亏N笔后暂停开仓；0=禁用连亏锁定
-    consec_lock = int(sym_consec.get("lock", rg_global.get("consec_loss_lock", 3))) if "lock" in sym_consec else int(rg_global.get("consec_loss_lock", 3))
+    consec_lock = (
+        int(sym_consec.get("lock", rg_global.get("consec_loss_lock", 3)))
+        if "lock" in sym_consec
+        else int(rg_global.get("consec_loss_lock", 3))
+    )
     # cooldown: 冷却M天后解锁重试（默认30天，与实盘口径对齐）
     consec_cooldown_days = int(sym_consec.get("cooldown", 30))
     consec_streak = 0  # 当前连续亏损笔数
@@ -4486,7 +4660,13 @@ def walk_forward_backtest_5m_exit(symbol, cfg=DEFAULT_CONFIG, min_bars=60, coold
             continue
         i += 1
     if not trades:
-        return {"symbol": symbol, "trades": 0, "note": "窗口内无5m可验证信号", "roll_skipped": roll_skipped, "consec_skipped": consec_skipped}
+        return {
+            "symbol": symbol,
+            "trades": 0,
+            "note": "窗口内无5m可验证信号",
+            "roll_skipped": roll_skipped,
+            "consec_skipped": consec_skipped,
+        }
     Rs = [t["R_adj"] for t in trades]
     wins = [r for r in Rs if r > 0]
     by_regime = {}

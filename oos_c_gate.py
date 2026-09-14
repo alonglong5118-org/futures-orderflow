@@ -25,6 +25,7 @@ C 感知方向门（threshold 增强）的 IS/OOS 验证
   oos_c_gate.json   逐品种原始记录 + 汇总
   oos_c_gate.html   可视化报告
 """
+
 import copy
 import fcntl
 import json
@@ -69,8 +70,7 @@ def max_drawdown(Rs):
 
 def subset_stats(trades):
     if not trades:
-        return {"n": 0, "expR": None, "total_R": 0.0, "win_rate": None,
-                "max_dd_R": 0.0, "profit_factor": None}
+        return {"n": 0, "expR": None, "total_R": 0.0, "win_rate": None, "max_dd_R": 0.0, "profit_factor": None}
     Rs = [t["R_adj"] for t in trades]
     n = len(Rs)
     expR = float(np.mean(Rs))
@@ -80,8 +80,11 @@ def subset_stats(trades):
     gl = -sum(losses)
     pf = (gw / gl) if gl > 1e-9 else (float("inf") if gw > 0 else 0.0)
     return {
-        "n": n, "expR": round(expR, 4), "total_R": round(float(np.sum(Rs)), 2),
-        "win_rate": round(len(wins) / n, 3), "max_dd_R": round(max_drawdown(Rs), 3),
+        "n": n,
+        "expR": round(expR, 4),
+        "total_R": round(float(np.sum(Rs)), 2),
+        "win_rate": round(len(wins) / n, 3),
+        "max_dd_R": round(max_drawdown(Rs), 3),
         "profit_factor": round(pf, 2) if pf != float("inf") else None,
     }
 
@@ -99,10 +102,11 @@ def _binom_two_sided(k, n):
     if n == 0:
         return None
     from math import comb
+
     p = 0.5
 
     def pmf(x):
-        return comb(n, x) * (p ** x) * ((1 - p) ** (n - x))
+        return comb(n, x) * (p**x) * ((1 - p) ** (n - x))
 
     pk = pmf(k)
     pval = sum(pmf(x) for x in range(n + 1) if pmf(x) <= pk + 1e-18)
@@ -154,7 +158,11 @@ def decide_and_eval(sym):
     st_ot_is, st_ot_oos = subset_stats(ot_is), subset_stats(ot_oos)
 
     # ── 决策（仅 IS，主门 same_sign）──
-    is_edge = (st_ss_is["expR"] - st_base_is["expR"]) if (st_ss_is["expR"] is not None and st_base_is["expR"] is not None) else None
+    is_edge = (
+        (st_ss_is["expR"] - st_base_is["expR"])
+        if (st_ss_is["expR"] is not None and st_base_is["expR"] is not None)
+        else None
+    )
     enable = False
     block = []
     if st_ss_is["n"] < MIN_T or st_base_is["n"] < MIN_T:
@@ -172,24 +180,36 @@ def decide_and_eval(sym):
     # ── OOS 验证 ──
     sel_oos = st_ss_oos if enable else st_base_oos  # 选择性策略 OOS
     base_oos_s = st_base_oos
-    delta_ss = (round(st_ss_oos["expR"] - st_base_oos["expR"], 4)
-                if (st_ss_oos["expR"] is not None and st_base_oos["expR"] is not None) else None)
-    delta_ot = (round(st_ot_oos["expR"] - st_base_oos["expR"], 4)
-                if (st_ot_oos["expR"] is not None and st_base_oos["expR"] is not None) else None)
+    delta_ss = (
+        round(st_ss_oos["expR"] - st_base_oos["expR"], 4)
+        if (st_ss_oos["expR"] is not None and st_base_oos["expR"] is not None)
+        else None
+    )
+    delta_ot = (
+        round(st_ot_oos["expR"] - st_base_oos["expR"], 4)
+        if (st_ot_oos["expR"] is not None and st_base_oos["expR"] is not None)
+        else None
+    )
 
     return {
-        "symbol": sym, "name": fd.SYMBOLS.get(sym, {}).get("name", sym),
+        "symbol": sym,
+        "name": fd.SYMBOLS.get(sym, {}).get("name", sym),
         "group": fd.SYMBOLS.get(sym, {}).get("group", "?"),
         "cutoff": cutoff.strftime("%Y-%m-%d"),
         "is_window": f"{lo.strftime('%Y-%m-%d')}~{cutoff.strftime('%Y-%m-%d')}",
         "oos_window": f"{cutoff.strftime('%Y-%m-%d')}~{hi.strftime('%Y-%m-%d')}",
-        "base_is": st_base_is, "base_oos": st_base_oos,
-        "ss_is": st_ss_is, "ss_oos": st_ss_oos,
-        "ot_is": st_ot_is, "ot_oos": st_ot_oos,
+        "base_is": st_base_is,
+        "base_oos": st_base_oos,
+        "ss_is": st_ss_is,
+        "ss_oos": st_ss_oos,
+        "ot_is": st_ot_is,
+        "ot_oos": st_ot_oos,
         "is_edge": round(is_edge, 4) if is_edge is not None else None,
-        "enable": enable, "block": block,
+        "enable": enable,
+        "block": block,
         "decision": "启用C门" if enable else "保持threshold",
-        "delta_ss_vs_base": delta_ss, "delta_ot_vs_base": delta_ot,
+        "delta_ss_vs_base": delta_ss,
+        "delta_ot_vs_base": delta_ot,
         "ss_gate_skipped": r_ss.get("c_gate_skipped", 0),
         "ot_gate_skipped": r_ot.get("c_gate_skipped", 0),
         "oos_win_ss": (delta_ss is not None and delta_ss > 0.01),
@@ -215,9 +235,12 @@ def main():
     print(f"品种池 = 有 kline C 长历史：{targets}")
     print(f"IS={SPLIT:.0%} 护栏：MIN_T={MIN_T}/MARGIN={MARGIN}/ss_IS_expR>0 ｜ 门阈值={GATE_THRESHOLD}")
     print("=" * 92, flush=True)
-    hdr = (f"{'品种':5}{'板块':5} {'IS_edge':>8} {'决策':>10} "
-           f"{'OOS_ss':>8}{'OOS_base':>9}{'Δss':>8}{'OOS_ot':>8}{'Δot':>8}")
-    print(hdr); print("-" * 92)
+    hdr = (
+        f"{'品种':5}{'板块':5} {'IS_edge':>8} {'决策':>10} "
+        f"{'OOS_ss':>8}{'OOS_base':>9}{'Δss':>8}{'OOS_ot':>8}{'Δot':>8}"
+    )
+    print(hdr)
+    print("-" * 92)
 
     records = []
     t_all = time.time()
@@ -227,24 +250,33 @@ def main():
         try:
             rec = decide_and_eval(sym)
         except TimeoutError:
-            print(f"[超时] {sym}", flush=True); continue
+            print(f"[超时] {sym}", flush=True)
+            continue
         except Exception as e:
-            print(f"[异常] {sym}: {repr(e)[:160]}", flush=True); continue
+            print(f"[异常] {sym}: {repr(e)[:160]}", flush=True)
+            continue
         finally:
             signal.alarm(0)
         if rec.get("skip"):
-            print(f"{sym:5} 跳过: {rec['reason']}", flush=True); continue
+            print(f"{sym:5} 跳过: {rec['reason']}", flush=True)
+            continue
         records.append(rec)
         ie = rec["is_edge"]
-        so = rec["ss_oos"]["expR"]; bo = rec["base_oos"]["expR"]; oo = rec["ot_oos"]["expR"]
+        so = rec["ss_oos"]["expR"]
+        bo = rec["base_oos"]["expR"]
+        oo = rec["ot_oos"]["expR"]
         sev = f"{so:+.3f}" if so is not None else "  -  "
         bev = f"{bo:+.3f}" if bo is not None else "  -  "
         oev = f"{oo:+.3f}" if oo is not None else "  -  "
-        dv = rec["delta_ss_vs_base"]; dv2 = rec["delta_ot_vs_base"]
+        dv = rec["delta_ss_vs_base"]
+        dv2 = rec["delta_ot_vs_base"]
         dsv = f"{dv:+.3f}" if dv is not None else "  -  "
         d2v = f"{dv2:+.3f}" if dv2 is not None else "  -  "
-        print(f"{sym:5}{rec['group']:5} {ie:>+8.3f} {rec['decision']:>10} "
-              f"{sev:>8}{bev:>9}{dsv:>8}{oev:>8}{d2v:>8}  ({time.time()-t0:.1f}s)", flush=True)
+        print(
+            f"{sym:5}{rec['group']:5} {ie:>+8.3f} {rec['decision']:>10} "
+            f"{sev:>8}{bev:>9}{dsv:>8}{oev:>8}{d2v:>8}  ({time.time() - t0:.1f}s)",
+            flush=True,
+        )
 
     valid = [r for r in records if r["base_oos"]["n"] > 0 and r["ss_oos"]["n"] > 0]
     n_total = len(records)
@@ -271,9 +303,12 @@ def main():
 
     # 相对基线（逐品种 OOS ΔexpR）
     def _split(pop, win_key, loss_key):
-        return ([r for r in pop if r[win_key]],
-                [r for r in pop if r[loss_key]],
-                [r for r in pop if not r[win_key] and not r[loss_key]])
+        return (
+            [r for r in pop if r[win_key]],
+            [r for r in pop if r[loss_key]],
+            [r for r in pop if not r[win_key] and not r[loss_key]],
+        )
+
     ss_wins, ss_loss, ss_flat = _split(gate_pop, "oos_win_ss", "oos_loss_ss")
     ot_wins, ot_loss, ot_flat = _split(gate_pop, "oos_win_ot", "oos_loss_ot")
 
@@ -286,7 +321,10 @@ def main():
         flats = len(ds) - wins - losses
         pval = _binom_two_sided(wins, wins + losses)
         return {
-            "n": len(ds), "wins": wins, "losses": losses, "flats": flats,
+            "n": len(ds),
+            "wins": wins,
+            "losses": losses,
+            "flats": flats,
             "median_delta": round(float(np.median(ds)), 4),
             "mean_delta": round(float(np.mean(ds)), 4),
             "win_rate_over_all": round(wins / len(ds), 3),
@@ -297,20 +335,35 @@ def main():
     sig_ot = _significance(gate_pop, "delta_ot_vs_base")
 
     summary = {
-        "n_total": n_total, "n_valid": len(valid), "n_gate_pop": len(gate_pop),
+        "n_total": n_total,
+        "n_valid": len(valid),
+        "n_gate_pop": len(gate_pop),
         "n_enabled": n_enabled,
         "mean_oos_expR_baseline_all": mean_base_all,
         "mean_oos_expR_baseline": mean_base,
         "mean_oos_expR_same_sign": mean_ss,
         "mean_oos_expR_oppose": mean_ot,
-        "delta_mean_ss_vs_base": (round(mean_ss - mean_base, 4) if mean_ss is not None and mean_base is not None else None),
-        "delta_mean_ot_vs_base": (round(mean_ot - mean_base, 4) if mean_ot is not None and mean_base is not None else None),
-        "n_oos_win_ss": len(ss_wins), "n_oos_loss_ss": len(ss_loss), "n_oos_flat_ss": len(ss_flat),
-        "n_oos_win_ot": len(ot_wins), "n_oos_loss_ot": len(ot_loss), "n_oos_flat_ot": len(ot_flat),
+        "delta_mean_ss_vs_base": (
+            round(mean_ss - mean_base, 4) if mean_ss is not None and mean_base is not None else None
+        ),
+        "delta_mean_ot_vs_base": (
+            round(mean_ot - mean_base, 4) if mean_ot is not None and mean_base is not None else None
+        ),
+        "n_oos_win_ss": len(ss_wins),
+        "n_oos_loss_ss": len(ss_loss),
+        "n_oos_flat_ss": len(ss_flat),
+        "n_oos_win_ot": len(ot_wins),
+        "n_oos_loss_ot": len(ot_loss),
+        "n_oos_flat_ot": len(ot_flat),
         "significance_same_sign": sig_ss,
         "significance_oppose": sig_ot,
-        "config": {"SPLIT": SPLIT, "MIN_T": MIN_T, "MARGIN": MARGIN,
-                   "gate_threshold": GATE_THRESHOLD, "c_source_for_gate": "kline"},
+        "config": {
+            "SPLIT": SPLIT,
+            "MIN_T": MIN_T,
+            "MARGIN": MARGIN,
+            "gate_threshold": GATE_THRESHOLD,
+            "c_source_for_gate": "kline",
+        },
     }
 
     out = {"summary": summary, "records": records}
@@ -318,15 +371,26 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     print("=" * 92, flush=True)
-    print(f"[汇总] 评估 {n_total} 个，回测有效 {len(valid)} 个，门可用总体 {len(gate_pop)} 个；IS 决定启用 C 门 {n_enabled}")
-    print(f"  逐品种 OOS 期望R均值(门可用总体)：基线(threshold) {mean_base:+.4f} ｜ same_sign {mean_ss:+.4f} ｜ oppose {mean_ot:+.4f}")
+    print(
+        f"[汇总] 评估 {n_total} 个，回测有效 {len(valid)} 个，门可用总体 {len(gate_pop)} 个；IS 决定启用 C 门 {n_enabled}"
+    )
+    print(
+        f"  逐品种 OOS 期望R均值(门可用总体)：基线(threshold) {mean_base:+.4f} ｜ same_sign {mean_ss:+.4f} ｜ oppose {mean_ot:+.4f}"
+    )
     if summary["delta_mean_ss_vs_base"] is not None:
-        print(f"  Δsame_sign−基线 = {summary['delta_mean_ss_vs_base']:+.4f} ｜ Δoppose−基线 = {summary['delta_mean_ot_vs_base']:+.4f}")
+        print(
+            f"  Δsame_sign−基线 = {summary['delta_mean_ss_vs_base']:+.4f} ｜ Δoppose−基线 = {summary['delta_mean_ot_vs_base']:+.4f}"
+        )
     print(f"  same_sign  OOS: 增益 {len(ss_wins)} / 有损 {len(ss_loss)} / 持平 {len(ss_flat)}")
     print(f"  oppose     OOS: 增益 {len(ot_wins)} / 有损 {len(ot_loss)} / 持平 {len(ot_flat)}")
-    print(f"  显著性(二项双尾, 仅计增益/有损): same_sign p={sig_ss['binom_p_two_sided']} ｜ oppose p={sig_ot['binom_p_two_sided']}")
-    print(f"  中位数 Δ: same_sign {sig_ss.get('median_delta')} ｜ oppose {sig_ot.get('median_delta')} ｜ 增益占比 oppose {sig_ot.get('win_rate_over_all')}", flush=True)
-    print(f"[耗时] {time.time()-t_all:.1f}s ｜ 已写 {OUT_JSON}", flush=True)
+    print(
+        f"  显著性(二项双尾, 仅计增益/有损): same_sign p={sig_ss['binom_p_two_sided']} ｜ oppose p={sig_ot['binom_p_two_sided']}"
+    )
+    print(
+        f"  中位数 Δ: same_sign {sig_ss.get('median_delta')} ｜ oppose {sig_ot.get('median_delta')} ｜ 增益占比 oppose {sig_ot.get('win_rate_over_all')}",
+        flush=True,
+    )
+    print(f"[耗时] {time.time() - t_all:.1f}s ｜ 已写 {OUT_JSON}", flush=True)
 
     build_html(out, OUT_HTML)
 
@@ -335,50 +399,59 @@ def build_html(out, path):
     s = out["summary"]
     recs = out["records"]
     # 门可用总体（有 kline C 且回测有效）—— 门在这些品种上才有作用空间
-    valid = [r for r in recs if r.get("kline_available")
-             and r.get("base_oos", {}).get("n", 0) > 0 and r.get("ss_oos", {}).get("n", 0) > 0]
+    valid = [
+        r
+        for r in recs
+        if r.get("kline_available") and r.get("base_oos", {}).get("n", 0) > 0 and r.get("ss_oos", {}).get("n", 0) > 0
+    ]
 
     def fmt(x):
         return f"{x:+.3f}" if isinstance(x, (int, float)) else "  -  "
+
     rows = []
-    for r in sorted(valid, key=lambda x: (x["delta_ss_vs_base"] or -9), reverse=True):
-        dv = r["delta_ss_vs_base"]; dv2 = r["delta_ot_vs_base"]
+    for r in sorted(valid, key=lambda x: x["delta_ss_vs_base"] or -9, reverse=True):
+        dv = r["delta_ss_vs_base"]
+        dv2 = r["delta_ot_vs_base"]
         cls = "gain" if (dv is not None and dv > 0.01) else ("loss" if (dv is not None and dv < -0.01) else "flat")
         cls2 = "gain" if (dv2 is not None and dv2 > 0.01) else ("loss" if (dv2 is not None and dv2 < -0.01) else "flat")
         dec_cls = "on" if r["enable"] else "off"
         rows.append(f"""<tr>
-<td class="sym">{r['symbol']}</td><td>{r['name']}</td><td>{r['group']}</td>
-<td>{fmt(r['is_edge'])}</td>
-<td class="dec {dec_cls}">{r['decision']}</td>
-<td>{r['ss_oos']['expR']:+.3f}<br><span class="sub">{r['ss_oos']['n']}笔</span></td>
-<td>{r['base_oos']['expR']:+.3f}<br><span class="sub">{r['base_oos']['n']}笔</span></td>
+<td class="sym">{r["symbol"]}</td><td>{r["name"]}</td><td>{r["group"]}</td>
+<td>{fmt(r["is_edge"])}</td>
+<td class="dec {dec_cls}">{r["decision"]}</td>
+<td>{r["ss_oos"]["expR"]:+.3f}<br><span class="sub">{r["ss_oos"]["n"]}笔</span></td>
+<td>{r["base_oos"]["expR"]:+.3f}<br><span class="sub">{r["base_oos"]["n"]}笔</span></td>
 <td class="{cls}">{fmt(dv)}</td>
-<td>{r['ot_oos']['expR']:+.3f}<br><span class="sub">{r['ot_oos']['n']}笔</span></td>
+<td>{r["ot_oos"]["expR"]:+.3f}<br><span class="sub">{r["ot_oos"]["n"]}笔</span></td>
 <td class="{cls2}">{fmt(dv2)}</td>
-<td class="sub">ss拦{r['ss_gate_skipped']}/ot拦{r['ot_gate_skipped']}</td>
+<td class="sub">ss拦{r["ss_gate_skipped"]}/ot拦{r["ot_gate_skipped"]}</td>
 </tr>""")
 
-    dm = s["delta_mean_ss_vs_base"]; dn = s["delta_mean_ot_vs_base"]
+    dm = s["delta_mean_ss_vs_base"]
+    dn = s["delta_mean_ot_vs_base"]
 
     def _sig_html(sig, label):
         p = sig.get("binom_p_two_sided")
         sig_cls = "gain" if (p is not None and p < 0.05) else "flat"
         sig_txt = "显著✓" if (p is not None and p < 0.05) else "不显著"
-        return (f"<tr><td>{label}</td><td>{sig.get('n')}</td><td class='gain'>{sig.get('wins')}</td>"
-                f"<td class='loss'>{sig.get('losses')}</td><td>{sig.get('flats')}</td>"
-                f"<td>{fmt(sig.get('median_delta'))}</td><td>{fmt(sig.get('mean_delta'))}</td>"
-                f"<td>{sig.get('win_rate_over_all')}</td><td class='{sig_cls}'>{p}</td>"
-                f"<td class='{sig_cls}'>{sig_txt}</td></tr>")
+        return (
+            f"<tr><td>{label}</td><td>{sig.get('n')}</td><td class='gain'>{sig.get('wins')}</td>"
+            f"<td class='loss'>{sig.get('losses')}</td><td>{sig.get('flats')}</td>"
+            f"<td>{fmt(sig.get('median_delta'))}</td><td>{fmt(sig.get('mean_delta'))}</td>"
+            f"<td>{sig.get('win_rate_over_all')}</td><td class='{sig_cls}'>{p}</td>"
+            f"<td class='{sig_cls}'>{sig_txt}</td></tr>"
+        )
+
     sig_ss_html = _sig_html(s.get("significance_same_sign", {}), "same_sign")
     sig_ot_html = _sig_html(s.get("significance_oppose", {}), f"oppose({s['config']['gate_threshold']})")
 
     headline = f"""<div class="kpis">
-<div class="kpi"><div class="v">{s['n_valid']}</div><div class="l">回测有效品种</div></div>
-<div class="kpi"><div class="v">{s['n_gate_pop']}</div><div class="l">门可用总体(有kline C)</div></div>
-<div class="kpi"><div class="v">{s['n_enabled']}</div><div class="l">IS 决定启用 C 门</div></div>
-<div class="kpi"><div class="v">{fmt(s['mean_oos_expR_baseline'])}</div><div class="l">基线 OOS 期望R(均值)</div></div>
-<div class="kpi"><div class="v">{fmt(s['mean_oos_expR_same_sign'])}</div><div class="l">same_sign OOS</div></div>
-<div class="kpi"><div class="v">{fmt(s['mean_oos_expR_oppose'])}</div><div class="l">oppose OOS</div></div>
+<div class="kpi"><div class="v">{s["n_valid"]}</div><div class="l">回测有效品种</div></div>
+<div class="kpi"><div class="v">{s["n_gate_pop"]}</div><div class="l">门可用总体(有kline C)</div></div>
+<div class="kpi"><div class="v">{s["n_enabled"]}</div><div class="l">IS 决定启用 C 门</div></div>
+<div class="kpi"><div class="v">{fmt(s["mean_oos_expR_baseline"])}</div><div class="l">基线 OOS 期望R(均值)</div></div>
+<div class="kpi"><div class="v">{fmt(s["mean_oos_expR_same_sign"])}</div><div class="l">same_sign OOS</div></div>
+<div class="kpi"><div class="v">{fmt(s["mean_oos_expR_oppose"])}</div><div class="l">oppose OOS</div></div>
 </div>"""
 
     html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
@@ -406,25 +479,25 @@ td.dec.on{{color:var(--red);font-weight:700}} td.dec.off{{color:var(--mut)}}
 .tag{{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;background:#223;color:var(--blue);margin-right:6px}}
 </style></head><body><div class="wrap">
 <h1>C 感知方向门（threshold 增强）IS/OOS 验证</h1>
-<div class="sub">三感参谋 · 四维信号系统 · 让资金面 C 真正参与决策（不部署 combined）｜ 生成于 {time.strftime('%Y-%m-%d %H:%M')}</div>
+<div class="sub">三感参谋 · 四维信号系统 · 让资金面 C 真正参与决策（不部署 combined）｜ 生成于 {time.strftime("%Y-%m-%d %H:%M")}</div>
 {headline}
 <div class="note">
 <b>动机</b>：threshold 模式下 C 维度<b>结构性惰性</b>（kline C 与 dragon C 回测逐笔一致）→ 单纯喂 C 不改交易。
 本验证给 threshold 加<b>C 感知方向门</b>（不让 C 定方向，只拦单）：门消费<b>丰富的 kline C</b>（17 年 1 分钟 K 线造）。
-<span class="tag">same_sign</span>T 看多但 C 反向(且≠0)则不开多；<span class="tag">oppose</span>仅 |C|&gt;{s['config']['gate_threshold']} 反向才拦（更温和）。
-<b>方法</b>：全部 {s['n_gate_pop']} 个有 kline C 的品种（17 年 1 分钟 K 线批量造）；按基线交易日切 <b>IS(前{int(s['config']['SPLIT']*100)}%)</b>/<b>OOS(后{100-int(s['config']['SPLIT']*100)}%)</b>，
-决策仅看 IS（护栏 MIN_T={s['config']['MIN_T']}、IS增益≥{s['config']['MARGIN']}、IS_ss_expR&gt;0），OOS 仅验证；
+<span class="tag">same_sign</span>T 看多但 C 反向(且≠0)则不开多；<span class="tag">oppose</span>仅 |C|&gt;{s["config"]["gate_threshold"]} 反向才拦（更温和）。
+<b>方法</b>：全部 {s["n_gate_pop"]} 个有 kline C 的品种（17 年 1 分钟 K 线批量造）；按基线交易日切 <b>IS(前{int(s["config"]["SPLIT"] * 100)}%)</b>/<b>OOS(后{100 - int(s["config"]["SPLIT"] * 100)}%)</b>，
+决策仅看 IS（护栏 MIN_T={s["config"]["MIN_T"]}、IS增益≥{s["config"]["MARGIN"]}、IS_ss_expR&gt;0），OOS 仅验证；
 <b>二项双尾检验</b>判断「增益品种占比」是否显著&gt;50%（H0: 门无方向性增益）。
 </div>
 
 <h2>一、组合层面结论</h2>
-<table><tr><th>指标</th><th>基线(threshold)</th><th>same_sign</th><th>oppose({s['config']['gate_threshold']})</th><th>Δss−基</th><th>Δot−基</th></tr>
-<tr><td>OOS 期望R 均值(逐品种)</td><td>{fmt(s['mean_oos_expR_baseline'])}</td><td>{fmt(s['mean_oos_expR_same_sign'])}</td><td>{fmt(s['mean_oos_expR_oppose'])}</td><td class="{('pos' if (dm or 0)>0 else 'neg')}">{fmt(dm)}</td><td class="{('pos' if (dn or 0)>0 else 'neg')}">{fmt(dn)}</td></tr>
+<table><tr><th>指标</th><th>基线(threshold)</th><th>same_sign</th><th>oppose({s["config"]["gate_threshold"]})</th><th>Δss−基</th><th>Δot−基</th></tr>
+<tr><td>OOS 期望R 均值(逐品种)</td><td>{fmt(s["mean_oos_expR_baseline"])}</td><td>{fmt(s["mean_oos_expR_same_sign"])}</td><td>{fmt(s["mean_oos_expR_oppose"])}</td><td class="{("pos" if (dm or 0) > 0 else "neg")}">{fmt(dm)}</td><td class="{("pos" if (dn or 0) > 0 else "neg")}">{fmt(dn)}</td></tr>
 </table>
 <div class="note">
 <b>读图</b>：same_sign / oppose 相对基线的 Δ（红=增益/绿=有损，A股惯例）。
-same_sign OOS：<b class="pos">增益 {s['n_oos_win_ss']}</b> / <b class="neg">有损 {s['n_oos_loss_ss']}</b> / 持平 {s['n_oos_flat_ss']}；
-oppose OOS：<b class="pos">增益 {s['n_oos_win_ot']}</b> / <b class="neg">有损 {s['n_oos_loss_ot']}</b> / 持平 {s['n_oos_flat_ot']}。
+same_sign OOS：<b class="pos">增益 {s["n_oos_win_ss"]}</b> / <b class="neg">有损 {s["n_oos_loss_ss"]}</b> / 持平 {s["n_oos_flat_ss"]}；
+oppose OOS：<b class="pos">增益 {s["n_oos_win_ot"]}</b> / <b class="neg">有损 {s["n_oos_loss_ot"]}</b> / 持平 {s["n_oos_flat_ot"]}。
 </div>
 
 <h2>一·二、统计显著性（门可用总体，二项双尾）</h2>
@@ -437,15 +510,15 @@ oppose OOS：<b class="pos">增益 {s['n_oos_win_ot']}</b> / <b class="neg">有�
 <h2>二、逐品种明细（按 same_sign OOS Δ 排序）</h2>
 <table><thead><tr><th>品种</th><th>名称</th><th>板块</th><th>IS edge</th><th>IS决策</th>
 <th>OOS_ss</th><th>OOS_base</th><th>Δss</th><th>OOS_ot</th><th>Δot</th><th>拦单数</th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table>
+<tbody>{"".join(rows)}</tbody></table>
 <div class="sub">红=增益 / 绿=有损。OOS_ss=启用 same_sign 门；OOS_base=永远 threshold；OOS_ot=oppose 门。拦单数=该模式在 IS+OOS 全样本拦下的信号数。</div>
 
 <h2>三、结论</h2>
 <div class="note">
 1. <b>门能否让 C 真正起作用</b>：取决于 OOS 相对基线是否稳定增益。见上表 Δss/Δot 与各品种增益/有损计数。<br>
-2. <b>护栏防过拟合</b>：IS 决定、OOS 仅验证；仅 {s['n_enabled']} 个品种被放行启用 same_sign 门。<br>
+2. <b>护栏防过拟合</b>：IS 决定、OOS 仅验证；仅 {s["n_enabled"]} 个品种被放行启用 same_sign 门。<br>
 3. <b>生产建议</b>：若 same_sign / oppose 的 OOS 均值 Δ 为负或增益≪有损（二项p不显著），则门不值得全市场部署，维持 threshold（现状）；若某品种 IS+OOS 双优可单独启用。<br>
-4. <b>结论判据</b>：门是否有意义 = 门可用总体(有 kline C)上 OOS 均值 Δ 为正 <b>且</b> 二项双尾 p&lt;0.05（增益品种占比显著&gt;50%）。仅 6 样本时易过拟合，现已扩到 {s['n_gate_pop']} 个品种大样本复核。
+4. <b>结论判据</b>：门是否有意义 = 门可用总体(有 kline C)上 OOS 均值 Δ 为正 <b>且</b> 二项双尾 p&lt;0.05（增益品种占比显著&gt;50%）。仅 6 样本时易过拟合，现已扩到 {s["n_gate_pop"]} 个品种大样本复核。
 </div>
 </div></body></html>"""
     with open(path, "w", encoding="utf-8") as f:

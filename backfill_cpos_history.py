@@ -18,6 +18,7 @@ score_C(symbol, date) 本就支持按回测日期查 history（见 four_dim_stra
     python backfill_cpos_history.py --days 250      # 回填最近 250 个交易日
     python backfill_cpos_history.py --days 12       # 小批量测试
 """
+
 import datetime
 import json
 import os

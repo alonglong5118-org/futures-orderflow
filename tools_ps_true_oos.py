@@ -18,6 +18,7 @@
   C 训练集重推 → 测试集评估（真正 OOS）
 判定：C 相对 A 的合并增益 + 符号检验 p 值。p > 0.05 即视为「无证据」，不得据此改动生产配置。
 """
+
 import copy
 import json
 import os
@@ -79,7 +80,7 @@ def _sign_test(w_a, w_b):
     if m == 0:
         return None
     k = min(w_a, w_b)
-    return min(2 * sum(comb(m, i) for i in range(k + 1)) / (2 ** m), 1.0)
+    return min(2 * sum(comb(m, i) for i in range(k + 1)) / (2**m), 1.0)
 
 
 def main():
@@ -112,10 +113,17 @@ def main():
             win_c += 1
         elif a_e > c_e:
             win_a += 1
-        rows.append({"sym": sym, "A_nobl": round(a_e, 4), "B_prod": round(b_e, 4),
-                     "C_derived": round(c_e, 4), "n": a_n, "derived": derived})
-        print(f"{sym:4} A无黑名单={a_e:+.3f}  B生产={b_e:+.3f}  C重推(OOS)={c_e:+.3f}  "
-              f"n={a_n:3d}  重推={derived}")
+        rows.append(
+            {
+                "sym": sym,
+                "A_nobl": round(a_e, 4),
+                "B_prod": round(b_e, 4),
+                "C_derived": round(c_e, 4),
+                "n": a_n,
+                "derived": derived,
+            }
+        )
+        print(f"{sym:4} A无黑名单={a_e:+.3f}  B生产={b_e:+.3f}  C重推(OOS)={c_e:+.3f}  n={a_n:3d}  重推={derived}")
 
     print("=" * 100)
     pooled = {}
@@ -125,8 +133,7 @@ def main():
     print(f"  C 相对 A：Δ = {pooled['C'] - pooled['A']:+.4f}R   逐品种 C 优 {win_c} / A 优 {win_a}")
     p = _sign_test(win_c, win_a)
     if p is not None:
-        print(f"  符号检验 p ≈ {p:.3f}"
-              + ("  → 无统计证据，不得据此改动生产配置" if p > 0.05 else "  → 方向显著"))
+        print(f"  符号检验 p ≈ {p:.3f}" + ("  → 无统计证据，不得据此改动生产配置" if p > 0.05 else "  → 方向显著"))
     print(f"耗时 {time.time() - t0:.0f}s")
     out = "/tmp/ps_true_oos_result.json"
     with open(out, "w") as f:

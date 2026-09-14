@@ -16,14 +16,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 # live_runner 导入重（含 HTTP server 模块），只导入目标函数所需的定义环境
 import importlib.util
 
-spec = importlib.util.spec_from_file_location(
-    "fdr", Path(__file__).parent / "four_dim_live_runner.py"
-)
+spec = importlib.util.spec_from_file_location("fdr", Path(__file__).parent / "four_dim_live_runner.py")
 
 
 def load_target_funcs():
     """从 four_dim_live_runner.py 提取目标函数（避免完整启动 server）。"""
-    import json, os, re
+    import json
+    import os
+    import re
+
     import trade_journal as tj
 
     src = (Path(__file__).parent / "four_dim_live_runner.py").read_text(encoding="utf-8")
@@ -77,10 +78,14 @@ def mk(n, wins, strategy, r_win=2.0, r_lose=-1.0):
     """造 n 笔成交，前 wins 笔盈利。"""
     out = []
     for i in range(n):
-        out.append({
-            "symbol": "test", "win": i < wins, "r_result": r_win if i < wins else r_lose,
-            "strategy": strategy,
-        })
+        out.append(
+            {
+                "symbol": "test",
+                "win": i < wins,
+                "r_result": r_win if i < wins else r_lose,
+                "strategy": strategy,
+            }
+        )
     return out
 
 
@@ -121,7 +126,9 @@ print(f"混合 20 笔（均值 60% + 趋势 30%）:")
 print(f"  旧公式（混桶 45%）winrate_score = {old_winrate_score(mixed_wr):.1f}")
 print(f"  新公式 winrate_score = {res_mixed['metrics']['winrate_score']}")
 for label, b in res_mixed["metrics"]["winrate_buckets"].items():
-    print(f"  桶[{label}]: n={b['n']}, WR={b['win_rate']}%, 基线={b['baseline']}%, 偏离={b['dev']:+}pp, 分={b['score']}")
+    print(
+        f"  桶[{label}]: n={b['n']}, WR={b['win_rate']}%, 基线={b['baseline']}%, 偏离={b['dev']:+}pp, 分={b['score']}"
+    )
 print()
 
 print("=" * 66)

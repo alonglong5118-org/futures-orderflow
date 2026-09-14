@@ -29,11 +29,18 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))
 
 from four_dim_strategy import (
-    DEFAULT_CONFIG, ROLL_GAP_MULT, ROLL_GAP_PCT, _atr_array, exit_plan,
-    get_slip_pts, load_daily,
+    DEFAULT_CONFIG,
+    ROLL_GAP_MULT,
+    ROLL_GAP_PCT,
+    _atr_array,
+    exit_plan,
+    get_slip_pts,
+    load_daily,
 )
 from pyramid_addon import (
-    PYRAMID_LADDER, PYRAMID_TRAIL_DIST_R, PYRAMID_TRAIL_START_R,
+    PYRAMID_LADDER,
+    PYRAMID_TRAIL_DIST_R,
+    PYRAMID_TRAIL_START_R,
     PYRAMID_WHITELIST,
 )
 
@@ -114,18 +121,18 @@ def replay(sym, arrays, entry_idx, direction, entry, atr_val, regime, cfg, mode)
     # ── 金字塔模式 ──
     # 状态（全部以 R 计，相对 entry）
     units = 1.0
-    unit_entries = [0.0]            # 各单位的入场 R 偏移
-    stop_r = -1.0                   # 当前全仓止损（R）
+    unit_entries = [0.0]  # 各单位的入场 R 偏移
+    stop_r = -1.0  # 当前全仓止损（R）
     p1_done = p2_done = False
     trail_active = False
     peak_r = 0.0
     exit_r = None
     exit_reason = ""
 
-    p1_trig = PYRAMID_LADDER[0]["trigger_r"]   # 1.0
-    p1_add = PYRAMID_LADDER[0]["add_ratio"]    # 0.5
-    p2_trig = PYRAMID_LADDER[1]["trigger_r"]   # 1.5
-    p2_add = PYRAMID_LADDER[1]["add_ratio"]    # 0.25
+    p1_trig = PYRAMID_LADDER[0]["trigger_r"]  # 1.0
+    p1_add = PYRAMID_LADDER[0]["add_ratio"]  # 0.5
+    p2_trig = PYRAMID_LADDER[1]["trigger_r"]  # 1.5
+    p2_add = PYRAMID_LADDER[1]["add_ratio"]  # 0.25
     p2_stop_r = PYRAMID_LADDER[1]["new_stop_r"]  # 0.5
 
     for j in range(entry_idx, n):
@@ -168,16 +175,23 @@ def replay(sym, arrays, entry_idx, direction, entry, atr_val, regime, cfg, mode)
         exit_reason = "期末平"
 
     # 金字塔 R：各单位 P&L 之和（单位归一化）
-    r_raw = sum(u * (exit_r - e) for u, e in zip([1.0, p1_add if p1_done else 0, p2_add if p2_done else 0], [0.0, p1_trig, p2_trig]))
+    r_raw = sum(
+        u * (exit_r - e)
+        for u, e in zip([1.0, p1_add if p1_done else 0, p2_add if p2_done else 0], [0.0, p1_trig, p2_trig])
+    )
     # 成本按实际执行次数：入场 + 加仓次数 + 出场
     n_exec = 2 + (1 if p1_done else 0) + (1 if p2_done else 0)
     r_adj = r_raw - n_exec * per_exec_cost
 
     detail = {
-        "p1_done": p1_done, "p2_done": p2_done,
-        "units": round(units, 2), "exit_r": round(exit_r, 3),
-        "exit_reason": exit_reason, "n_exec": n_exec,
-        "r_raw": round(r_raw, 3), "r_adj": round(r_adj, 3),
+        "p1_done": p1_done,
+        "p2_done": p2_done,
+        "units": round(units, 2),
+        "exit_r": round(exit_r, 3),
+        "exit_reason": exit_reason,
+        "n_exec": n_exec,
+        "r_raw": round(r_raw, 3),
+        "r_adj": round(r_adj, 3),
     }
     return r_adj, detail
 
@@ -190,10 +204,10 @@ def main():
 
     # 收集门控交易 + 数据缓存
     df_cache = {}
-    gated = []          # 全门控
-    no_label = []       # 消融：去标签门
-    no_regime = []      # 消融：去行情门
-    base_all = []       # 一致性检查样本（全白名单）
+    gated = []  # 全门控
+    no_label = []  # 消融：去标签门
+    no_regime = []  # 消融：去行情门
+    base_all = []  # 一致性检查样本（全白名单）
 
     for sym, r in data.items():
         if sym not in PYRAMID_WHITELIST:
@@ -209,9 +223,12 @@ def main():
         for k, dt in enumerate(dates):
             date_idx.setdefault(dt, k)
         arrays = {
-            "high": df["high"].values, "low": df["low"].values,
-            "close": df["close"].values, "open": df["open"].values,
-            "n": len(df), "dates": dates,
+            "high": df["high"].values,
+            "low": df["low"].values,
+            "close": df["close"].values,
+            "open": df["open"].values,
+            "n": len(df),
+            "dates": dates,
         }
         df_cache[sym] = (df, arrays, date_idx)
         atr_all = _atr_array(arrays["high"], arrays["low"], arrays["close"], 14)
@@ -236,13 +253,13 @@ def main():
 
     print(f"金字塔 5 折 OOS 验证（同路径 A/B 重放）")
     print(f"白名单品种: {sorted(PYRAMID_WHITELIST)}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"门控交易：全门控 {len(gated)} 笔 | 去标签门 {len(no_label)} | 去行情门 {len(no_regime)}")
     print()
 
     # ── 引擎忠实性检查（基线模式 vs 记录 R_raw）──
     print("【引擎忠实性检查】基线重放 vs 记录 R（抽样 300 笔）")
-    sample = base_all[::max(1, len(base_all) // 300)][:300]
+    sample = base_all[:: max(1, len(base_all) // 300)][:300]
     diffs, ok = [], 0
     for rec in sample:
         sym, t, k = rec["sym"], rec["t"], rec["k"]
@@ -270,18 +287,25 @@ def main():
         if out is None:
             continue
         r_pyr, detail = out
-        deltas.append({
-            "sym": sym, "date": str(t["entry_date"])[:10],
-            "delta": r_pyr - t["R_adj"],
-            "base": t["R_adj"], "pyr": r_pyr, "detail": detail,
-        })
+        deltas.append(
+            {
+                "sym": sym,
+                "date": str(t["entry_date"])[:10],
+                "delta": r_pyr - t["R_adj"],
+                "base": t["R_adj"],
+                "pyr": r_pyr,
+                "detail": detail,
+            }
+        )
 
     deltas.sort(key=lambda x: x["date"])
     n = len(deltas)
     print(f"  有效重放 {n} 笔")
     d_arr = np.array([x["delta"] for x in deltas])
-    print(f"  全样本 Δ: 合计 {d_arr.sum():+.2f}R, 均值 {d_arr.mean():+.4f}R/笔, "
-          f"中位 {np.median(d_arr):+.4f}R, 改善比例 {(d_arr > 0).mean():.1%}")
+    print(
+        f"  全样本 Δ: 合计 {d_arr.sum():+.2f}R, 均值 {d_arr.mean():+.4f}R/笔, "
+        f"中位 {np.median(d_arr):+.4f}R, 改善比例 {(d_arr > 0).mean():.1%}"
+    )
     # 无额外成本口径（金字塔按 2 次执行计）
     print()
 
@@ -291,11 +315,15 @@ def main():
         s = f * fold_size if f < N_FOLDS - 1 else (N_FOLDS - 1) * fold_size
         e = (f + 1) * fold_size if f < N_FOLDS - 1 else n
         fd = d_arr[s:e]
-        fold_results.append({
-            "fold": f + 1, "n": len(fd), "sum": float(fd.sum()),
-            "mean": float(fd.mean()) if len(fd) else 0,
-            "pos_rate": float((fd > 0).mean()) if len(fd) else 0,
-        })
+        fold_results.append(
+            {
+                "fold": f + 1,
+                "n": len(fd),
+                "sum": float(fd.sum()),
+                "mean": float(fd.mean()) if len(fd) else 0,
+                "pos_rate": float((fd > 0).mean()) if len(fd) else 0,
+            }
+        )
     print(f"  {'折':>3} {'n':>5} {'Δ合计(R)':>10} {'Δ均值':>9} {'改善比例':>8}")
     for fr in fold_results:
         print(f"  {fr['fold']:>3} {fr['n']:>5} {fr['sum']:>+10.2f} {fr['mean']:>+9.4f} {fr['pos_rate']:>8.1%}")
@@ -323,7 +351,7 @@ def main():
     reason_cnt = Counter(x["detail"]["exit_reason"] for x in deltas)
     for rsn, c in reason_cnt.most_common():
         sub = [x["delta"] for x in deltas if x["detail"]["exit_reason"] == rsn]
-        print(f"  {rsn:<8} n={c:>4} ({c/n:>5.1%})  Δ均值 {np.mean(sub):+.4f}")
+        print(f"  {rsn:<8} n={c:>4} ({c / n:>5.1%})  Δ均值 {np.mean(sub):+.4f}")
     p1_rate = sum(1 for x in deltas if x["detail"]["p1_done"]) / n
     p2_rate = sum(1 for x in deltas if x["detail"]["p2_done"]) / n
     print(f"  P1 触发率 {p1_rate:.1%} | P2 触发率 {p2_rate:.1%}")

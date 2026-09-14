@@ -17,8 +17,16 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 # 候选配置：symbol -> {regime: {"cluster_w": {...}}}
 CANDIDATES = {
     "TA": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},
-    "eg": {"趋势": {"trend": 0.3, "mean": 2.0}, "震荡": {"trend": 0.3, "mean": 2.0}, "波动": {"trend": 0.3, "mean": 2.0}},
-    "eb": {"趋势": {"trend": 0.3, "mean": 2.0}, "震荡": {"trend": 0.3, "mean": 2.0}, "波动": {"trend": 0.3, "mean": 2.0}},
+    "eg": {
+        "趋势": {"trend": 0.3, "mean": 2.0},
+        "震荡": {"trend": 0.3, "mean": 2.0},
+        "波动": {"trend": 0.3, "mean": 2.0},
+    },
+    "eb": {
+        "趋势": {"trend": 0.3, "mean": 2.0},
+        "震荡": {"trend": 0.3, "mean": 2.0},
+        "波动": {"trend": 0.3, "mean": 2.0},
+    },
     "bu": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},
     "UR": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},
     "ru": {"趋势": {"seasonal": 2.0}, "震荡": {"seasonal": 2.0}, "波动": {"seasonal": 2.0}},
@@ -49,7 +57,7 @@ def oos_walkforward(symbol, cfg, n_folds=N_FOLDS):
 
 def main():
     print(f"第二批品种级簇权重 OOS 验证（{N_FOLDS} 折）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print()
 
     verdicts = []
@@ -79,12 +87,22 @@ def main():
         print(f"  覆盖: {' / '.join(f'{e:+.3f}' for e in test)} → {test_mean:+.4f}")
         diff = test_mean - base_mean
         ok = diff > 0 and improves / n >= 0.6
-        print(f"  改善 {diff:+.4f}, 胜率 {improves}/{n} ({improves/n:.0%}) → {'✓ 达标' if ok else '✗ 不达标'}")
+        print(f"  改善 {diff:+.4f}, 胜率 {improves}/{n} ({improves / n:.0%}) → {'✓ 达标' if ok else '✗ 不达标'}")
         print()
-        verdicts.append({"symbol": sym, "w": cluster_w, "base": base_mean, "test": test_mean,
-                         "diff": diff, "wins": improves, "n": n, "ok": ok})
+        verdicts.append(
+            {
+                "symbol": sym,
+                "w": cluster_w,
+                "base": base_mean,
+                "test": test_mean,
+                "diff": diff,
+                "wins": improves,
+                "n": n,
+                "ok": ok,
+            }
+        )
 
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     passed = [v for v in verdicts if v["ok"]]
     failed = [v for v in verdicts if not v["ok"]]
     print(f"达标 {len(passed)}: {', '.join(v['symbol'] for v in passed)}")

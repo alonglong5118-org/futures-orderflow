@@ -42,14 +42,14 @@ SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from monitor.pnl_data_source import PnLDataSource
-from monitor.drift_detector import DriftDetector, DriftAlert
 from monitor.dashboard import PerformanceDashboard
-
+from monitor.drift_detector import DriftAlert, DriftDetector
+from monitor.pnl_data_source import PnLDataSource
 
 # ============================================================================
 # 监控历史记录
 # ============================================================================
+
 
 class MonitorHistory:
     """
@@ -93,14 +93,19 @@ class MonitorHistory:
             "run_id": run_id,
             "timestamp": timestamp,
             "metrics": metrics,
-            "alerts": [a.to_dict() if hasattr(a, "to_dict") else {
-                "symbol": a.symbol,
-                "metric": a.metric,
-                "severity": a.severity,
-                "message": a.message,
-                "delta": a.delta,
-                "p_value": getattr(a, "p_value", None),
-            } for a in alerts],
+            "alerts": [
+                a.to_dict()
+                if hasattr(a, "to_dict")
+                else {
+                    "symbol": a.symbol,
+                    "metric": a.metric,
+                    "severity": a.severity,
+                    "message": a.message,
+                    "delta": a.delta,
+                    "p_value": getattr(a, "p_value", None),
+                }
+                for a in alerts
+            ],
             "source_summary": source_summary,
             "n_critical": sum(1 for a in alerts if a.severity == "critical"),
             "n_warning": sum(1 for a in alerts if a.severity == "warning"),
@@ -112,14 +117,16 @@ class MonitorHistory:
 
         # 更新索引
         idx = self._load_index()
-        idx["runs"].append({
-            "run_id": run_id,
-            "timestamp": timestamp,
-            "n_critical": snapshot["n_critical"],
-            "n_warning": snapshot["n_warning"],
-            "total_trades": source_summary.get("total_trades", 0),
-            "snapshot_file": os.path.basename(snap_path),
-        })
+        idx["runs"].append(
+            {
+                "run_id": run_id,
+                "timestamp": timestamp,
+                "n_critical": snapshot["n_critical"],
+                "n_warning": snapshot["n_warning"],
+                "total_trades": source_summary.get("total_trades", 0),
+                "snapshot_file": os.path.basename(snap_path),
+            }
+        )
         # 最多保留 100 条索引
         if len(idx["runs"]) > 100:
             idx["runs"] = idx["runs"][-100:]
@@ -147,10 +154,12 @@ class MonitorHistory:
                     snap = json.load(f)
                 sym_metrics = snap.get("metrics", {}).get(symbol, {})
                 if metric in sym_metrics:
-                    trend.append({
-                        "timestamp": run["timestamp"],
-                        "value": sym_metrics[metric],
-                    })
+                    trend.append(
+                        {
+                            "timestamp": run["timestamp"],
+                            "value": sym_metrics[metric],
+                        }
+                    )
             except Exception:
                 pass
         return trend
@@ -159,6 +168,7 @@ class MonitorHistory:
 # ============================================================================
 # 告警通知
 # ============================================================================
+
 
 class AlertNotifier:
     """
@@ -231,8 +241,8 @@ class AlertNotifier:
             return
 
         import smtplib
-        from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
 
         critical = [a for a in alerts if a.severity == "critical"]
         subject = f"[参数漂移告警] {len(critical)} 个严重 / {len(alerts)} 个总计"
@@ -354,6 +364,7 @@ class AlertNotifier:
 # ============================================================================
 # 主监控器
 # ============================================================================
+
 
 class LiveMonitor:
     """
@@ -494,9 +505,7 @@ class LiveMonitor:
         n_warning = sum(1 for a in alerts if a.severity == "warning")
 
         if alerts:
-            self.notifier.send(alerts, context={
-                "source": self.pnl_source.summary()["available_sources"]
-            })
+            self.notifier.send(alerts, context={"source": self.pnl_source.summary()["available_sources"]})
 
         if n_critical > 0:
             return 2
@@ -537,6 +546,7 @@ class LiveMonitor:
             except Exception as e:
                 print(f"[守护模式] 运行出错: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             try:
@@ -549,6 +559,7 @@ class LiveMonitor:
 # ============================================================================
 # 命令行入口
 # ============================================================================
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -564,22 +575,18 @@ def main():
   python -m monitor.live_monitor --config my_config.json  # 指定配置文件
         """,
     )
-    parser.add_argument("--config", default="monitor/live_monitor_config.json",
-                        help="配置文件路径 (默认: monitor/live_monitor_config.json)")
-    parser.add_argument("--check", action="store_true",
-                        help="仅检测漂移（退出码: 0=正常 1=警告 2=严重）")
-    parser.add_argument("--dashboard", action="store_true",
-                        help="仅生成监控看板")
-    parser.add_argument("--history", action="store_true",
-                        help="查看历史运行记录")
-    parser.add_argument("--daemon", action="store_true",
-                        help="守护模式（定期运行）")
-    parser.add_argument("--interval", type=int, default=3600,
-                        help="守护模式运行间隔（秒），默认 3600")
-    parser.add_argument("--output", type=str, default=None,
-                        help="看板输出目录")
-    parser.add_argument("--limit", type=int, default=20,
-                        help="历史记录显示条数")
+    parser.add_argument(
+        "--config",
+        default="monitor/live_monitor_config.json",
+        help="配置文件路径 (默认: monitor/live_monitor_config.json)",
+    )
+    parser.add_argument("--check", action="store_true", help="仅检测漂移（退出码: 0=正常 1=警告 2=严重）")
+    parser.add_argument("--dashboard", action="store_true", help="仅生成监控看板")
+    parser.add_argument("--history", action="store_true", help="查看历史运行记录")
+    parser.add_argument("--daemon", action="store_true", help="守护模式（定期运行）")
+    parser.add_argument("--interval", type=int, default=3600, help="守护模式运行间隔（秒），默认 3600")
+    parser.add_argument("--output", type=str, default=None, help="看板输出目录")
+    parser.add_argument("--limit", type=int, default=20, help="历史记录显示条数")
 
     args = parser.parse_args()
 

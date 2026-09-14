@@ -22,14 +22,13 @@
 import argparse
 import os
 import sys
-from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from monitor.feishu_alert import FeishuAlert
 from monitor.drift_detector import DriftAlert
+from monitor.feishu_alert import FeishuAlert
 
 
 def test_text(alert: FeishuAlert, text: str):

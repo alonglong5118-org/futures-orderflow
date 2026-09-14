@@ -5,7 +5,6 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-
 DEFAULT_POOL_PATH = "strategy_discovery/candidate_pool.json"
 
 
@@ -45,8 +44,7 @@ class CandidatePool:
         with open(self.path, "w") as f:
             json.dump(self._data, f, ensure_ascii=False, indent=2)
 
-    def add(self, validation_result: Dict[str, Any], status: str = "candidate",
-            notes: str = "") -> str:
+    def add(self, validation_result: Dict[str, Any], status: str = "candidate", notes: str = "") -> str:
         """添加一个验证结果到候选池。返回假设 ID。"""
         hypo_id = validation_result["hypothesis"]["id"]
 
@@ -86,8 +84,9 @@ class CandidatePool:
                 return h
         return None
 
-    def list(self, verdict: Optional[str] = None, status: Optional[str] = None,
-             tag: Optional[str] = None, limit: int = 50) -> List[Dict]:
+    def list(
+        self, verdict: Optional[str] = None, status: Optional[str] = None, tag: Optional[str] = None, limit: int = 50
+    ) -> List[Dict]:
         """列出候选池中的假设，支持筛选。"""
         results = []
         for h in self._data["hypotheses"]:
@@ -173,14 +172,14 @@ class CandidatePool:
         lines.append("")
         lines.append(f"- **判定**: {result['verdict'].upper()}")
         lines.append(f"- **平均 expR**: {summary.get('avg_expR', 'N/A')}")
-        wr_str = f"{summary['avg_win_rate']*100:.1f}%" if summary.get("avg_win_rate") else "N/A"
+        wr_str = f"{summary['avg_win_rate'] * 100:.1f}%" if summary.get("avg_win_rate") else "N/A"
         lines.append(f"- **平均胜率**: {wr_str}")
         lines.append(f"- **总交易数**: {summary.get('total_trades', 0)}")
         lines.append(f"- **正收益品种**: {summary.get('positive_count', 0)}/{summary.get('valid_symbols', 0)}")
         if "oos_avg_expR" in summary:
             lines.append(f"- **OOS 平均 expR**: {summary['oos_avg_expR']}")
         if "avg_oos_degrade" in summary:
-            lines.append(f"- **平均 OOS 退化率**: {summary['avg_oos_degrade']*100:.0f}%")
+            lines.append(f"- **平均 OOS 退化率**: {summary['avg_oos_degrade'] * 100:.0f}%")
         lines.append("")
         if result.get("reasons"):
             lines.append("### 问题与风险")

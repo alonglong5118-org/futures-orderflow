@@ -67,17 +67,18 @@ for i, line in enumerate(lines):
     title = next((t for t in INTROS if f'<span class="gh-title">{t}</span>' in line), None)
     if title is None:
         continue
-    if 'gh-flow' in line:
+    if "gh-flow" in line:
         skipped.append(title)
         continue
     m = re.search(r'class="group-head (gh-\w+)"', line)
     if not m:
-        raise SystemExit(f"无法匹配 group-head 类名: 行{i+1}")
+        raise SystemExit(f"无法匹配 group-head 类名: 行{i + 1}")
     line = line.replace(f'class="group-head {m.group(1)}"', f'class="group-head {m.group(1)} gh-flow"', 1)
-    line, n = re.subn(r'<span class="gh-sub">[^<]*</span>',
-                      f'<span class="gh-intro">{INTROS[title]}</span>', line, count=1)
+    line, n = re.subn(
+        r'<span class="gh-sub">[^<]*</span>', f'<span class="gh-intro">{INTROS[title]}</span>', line, count=1
+    )
     if n != 1:
-        raise SystemExit(f"gh-sub 替换失败: {title}（行{i+1}）")
+        raise SystemExit(f"gh-sub 替换失败: {title}（行{i + 1}）")
     lines[i] = line
     done.append(title)
 

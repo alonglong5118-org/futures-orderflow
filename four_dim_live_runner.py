@@ -274,7 +274,6 @@ import discipline_review as dr
 import drawdown_guard as ddg  # #119 回撤水位线自动降险（渐变 + 持久化）
 import event_calendar as ec  # #13 事件/数据日历闸门
 import execution_planner as exp  # #7 大单拆分/冰山/TWAP 执行建议
-import pyramid_addon as pyr  # P2 金字塔加仓影子模式（三重门+保守阶梯，只推荐不执行）
 import feature_manager as fmg  # 特性开关管理器（热加载/切换/日志）
 import four_dim_calibrate as fdc  # #121 已接入 CLI：真重校准扫描
 import four_dim_recalibrate as fdr  # #121 已接入 CLI：校准漂移检测
@@ -287,8 +286,8 @@ import macro_context as mctx  # #6 跨资产宏观语境(live 专属，回测 ma
 import market_scanner as mscan  # #11 全市场批量扫描(并行)
 import montecarlo as mc  # #11 蒙特卡洛权益曲线置信区间
 import paper_trading_integration as pti  # 自动模拟交易引擎集成
-import trisense_replay_integration as tri  # 三感参谋实盘跟踪账户（第二账户）
 import push_notify as pn  # #15 手机推送(Telegram/Bark/企业微信)
+import pyramid_addon as pyr  # P2 金字塔加仓影子模式（三重门+保守阶梯，只推荐不执行）
 import regime_hmm as rhmm  # #7 HMM 市场状态识别(live 专属，回测不要调用)
 import sentiment_engine as senteng  # #8 市场情绪系统(live 专属，回测 sentiment_label=None 不进)
 import signal_explain as sexp  # #4 信号解释(确定性 driver 解释 + 可选 LLM 增强层)
@@ -297,6 +296,7 @@ import symbol_screener as sscreener  # #11 品种筛选引擎
 
 # —— #3 盘口级订单流：把真实 tick 的 Delta/吸收/失衡 接入 C_flow（push_tick） ——
 import tick_orderflow as tof
+import trisense_replay_integration as tri  # 三感参谋实盘跟踪账户（第二账户）
 import viz_upgrade as viz  # #11 回测可视化增强(Plotly)
 
 # ---------------------------------------------------------------------------
@@ -772,7 +772,7 @@ PERF_PF_BASELINE_BY_LABEL = {
 }
 PERF_WINRATE_BASELINE_DEFAULT = 34.0  # 无标签/样本不足桶的全局基线
 PERF_PF_BASELINE_DEFAULT = 1.20
-PERF_BUCKET_MIN_TRADES = 3            # 桶内样本 <3 笔时并入无标签桶
+PERF_BUCKET_MIN_TRADES = 3  # 桶内样本 <3 笔时并入无标签桶
 
 # 连亏惊奇度分带：p = 当前连亏长度在基线胜率下的出现概率（越小越异常）
 # p ≥ 0.25 完全正常(50) → p < 0.01 极端异常(0)。盈利连击镜像（60→100）。
@@ -3970,11 +3970,19 @@ def _fire_trail_alert(sym, pos, px, state, new_stop):
     # 分品种参数覆盖（与 manage_trailing_stops / exit_plan 保持一致）
     tt = dict(_STRAT_CFG.get("trailing_tail", {}))
     sym_tail = _STRAT_CFG.get("per_symbol_tail", {}).get(sym, {})
-    for _k in ("tail_pct", "tail_trail_R", "min_profit_R", "tail_breakeven_R",
-               "partial_take_R", "partial_take_pct",
-               "partial_take2_R", "partial_take2_pct",
-               "tail_tighten_R", "tail_tighten_pct",
-               "tail_max_bars"):
+    for _k in (
+        "tail_pct",
+        "tail_trail_R",
+        "min_profit_R",
+        "tail_breakeven_R",
+        "partial_take_R",
+        "partial_take_pct",
+        "partial_take2_R",
+        "partial_take2_pct",
+        "tail_tighten_R",
+        "tail_tighten_pct",
+        "tail_max_bars",
+    ):
         if _k in sym_tail:
             tt[_k] = sym_tail[_k]
     tail_pct = float(tt.get("tail_pct", 0.25))
@@ -4465,11 +4473,19 @@ def manage_trailing_stops():
         tt = dict(_STRAT_CFG.get("trailing_tail", {}))
         # 分品种参数覆盖（优先级高于全局，与 exit_plan / 回测逻辑对齐）
         sym_tail = _STRAT_CFG.get("per_symbol_tail", {}).get(sym, {})
-        for _k in ("tail_pct", "tail_trail_R", "min_profit_R", "tail_breakeven_R",
-                   "partial_take_R", "partial_take_pct",
-                   "partial_take2_R", "partial_take2_pct",
-                   "tail_tighten_R", "tail_tighten_pct",
-                   "tail_max_bars"):
+        for _k in (
+            "tail_pct",
+            "tail_trail_R",
+            "min_profit_R",
+            "tail_breakeven_R",
+            "partial_take_R",
+            "partial_take_pct",
+            "partial_take2_R",
+            "partial_take2_pct",
+            "tail_tighten_R",
+            "tail_tighten_pct",
+            "tail_max_bars",
+        ):
             if _k in sym_tail:
                 tt[_k] = sym_tail[_k]
         # 开关优先级：特性开关 > 旧配置 > 默认关闭
@@ -4564,9 +4580,13 @@ def manage_trailing_stops():
         # 仅状态变化时触发一次提示（避免刷屏）；不修改止损，仅用于提示用户主动减仓
         # 注意：partial_take_R 是相对尾仓入场价的 R（与回测 _sim_exit_5m 一致）
         tail_profit_R_for_alert = profit_R - min_profit_R if new_state == "尾仓" else 0
-        if (new_state == "尾仓" and partial_take_R > 0 and partial_take_pct > 0
-                and tail_profit_R_for_alert >= partial_take_R
-                and pos.get("partial_take_fired") != partial_take_R):
+        if (
+            new_state == "尾仓"
+            and partial_take_R > 0
+            and partial_take_pct > 0
+            and tail_profit_R_for_alert >= partial_take_R
+            and pos.get("partial_take_fired") != partial_take_R
+        ):
             # 标记已触发（通过 advance_trailing 的扩展字段持久化）
             try:
                 at.set_position_field(sym, "partial_take_fired", partial_take_R)
@@ -4576,26 +4596,37 @@ def manage_trailing_stops():
         # ── P0-7 二级止盈检测（尾仓态下达到 partial_take2_R 时再提示减仓）──
         # 在 P0-6 之后，更高盈利阈值时触发，平掉剩余尾仓的一部分
         # 注意：partial_take2_R 是相对尾仓入场价的 R（与回测一致）
-        if (new_state == "尾仓" and partial_take2_R > 0 and partial_take2_pct > 0
-                and tail_profit_R_for_alert >= partial_take2_R
-                and pos.get("partial_take2_fired") != partial_take2_R):
+        if (
+            new_state == "尾仓"
+            and partial_take2_R > 0
+            and partial_take2_pct > 0
+            and tail_profit_R_for_alert >= partial_take2_R
+            and pos.get("partial_take2_fired") != partial_take2_R
+        ):
             try:
                 at.set_position_field(sym, "partial_take2_fired", partial_take2_R)
             except Exception:
                 pass
             _fire_partial_take2_alert(sym, pos, px, partial_take2_R, partial_take2_pct, oneR, new_stop)
         # ── P0-8 跟踪收紧触发提示（尾仓盈利刚达 tail_tighten_R 时提示跟踪距离已收紧）──
-        if (new_state == "尾仓" and tail_tighten_R > 0
-                and tail_profit_R_for_alert >= tail_tighten_R
-                and pos.get("tail_tighten_fired") != tail_tighten_R):
+        if (
+            new_state == "尾仓"
+            and tail_tighten_R > 0
+            and tail_profit_R_for_alert >= tail_tighten_R
+            and pos.get("tail_tighten_fired") != tail_tighten_R
+        ):
             try:
                 at.set_position_field(sym, "tail_tighten_fired", tail_tighten_R)
             except Exception:
                 pass
             # 跟踪收紧不单独发推送（修改止损本身会触发状态告警），仅记录
-            log_alert("跟踪收紧", sym, pos.get("name", sym),
-                      f"尾仓盈利达 {tail_tighten_R:.1f}R，跟踪止损距离收紧 {int(tail_tighten_pct*100)}%",
-                      {"tail_tighten_R": tail_tighten_R, "tail_tighten_pct": tail_tighten_pct, "price": px})
+            log_alert(
+                "跟踪收紧",
+                sym,
+                pos.get("name", sym),
+                f"尾仓盈利达 {tail_tighten_R:.1f}R，跟踪止损距离收紧 {int(tail_tighten_pct * 100)}%",
+                {"tail_tighten_R": tail_tighten_R, "tail_tighten_pct": tail_tighten_pct, "price": px},
+            )
         changed = False
         if (stop is None and new_stop is not None) or (stop is not None and abs(new_stop - stop) > 1e-6):
             changed = True
@@ -5214,9 +5245,12 @@ def _pb_load_events():
     except Exception:
         pass
     try:
-        _alerts_raw = json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) if os.path.exists(ALERT_HISTORY_FILE) else {}
+        _alerts_raw = (
+            json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) if os.path.exists(ALERT_HISTORY_FILE) else {}
+        )
         _alerts = _alerts_raw.get("alerts", _alerts_raw) if isinstance(_alerts_raw, dict) else _alerts_raw
-        if not isinstance(_alerts, list): _alerts = []
+        if not isinstance(_alerts, list):
+            _alerts = []
         for a in _alerts:
             at_ = _pb_parse_dt(a.get("time"))
             if at_:
@@ -5599,7 +5633,9 @@ def _sens_run_thread(symbols, tail):
         # 诚实标记：基线 0 笔 = 扫描无效，不得呈现"全部稳健"假绿
         if base_metrics.get("n_trades", 0) == 0:
             result["status"] = "empty"
-            result["reason"] = "基线 0 笔成交，样本不足，敏感性结果无效" + (f"；异常: {'; '.join(errors[:3])}" if errors else "")
+            result["reason"] = "基线 0 笔成交，样本不足，敏感性结果无效" + (
+                f"；异常: {'; '.join(errors[:3])}" if errors else ""
+            )
         if errors:
             result["errors"] = errors[:10]
         _SENS_CACHE["v"] = result
@@ -5729,7 +5765,8 @@ def load_alerts(kind=None, limit=120):
     try:
         raw = json.load(open(ALERT_HISTORY_FILE, encoding="utf-8")) if os.path.exists(ALERT_HISTORY_FILE) else {}
         arr = raw.get("alerts", raw) if isinstance(raw, dict) else raw
-        if not isinstance(arr, list): arr = []
+        if not isinstance(arr, list):
+            arr = []
     except Exception:
         arr = []
     kinds = {}
@@ -5999,8 +6036,10 @@ def _roll_spread(sym, old_code, new_code, ttl=300):
         if pro is not None:
             df = pro.query("rt_fut_k", ts_code="*")
             if df is not None and not getattr(df, "empty", True):
-                want = {re.sub(r"[^A-Z0-9]", "", str(old_code).upper()): "old",
-                        re.sub(r"[^A-Z0-9]", "", str(new_code).upper()): "new"}
+                want = {
+                    re.sub(r"[^A-Z0-9]", "", str(old_code).upper()): "old",
+                    re.sub(r"[^A-Z0-9]", "", str(new_code).upper()): "new",
+                }
                 for _, r in df.iterrows():
                     code = re.sub(r"[^A-Z0-9]", "", str(r.get("ts_code", "")).upper())
                     # rt_fut_k 可能给 3 位缩略码（FG609），补成 4 位再比对
@@ -6156,7 +6195,10 @@ def rollover_overview():
 _POS_STRAT_CACHE = {"ts": 0.0, "data": {}}  # 60s 缓存（classify_regime 需算日线，省每轮重算）
 _POS_STRAT_TTL = 60.0
 _LAYER0_NAMES = {
-    "trend_early": "趋势初", "trend_mid": "趋势中", "trend_late": "趋势末", "sideways": "震荡",
+    "trend_early": "趋势初",
+    "trend_mid": "趋势中",
+    "trend_late": "趋势末",
+    "sideways": "震荡",
 }
 
 
@@ -6242,21 +6284,38 @@ def pos_strategy_payload():
             plan = None
             if passed and stop_dist and avg:
                 plan = pyr.evaluate(
-                    symbol=sym, direction=p.get("direction"), entry_price=avg,
-                    stop_dist=stop_dist, lots=lots, market_state=layer0,
-                    strategy_label=label, roll_level=roll_lv,
+                    symbol=sym,
+                    direction=p.get("direction"),
+                    entry_price=avg,
+                    stop_dist=stop_dist,
+                    lots=lots,
+                    market_state=layer0,
+                    strategy_label=label,
+                    roll_level=roll_lv,
                 )
             pyramid = {
                 "passed": passed,
                 "gates": {
-                    "regime": {"ok": gates["passed"]["regime"],
-                               "name": "行情门", "desc": f"Layer0={_LAYER0_NAMES.get(layer0, layer0 or '无数据')}（趋势初/中期开放）"},
-                    "symbol": {"ok": gates["passed"]["symbol"],
-                               "name": "品种门", "desc": "白名单" if gates["passed"]["symbol"] else "未过 OOS 验证/黑名单"},
-                    "label": {"ok": gates["passed"]["label"],
-                              "name": "标签门", "desc": f"标签={label or '无'}（趋势/背离开放）"},
-                    "roll": {"ok": gates["passed"]["roll"],
-                             "name": "换月门", "desc": f"换月={roll_lv or 'ok'}（warn/urgent 暂停）"},
+                    "regime": {
+                        "ok": gates["passed"]["regime"],
+                        "name": "行情门",
+                        "desc": f"Layer0={_LAYER0_NAMES.get(layer0, layer0 or '无数据')}（趋势初/中期开放）",
+                    },
+                    "symbol": {
+                        "ok": gates["passed"]["symbol"],
+                        "name": "品种门",
+                        "desc": "白名单" if gates["passed"]["symbol"] else "未过 OOS 验证/黑名单",
+                    },
+                    "label": {
+                        "ok": gates["passed"]["label"],
+                        "name": "标签门",
+                        "desc": f"标签={label or '无'}（趋势/背离开放）",
+                    },
+                    "roll": {
+                        "ok": gates["passed"]["roll"],
+                        "name": "换月门",
+                        "desc": f"换月={roll_lv or 'ok'}（warn/urgent 暂停）",
+                    },
                 },
                 "failed_reasons": gates["failed_reasons"],
                 "plan": plan,
@@ -6269,10 +6328,12 @@ def pos_strategy_payload():
         tp = None
         if stop_dist:
             cur_r = round((px - avg) * ds / stop_dist, 2) if px else None
-            def _dist_r(target):
-                if target is None or px is None:
+
+            def _dist_r(target, _px=px, _ds=ds, _stop=stop_dist):
+                if target is None or _px is None:
                     return None
-                return round((target - px) * ds / stop_dist, 2)
+                return round((target - _px) * _ds / _stop, 2)
+
             tp = {
                 "tp_level": p.get("tp_level", "tp_none"),
                 "trail_state": p.get("trail_state"),
@@ -6318,6 +6379,7 @@ def trisense_pos_strategy_payload():
     rows = {}
     try:
         import trisense_replay_integration as _tri
+
         tri_state = _tri.get_state()
         tri_positions = tri_state.get("positions", [])
     except Exception:
@@ -6333,7 +6395,8 @@ def trisense_pos_strategy_payload():
         if sym == raw_sym:
             # 没查到映射，尝试从合约号里提取品种代码（如 J701 -> J, SH611 -> SH）
             import re
-            m = re.match(r'^([A-Za-z]+)', raw_sym)
+
+            m = re.match(r"^([A-Za-z]+)", raw_sym)
             if m:
                 prefix = m.group(1)
                 # 对齐 SYMBOLS 里的大小写
@@ -6384,21 +6447,38 @@ def trisense_pos_strategy_payload():
             plan = None
             if passed and stop_dist and avg:
                 plan = pyr.evaluate(
-                    symbol=sym, direction=pos.get("direction"), entry_price=avg,
-                    stop_dist=stop_dist, lots=lots, market_state=layer0,
-                    strategy_label=label, roll_level=roll_lv,
+                    symbol=sym,
+                    direction=pos.get("direction"),
+                    entry_price=avg,
+                    stop_dist=stop_dist,
+                    lots=lots,
+                    market_state=layer0,
+                    strategy_label=label,
+                    roll_level=roll_lv,
                 )
             pyramid = {
                 "passed": passed,
                 "gates": {
-                    "regime": {"ok": gates["passed"]["regime"],
-                               "name": "行情门", "desc": f"Layer0={_LAYER0_NAMES.get(layer0, layer0 or '无数据')}（趋势初/中期开放）"},
-                    "symbol": {"ok": gates["passed"]["symbol"],
-                               "name": "品种门", "desc": "白名单" if gates["passed"]["symbol"] else "未过 OOS 验证/黑名单"},
-                    "label": {"ok": gates["passed"]["label"],
-                              "name": "标签门", "desc": f"标签={label or '无'}（趋势/背离开放）"},
-                    "roll": {"ok": gates["passed"]["roll"],
-                             "name": "换月门", "desc": f"换月={roll_lv or 'ok'}（warn/urgent 暂停）"},
+                    "regime": {
+                        "ok": gates["passed"]["regime"],
+                        "name": "行情门",
+                        "desc": f"Layer0={_LAYER0_NAMES.get(layer0, layer0 or '无数据')}（趋势初/中期开放）",
+                    },
+                    "symbol": {
+                        "ok": gates["passed"]["symbol"],
+                        "name": "品种门",
+                        "desc": "白名单" if gates["passed"]["symbol"] else "未过 OOS 验证/黑名单",
+                    },
+                    "label": {
+                        "ok": gates["passed"]["label"],
+                        "name": "标签门",
+                        "desc": f"标签={label or '无'}（趋势/背离开放）",
+                    },
+                    "roll": {
+                        "ok": gates["passed"]["roll"],
+                        "name": "换月门",
+                        "desc": f"换月={roll_lv or 'ok'}（warn/urgent 暂停）",
+                    },
                 },
                 "failed_reasons": gates["failed_reasons"],
                 "plan": plan,
@@ -6411,10 +6491,12 @@ def trisense_pos_strategy_payload():
         tp = None
         if stop_dist:
             cur_r = round((px - avg) * ds / stop_dist, 2) if px else None
-            def _tri_dist_r(target):
-                if target is None or px is None:
+
+            def _tri_dist_r(target, _px=px, _ds=ds, _stop=stop_dist):
+                if target is None or _px is None:
                     return None
-                return round((target - px) * ds / stop_dist, 2)
+                return round((target - _px) * _ds / _stop, 2)
+
             tp = {
                 "tp_level": pos.get("tp_level", "tp_none"),
                 "trail_state": pos.get("trail_state"),
@@ -7937,15 +8019,17 @@ def load_journal_trades_for_perf():
                 r_result = 0.0
         elif equity > 0:
             r_result = float(pnl) / (0.01 * equity)
-        out.append({
-            "symbol": t.get("symbol"),
-            "time": t.get("time") or t.get("exit_time"),
-            "win": float(pnl) > 0,
-            "r_result": round(r_result, 3),
-            "pnl": float(pnl),
-            "strategy": t.get("strategy") or "手动",
-            "source": "journal",
-        })
+        out.append(
+            {
+                "symbol": t.get("symbol"),
+                "time": t.get("time") or t.get("exit_time"),
+                "win": float(pnl) > 0,
+                "r_result": round(r_result, 3),
+                "pnl": float(pnl),
+                "strategy": t.get("strategy") or "手动",
+                "source": "journal",
+            }
+        )
     return out
 
 
@@ -7986,8 +8070,11 @@ def calc_performance_score(recent_trades):
         dev = wr_b - base_b  # 相对自身基线的偏离（百分点）
         score_b = max(0.0, min(100.0, 50.0 + dev * 2.5))
         bucket_scores[label] = {
-            "n": len(bts), "win_rate": round(wr_b, 1),
-            "baseline": base_b, "dev": round(dev, 1), "score": round(score_b, 1),
+            "n": len(bts),
+            "win_rate": round(wr_b, 1),
+            "baseline": base_b,
+            "dev": round(dev, 1),
+            "score": round(score_b, 1),
         }
         weighted_sum += score_b * len(bts)
         weighted_n += len(bts)
@@ -8043,7 +8130,7 @@ def calc_performance_score(recent_trades):
         streak_p = None
     else:
         # 出现概率：p(连亏k) = (1-w)^k；p(连赢k) = w^k
-        streak_p = (1 - dom_wr_base) ** current_streak if streak_type == "lose" else dom_wr_base ** current_streak
+        streak_p = (1 - dom_wr_base) ** current_streak if streak_type == "lose" else dom_wr_base**current_streak
         col = 1 if streak_type == "win" else 0
         streak_score = 50.0
         for threshold, lose_s, win_s in PERF_STREAK_SURPRISE_BANDS:
@@ -9018,8 +9105,7 @@ _MS_STATE_UPDATE_INTERVAL = 600  # 日级状态 10 分钟一轮足够（主循�
 def _save_market_states_locked():
     tmp = _MS_STATE_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"saved_at": time.time(), "states": market_state_cache},
-                  f, ensure_ascii=False, default=str)
+        json.dump({"saved_at": time.time(), "states": market_state_cache}, f, ensure_ascii=False, default=str)
     os.replace(tmp, _MS_STATE_FILE)
 
 
@@ -10050,7 +10136,9 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     _cg_blocked, _cg_c = _apply_c_gate(sym, dir_T, today, _STRAT_CFG)
                     if _cg_blocked:
                         _C_GATE_STATS["blocked"] += 1
-                        _C_GATE_STATS["last_blocked"] = (_C_GATE_STATS["last_blocked"][-9:] + [(sym, dir_T, round(_cg_c, 1))])
+                        _C_GATE_STATS["last_blocked"] = _C_GATE_STATS["last_blocked"][-9:] + [
+                            (sym, dir_T, round(_cg_c, 1))
+                        ]
                         pipe["c_gate_blocked"] = True
                         pipe["c_gate_c_kline"] = round(_cg_c, 1)
                         pipe["c_gate_mode"] = _cg_mode
@@ -10058,7 +10146,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         _dir_lbl = "多" if dir_T > 0 else "空"
                         _cg_thr = float((_STRAT_CFG.get("bias_synthesis", {}) or {}).get("c_gate_threshold", 30.0))
                         _cg_reason = ("资金流背离：kline C=%+.1f 与%s信号反向" % (_cg_c, _dir_lbl)) + (
-                            " 且 |C|>%.0f" % _cg_thr if _cg_mode == "oppose_threshold" else "")
+                            " 且 |C|>%.0f" % _cg_thr if _cg_mode == "oppose_threshold" else ""
+                        )
                         _supp = state.setdefault("c_gate_suppressions", {})
                         _sp = _supp.get(sym)
                         _supp[sym] = {
@@ -10079,27 +10168,32 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         if (_clast is None) or (_clast[0] != dir_T) or (time.time() - _clast[1] > 1800):
                             _C_GATE_CHAT_LAST[sym] = (dir_T, time.time())
                             try:
-                                append_chat({
-                                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                    "symbol": sym,
-                                    "name": (SYMBOLS.get(sym) or {}).get("name", sym),
-                                    "direction": _dir_lbl,
-                                    "kind": "signal",
-                                    "signal_type": "资金流背离·已抑制",
-                                    "push_suppressed": True,
-                                    "c_gate_blocked": True,
-                                    "c_gate_c_kline": round(_cg_c, 1),
-                                    "c_gate_mode": _cg_mode,
-                                    "reason": _cg_reason,
-                                    "action_advice": "kline C=%+.1f 逆势，C门已抑制该%s信号（不推送建仓）" % (_cg_c, _dir_lbl),
-                                })
+                                append_chat(
+                                    {
+                                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                        "symbol": sym,
+                                        "name": (SYMBOLS.get(sym) or {}).get("name", sym),
+                                        "direction": _dir_lbl,
+                                        "kind": "signal",
+                                        "signal_type": "资金流背离·已抑制",
+                                        "push_suppressed": True,
+                                        "c_gate_blocked": True,
+                                        "c_gate_c_kline": round(_cg_c, 1),
+                                        "c_gate_mode": _cg_mode,
+                                        "reason": _cg_reason,
+                                        "action_advice": "kline C=%+.1f 逆势，C门已抑制该%s信号（不推送建仓）"
+                                        % (_cg_c, _dir_lbl),
+                                    }
+                                )
                             except Exception:
                                 pass
                         # 周期日志（每 10 分钟），便于 live 监控门的实际拦截率
                         _now = time.time()
                         if _now - _C_GATE_STATS["last_log"] > 600:
                             _C_GATE_STATS["last_log"] = _now
-                            print(f"[C门] 拦截 {_C_GATE_STATS['blocked']} / 通过 {_C_GATE_STATS['passed']} ｜ 最近拦截: {_C_GATE_STATS['last_blocked'][-5:]}")
+                            print(
+                                f"[C门] 拦截 {_C_GATE_STATS['blocked']} / 通过 {_C_GATE_STATS['passed']} ｜ 最近拦截: {_C_GATE_STATS['last_blocked'][-5:]}"
+                            )
                         continue
                     else:
                         _C_GATE_STATS["passed"] += 1
@@ -10832,12 +10926,14 @@ def start_dashboard(state):
                     for _aid in _accounts:
                         _name_map = {"default": "策略模拟盘", "live": "三感参谋实盘"}
                         _badge_map = {"default": "自动策略", "live": "实盘跟踪"}
-                        _account_info.append({
-                            "id": _aid,
-                            "name": _name_map.get(_aid, _aid),
-                            "badge": _badge_map.get(_aid, ""),
-                            "current": _aid == _current,
-                        })
+                        _account_info.append(
+                            {
+                                "id": _aid,
+                                "name": _name_map.get(_aid, _aid),
+                                "badge": _badge_map.get(_aid, ""),
+                                "current": _aid == _current,
+                            }
+                        )
                     body = json.dumps({"ok": True, "accounts": _account_info, "current": _current}, ensure_ascii=False)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
@@ -10872,6 +10968,7 @@ def start_dashboard(state):
                 state["version"] = APP_VERSION
                 # v3.9 动态仓位状态（组合层优化）
                 try:
+
                     def _dir_int(d):
                         """方向字段兼容多种格式：1/-1、'多'/'空'、'long'/'short' 等。"""
                         if isinstance(d, (int, float)):
@@ -10882,6 +10979,7 @@ def start_dashboard(state):
                         if s in ("空", "空单", "short", "sell", "空頭", "kong", "-1", "-"):
                             return -1
                         return 0
+
                     _dp_pos_list = [
                         {"sym": _s, "direction": _dir_int(_p.get("direction", 0)), "lots": _p.get("lots", 0)}
                         for _s, _p in state.get("positions", {}).items()
@@ -10932,18 +11030,39 @@ def start_dashboard(state):
                             _until = datetime.strptime(str(_acc_st.get("snapshot_until", "")), "%Y-%m-%d %H:%M:%S")
                             if datetime.now() < _until:
                                 _snap = _acc_st.get("snapshot", {})
-                                state["equity"] = float(_snap.get("equity", _acc_st.get("equity", state.get("equity", 0))))
-                                state["available"] = float(_snap.get("available", _acc_st.get("available", state.get("available", 0))))
-                                state["total_margin"] = float(_snap.get("total_margin", _acc_st.get("margin_occupied", state.get("total_margin", 0))))
-                                state["float_total"] = float(_snap.get("float_total", _snap.get("mtm_pnl", _acc_st.get("mtm_pnl", state.get("float_total", 0)))))
+                                state["equity"] = float(
+                                    _snap.get("equity", _acc_st.get("equity", state.get("equity", 0)))
+                                )
+                                state["available"] = float(
+                                    _snap.get("available", _acc_st.get("available", state.get("available", 0)))
+                                )
+                                state["total_margin"] = float(
+                                    _snap.get(
+                                        "total_margin", _acc_st.get("margin_occupied", state.get("total_margin", 0))
+                                    )
+                                )
+                                state["float_total"] = float(
+                                    _snap.get(
+                                        "float_total",
+                                        _snap.get("mtm_pnl", _acc_st.get("mtm_pnl", state.get("float_total", 0))),
+                                    )
+                                )
                                 state["mtm_pnl"] = state["float_total"]
                                 state["usage_rate"] = float(_snap.get("usage_rate", _acc_st.get("usage_rate", 0) * 100))
                                 state["snapshot_mode"] = True
                                 state["snapshot_until"] = _acc_st.get("snapshot_until")
                             else:
                                 # ★ 2026-09-14: 到期自动回退 —— 清除快照注入的顶层字段，恢复实时口径，不残留快照值
-                                for _k in ("snapshot_mode", "snapshot_until", "equity", "available",
-                                           "total_margin", "float_total", "mtm_pnl", "usage_rate"):
+                                for _k in (
+                                    "snapshot_mode",
+                                    "snapshot_until",
+                                    "equity",
+                                    "available",
+                                    "total_margin",
+                                    "float_total",
+                                    "mtm_pnl",
+                                    "usage_rate",
+                                ):
                                     state.pop(_k, None)
                         except Exception:
                             pass
@@ -11101,6 +11220,7 @@ def start_dashboard(state):
                 force = "force=1" in self.path
                 try:
                     _cc = cross_source_check(force=force)
+
                     def _sanitize_nan(o):
                         if isinstance(o, float) and (math.isnan(o) or math.isinf(o)):
                             return None
@@ -11109,6 +11229,7 @@ def start_dashboard(state):
                         if isinstance(o, list):
                             return [_sanitize_nan(v) for v in o]
                         return o
+
                     body = json.dumps(_sanitize_nan(_cc), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
@@ -11224,7 +11345,9 @@ def start_dashboard(state):
                     elif _act == "reset":
                         _peak = _p.get("peak")
                         body = json.dumps(
-                            rsm.get_kill(at.get_account()).reset("面板人工解除", reset_peak_to=float(_peak) if _peak else None),
+                            rsm.get_kill(at.get_account()).reset(
+                                "面板人工解除", reset_peak_to=float(_peak) if _peak else None
+                            ),
                             ensure_ascii=False,
                             default=str,
                         )
@@ -11267,15 +11390,16 @@ def start_dashboard(state):
                         _dir = int(_dir_raw)
                     except (ValueError, TypeError):
                         _dir = 1 if _dir_raw == "多" else (-1 if _dir_raw == "空" else 1)
-                    
+
                     import four_dim_strategy as _fd_cg_api
+
                     _cg = _fd_cg_api.check_c_gate(_sym, _dir, _STRAT_CFG)
                     # 附加上下文：该品种的 c_gate 配置
                     _mode, _thr = _fd_cg_api.get_c_gate_config(_sym, _STRAT_CFG)
                     _kline_c = _fd_cg_api.get_kline_C(_sym)
                     _cg["config"] = {"mode": _mode, "threshold": _thr}
                     _cg["kline_C"] = _kline_c
-                    
+
                     body = json.dumps(_cg, ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"error": str(e), "passed": True}, ensure_ascii=False)
@@ -12481,7 +12605,8 @@ def start_dashboard(state):
             result = super().parse_request()
             if result:
                 try:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
+
                     _parsed = urlparse(self.path)
                     _qs = parse_qs(_parsed.query)
                     _acc_param = _qs.get("account", [None])[0]
@@ -12614,12 +12739,13 @@ def start_dashboard(state):
                                 print(f"[journal] ⚠️ 风控缩放: 手数从 {_orig_lots} 缩放到 {lots} (系数={_scale})")
                         except Exception as _risk_e:
                             print(f"[journal] ⚠️ 风控检查异常(放行): {_risk_e}")
-                        
+
                         # C 感知方向门（记账入口同样检查，与实盘一致）
                         try:
                             _dir_val = 1 if direction == "多" else (-1 if direction == "空" else 0)
                             if _dir_val != 0:
                                 import four_dim_strategy as _fd_cg2
+
                                 _cg = _fd_cg2.check_c_gate(sym, _dir_val, _STRAT_CFG)
                                 if not _cg["passed"]:
                                     print(f"[journal] 🚫 开仓被C感知门拦截: {_cg['reason']}")
@@ -12739,7 +12865,11 @@ def start_dashboard(state):
                         # 记录开仓纪律事件（含当时状态机状态，供锁死判定）
                         try:
                             dr.log_event(
-                                "entry", symbol=sym, direction=direction, lots=lots, risk_state=rsm.get_fsm(at.get_account()).state
+                                "entry",
+                                symbol=sym,
+                                direction=direction,
+                                lots=lots,
+                                risk_state=rsm.get_fsm(at.get_account()).state,
                             )
                         except Exception:
                             pass
@@ -12846,12 +12976,15 @@ def start_dashboard(state):
                                     )
                             except Exception as _risk_e:
                                 print(f"[trade] ⚠️ 风控检查异常(放行): {_risk_e}")
-                            
+
                             # C 感知方向门（oppose_threshold）：T 方向与 kline C 反向时抑制开仓
                             try:
-                                _dir_val = 1 if body.get("direction") == "多" else (-1 if body.get("direction") == "空" else 0)
+                                _dir_val = (
+                                    1 if body.get("direction") == "多" else (-1 if body.get("direction") == "空" else 0)
+                                )
                                 if _dir_val != 0:
                                     import four_dim_strategy as _fd_cg
+
                                     _cg = _fd_cg.check_c_gate(sym, _dir_val, _STRAT_CFG)
                                     if not _cg["passed"]:
                                         print(f"[trade] 🚫 开仓被C感知门拦截: {_cg['reason']}")
@@ -13484,8 +13617,13 @@ def _update_aux(feed, state):
             _dd_peak = None
         # 组合级硬熔断（#5）：把持仓一并喂进去，触发时直接生成一键全平清单
         _res = rsm.update_risk_state(
-            eq, used, daily_pnl, consec, positions=snap.get("positions") or [], peak_equity=_dd_peak,
-            account_id=at.get_account()
+            eq,
+            used,
+            daily_pnl,
+            consec,
+            positions=snap.get("positions") or [],
+            peak_equity=_dd_peak,
+            account_id=at.get_account(),
         )
         new_state = rsm.get_fsm(at.get_account()).summary()  # 含 daily_loss_pct / daily_loss_stop / killswitch
         state["risk_state"] = new_state
@@ -14228,7 +14366,7 @@ def _holdings_kline(sym, bars=30):
            supports:[...], resistances:[...], entry_price, direction,
            stop_loss, take_profit_1, take_profit_2, current_price, atr}"""
     import sr_analyzer as sra
-    from four_dim_strategy import exit_plan, risk_gate, strat_atr
+    from four_dim_strategy import exit_plan, risk_gate
 
     df = load_daily_refreshed(sym)
     if df is None or len(df) < 20:
@@ -14504,12 +14642,14 @@ def main():
         print(f"[PaperTrading] 初始化失败: {_e}")
     # ★ 启动实盘跟踪引擎（第二账户，不跟信号，只手动持仓）
     try:
+
         def _tri_stop_vol(contract_symbol):
             """三感参谋默认止损波动量：合约代码 → 纯品种 → 日线 ATR/DR。"""
             sym = fd.variety_of(contract_symbol)
             if not sym or sym == contract_symbol:
                 import re
-                m = re.match(r'^([A-Za-z]+)', contract_symbol)
+
+                m = re.match(r"^([A-Za-z]+)", contract_symbol)
                 if m:
                     prefix = m.group(1)
                     if prefix.upper() in SYMBOLS:
@@ -14525,6 +14665,7 @@ def main():
             except Exception:
                 pass
             return None
+
         tri.init(
             price_feed=feed if feed_ok else None,
             contract_specs=_TCFG.get("contract_specs", {}),

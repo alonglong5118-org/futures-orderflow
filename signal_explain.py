@@ -255,6 +255,7 @@ def _load_dotenv():
 
 _load_dotenv()
 
+
 def llm_enabled():
     """本地 Ollama 或云端 LLM_* 任一可用即 True。
     runner 用它决定是否异步补推 AI 解读——取代原先硬编码的 DEEPSEEK_API_KEY 检查
@@ -312,9 +313,7 @@ def _ollama_explain(prompt):
                 },
             }
         ).encode("utf-8")
-        req = urllib.request.Request(
-            host + "/api/generate", data=payload, headers={"Content-Type": "application/json"}
-        )
+        req = urllib.request.Request(host + "/api/generate", data=payload, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=float(os.environ.get("OLLAMA_TIMEOUT", 60))) as r:
             data = json.loads(r.read())
         resp = (data.get("response") or "").strip()

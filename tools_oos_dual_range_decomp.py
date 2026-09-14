@@ -14,7 +14,6 @@
    品种级聚类 bootstrap（B=2000，品种为独立单元重采样）→ ΔexpR 的 95%CI。
 """
 
-import math
 import sys
 from pathlib import Path
 

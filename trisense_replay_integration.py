@@ -40,9 +40,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from paper_trading_engine import PaperTradingEngine
-import risk_state_machine as _rsm
 import drawdown_guard as _ddg
+import risk_state_machine as _rsm
+from paper_trading_engine import PaperTradingEngine
 
 STATE_FILE = os.path.join(HERE, "trisense_replay_state.json")
 TRI_ACCOUNT_ID = "trisense_replay"  # 三感参谋独立账户 ID（风控/回撤状态按此隔离）
@@ -178,8 +178,12 @@ def tick(state: dict | None = None) -> dict:
 
         # 风控状态机 + 硬熔断更新
         _rsm.update_risk_state(
-            eq, used, daily_pnl, consec,
-            positions=positions, peak_equity=_dd_peak,
+            eq,
+            used,
+            daily_pnl,
+            consec,
+            positions=positions,
+            peak_equity=_dd_peak,
             account_id=TRI_ACCOUNT_ID,
         )
     except Exception as e:
@@ -250,9 +254,7 @@ def risk_kill_ack() -> dict:
 def risk_kill_reset(peak_equity=None) -> dict:
     """人工解除三感参谋硬熔断，可指定新的峰值权益。"""
     try:
-        result = _rsm.get_kill(TRI_ACCOUNT_ID).reset(
-            "面板人工解除", reset_peak_to=peak_equity
-        )
+        result = _rsm.get_kill(TRI_ACCOUNT_ID).reset("面板人工解除", reset_peak_to=peak_equity)
         # 同步重置回撤水位线峰值
         try:
             _ddg.reset_peak(peak_equity, account_id=TRI_ACCOUNT_ID)
@@ -348,6 +350,7 @@ def handle_api(handler) -> None:
                 try:
                     import four_dim_strategy as _fd_cg_tri
                     from four_dim_strategy import DEFAULT_CONFIG as _TRI_CFG
+
                     _cg_res = _fd_cg_tri.check_c_gate(sym_open, _dir_val, _TRI_CFG)
                     if not _cg_res["passed"]:
                         _cg_blocked = True
@@ -445,9 +448,7 @@ def handle_api(handler) -> None:
                 peak_val = float(peak) if peak else None
             except (TypeError, ValueError):
                 peak_val = None
-            result = _rsm.get_kill(TRI_ACCOUNT_ID).reset(
-                "面板人工解除", reset_peak_to=peak_val
-            )
+            result = _rsm.get_kill(TRI_ACCOUNT_ID).reset("面板人工解除", reset_peak_to=peak_val)
             # 同步重置回撤水位线峰值
             try:
                 _ddg.reset_peak(peak_val, account_id=TRI_ACCOUNT_ID)
@@ -463,6 +464,7 @@ def handle_api(handler) -> None:
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
         _send_json(handler, body)

@@ -50,7 +50,8 @@ class TestFeatureFlagsWiring(unittest.TestCase):
         """每个开关都必须显式标注 _wired，防止新增开关忘记判定接线状态。"""
         missing = [k for k, v in self._flags().items() if "_wired" not in v]
         self.assertEqual(
-            [], missing,
+            [],
+            missing,
             msg=f"以下开关缺少 _wired 标注，请判定接线状态后补上: {missing}",
         )
 
@@ -64,9 +65,7 @@ class TestFeatureFlagsWiring(unittest.TestCase):
             with self.subTest(flag=name):
                 before = self.mgr.is_enabled(name)
                 # 尝试切到相反状态
-                res = self.mgr.toggle_feature(
-                    name, not before, reason="契约测试", operator="unittest"
-                )
+                res = self.mgr.toggle_feature(name, not before, reason="契约测试", operator="unittest")
                 self.assertFalse(
                     res.get("ok"),
                     msg=f"{name} 是未接线开关，切换本应被拒绝，实际返回 {res}",
@@ -74,7 +73,8 @@ class TestFeatureFlagsWiring(unittest.TestCase):
                 self.assertIn("未接线", res.get("error", ""))
                 # 状态必须原封不动
                 self.assertEqual(
-                    before, self.mgr.is_enabled(name),
+                    before,
+                    self.mgr.is_enabled(name),
                     msg=f"{name} 状态被改动了（未接线开关不应写入）",
                 )
 

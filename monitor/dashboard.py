@@ -32,13 +32,11 @@
     }
 """
 
-import json
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from monitor.drift_detector import DriftDetector, DriftAlert
-
+from monitor.drift_detector import DriftAlert, DriftDetector
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -419,9 +417,7 @@ class PerformanceDashboard:
                 result[a.symbol] = a.severity
         return result
 
-    def _compute_avg_expr(
-        self, metrics: Dict[str, Dict[str, Any]]
-    ) -> tuple:
+    def _compute_avg_expr(self, metrics: Dict[str, Dict[str, Any]]) -> tuple:
         """计算平均 expR（简单平均）"""
         if not metrics:
             return 0.0, 0.0
@@ -514,8 +510,19 @@ def generate_demo_dashboard(output_dir: str = ".") -> str:
 
     # Phase 6 上线品种
     phase6_symbols = [
-        "zn", "pp", "al", "c", "cs", "y", "hc", "l",
-        "RM", "ss", "au", "OI", "CF",
+        "zn",
+        "pp",
+        "al",
+        "c",
+        "cs",
+        "y",
+        "hc",
+        "l",
+        "RM",
+        "ss",
+        "au",
+        "OI",
+        "CF",
     ]
 
     metrics = {}
@@ -560,8 +567,6 @@ def generate_demo_dashboard(output_dir: str = ".") -> str:
 
 
 if __name__ == "__main__":
-    import sys
-
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     output_dir = os.path.join(project_root, "logs")
     os.makedirs(output_dir, exist_ok=True)

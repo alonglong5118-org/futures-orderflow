@@ -15,13 +15,15 @@
 这恰说明「固定 3-5% 组合回撤闸门」对本策略波动率是自杀式紧——但本扫描改用「入场回撤状态分层」
 规避了该缩放死锁，专注检验闸门前提是否成立。
 """
+
 import sys
+
 import numpy as np
 import pandas as pd
 
 HERE = "/Users/a123/WorkBuddy/2026-09-04-07-56-14/fourd_run"
 sys.path.insert(0, HERE)
-from four_dim_strategy import walk_forward_backtest, DEFAULT_CONFIG, DISABLED_SYMBOLS, load_daily
+from four_dim_strategy import DISABLED_SYMBOLS, load_daily, walk_forward_backtest
 
 SYMS = ["rb", "FG", "ag", "cu", "al", "JM", "jd", "SR", "TA", "y", "p", "ru", "c", "fu", "J"]
 
@@ -39,15 +41,17 @@ def collect_trades():
         df = load_daily(sym)
         closes[sym] = df["close"]
         for t in r["trades_detail"]:
-            trades.append({
-                "sym": sym,
-                "dir": int(t["dir"]),
-                "R": float(t["R_adj"]),
-                "entry": t["entry_date"],
-                "exit": t["exit_date"],
-                "entry_price": float(t["entry_price"]),
-                "sd": float(t["stop_dist"]),
-            })
+            trades.append(
+                {
+                    "sym": sym,
+                    "dir": int(t["dir"]),
+                    "R": float(t["R_adj"]),
+                    "entry": t["entry_date"],
+                    "exit": t["exit_date"],
+                    "entry_price": float(t["entry_price"]),
+                    "sd": float(t["stop_dist"]),
+                }
+            )
     trades.sort(key=lambda x: x["entry"])
     return trades, closes
 
@@ -95,8 +99,7 @@ def main():
     print(f"dd_tier 入场回撤状态分层（{len(trades)} 笔 live 成交，参考曲线最大回撤 {dd.max():.0f}%）")
     print("=" * 86)
     print(f"{'分层(入场dd)':16} {'成交':>6} {'占比':>7} {'avgR':>8} {'sumR':>9} {'胜率':>7}")
-    buckets = [("0–5%", 0, 5), ("5–8%", 5, 8), ("8–10%", 8, 10),
-               ("10–15%", 10, 15), ("≥15%", 15, 1e9)]
+    buckets = [("0–5%", 0, 5), ("5–8%", 5, 8), ("8–10%", 8, 10), ("10–15%", 10, 15), ("≥15%", 15, 1e9)]
     for name, lo, hi in buckets:
         grp = [t for t in trades if lo <= t["dd_entry"] < hi]
         if not grp:
@@ -104,11 +107,13 @@ def main():
             continue
         Rs = [t["R"] for t in grp]
         wr = sum(1 for r in Rs if r > 0) / len(Rs)
-        print(f"{name:16} {len(grp):6d} {len(grp)/len(trades)*100:6.1f}% "
-              f"{np.mean(Rs):+8.3f} {sum(Rs):+9.2f} {wr*100:6.1f}%")
+        print(
+            f"{name:16} {len(grp):6d} {len(grp) / len(trades) * 100:6.1f}% "
+            f"{np.mean(Rs):+8.3f} {sum(Rs):+9.2f} {wr * 100:6.1f}%"
+        )
     base = np.mean(allR)
     wr = sum(1 for r in allR if r > 0) / len(allR)
-    print(f"{'全样本':16} {len(allR):6d} {'100%':>7} {base:+8.3f} {sum(allR):+9.2f} {wr*100:6.1f}%")
+    print(f"{'全样本':16} {len(allR):6d} {'100%':>7} {base:+8.3f} {sum(allR):+9.2f} {wr * 100:6.1f}%")
     print("-" * 86)
     print("前提检验：高 dd 层 avgR 是否显著低于全样本？")
     print("  · 若 10–15% / ≥15% 层 avgR ≈ 全样本 → 回撤不预测下一笔亏损，闸门无前提（纯枷锁）")
@@ -122,13 +127,16 @@ def main():
         blk = [t for t in trades if t["dd_entry"] >= x]
         if blk:
             bR = [t["R"] for t in blk]
-            bar = f"高dd层 avgR {np.mean(bR):+.3f}（{'省亏' if np.mean(bR)<0 else '误杀盈利'}）"
+            bar = f"高dd层 avgR {np.mean(bR):+.3f}（{'省亏' if np.mean(bR) < 0 else '误杀盈利'}）"
         else:
             bar = "无成交达此回撤→闸门从未触发"
         nblk = len(blk)
         sblk = sum(t["R"] for t in blk)
-        print(f"{'H%d 硬阈'%x:16} {len(trades)-nblk:6d} {nblk:6d} {sblk:+10.2f} "
-              f"{(np.mean([t['R'] for t in blk]) if blk else 0):+9.3f}  {bar}")
+        print(
+            f"{'H%d 硬阈' % x:16} {len(trades) - nblk:6d} {nblk:6d} {sblk:+10.2f} "
+            f"{(np.mean([t['R'] for t in blk]) if blk else 0):+9.3f}  {bar}"
+        )
+
     # 生产级 5 档级联
     def casc(t):
         d = t["dd_entry"]
@@ -139,12 +147,15 @@ def main():
         if d >= 5:
             return "size0.7"
         return True
+
     blk = [t for t in trades if casc(t) is False]
     sblk = sum(t["R"] for t in blk)
-    avg_blk = (np.mean([t["R"] for t in blk]) if blk else 0.0)
+    avg_blk = np.mean([t["R"] for t in blk]) if blk else 0.0
     avg_str = ("%+.3f" % avg_blk) if blk else "无"
-    print(f"{'C 生产级5档':16} {len(trades) - len(blk):6d} {len(blk):6d} {sblk:+10.2f} "
-          f"{avg_blk:+9.3f}  拦截层 avgR {avg_str}")
+    print(
+        f"{'C 生产级5档':16} {len(trades) - len(blk):6d} {len(blk):6d} {sblk:+10.2f} "
+        f"{avg_blk:+9.3f}  拦截层 avgR {avg_str}"
+    )
     print("=" * 86)
 
 

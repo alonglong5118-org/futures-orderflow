@@ -56,8 +56,10 @@ class AccountTrackerReconTest(unittest.TestCase):
 
     def _snapshot(self, prices):
         """屏蔽实时行情源，让 snapshot 确定性回退到传入的 prices。"""
-        with mock.patch.object(at, "_get_ak_price", return_value=None), \
-             mock.patch.object(at, "_get_ms_price", return_value=None):
+        with (
+            mock.patch.object(at, "_get_ak_price", return_value=None),
+            mock.patch.object(at, "_get_ms_price", return_value=None),
+        ):
             return at.snapshot(prices)
 
     def _find(self, snap, sym):

@@ -224,6 +224,7 @@ def handle_api(handler) -> None:
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
         _send_json(handler, body)

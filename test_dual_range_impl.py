@@ -21,9 +21,8 @@ import pandas as pd
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 
-import four_dim_strategy as fds
 from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
-from strategy_layer import _dual_range_array, dual_range_vol, atr as strat_atr
+from strategy_layer import _dual_range_array, dual_range_vol
 
 N_FOLDS = 5
 FAILED = []
@@ -50,13 +49,18 @@ h, l, c = df_ru["high"].values, df_ru["low"].values, df_ru["close"].values
 a = _dual_range_array(h, l, c, 14)
 b = validation_dr(h, l, c, 14)
 valid_mask = ~np.isnan(b)
-check("T1a _dual_range_array 与验证公式逐位一致", bool(np.allclose(a[valid_mask], b[valid_mask])),
-      f"{valid_mask.sum()} 个有效值")
+check(
+    "T1a _dual_range_array 与验证公式逐位一致",
+    bool(np.allclose(a[valid_mask], b[valid_mask])),
+    f"{valid_mask.sum()} 个有效值",
+)
 
 s = dual_range_vol(df_ru)
-check("T1b dual_range_vol 序列版与数组版末值一致",
-      abs(float(s.iloc[-1]) - float(a[-1])) < 1e-9,
-      f"series={float(s.iloc[-1]):.4f} array={float(a[-1]):.4f}")
+check(
+    "T1b dual_range_vol 序列版与数组版末值一致",
+    abs(float(s.iloc[-1]) - float(a[-1])) < 1e-9,
+    f"series={float(s.iloc[-1]):.4f} array={float(a[-1]):.4f}",
+)
 
 
 # ── T2: 白名单品种生产复现验证结果 ────────────────────────────
@@ -76,11 +80,8 @@ def folds(sym, cfg):
 # tools_oos_dual_range_final.py stop_only（DR 止损 + ATR regime）的 ru 5 折结果
 EXPECT_RU = [1.861, 1.534, -0.457, 0.274, 0.033]
 got_ru = folds("ru", DEFAULT_CONFIG)
-ok = len(got_ru) == len(EXPECT_RU) and all(
-    g is not None and abs(g - e) < 5e-4 for g, e in zip(got_ru, EXPECT_RU)
-)
-check("T2 ru 生产引擎复现验证 stop_only 结果", ok,
-      " ".join(f"{g:+.3f}" if g is not None else "None" for g in got_ru))
+ok = len(got_ru) == len(EXPECT_RU) and all(g is not None and abs(g - e) < 5e-4 for g, e in zip(got_ru, EXPECT_RU))
+check("T2 ru 生产引擎复现验证 stop_only 结果", ok, " ".join(f"{g:+.3f}" if g is not None else "None" for g in got_ru))
 
 # p 也抽查一折（首折 +0.425）
 r_p = walk_forward_backtest("p", cfg=DEFAULT_CONFIG, df_in=load_daily("p").iloc[: len(load_daily("p")) // 5])
@@ -93,8 +94,7 @@ cfg_no_dr["dual_range_stop_symbols"] = []
 got_cu_on = folds("cu", DEFAULT_CONFIG)
 got_cu_off = folds("cu", cfg_no_dr)
 pairs = [(x, y) for x, y in zip(got_cu_on, got_cu_off) if x is not None and y is not None]
-check("T3 cu（非白名单）不受白名单配置影响", pairs and all(x == y for x, y in pairs),
-      f"{len(pairs)} 折逐一相等")
+check("T3 cu（非白名单）不受白名单配置影响", pairs and all(x == y for x, y in pairs), f"{len(pairs)} 折逐一相等")
 
 
 # ── T4: runner helper（重启后 API 验证，不在测试中导入 runner）─────────

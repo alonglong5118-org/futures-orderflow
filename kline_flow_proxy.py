@@ -15,12 +15,10 @@ P0-1 实测：该天勤账户**只有历史 K 线回放（get_kline_serial ✅�
 
 数据源可插拔：天勤回放（现成、短窗口）⇄ 本地 17 年文件（待 Ken 移到可读目录后切换）。
 """
-import os
-import sys
+
 import json
-import time
+import os
 import signal
-import traceback
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -79,7 +77,7 @@ def kline_flow_proxy(df, window=20):
         sd = pd.Series(vals).rolling(window, min_periods=window // 2).std().replace(0, np.nan)
         z = ((pd.Series(vals) - mu) / sd).fillna(0.0)
         # 把 z 限幅回 [-100,100]
-        sm = (np.tanh(z.values / 2.0) * 100)
+        sm = np.tanh(z.values / 2.0) * 100
         for i, d in enumerate(days):
             out[d] = round(float(sm[i]), 2)
     return out
@@ -132,14 +130,17 @@ def load_kline_local(symbol, data_dir, pattern=None):
     pattern 未给时，按 `<symbol>*.(csv|parquet)` 在 data_dir 下查找（不递归子目录）。
     期望列：datetime(或 date/time/open_time) + open/high/low/close/volume + open_oi/close_oi(可选)。
     返回 pandas DataFrame。格式细节待 Ken 把数据移到可读目录后据实校准。"""
-    import pandas as pd
     import glob
 
+    import pandas as pd
+
     if pattern is None:
-        pats = [os.path.join(data_dir, f"{symbol}*.csv"),
-                os.path.join(data_dir, f"{symbol}*.parquet"),
-                os.path.join(data_dir, f"{symbol.upper()}*.csv"),
-                os.path.join(data_dir, f"{symbol.upper()}*.parquet")]
+        pats = [
+            os.path.join(data_dir, f"{symbol}*.csv"),
+            os.path.join(data_dir, f"{symbol}*.parquet"),
+            os.path.join(data_dir, f"{symbol.upper()}*.csv"),
+            os.path.join(data_dir, f"{symbol.upper()}*.parquet"),
+        ]
     else:
         pats = [os.path.join(data_dir, pattern)]
     files = []
@@ -164,13 +165,12 @@ def load_kline_local(symbol, data_dir, pattern=None):
 
 
 # ───────────────────────── 构建 cpos 兼容缓存 ─────────────────────────
-def build_kline_cflow_cache(symbols, out_file="cflow_kline_cache.json",
-                            source="tianqin", data_dir=None,
-                            start=None, end=None, duration=60):
+def build_kline_cflow_cache(
+    symbols, out_file="cflow_kline_cache.json", source="tianqin", data_dir=None, start=None, end=None, duration=60
+):
     """对 symbols 算日频 flow proxy，写出 cpos_cache 兼容的 JSON：
        {SYM: {"symbol":SYM, "history":[{"date":YYYYMMDD,"C_score":x}, ...], "C_score":<最新>}}
     precompute_C_array(c_source="kline") 直接吃这个结构。"""
-    import pandas as pd
 
     cache = {}
     for sym in symbols:
@@ -196,8 +196,11 @@ def build_kline_cflow_cache(symbols, out_file="cflow_kline_cache.json",
             "history": hist,
             "C_score": hist[-1]["C_score"],
         }
-        print(f"[ok] {sym}: {len(hist)} 日 proxy，范围 {hist[0]['date']}~{hist[-1]['date']} "
-              f"样例 {hist[0]} {hist[len(hist)//2]} {hist[-1]}", flush=True)
+        print(
+            f"[ok] {sym}: {len(hist)} 日 proxy，范围 {hist[0]['date']}~{hist[-1]['date']} "
+            f"样例 {hist[0]} {hist[len(hist) // 2]} {hist[-1]}",
+            flush=True,
+        )
 
     out = os.path.join(HERE, out_file)
     with open(out, "w", encoding="utf-8") as f:

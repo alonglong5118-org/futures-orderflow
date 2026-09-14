@@ -121,10 +121,12 @@ def main():
         for i, t in enumerate(trades):
             if not isinstance(t, dict):
                 continue
-            if (str(t.get("time")) == str(s.get("time"))
-                    and str(t.get("symbol")) == str(s.get("symbol"))
-                    and float(t.get("lots", 0) or 0) == float(s.get("lots") or 0)
-                    and float(t.get("pnl", 0) or 0) == float(s.get("pnl") or 0)):
+            if (
+                str(t.get("time")) == str(s.get("time"))
+                and str(t.get("symbol")) == str(s.get("symbol"))
+                and float(t.get("lots", 0) or 0) == float(s.get("lots") or 0)
+                and float(t.get("pnl", 0) or 0) == float(s.get("pnl") or 0)
+            ):
                 targets.append(i)
                 break
     if not targets:
@@ -134,8 +136,10 @@ def main():
     old_total = sum(float(t.get("pnl") or 0) for t in trades if isinstance(t, dict))
     for i in targets:
         t = trades[i]
-        print(f"\n将处理 trades[{i}]: {t.get('time')} {t.get('symbol')} "
-              f"{t.get('lots')}手 @{t.get('entry_price')} pnl={t.get('pnl')}")
+        print(
+            f"\n将处理 trades[{i}]: {t.get('time')} {t.get('symbol')} "
+            f"{t.get('lots')}手 @{t.get('entry_price')} pnl={t.get('pnl')}"
+        )
 
     new_trades = list(trades)
     if args.remove:
@@ -157,8 +161,10 @@ def main():
 
     est = _estimate_equity(new_total)
     if est:
-        print(f"预估动态权益：{est['anchor']:,.0f}（anchor） − Δ已实现 "
-              f"{est['realized_at_sync'] - new_total:,.0f} = {est['est_dynamic_equity']:,.2f}")
+        print(
+            f"预估动态权益：{est['anchor']:,.0f}（anchor） − Δ已实现 "
+            f"{est['realized_at_sync'] - new_total:,.0f} = {est['est_dynamic_equity']:,.2f}"
+        )
         print("⚠️ 该预估假设当前浮动 ≈ 同步时浮动；实际值以券商权益为准。")
 
     if not args.apply:

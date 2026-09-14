@@ -8,14 +8,15 @@
 判定：趋势态后续收益明显高于其他态 → 行情门（仅趋势态放行加仓）有依据；
       趋势态与其他态无分离 → 状态信号是噪声，Layer0 需重校准。
 """
+
 import sys
+
 import numpy as np
-import pandas as pd
 
 HERE = "/Users/a123/WorkBuddy/2026-09-04-07-56-14/fourd_run"
 sys.path.insert(0, HERE)
-from four_dim_strategy import load_daily, SYMBOLS
-from strategy_layer import classify_regime_array, _atr_array, _sma_array
+from four_dim_strategy import SYMBOLS, load_daily
+from strategy_layer import _atr_array, _sma_array, classify_regime_array
 
 CODE_NAME = {0: "未知", 1: "波动", 2: "震荡", 3: "趋势", 4: "过渡"}
 
@@ -43,8 +44,7 @@ def main():
         n_sym += 1
         rets = np.diff(close) / close[:-1]
         for h in horizons:
-            fwd = np.concatenate([rets[: n - 1 - h + 1] if False else np.zeros(h - 1),
-                                  close[h:] / close[:-h] - 1])
+            fwd = np.concatenate([rets[: n - 1 - h + 1] if False else np.zeros(h - 1), close[h:] / close[:-h] - 1])
             # 更稳妥：逐 bar 前推
             fwd = np.full(n, np.nan)
             for t in range(n - h):
@@ -76,7 +76,7 @@ def main():
             mean = b[0] / b[1]
             wr = b[2] / b[1]
             rows.append((c, b[1], mean, wr))
-            print(f"{CODE_NAME[c]:6} {b[1]:8d} {mean*100:9.3f}% {wr*100:7.1f}%")
+            print(f"{CODE_NAME[c]:6} {b[1]:8d} {mean * 100:9.3f}% {wr * 100:7.1f}%")
         # 趋势 vs 非趋势分离度
         trend = next((r for r in rows if r[0] == 3), None)
         others = [r for r in rows if r[0] != 3 and r[0] != 0]
@@ -84,8 +84,10 @@ def main():
             om = np.mean([r[2] for r in others])
             sep = trend[2] - om
             best = max(rows, key=lambda r: r[2])
-            print(f"  趋势态均值 {trend[2]*100:.3f}% vs 其他态均值 {om*100:.3f}% → 分离 {sep*100:+.3f}% "
-                  f"| 最高收益态={CODE_NAME[best[0]]}({best[2]*100:.3f}%)")
+            print(
+                f"  趋势态均值 {trend[2] * 100:.3f}% vs 其他态均值 {om * 100:.3f}% → 分离 {sep * 100:+.3f}% "
+                f"| 最高收益态={CODE_NAME[best[0]]}({best[2] * 100:.3f}%)"
+            )
             verdict = "✅趋势态预测力成立" if sep > 0.1 else ("⚠️趋势态无超额预测力" if sep < 0.05 else "➖弱分离")
             print(f"  判定: {verdict}")
     print("=" * 78)

@@ -6,24 +6,24 @@
 - 分类清晰：策略库/品种笔记/技能卡分别处理
 """
 
+import json
 import os
 import re
-import json
-import time
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
 class NoteInfo:
     """一篇笔记的元信息。"""
+
     path: str
     title: str = ""
     tags: List[str] = field(default_factory=list)
-    note_type: str = ""           # 策略 / 品种 / 技能 / 知识资产
-    strategy_type: str = ""        # 趋势跟踪 / 周期波段 / 对冲 ...
+    note_type: str = ""  # 策略 / 品种 / 技能 / 知识资产
+    strategy_type: str = ""  # 趋势跟踪 / 周期波段 / 对冲 ...
     symbols: List[str] = field(default_factory=list)
-    group: str = ""                # 黑系 / 有色 / 农产品 / 化工
+    group: str = ""  # 黑系 / 有色 / 农产品 / 化工
     status: str = ""
     one_liner: str = ""
     core_logic: str = ""
@@ -112,22 +112,34 @@ def map_symbol_to_code(symbol_name: str) -> Optional[str]:
     """把中文品种名映射成交易代码（和四维策略的 SYMBOLS key 对齐）。"""
     # 注意：四维策略里的 symbol key 大多是小写，SA/FG/JD 等是大写
     mapping = {
-        "焦煤": "JM", "焦炭": "J",
-        "螺纹": "rb", "螺纹钢": "rb",
-        "铁矿石": "i", "铁矿": "i",
+        "焦煤": "JM",
+        "焦炭": "J",
+        "螺纹": "rb",
+        "螺纹钢": "rb",
+        "铁矿石": "i",
+        "铁矿": "i",
         "热卷": "hc",
-        "沪铜": "cu", "铜": "cu",
-        "豆粕": "M", "豆油": "y", "棕榈": "P",
-        "纯碱": "SA", "玻璃": "FG",
+        "沪铜": "cu",
+        "铜": "cu",
+        "豆粕": "M",
+        "豆油": "y",
+        "棕榈": "P",
+        "纯碱": "SA",
+        "玻璃": "FG",
         "鸡蛋": "JD",
-        "聚丙烯": "pp", "PP": "pp",
-        "PTA": "TA", "pta": "TA",
+        "聚丙烯": "pp",
+        "PP": "pp",
+        "PTA": "TA",
+        "pta": "TA",
         "生猪": "lh",
         "甲醇": "MA",
         "塑料": "L",
-        "沪铝": "al", "铝": "al",
-        "沪锌": "zn", "锌": "zn",
-        "黄金": "au", "白银": "ag",
+        "沪铝": "al",
+        "铝": "al",
+        "沪锌": "zn",
+        "锌": "zn",
+        "黄金": "au",
+        "白银": "ag",
         "玉米": "c",
     }
     code = mapping.get(symbol_name)
@@ -175,6 +187,7 @@ def parse_strategy_note(path: str, content: str) -> NoteInfo:
     if note.symbols:
         # 用第一个品种的分组
         from four_dim_strategy import SYMBOLS
+
         for s in note.symbols:
             if s in SYMBOLS:
                 note.group = SYMBOLS[s].get("group", "")
@@ -329,18 +342,51 @@ class KnowledgeMiner:
                 text = (note.title + " " + note.one_liner).lower()
                 # 明确排除：纯运维/工程/工具类技能
                 exclude_keywords = [
-                    "ci", "门禁", "告警", "api", "漂移", "前端", "面板", "仪表盘",
-                    "特性开关", "检查清单", "复盘", "数据诊断", "钩子优化",
-                    "去重", "数据源", "冗余", "研究方法",
+                    "ci",
+                    "门禁",
+                    "告警",
+                    "api",
+                    "漂移",
+                    "前端",
+                    "面板",
+                    "仪表盘",
+                    "特性开关",
+                    "检查清单",
+                    "复盘",
+                    "数据诊断",
+                    "钩子优化",
+                    "去重",
+                    "数据源",
+                    "冗余",
+                    "研究方法",
                 ]
                 if any(k in text for k in exclude_keywords):
                     continue
                 # 明确保留：和策略表现直接相关的
                 include_keywords = [
-                    "策略", "因子", "权重", "优化", "风控", "回测", "过拟合",
-                    "止损", "止盈", "趋势", "震荡", "参数", "组合", "稳健池",
-                    "kelly", "nsga", "ic", "oos", "校准", "验证",
-                    "护城河", "套利", "对冲",
+                    "策略",
+                    "因子",
+                    "权重",
+                    "优化",
+                    "风控",
+                    "回测",
+                    "过拟合",
+                    "止损",
+                    "止盈",
+                    "趋势",
+                    "震荡",
+                    "参数",
+                    "组合",
+                    "稳健池",
+                    "kelly",
+                    "nsga",
+                    "ic",
+                    "oos",
+                    "校准",
+                    "验证",
+                    "护城河",
+                    "套利",
+                    "对冲",
                 ]
                 if not any(k in text for k in include_keywords):
                     continue
@@ -348,7 +394,7 @@ class KnowledgeMiner:
             # 生成文件名（用英文+数字+下划线，避免中文路径问题）
             # 用 source_file 做文件名更稳定
             base_name = os.path.splitext(note.source_file)[0]
-            safe_name = re.sub(r'[^\w\-]', '_', base_name)[:50]
+            safe_name = re.sub(r"[^\w\-]", "_", base_name)[:50]
             filename = f"draft_{note.note_type}_{safe_name}.json"
             filepath = os.path.join(output_dir, filename)
 
@@ -383,8 +429,17 @@ class KnowledgeMiner:
     def _suggest_config_changes(self, note: NoteInfo) -> List[str]:
         """根据笔记内容给出可能的配置改动方向提示。"""
         hints = []
-        text = (note.title + " " + note.one_liner + " " + note.core_logic + " " +
-                note.entry_conditions + " " + note.risk_rules).lower()
+        text = (
+            note.title
+            + " "
+            + note.one_liner
+            + " "
+            + note.core_logic
+            + " "
+            + note.entry_conditions
+            + " "
+            + note.risk_rules
+        ).lower()
 
         # 趋势/均线相关
         if any(k in text for k in ["均线", "趋势跟踪", "趋势", "突破", "sma", "ma"]):
@@ -438,14 +493,16 @@ class KnowledgeMiner:
             try:
                 with open(path, "r") as fh:
                     d = json.load(fh)
-                drafts.append({
-                    "file": f,
-                    "name": d.get("name", ""),
-                    "type": d.get("_note_type", ""),
-                    "status": d.get("_status", "draft"),
-                    "symbols": d.get("target_symbols", []),
-                    "hints": d.get("_config_hints", []),
-                })
+                drafts.append(
+                    {
+                        "file": f,
+                        "name": d.get("name", ""),
+                        "type": d.get("_note_type", ""),
+                        "status": d.get("_status", "draft"),
+                        "symbols": d.get("target_symbols", []),
+                        "hints": d.get("_config_hints", []),
+                    }
+                )
             except Exception:
                 pass
         return drafts

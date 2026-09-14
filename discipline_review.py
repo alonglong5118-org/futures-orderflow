@@ -486,8 +486,7 @@ def _data_integrity():
         if susp:
             out["equity_trustworthy"] = False
             out["suspicious"] = susp
-            rec = {"date": datetime.now().strftime("%Y-%m-%d"),
-                   "ok": False, "suspicious": susp, "anchor": eh._anchor()}
+            rec = {"date": datetime.now().strftime("%Y-%m-%d"), "ok": False, "suspicious": susp, "anchor": eh._anchor()}
             out["data_alerts"] = eh.audit_alerts(rec)
     except Exception:
         pass

@@ -19,17 +19,21 @@ from four_dim_strategy import DEFAULT_CONFIG, load_daily, walk_forward_backtest
 
 CANDIDATES = {
     # 强候选：单簇明确失效 + 样本充足
-    "hc": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},   # 均值13笔-0.512, 趋势+0.652健康
-    "MA": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},   # 均值11笔-0.306
-    "ag": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},   # 均值28笔-0.239
-    "p": {"趋势": {"trend": 0.5, "mean": 2.0}, "震荡": {"trend": 0.5, "mean": 2.0}, "波动": {"trend": 0.5, "mean": 2.0}},  # 均值43笔+0.342 vs 趋势+0.092
-    "OI": {"趋势": {"mean": 2.0}, "震荡": {"mean": 2.0}, "波动": {"mean": 2.0}},   # 均值27笔+0.316 vs 趋势+0.180
+    "hc": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},  # 均值13笔-0.512, 趋势+0.652健康
+    "MA": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},  # 均值11笔-0.306
+    "ag": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},  # 均值28笔-0.239
+    "p": {
+        "趋势": {"trend": 0.5, "mean": 2.0},
+        "震荡": {"trend": 0.5, "mean": 2.0},
+        "波动": {"trend": 0.5, "mean": 2.0},
+    },  # 均值43笔+0.342 vs 趋势+0.092
+    "OI": {"趋势": {"mean": 2.0}, "震荡": {"mean": 2.0}, "波动": {"mean": 2.0}},  # 均值27笔+0.316 vs 趋势+0.180
     # 中候选：样本少但有先例支持（jd seasonal 先例）
     "l": {"趋势": {"seasonal": 2.0}, "震荡": {"seasonal": 2.0}, "波动": {"seasonal": 2.0}},  # 季节5笔+0.970
-    "AP": {"趋势": {"mean": 2.0}, "震荡": {"mean": 2.0}, "波动": {"mean": 2.0}},   # 均值14笔+0.476 vs 趋势+0.223
+    "AP": {"趋势": {"mean": 2.0}, "震荡": {"mean": 2.0}, "波动": {"mean": 2.0}},  # 均值14笔+0.476 vs 趋势+0.223
     # 对照组：与 TA 翻车模式同构（趋势健康+均值轻度负→降均值），验证该模式是否普遍翻车
-    "al": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},   # 趋势+0.607健康, 均值-0.035
-    "y": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},    # 趋势+0.359健康, 均值-0.074
+    "al": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},  # 趋势+0.607健康, 均值-0.035
+    "y": {"趋势": {"mean": 0.3}, "震荡": {"mean": 0.3}, "波动": {"mean": 0.3}},  # 趋势+0.359健康, 均值-0.074
 }
 
 N_FOLDS = 5
@@ -56,7 +60,7 @@ def oos_walkforward(symbol, cfg, n_folds=N_FOLDS):
 
 def main():
     print(f"第三批品种级簇权重 OOS 验证（{N_FOLDS} 折）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print()
 
     verdicts = []
@@ -86,12 +90,22 @@ def main():
         print(f"  覆盖: {' / '.join(f'{e:+.3f}' for e in test)} → {test_mean:+.4f}")
         diff = test_mean - base_mean
         ok = diff > 0 and improves / n >= 0.6
-        print(f"  改善 {diff:+.4f}, 胜率 {improves}/{n} ({improves/n:.0%}) → {'✓ 达标' if ok else '✗ 不达标'}")
+        print(f"  改善 {diff:+.4f}, 胜率 {improves}/{n} ({improves / n:.0%}) → {'✓ 达标' if ok else '✗ 不达标'}")
         print()
-        verdicts.append({"symbol": sym, "w": cluster_w, "base": base_mean, "test": test_mean,
-                         "diff": diff, "wins": improves, "n": n, "ok": ok})
+        verdicts.append(
+            {
+                "symbol": sym,
+                "w": cluster_w,
+                "base": base_mean,
+                "test": test_mean,
+                "diff": diff,
+                "wins": improves,
+                "n": n,
+                "ok": ok,
+            }
+        )
 
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     passed = [v for v in verdicts if v["ok"]]
     failed = [v for v in verdicts if not v["ok"]]
     print(f"达标 {len(passed)}: {', '.join(v['symbol'] for v in passed)}")

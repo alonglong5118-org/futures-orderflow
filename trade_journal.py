@@ -35,13 +35,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 与 account_tracker 同步切换账户，每个账户有独立的交易日志和日内权益曲线
 _journal_current_account = "default"
 
+
 def _journal_account():
     """获取当前账户 ID（优先与 account_tracker 同步）。"""
     try:
         import account_tracker as at
+
         return at.get_account()
     except Exception:
         return _journal_current_account
+
 
 def _journal_file_for(account_id=None):
     if account_id is None:
@@ -50,12 +53,14 @@ def _journal_file_for(account_id=None):
         return os.path.join(HERE, "trade_journal.json")
     return os.path.join(HERE, f"trade_journal_{account_id}.json")
 
+
 def _intraday_file_for(account_id=None):
     if account_id is None:
         account_id = _journal_account()
     if account_id == "default":
         return os.path.join(HERE, "intraday_equity.json")
     return os.path.join(HERE, f"intraday_equity_{account_id}.json")
+
 
 SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 # 用 RLock 而非 Lock：update_trade 在持有锁时会调用 _load/_save（其内部也上锁），
@@ -770,6 +775,7 @@ def summary():
     # 加载账户状态用于计算持仓风险
     try:
         import account_tracker as at
+
         _acct_file = at.state_file_for()
     except Exception:
         _acct_file = os.path.join(HERE, "account_state.json")

@@ -32,6 +32,7 @@ B. 自动（灰区）：用开源 cfmmc_crawler 自动批量下载（自动识�
 
 依赖：仅 Python 标准库（html.parser）。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -201,6 +202,7 @@ def _parse_file(path, name="", broker_id="", investor_id=""):
                 hidx = i
                 break
         if header:
+
             def _col(*keys):
                 for j, c in enumerate(header):
                     for k in keys:
@@ -214,7 +216,7 @@ def _parse_file(path, name="", broker_id="", investor_id=""):
             i_price = _col("开仓价", "开仓", "持仓均价", "成交价")
             i_margin = _col("保证金")
             if i_inst >= 0 and (i_vol >= 0 or i_price >= 0):
-                for row in pos_table[hidx + 1:]:
+                for row in pos_table[hidx + 1 :]:
                     if i_inst >= len(row):
                         continue
                     inst = (row[i_inst] or "").strip()
@@ -232,16 +234,20 @@ def _parse_file(path, name="", broker_id="", investor_id=""):
                     margin = _num(row[i_margin]) if i_margin >= 0 and i_margin < len(row) else 0.0
                     if vol <= 0:
                         continue
-                    positions_raw.append({
-                        "instrument": inst.upper(),
-                        "direction": direction,
-                        "volume": int(vol),
-                        "open_price": round(price, 2),
-                        "margin": round(margin, 2),
-                    })
+                    positions_raw.append(
+                        {
+                            "instrument": inst.upper(),
+                            "direction": direction,
+                            "volume": int(vol),
+                            "open_price": round(price, 2),
+                            "margin": round(margin, 2),
+                        }
+                    )
 
-    print(f"[结算单解析] ✅ {os.path.basename(path)} | 账户 {investor_id or '?'} | "
-          f"权益 {balance:,.0f} / 可用 {available:,.0f} / 盈亏 {profit:,.0f} | 持仓 {len(positions_raw)} 条")
+    print(
+        f"[结算单解析] ✅ {os.path.basename(path)} | 账户 {investor_id or '?'} | "
+        f"权益 {balance:,.0f} / 可用 {available:,.0f} / 盈亏 {profit:,.0f} | 持仓 {len(positions_raw)} 条"
+    )
 
     return {
         "name": name or (investor_id or os.path.basename(path)),

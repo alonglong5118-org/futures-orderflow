@@ -33,7 +33,12 @@ SHADOW_LOG = os.path.join(HERE, "pyramid_shadow_log.json")
 # v1 = 诊断层加仓 EV>0.12R 的 10 品种；v2 = 模块级同路径 A/B 重放逐品种 5 折验证后保留 6 个。
 # 白名单 v2 复验：n=383, Δ合计 +60.89R, +0.159R/笔, 5/5 折全正（tools_oos_pyramid_by_symbol.py）
 PYRAMID_WHITELIST = {
-    "FG", "SR", "l", "ru", "sp", "ss",
+    "FG",
+    "SR",
+    "l",
+    "ru",
+    "sp",
+    "ss",
 }
 # OOS 剔除（模块级重放不达标）：cu 2/5 折 -13.56R（诊断第一但保本止损掐赢单）、
 # AP 2/5 折、p 3/5 折但合计为负、pp 2/5 折。教训：加仓单位孤立 EV ≠ 全模块 Δ
@@ -59,12 +64,14 @@ PYRAMID_LADDER = [
     {"step": "P1", "trigger_r": 1.0, "add_ratio": 0.50, "new_stop_r": 0.0},
     {"step": "P2", "trigger_r": 1.5, "add_ratio": 0.25, "new_stop_r": 0.5},
 ]
-PYRAMID_TRAIL_START_R = 2.0   # P2 后启动移动止损的起点
-PYRAMID_TRAIL_DIST_R = 1.0    # 峰值回撤 1.0R 离场
+PYRAMID_TRAIL_START_R = 2.0  # P2 后启动移动止损的起点
+PYRAMID_TRAIL_DIST_R = 1.0  # 峰值回撤 1.0R 离场
 
 _STATE_NAMES = {
-    "trend_early": "趋势初", "trend_mid": "趋势中",
-    "trend_late": "趋势末", "sideways": "震荡",
+    "trend_early": "趋势初",
+    "trend_mid": "趋势中",
+    "trend_late": "趋势末",
+    "sideways": "震荡",
 }
 
 
@@ -75,7 +82,9 @@ def _gate_reasons(symbol, market_state, strategy_label, roll_level=None):
 
     g["regime"] = market_state in PYRAMID_STATES
     if not g["regime"]:
-        detail["regime"] = f"行情门未过：{_STATE_NAMES.get(market_state, market_state or '未知状态')}（仅趋势初/中期开放）"
+        detail["regime"] = (
+            f"行情门未过：{_STATE_NAMES.get(market_state, market_state or '未知状态')}（仅趋势初/中期开放）"
+        )
 
     if symbol in PYRAMID_WHITELIST:
         g["symbol"] = True
@@ -90,13 +99,14 @@ def _gate_reasons(symbol, market_state, strategy_label, roll_level=None):
 
     g["roll"] = roll_level not in PYRAMID_ROLL_BLOCK
     if not g["roll"]:
-        detail["roll"] = f"换月门未过：{symbol} 持仓合约距交割月不足 15 天（{roll_level}），老合约趋势失真，暂停加仓推荐"
+        detail["roll"] = (
+            f"换月门未过：{symbol} 持仓合约距交割月不足 15 天（{roll_level}），老合约趋势失真，暂停加仓推荐"
+        )
 
     return all(g.values()), {"passed": g, "failed_reasons": detail}
 
 
-def evaluate(symbol, direction, entry_price, stop_dist, lots,
-             market_state=None, strategy_label=None, roll_level=None):
+def evaluate(symbol, direction, entry_price, stop_dist, lots, market_state=None, strategy_label=None, roll_level=None):
     """三重门评估。全过 → 返回金字塔推荐 dict；任一门不过 → 返回 None（走原 T1/T2）。
 
     direction: "多"/"空"（或 ±1）
@@ -119,16 +129,18 @@ def evaluate(symbol, direction, entry_price, stop_dist, lots,
         add_lots = max(1, int(lots * spec["add_ratio"] + 0.5)) if lots >= 2 else 1
         trigger_price = round(entry_price + d * spec["trigger_r"] * stop_dist, 1)
         new_stop_price = round(entry_price + d * spec["new_stop_r"] * stop_dist, 1)
-        ladder.append({
-            "step": spec["step"],
-            "trigger_r": spec["trigger_r"],
-            "trigger_price": trigger_price,
-            "add_lots": add_lots,
-            "add_ratio": spec["add_ratio"],
-            "new_stop_r": spec["new_stop_r"],
-            "new_stop_price": new_stop_price,
-            "note": f"{'涨至' if d > 0 else '跌至'} {trigger_price} 加 {add_lots} 手，全仓止损上移至 {new_stop_price}",
-        })
+        ladder.append(
+            {
+                "step": spec["step"],
+                "trigger_r": spec["trigger_r"],
+                "trigger_price": trigger_price,
+                "add_lots": add_lots,
+                "add_ratio": spec["add_ratio"],
+                "new_stop_r": spec["new_stop_r"],
+                "new_stop_price": new_stop_price,
+                "note": f"{'涨至' if d > 0 else '跌至'} {trigger_price} 加 {add_lots} 手，全仓止损上移至 {new_stop_price}",
+            }
+        )
         peak_lots += add_lots
 
     trail_price = round(entry_price + d * PYRAMID_TRAIL_START_R * stop_dist, 1)

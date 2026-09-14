@@ -4,10 +4,9 @@
 A) 实时(非回放) get_quote 能否解析 rb2410 —— 验证账户/符号格式。
 B) 回放下 get_kline_serial 能否取到历史 K 线 —— 验证历史数据权限(与 tick 区分)。
 """
-import os
-import sys
+
 import json
-import time
+import os
 import signal
 import traceback
 from datetime import datetime
@@ -38,8 +37,11 @@ def main():
             if n >= 3:
                 break
         signal.alarm(0)
-        print(f"  ✅ live quote 解析成功：last_price={q.get('last_price')} "
-              f"ins={q.get('ins_name')} datetime={q.get('datetime')}", flush=True)
+        print(
+            f"  ✅ live quote 解析成功：last_price={q.get('last_price')} "
+            f"ins={q.get('ins_name')} datetime={q.get('datetime')}",
+            flush=True,
+        )
         api.close()
     except TimeoutError:
         print("  ⏱ live quote 超时", flush=True)
@@ -50,9 +52,10 @@ def main():
     # ── B) 回放 K 线 ──
     print("=== B) 回放 get_kline_serial(rb2410,60) ===", flush=True)
     try:
-        api = TqApi(backtest=TqBacktest(start_dt=datetime(2024, 3, 4, 9, 0, 0),
-                                        end_dt=datetime(2024, 3, 4, 10, 0, 0)),
-                    auth=TqAuth(USER, PASS))
+        api = TqApi(
+            backtest=TqBacktest(start_dt=datetime(2024, 3, 4, 9, 0, 0), end_dt=datetime(2024, 3, 4, 10, 0, 0)),
+            auth=TqAuth(USER, PASS),
+        )
         k = api.get_kline_serial("rb2410", 60)
         signal.signal(signal.SIGALRM, _on_alarm)
         signal.alarm(TIMEOUT)

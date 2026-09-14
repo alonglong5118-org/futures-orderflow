@@ -114,6 +114,7 @@ def recompute_signal_evidence(symbol, signal_time):
     """
     try:
         from four_dim_strategy import load_daily, pipeline
+
         date_str = str(signal_time)[:10].replace("-", "")
         if len(date_str) != 8:
             return None
@@ -150,9 +151,7 @@ def backfill(dry_run=True):
 
         sym = trade.get("symbol", "")
         direction = _trade_direction(trade)
-        trade_time = _parse_time(
-            trade.get("entry_time") or trade.get("time") or trade.get("created_at")
-        )
+        trade_time = _parse_time(trade.get("entry_time") or trade.get("time") or trade.get("created_at"))
 
         if not trade_time:
             stats["no_time"] += 1
@@ -176,20 +175,22 @@ def backfill(dry_run=True):
             if matched.get("strat_evidence"):
                 trade["strat_evidence"] = matched["strat_evidence"]
             stats["backfilled"] += 1
-            changes.append({
-                "idx": i,
-                "symbol": sym,
-                "direction": "多" if direction > 0 else "空",
-                "trade_time": str(trade_time),
-                "matched_signal_time": matched.get("time", ""),
-                "strategy": trade["strategy"],
-            })
+            changes.append(
+                {
+                    "idx": i,
+                    "symbol": sym,
+                    "direction": "多" if direction > 0 else "空",
+                    "trade_time": str(trade_time),
+                    "matched_signal_time": matched.get("time", ""),
+                    "strategy": trade["strategy"],
+                }
+            )
         else:
             trade["strategy"] = "手动"
             stats["manual"] += 1
 
     # 输出统计
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"回填统计:")
     print(f"  总成交: {stats['total']} 笔")
     print(f"  已有标签: {stats['already_labeled']} 笔")

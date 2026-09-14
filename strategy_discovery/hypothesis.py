@@ -34,7 +34,7 @@ class Hypothesis:
         target_symbols: Optional[List[str]] = None,
         tags: Optional[List[str]] = None,
     ):
-        self.id = f"hypo_{int(time.time()*1000)}"
+        self.id = f"hypo_{int(time.time() * 1000)}"
         self.name = name
         self.description = description
         self.source = source

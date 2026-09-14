@@ -270,15 +270,18 @@ _LOCK = threading.Lock()
 # 新增账户：live（三感参谋实盘跟踪账户）
 _tls = threading.local()  # 线程局部存储
 
+
 def get_account():
     """获取当前线程的账户 ID。"""
-    return getattr(_tls, 'current_account', 'default')
+    return getattr(_tls, "current_account", "default")
+
 
 def set_account(account_id):
     """设置当前线程的账户 ID。返回旧的账户 ID。"""
     old = get_account()
     _tls.current_account = account_id
     return old
+
 
 def state_file_for(account_id=None):
     """获取指定账户的 state 文件路径。不传则用当前线程账户。"""
@@ -288,26 +291,34 @@ def state_file_for(account_id=None):
         return os.path.join(HERE, "account_state.json")
     return os.path.join(HERE, f"account_state_{account_id}.json")
 
+
 def list_accounts():
     """列出所有已知账户（通过扫描 state 文件发现）。"""
     accounts = ["default"]
     for fn in os.listdir(HERE):
-        if fn.startswith("account_state_") and fn.endswith(".json") and not fn.endswith(".bak") and not fn.endswith(".tmp"):
-            aid = fn[len("account_state_"):-len(".json")]
+        if (
+            fn.startswith("account_state_")
+            and fn.endswith(".json")
+            and not fn.endswith(".bak")
+            and not fn.endswith(".tmp")
+        ):
+            aid = fn[len("account_state_") : -len(".json")]
             if aid not in accounts:
                 accounts.append(aid)
     return accounts
 
+
 class account_context:
     """上下文管理器：临时切换当前线程的账户，退出时恢复。"""
+
     def __init__(self, account_id):
         self.account_id = account_id
         self._old = None
-    
+
     def __enter__(self):
         self._old = set_account(self.account_id)
         return self
-    
+
     def __exit__(self, *args):
         set_account(self._old)
         return False
@@ -769,8 +780,8 @@ def _auto_stop_levels(sym, pos, _cfg=None):
             return None, None, None
         # ATR × 1 止损（多单止损在下方，空单止损在上方）
         stop = round(avg - ds * atr_val, 2)
-        t1   = round(avg + ds * atr_val * 3.0, 2)
-        t2   = round(avg + ds * atr_val * 5.0, 2)
+        t1 = round(avg + ds * atr_val * 3.0, 2)
+        t2 = round(avg + ds * atr_val * 5.0, 2)
         return stop, t1, t2
     except Exception:
         return None, None, None
@@ -943,7 +954,7 @@ def heal_from_journal():
         #   条件 B: state 有持仓，但 journal 对某些品种只有 CLOSED 没有 OPEN → 跳过（journal 部分缺失）
         _all_open_in_journal = sum(1 for t in jdata.get("trades", []) if t.get("pnl") is None)
         _state_has_positions = any((p.get("lots") or 0) > 0 for p in (st.get("positions") or {}).values())
-        _journal_incomplete = (_all_open_in_journal == 0 and _state_has_positions)
+        _journal_incomplete = _all_open_in_journal == 0 and _state_has_positions
         # 条件 B: state 持仓中有品种 journal 只记了 CLOSED 没记 OPEN（典型的跨账户 journal 污染）
         _journal_syms_open = set()
         for t in jdata.get("trades", []):
@@ -958,7 +969,11 @@ def heal_from_journal():
                     _journal_incomplete_b = True
                     break
         if _journal_incomplete or _journal_incomplete_b:
-            _reason = f"journal 无 OPEN ({_all_open_in_journal}条) vs state {sum(1 for p in (st.get('positions') or {}).values() if (p.get('lots') or 0) > 0)}个持仓" if _journal_incomplete else f"journal 对 state 持仓品种记录缺失"
+            _reason = (
+                f"journal 无 OPEN ({_all_open_in_journal}条) vs state {sum(1 for p in (st.get('positions') or {}).values() if (p.get('lots') or 0) > 0)}个持仓"
+                if _journal_incomplete
+                else f"journal 对 state 持仓品种记录缺失"
+            )
             changes.append(f"⚠️ 僵尸清除跳过: {_reason}")
         else:
             _closed_syms = set()
@@ -996,11 +1011,14 @@ def heal_from_journal():
             if _fs is not None:
                 _changed = False
                 if pos.get("stop") is None:
-                    pos["stop"] = _fs; _changed = True
+                    pos["stop"] = _fs
+                    _changed = True
                 if pos.get("t1") is None:
-                    pos["t1"] = _ft1; _changed = True
+                    pos["t1"] = _ft1
+                    _changed = True
                 if pos.get("t2") is None:
-                    pos["t2"] = _ft2; _changed = True
+                    pos["t2"] = _ft2
+                    _changed = True
                 if _changed:
                     _ftp = _auto_tp_targets(sym, pos)
                     if _ftp:
@@ -1008,7 +1026,9 @@ def heal_from_journal():
                             {"level": "t1", "price": round(_ftp["t1_price"], 2), "ratio": 0.5, "lots": 0.5},
                             {"level": "t2", "price": round(_ftp["t2_price"], 2), "ratio": 1.0, "lots": 0.5},
                         ]
-                    changes.append(f"兜底补算: {sym} {pos.get('direction')} → stop={pos.get('stop')} t1={pos.get('t1')} t2={pos.get('t2')}")
+                    changes.append(
+                        f"兜底补算: {sym} {pos.get('direction')} → stop={pos.get('stop')} t1={pos.get('t1')} t2={pos.get('t2')}"
+                    )
             # 补齐 tp_targets（分级止盈目标价）：journal 有 stop/stop_dist → 反推；无则用 2% ATR 默认
             if (pos.get("lots") or 0) > 0 and pos.get("tp_targets") is None and pos.get("avg"):
                 _tp_tgt = _auto_tp_targets(sym, pos)
@@ -1071,28 +1091,30 @@ def snapshot(prices=None):
                 for _p in _snap_positions:
                     _sym = _p.get("symbol", "")
                     _stored = _pos_dict.get(_sym, {}) if isinstance(_pos_dict, dict) else {}
-                    _merged_positions.append({
-                        "symbol": _sym,
-                        "name": _p.get("name", _stored.get("name", _sym)),
-                        "contract": _p.get("contract", _stored.get("contract", _sym)),
-                        "direction": _p.get("direction", _stored.get("direction", "多")),
-                        "lots": _p.get("lots", _stored.get("lots", 0)),
-                        "avg": _p.get("avg", _stored.get("avg", 0)),
-                        "stop": _stored.get("stop"),
-                        "target": _stored.get("target"),
-                        "t1": _stored.get("t1"),
-                        "t2": _stored.get("t2"),
-                        "tp_level": _stored.get("tp_level", "tp_none"),
-                        "tp_targets": _stored.get("tp_targets"),
-                        "trailing_stop": _stored.get("trailing_stop"),
-                        "trail_state": _stored.get("trail_state"),
-                        "init_qty": _stored.get("init_qty", _p.get("lots", 0)),
-                        "price": _p.get("price"),
-                        "float_pnl": _p.get("float_pnl"),
-                        "margin_used": _p.get("margin_used", 0),
-                        "margin_pct": _p.get("margin_pct", 0),
-                        "dist_to_cap": 0,
-                    })
+                    _merged_positions.append(
+                        {
+                            "symbol": _sym,
+                            "name": _p.get("name", _stored.get("name", _sym)),
+                            "contract": _p.get("contract", _stored.get("contract", _sym)),
+                            "direction": _p.get("direction", _stored.get("direction", "多")),
+                            "lots": _p.get("lots", _stored.get("lots", 0)),
+                            "avg": _p.get("avg", _stored.get("avg", 0)),
+                            "stop": _stored.get("stop"),
+                            "target": _stored.get("target"),
+                            "t1": _stored.get("t1"),
+                            "t2": _stored.get("t2"),
+                            "tp_level": _stored.get("tp_level", "tp_none"),
+                            "tp_targets": _stored.get("tp_targets"),
+                            "trailing_stop": _stored.get("trailing_stop"),
+                            "trail_state": _stored.get("trail_state"),
+                            "init_qty": _stored.get("init_qty", _p.get("lots", 0)),
+                            "price": _p.get("price"),
+                            "float_pnl": _p.get("float_pnl"),
+                            "margin_used": _p.get("margin_used", 0),
+                            "margin_pct": _p.get("margin_pct", 0),
+                            "dist_to_cap": 0,
+                        }
+                    )
                 _eq = float(_snap.get("equity", st.get("equity", 0)))
                 _avail = float(_snap.get("available", st.get("available", 0)))
                 _margin = float(_snap.get("total_margin", st.get("margin_occupied", 0)))
@@ -1261,6 +1283,7 @@ def snapshot(prices=None):
     INIT_CAPITAL = float(st.get("initial_balance", 100600) or 100600)
     try:
         import trade_journal as _tj
+
         realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
     except Exception:
         realized_pnl = st.get("realized_pnl_at_sync", 0) or 0
@@ -1300,7 +1323,9 @@ def snapshot(prices=None):
     self_check_msg = ""
     self_check_ok = abs(dynamic_equity - (equity_anchor + delta_realized + delta_float)) < 0.5
     if not self_check_ok:
-        self_check_msg = f"[自检失败] equity={dynamic_equity} != anchor={equity_anchor}+dR={delta_realized}+dF={delta_float}"
+        self_check_msg = (
+            f"[自检失败] equity={dynamic_equity} != anchor={equity_anchor}+dR={delta_realized}+dF={delta_float}"
+        )
         print(f"[SELF_CHECK] {self_check_msg}")
     # ★ 2026-09-14: float_at_sync 口径对账（防 mtm/持仓累计浮盈混淆复发）
     # float_at_sync 必须 = 同步时刻持仓累计浮盈 = Σ(存储price - avg) × mult × lots × 方向
@@ -1309,9 +1334,14 @@ def snapshot(prices=None):
     for _sym, _pos in st["positions"].items():
         if _pos.get("lots") and _pos.get("avg") and _pos.get("price") is not None:
             _m = specs.get(_sym, {}).get("multiplier", 1)
-            _expected_fa += (float(_pos["price"]) - float(_pos["avg"])) * _m * float(_pos["lots"]) * _dir_sign(_pos.get("direction"))
+            _expected_fa += (
+                (float(_pos["price"]) - float(_pos["avg"]))
+                * _m
+                * float(_pos["lots"])
+                * _dir_sign(_pos.get("direction"))
+            )
     if float_at_sync and abs(float_at_sync - _expected_fa) > 1.0:
-        _recon_msg = f"[对账漂移] float_at_sync={float_at_sync} ≠ 持仓累计浮盈和={round(_expected_fa,2)}（疑似误存 mtm 盯市浮盈口径）"
+        _recon_msg = f"[对账漂移] float_at_sync={float_at_sync} ≠ 持仓累计浮盈和={round(_expected_fa, 2)}（疑似误存 mtm 盯市浮盈口径）"
         self_check_msg = (self_check_msg + " " if self_check_msg else "") + _recon_msg
         print(f"[RECONCILE] {_recon_msg}")
     # return 里引用的变量（从新公式语义填充）

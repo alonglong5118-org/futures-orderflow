@@ -25,17 +25,16 @@
 """
 
 import argparse
-import json
 import os
 import sys
 
 # 确保能 import 项目根目录
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from strategy_discovery.hypothesis import Hypothesis, load_hypothesis_from_json
-from strategy_discovery.validator import validate_hypothesis, print_validation_result, load_baseline
 from strategy_discovery.candidate_pool import CandidatePool
+from strategy_discovery.hypothesis import load_hypothesis_from_json
 from strategy_discovery.knowledge_miner import KnowledgeMiner
+from strategy_discovery.validator import load_baseline, print_validation_result, validate_hypothesis
 
 
 def cmd_validate(args):
@@ -103,8 +102,7 @@ def cmd_pool(args):
     print("=" * 80)
     print(f"  策略候选池  ({len(items)} 个)")
     print("=" * 80)
-    print(f"  {'状态':<5}{'判定':<6}{'名称':<30}{'expR':>8}{'胜率':>8}"
-          f"{'交易数':>7}{'来源':<15}")
+    print(f"  {'状态':<5}{'判定':<6}{'名称':<30}{'expR':>8}{'胜率':>8}{'交易数':>7}{'来源':<15}")
     print("  " + "─" * 76)
 
     for item in items:
@@ -112,18 +110,18 @@ def cmd_pool(args):
         result = item["validation_result"]
         summary = result.get("summary", {})
 
-        st_icon = {"candidate": "🟡", "accepted": "✅", "rejected": "❌",
-                   "testing": "🔬"}.get(item.get("status", ""), "❓")
+        st_icon = {"candidate": "🟡", "accepted": "✅", "rejected": "❌", "testing": "🔬"}.get(
+            item.get("status", ""), "❓"
+        )
         v_icon = {"pass": "✅", "warn": "⚠️", "fail": "❌"}.get(result.get("verdict", ""), "?")
 
         name = hypo.get("name", "")[:28]
         avg_exp = f"{summary.get('avg_expR', 0):+.3f}" if summary.get("avg_expR") is not None else "  N/A"
-        avg_wr = f"{summary.get('avg_win_rate', 0)*100:.1f}%" if summary.get("avg_win_rate") else " N/A"
+        avg_wr = f"{summary.get('avg_win_rate', 0) * 100:.1f}%" if summary.get("avg_win_rate") else " N/A"
         total_tr = summary.get("total_trades", 0)
         source = hypo.get("source", "")[:13]
 
-        print(f"  {st_icon}   {v_icon}   {name:<30}{avg_exp:>8}{avg_wr:>8}"
-              f"{total_tr:>7}{source:<15}")
+        print(f"  {st_icon}   {v_icon}   {name:<30}{avg_exp:>8}{avg_wr:>8}{total_tr:>7}{source:<15}")
 
     print("=" * 80)
     print()
@@ -211,6 +209,7 @@ def print_draft_list(drafts):
 def cmd_drafts(args):
     """列出草稿假设。"""
     from strategy_discovery.knowledge_miner import KnowledgeMiner
+
     miner = KnowledgeMiner("")
     drafts = miner.list_drafts(args.dir)
     print_draft_list(drafts)
@@ -234,11 +233,14 @@ def main():
 
     # pool
     p = subparsers.add_parser("pool", help="查看候选池")
-    p.add_argument("--verdict", type=str, default="all", choices=["all", "pass", "warn", "fail"],
-                   help="按判定筛选")
-    p.add_argument("--status", type=str, default="all",
-                   choices=["all", "candidate", "accepted", "rejected", "testing"],
-                   help="按状态筛选")
+    p.add_argument("--verdict", type=str, default="all", choices=["all", "pass", "warn", "fail"], help="按判定筛选")
+    p.add_argument(
+        "--status",
+        type=str,
+        default="all",
+        choices=["all", "candidate", "accepted", "rejected", "testing"],
+        help="按状态筛选",
+    )
     p.add_argument("--limit", type=int, default=20, help="显示数量")
     p.add_argument("--stats", action="store_true", help="只看统计")
     p.add_argument("--pool", type=str, default="strategy_discovery/candidate_pool.json", help="候选池路径")
@@ -252,14 +254,12 @@ def main():
     # mine
     m = subparsers.add_parser("mine", help="从知识库扫描生成假设草稿")
     m.add_argument("--vault", type=str, default=None, help="知识库路径")
-    m.add_argument("--output", "-o", type=str, default="strategy_discovery/draft_hypotheses",
-                   help="草稿输出目录")
+    m.add_argument("--output", "-o", type=str, default="strategy_discovery/draft_hypotheses", help="草稿输出目录")
     m.add_argument("--list", action="store_true", help="生成后列出草稿")
 
     # drafts
     d = subparsers.add_parser("drafts", help="列出草稿假设")
-    d.add_argument("--dir", type=str, default="strategy_discovery/draft_hypotheses",
-                   help="草稿目录")
+    d.add_argument("--dir", type=str, default="strategy_discovery/draft_hypotheses", help="草稿目录")
 
     args = parser.parse_args()
 

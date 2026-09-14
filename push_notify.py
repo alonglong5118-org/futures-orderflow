@@ -26,9 +26,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 import urllib.parse
 import urllib.request
-import subprocess
 from datetime import datetime
 
 log = logging.getLogger("push_notify")
@@ -144,19 +144,24 @@ def _send_feishu(cfg, title, text):
     lark_cli = feishu.get("lark_cli", "")
     if not lark_cli:
         import shutil as _sh
-        lark_cli = (
-            _sh.which("lark-cli")
-            or "/Users/a123/.trae-cn/plugins/trae-remote-official/lark/1.0.4/bin/lark-cli"
-        )
+
+        lark_cli = _sh.which("lark-cli") or "/Users/a123/.trae-cn/plugins/trae-remote-official/lark/1.0.4/bin/lark-cli"
     try:
         payload = json.dumps({"text": f"【{title}】{text}"}, ensure_ascii=False)
         cmd = [
-            lark_cli, "im", "+messages-send",
-            "--chat-id", chat_id,
-            "--msg-type", "text",
-            "--content", payload,
-            "--as", "user",
-            "--format", "json",
+            lark_cli,
+            "im",
+            "+messages-send",
+            "--chat-id",
+            chat_id,
+            "--msg-type",
+            "text",
+            "--content",
+            payload,
+            "--as",
+            "user",
+            "--format",
+            "json",
         ]
         env = os.environ.copy()
         env["LARKSUITE_CLI_NO_UPDATE_NOTIFIER"] = "1"

@@ -3,31 +3,31 @@
 import json
 import os
 import sys
-from copy import deepcopy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # 确保能 import 项目根目录的模块
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import four_dim_strategy as fd
+
 from .hypothesis import Hypothesis
 
 # ── 基准品种（和回归测试一致，保持可比性）──
 DEFAULT_SYMBOLS = ["cu", "rb", "JM", "i", "M", "y", "pp", "TA"]
 
 # ── 过拟合判定阈值 ──
-OOS_WARN_DEGRADE = 0.30   # IS→OOS expR 退化 >30% → 警告
-OOS_FAIL_DEGRADE = 0.50   # IS→OOS expR 退化 >50% → 失败（过拟合）
-WIN_DEGRADE_WARN = 0.10   # 胜率下降 >10% → 警告
-WIN_DEGRADE_FAIL = 0.20   # 胜率下降 >20% → 失败
-SIG_AGREE_WARN = 0.85     # 信号一致率 <85% → 警告
-SIG_AGREE_FAIL = 0.70     # 信号一致率 <70% → 失败（逻辑变了）
+OOS_WARN_DEGRADE = 0.30  # IS→OOS expR 退化 >30% → 警告
+OOS_FAIL_DEGRADE = 0.50  # IS→OOS expR 退化 >50% → 失败（过拟合）
+WIN_DEGRADE_WARN = 0.10  # 胜率下降 >10% → 警告
+WIN_DEGRADE_FAIL = 0.20  # 胜率下降 >20% → 失败
+SIG_AGREE_WARN = 0.85  # 信号一致率 <85% → 警告
+SIG_AGREE_FAIL = 0.70  # 信号一致率 <70% → 失败（逻辑变了）
 TRADE_CHANGE_WARN = 0.50  # 交易数变化 >50% → 警告
 TRADE_CHANGE_FAIL = 0.80  # 交易数变化 >80% → 失败
 
 # ── 综合放行标准 ──
-MIN_EXP = 0.02            # 最低 expR（正收益）
-MIN_TRADES = 10           # 最少交易数（样本太小没意义）
+MIN_EXP = 0.02  # 最低 expR（正收益）
+MIN_TRADES = 10  # 最少交易数（样本太小没意义）
 
 
 def load_baseline(path: str = "regression_baseline.json") -> Optional[Dict]:
@@ -38,8 +38,7 @@ def load_baseline(path: str = "regression_baseline.json") -> Optional[Dict]:
         return json.load(f)
 
 
-def run_backtest(symbol: str, cfg: Dict, tail: Optional[int] = None,
-                 df_in=None) -> Dict:
+def run_backtest(symbol: str, cfg: Dict, tail: Optional[int] = None, df_in=None) -> Dict:
     """跑单个品种的 walk-forward 回测，标准化返回。"""
     try:
         r = fd.walk_forward_backtest(symbol, cfg, tail=tail, df_in=df_in)
@@ -185,9 +184,7 @@ def validate_hypothesis(
         if b and b.get("expR") is not None and h.get("expR") is not None:
             sym_result["deltas"]["expR"] = round(h["expR"] - b["expR"], 4)
             sym_result["deltas"]["win_rate"] = round(h["win_rate"] - b["win_rate"], 3)
-            sym_result["deltas"]["trades_pct"] = round(
-                (h["trades"] - b["trades"]) / max(b["trades"], 1), 2
-            )
+            sym_result["deltas"]["trades_pct"] = round((h["trades"] - b["trades"]) / max(b["trades"], 1), 2)
             sym_result["deltas"]["sig_agreement"] = round(
                 calc_signal_agreement(h.get("signatures", []), b.get("signatures", [])), 3
             )
@@ -249,7 +246,9 @@ def validate_hypothesis(
         "total_symbols": len(symbols),
         "valid_symbols": n_valid,
         "avg_expR": round(sum(s["hypothesis"]["expR"] for s in valid_syms) / max(n_valid, 1), 4) if n_valid else None,
-        "avg_win_rate": round(sum(s["hypothesis"]["win_rate"] for s in valid_syms) / max(n_valid, 1), 3) if n_valid else None,
+        "avg_win_rate": round(sum(s["hypothesis"]["win_rate"] for s in valid_syms) / max(n_valid, 1), 3)
+        if n_valid
+        else None,
         "total_trades": sum(s["hypothesis"]["trades"] for s in per_symbol),
         "positive_count": sum(1 for s in valid_syms if s["hypothesis"]["expR"] > 0),
     }
@@ -257,9 +256,7 @@ def validate_hypothesis(
     # OOS 汇总
     oos_valid = [s for s in per_symbol if s["oos"].get("expR") is not None]
     if oos_valid:
-        summary["oos_avg_expR"] = round(
-            sum(s["oos"]["expR"] for s in oos_valid) / len(oos_valid), 4
-        )
+        summary["oos_avg_expR"] = round(sum(s["oos"]["expR"] for s in oos_valid) / len(oos_valid), 4)
         # 平均退化率（只算 IS 有正收益的）
         degrade_rates = [
             s["oos_degrade"]["expR_drop"]
@@ -325,8 +322,10 @@ def print_validation_result(result: Dict, verbose: bool = True):
     print("=" * 90)
 
     if verbose:
-        print(f"  {'品种':<6}{'分组':<6}{'expR':>8}{'ΔexpR':>8}{'胜率':>8}{'Δ胜率':>8}"
-              f"{'交易数':>7}{'Δ笔数':>7}{'信号一致':>8}{'OOS退化':>8}{'状态':>6}")
+        print(
+            f"  {'品种':<6}{'分组':<6}{'expR':>8}{'ΔexpR':>8}{'胜率':>8}{'Δ胜率':>8}"
+            f"{'交易数':>7}{'Δ笔数':>7}{'信号一致':>8}{'OOS退化':>8}{'状态':>6}"
+        )
         print("  " + "─" * 86)
 
         for s in result["per_symbol"]:
@@ -338,12 +337,12 @@ def print_validation_result(result: Dict, verbose: bool = True):
             group = s["group"]
             expR = f"{h['expR']:+.3f}" if h["expR"] is not None else "   N/A"
             d_expR = f"{d.get('expR', 0):+.3f}" if "expR" in d else "   N/A"
-            wr = f"{h['win_rate']*100:.1f}%" if h.get("win_rate") else "  N/A"
-            d_wr = f"{d.get('win_rate', 0)*100:+.1f}%" if "win_rate" in d else "  N/A"
+            wr = f"{h['win_rate'] * 100:.1f}%" if h.get("win_rate") else "  N/A"
+            d_wr = f"{d.get('win_rate', 0) * 100:+.1f}%" if "win_rate" in d else "  N/A"
             tr = str(h["trades"])
-            d_tr = f"{d.get('trades_pct', 0)*100:+.0f}%" if "trades_pct" in d else " N/A"
-            sig = f"{d.get('sig_agreement', 0)*100:.0f}%" if "sig_agreement" in d else " N/A"
-            oos_d = f"{s['oos_degrade'].get('expR_drop', 0)*100:.0f}%" if "expR_drop" in s["oos_degrade"] else " N/A"
+            d_tr = f"{d.get('trades_pct', 0) * 100:+.0f}%" if "trades_pct" in d else " N/A"
+            sig = f"{d.get('sig_agreement', 0) * 100:.0f}%" if "sig_agreement" in d else " N/A"
+            oos_d = f"{s['oos_degrade'].get('expR_drop', 0) * 100:.0f}%" if "expR_drop" in s["oos_degrade"] else " N/A"
 
             # 状态图标
             worst = "ok"
@@ -355,23 +354,25 @@ def print_validation_result(result: Dict, verbose: bool = True):
                     worst = "warn"
             status_icon = {"ok": "✅", "warn": "⚠️", "fail": "❌", "unknown": "❓"}.get(worst, "?")
 
-            print(f"  {sym:<6}{group:<6}{expR:>8}{d_expR:>8}{wr:>8}{d_wr:>8}"
-                  f"{tr:>7}{d_tr:>7}{sig:>8}{oos_d:>8}{status_icon:>6}")
+            print(
+                f"  {sym:<6}{group:<6}{expR:>8}{d_expR:>8}{wr:>8}{d_wr:>8}"
+                f"{tr:>7}{d_tr:>7}{sig:>8}{oos_d:>8}{status_icon:>6}"
+            )
 
     print("  " + "─" * 86)
     avg_exp = summary.get("avg_expR")
     avg_wr = summary.get("avg_win_rate")
-    print(f"  {'加权平均':<12}"
-          f"{f'{avg_exp:+.3f}':>14}"
-          f"{f'{avg_wr*100:.1f}%':>16}"
-          f"{str(summary['total_trades']):>15}"
-          f"{summary.get('positive_count', 0)}/{summary['valid_symbols']}正收益")
+    print(
+        f"  {'加权平均':<12}"
+        f"{f'{avg_exp:+.3f}':>14}"
+        f"{f'{avg_wr * 100:.1f}%':>16}"
+        f"{str(summary['total_trades']):>15}"
+        f"{summary.get('positive_count', 0)}/{summary['valid_symbols']}正收益"
+    )
 
     if "oos_avg_expR" in summary:
         oos_exp_str = f"{summary['oos_avg_expR']:+.3f}"
-        print(f"  {'OOS平均':<12}"
-              f"{oos_exp_str:>14}"
-              f"  平均退化: {summary.get('avg_oos_degrade', 0)*100:.0f}%")
+        print(f"  {'OOS平均':<12}{oos_exp_str:>14}  平均退化: {summary.get('avg_oos_degrade', 0) * 100:.0f}%")
 
     print()
     print(f"  判定: {verdict_icon}  \033[{verdict_color}m{verdict.upper()}\033[0m", end="")
@@ -380,7 +381,7 @@ def print_validation_result(result: Dict, verbose: bool = True):
         for r in result["reasons"][:5]:
             print(f"    · {r}")
         if len(result["reasons"]) > 5:
-            print(f"    · ... 还有 {len(result['reasons'])-5} 个")
+            print(f"    · ... 还有 {len(result['reasons']) - 5} 个")
     else:
         print()
     print("=" * 90)

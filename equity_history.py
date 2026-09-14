@@ -67,6 +67,7 @@ _NOTE = (
 # 内部：读写
 # ============================================================
 
+
 def _intraday_file():
     """复用 trade_journal 的日内文件定位逻辑（含多账户后缀）。"""
     try:
@@ -181,6 +182,7 @@ def _clean_equities(eqs, rel_thresh=0.30):
 # 审计：权益基准来源 + journal 物理不可能盈亏
 # ============================================================
 
+
 def _anchor():
     """读 account_tracker 的「权益锚」三元组。
 
@@ -271,23 +273,26 @@ def journal_sanity(max_move_ratio=0.50):
             continue
         cap = mult * lots * float(entry) * max_move_ratio
         if abs(float(pnl)) > cap:
-            out["suspicious"].append({
-                "time": t.get("time"),
-                "symbol": sym,
-                "lots": lots,
-                "entry_price": entry,
-                "multiplier": mult,
-                "pnl": pnl,
-                "max_plausible_pnl": round(cap, 2),
-                "implied_exit_price": round(float(entry) + float(pnl) / (mult * lots), 2),
-                "excess_x": round(abs(float(pnl)) / cap, 1) if cap else None,
-            })
+            out["suspicious"].append(
+                {
+                    "time": t.get("time"),
+                    "symbol": sym,
+                    "lots": lots,
+                    "entry_price": entry,
+                    "multiplier": mult,
+                    "pnl": pnl,
+                    "max_plausible_pnl": round(cap, 2),
+                    "implied_exit_price": round(float(entry) + float(pnl) / (mult * lots), 2),
+                    "excess_x": round(abs(float(pnl)) / cap, 1) if cap else None,
+                }
+            )
     return out
 
 
 # ============================================================
 # 核心：归档
 # ============================================================
+
 
 def snapshot(date=None, force=False):
     """把某个自然日的日内曲线归档成一条日终快照。
@@ -309,9 +314,7 @@ def snapshot(date=None, force=False):
         raw_points = _load_intraday().get(date, []) or []
         points = _session_points(raw_points)  # 只取 15:00 收盘前
         raw_eqs = [
-            float(p["equity"])
-            for p in points
-            if isinstance(p, dict) and isinstance(p.get("equity"), (int, float))
+            float(p["equity"]) for p in points if isinstance(p, dict) and isinstance(p.get("equity"), (int, float))
         ]
         if not raw_eqs:
             return None
@@ -521,15 +524,27 @@ def audit_alerts(rec):
     for s in rec.get("suspicious", []):
         out.append(
             "  · %s %s %s手 @%s（乘数%s）记 pnl=%s，隐含平仓价 %s（超合理上限 %s 倍）"
-            % (s.get("time"), s.get("symbol"), s.get("lots"), s.get("entry_price"),
-               s.get("multiplier"), s.get("pnl"), s.get("implied_exit_price"), s.get("excess_x"))
+            % (
+                s.get("time"),
+                s.get("symbol"),
+                s.get("lots"),
+                s.get("entry_price"),
+                s.get("multiplier"),
+                s.get("pnl"),
+                s.get("implied_exit_price"),
+                s.get("excess_x"),
+            )
         )
     a = rec.get("anchor") or {}
     if a:
         out.append(
             "  · 权益锚 %s（本金 %s，隐含增长 %s%%），上次同步 %s"
-            % (a.get("anchor_equity"), a.get("initial_balance"),
-               a.get("anchor_implied_growth_pct"), a.get("equity_synced_at"))
+            % (
+                a.get("anchor_equity"),
+                a.get("initial_balance"),
+                a.get("anchor_implied_growth_pct"),
+                a.get("equity_synced_at"),
+            )
         )
     return out
 
@@ -537,6 +552,7 @@ def audit_alerts(rec):
 # ============================================================
 # 查询
 # ============================================================
+
 
 def history(days=60, clean_only=False):
     """返回最近 days 天的归档条目（升序）。days<=0 表示全部。
@@ -574,15 +590,14 @@ def summary(clean_only=False):
         "cum_pnl": round(total, 2),
         "best_day": {"date": best["date"], "pnl": best.get("pnl")},
         "worst_day": {"date": worst["date"], "pnl": worst.get("pnl")},
-        "max_intraday_dd_pct": max(
-            (r.get("intraday_max_dd_pct", 0) or 0) for r in rows
-        ),
+        "max_intraday_dd_pct": max((r.get("intraday_max_dd_pct", 0) or 0) for r in rows),
     }
 
 
 # ============================================================
 # 回填：从 trade_journal 已平仓成交反推逐日权益
 # ============================================================
+
 
 def backfill_from_journal(account_id="default", apply=False, now=None):
     """从 trade_journal 已平仓成交反推逐日权益，回填 equity_history.json 的 days。
@@ -660,21 +675,23 @@ def backfill_from_journal(account_id="default", apply=False, now=None):
                 max_dd = max(max_dd, dd)
         day_close = running
         pnl = day_close - day_open
-        derived.append({
-            "date": d,
-            "archived_at": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "open_equity": round(day_open, 2),
-            "close_equity": round(day_close, 2),
-            "high": round(high, 2),
-            "low": round(low, 2),
-            "pnl": round(pnl, 2),
-            "pnl_pct": round(pnl / day_open * 100, 3) if day_open else 0.0,
-            "range_pct": round((high - low) / day_open * 100, 3) if day_open else 0.0,
-            "intraday_max_dd_pct": round(max_dd * 100, 3),
-            "samples": len(pnls),
-            "source": "journal_backfill",
-            "base_equity": round(base, 2),
-        })
+        derived.append(
+            {
+                "date": d,
+                "archived_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+                "open_equity": round(day_open, 2),
+                "close_equity": round(day_close, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round(pnl / day_open * 100, 3) if day_open else 0.0,
+                "range_pct": round((high - low) / day_open * 100, 3) if day_open else 0.0,
+                "intraday_max_dd_pct": round(max_dd * 100, 3),
+                "samples": len(pnls),
+                "source": "journal_backfill",
+                "base_equity": round(base, 2),
+            }
+        )
         prev_close = day_close
 
     hist = _load_hist()
@@ -683,12 +700,14 @@ def backfill_from_journal(account_id="default", apply=False, now=None):
     for e in derived:
         if e["date"] in hist["days"]:
             real = hist["days"][e["date"]]
-            conflicts.append({
-                "date": e["date"],
-                "real_close": real.get("close_equity"),
-                "derived_close": e["close_equity"],
-                "kept": "real",
-            })
+            conflicts.append(
+                {
+                    "date": e["date"],
+                    "real_close": real.get("close_equity"),
+                    "derived_close": e["close_equity"],
+                    "kept": "real",
+                }
+            )
         else:
             if apply:
                 hist["days"][e["date"]] = e
@@ -714,6 +733,7 @@ def backfill_from_journal(account_id="default", apply=False, now=None):
 # CLI
 # ============================================================
 
+
 def _main():
     ap = argparse.ArgumentParser(description="日终权益归档")
     ap.add_argument("--check", action="store_true", help="只报告待归档日期，不写文件")
@@ -734,14 +754,18 @@ def _main():
         if "error" in res:
             print("❌ %s" % res["error"])
             return 2
-        print("回填（账户=%s）：已平仓 %d 笔，总盈亏 %+.2f，锚 %s，起点权益 %s"
-              % (res["account"], res["closed_trades"], res["total_closed_pnl"],
-                 res["base_equity"], res["start_equity"]))
-        print("派生 %d 条；新增 %d 条；冲突 %d 条（冲突以真实归档为准）"
-              % (len(res["derived"]), len(res["added"]), len(res["conflicts"])))
+        print(
+            "回填（账户=%s）：已平仓 %d 笔，总盈亏 %+.2f，锚 %s，起点权益 %s"
+            % (res["account"], res["closed_trades"], res["total_closed_pnl"], res["base_equity"], res["start_equity"])
+        )
+        print(
+            "派生 %d 条；新增 %d 条；冲突 %d 条（冲突以真实归档为准）"
+            % (len(res["derived"]), len(res["added"]), len(res["conflicts"]))
+        )
         for c in res["conflicts"]:
-            print("  ⚠️ 冲突 %s：真实收盘 %s vs 反推收盘 %s → 保留真实"
-                  % (c["date"], c["real_close"], c["derived_close"]))
+            print(
+                "  ⚠️ 冲突 %s：真实收盘 %s vs 反推收盘 %s → 保留真实" % (c["date"], c["real_close"], c["derived_close"])
+            )
         if not args.apply:
             print("【只读预演】未写任何文件。确认无误后加 --apply 回填。")
         else:
@@ -751,8 +775,10 @@ def _main():
     if args.audit:
         rec = journal_audit(force=True)
         lines = audit_alerts(rec)
-        print("journal 巡检 %s：检查 %d 笔可结算成交，可疑 %d 笔"
-              % (rec["date"], rec["checked"], len(rec.get("suspicious", []))))
+        print(
+            "journal 巡检 %s：检查 %d 笔可结算成交，可疑 %d 笔"
+            % (rec["date"], rec["checked"], len(rec.get("suspicious", [])))
+        )
         if lines:
             print("\n" + "\n".join(lines))
         else:
@@ -772,13 +798,18 @@ def _main():
             e = snapshot(args.date, force=args.force)
             print(json.dumps(e, ensure_ascii=False, indent=2) if e else "无数据可归档：%s" % args.date)
         else:
-            done = [snapshot(d, force=(args.force and d == datetime.now().strftime("%Y-%m-%d")))
-                    for d in pending()] if not args.force else [snapshot(None, force=True)]
+            done = (
+                [snapshot(d, force=(args.force and d == datetime.now().strftime("%Y-%m-%d"))) for d in pending()]
+                if not args.force
+                else [snapshot(None, force=True)]
+            )
             done = [e for e in done if e]
             if done:
                 for e in done:
-                    print("已归档 %s  收盘 %.2f  盈亏 %+.2f (%.3f%%)  样本 %d"
-                          % (e["date"], e["close_equity"], e["pnl"], e["pnl_pct"], e["samples"]))
+                    print(
+                        "已归档 %s  收盘 %.2f  盈亏 %+.2f (%.3f%%)  样本 %d"
+                        % (e["date"], e["close_equity"], e["pnl"], e["pnl_pct"], e["samples"])
+                    )
             else:
                 print("无新增归档（可能均已归档，或当日尚未收盘）")
         return 0
@@ -790,9 +821,17 @@ def _main():
             return 0
         print("%-12s %12s %12s %10s %8s %6s" % ("日期", "收盘权益", "当日盈亏", "盈亏%", "日内DD%", "样本"))
         for r in rows:
-            print("%-12s %12.2f %+12.2f %9.3f%% %7.3f%% %6d" % (
-                r["date"], r["close_equity"], r["pnl"], r["pnl_pct"],
-                r.get("intraday_max_dd_pct", 0) or 0, r["samples"]))
+            print(
+                "%-12s %12.2f %+12.2f %9.3f%% %7.3f%% %6d"
+                % (
+                    r["date"],
+                    r["close_equity"],
+                    r["pnl"],
+                    r["pnl_pct"],
+                    r.get("intraday_max_dd_pct", 0) or 0,
+                    r["samples"],
+                )
+            )
         print("\n汇总: %s" % json.dumps(summary(), ensure_ascii=False))
         return 0
 

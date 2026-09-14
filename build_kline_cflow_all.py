@@ -20,15 +20,16 @@ build_kline_cflow_all.py —— 用 17 年本地 1 分钟 K 线，为 fd.SYMBOLS
   python3 build_kline_cflow_all.py            # 全品种
   python3 build_kline_cflow_all.py FG SA JM J  # 仅指定品种（调试）
 """
+
+import json
+import multiprocessing as mp
 import os
 import re
-import sys
-import json
-import zipfile
-import tempfile
 import shutil
+import sys
+import tempfile
+import zipfile
 from collections import defaultdict
-import multiprocessing as mp
 
 import numpy as np
 import pandas as pd

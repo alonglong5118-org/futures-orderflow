@@ -39,13 +39,14 @@ ctp_account_feed.py — 直连期货公司 CTP 柜台，查询实盘资金/持�
   python ctp_account_feed.py            # 常驻：每 poll_seconds 秒刷新一次快照
   python ctp_account_feed.py once       # 只查一次就退出（配合 cron / 手动触发）
 """
+
 from __future__ import annotations
 
 import json
 import os
 import sys
-import time
 import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH = os.path.join(HERE, "ctp_account_feed.json")
@@ -86,9 +87,12 @@ class FeedTrader(TraderApi):
             "name": cfg.get("name"),
             "broker_id": cfg.get("broker_id"),
             "investor_id": cfg.get("investor_id"),
-            "balance": 0.0, "available": 0.0, "profit": 0.0,
+            "balance": 0.0,
+            "available": 0.0,
+            "profit": 0.0,
             "positions_raw": [],
-            "_account_done": False, "_position_done": False,
+            "_account_done": False,
+            "_position_done": False,
         }
         self._done = threading.Event()
 
@@ -123,10 +127,10 @@ class FeedTrader(TraderApi):
             self._done.set()
             return
         print(f"  [{self.cfg.get('name')}] 登录成功，开始查询账户/持仓…")
-        self.ReqQryTradingAccount(
-            {"BrokerID": self.cfg["broker_id"], "InvestorID": self.cfg["investor_id"]}, 1)
+        self.ReqQryTradingAccount({"BrokerID": self.cfg["broker_id"], "InvestorID": self.cfg["investor_id"]}, 1)
         self.ReqQryInvestorPosition(
-            {"BrokerID": self.cfg["broker_id"], "InvestorID": self.cfg["investor_id"], "InstrumentID": ""}, 2)
+            {"BrokerID": self.cfg["broker_id"], "InvestorID": self.cfg["investor_id"], "InstrumentID": ""}, 2
+        )
 
     def OnRspQryTradingAccount(self, data, error, request_id, is_last):
         if data is not None:
@@ -143,13 +147,15 @@ class FeedTrader(TraderApi):
             if inst:
                 pd = _val(data, "PosiDirection", "")
                 direction = "多" if str(pd) == "2" else ("空" if str(pd) == "3" else "?")
-                self.col["positions_raw"].append({
-                    "instrument": inst,
-                    "direction": direction,
-                    "volume": int(_val(data, "Position", 0)),
-                    "open_price": _val(data, "OpenPrice", 0.0),
-                    "margin": _val(data, "Margin", 0.0),
-                })
+                self.col["positions_raw"].append(
+                    {
+                        "instrument": inst,
+                        "direction": direction,
+                        "volume": int(_val(data, "Position", 0)),
+                        "open_price": _val(data, "OpenPrice", 0.0),
+                        "margin": _val(data, "Margin", 0.0),
+                    }
+                )
         if is_last:
             self.col["_position_done"] = True
             self._check_done()
@@ -186,10 +192,24 @@ def main():
             "output_path": "account_monitor_ctp.json",
             "poll_seconds": 30,
             "accounts": [
-                {"name": "西南期货", "broker_id": "<西南BrokerID>", "investor_id": "<你的资金账号>", "password": "<交易密码>",
-                 "td_front": "tcp://<西南期货实盘交易前置IP:端口>", "app_id": "<期货公司给的AppID>", "auth_code": "<AuthCode>"},
-                {"name": "中信期货", "broker_id": "<中信BrokerID>", "investor_id": "<你的资金账号>", "password": "<交易密码>",
-                 "td_front": "tcp://<中信实盘交易前置IP:端口>", "app_id": "<AppID>", "auth_code": "<AuthCode>"},
+                {
+                    "name": "西南期货",
+                    "broker_id": "<西南BrokerID>",
+                    "investor_id": "<你的资金账号>",
+                    "password": "<交易密码>",
+                    "td_front": "tcp://<西南期货实盘交易前置IP:端口>",
+                    "app_id": "<期货公司给的AppID>",
+                    "auth_code": "<AuthCode>",
+                },
+                {
+                    "name": "中信期货",
+                    "broker_id": "<中信BrokerID>",
+                    "investor_id": "<你的资金账号>",
+                    "password": "<交易密码>",
+                    "td_front": "tcp://<中信实盘交易前置IP:端口>",
+                    "app_id": "<AppID>",
+                    "auth_code": "<AuthCode>",
+                },
             ],
         }
         with open(CFG_PATH + ".example", "w", encoding="utf-8") as f:

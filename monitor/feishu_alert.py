@@ -18,14 +18,13 @@
     需先配置飞书应用：lark-cli config init
 """
 
+import hashlib
 import json
 import os
 import subprocess
-import hashlib
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -105,42 +104,50 @@ class FeishuAlert:
 
         elements = []
         # 概览
-        elements.append({
-            "tag": "markdown",
-            "content": (
-                f"**监控时间**：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"**数据源**：{context.get('source', '实盘')}\n"
-                f"**告警总数**：{len(alerts)} 条（🔴 {len(critical)} / 🟡 {len(warning)}）"
-            ),
-        })
+        elements.append(
+            {
+                "tag": "markdown",
+                "content": (
+                    f"**监控时间**：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"**数据源**：{context.get('source', '实盘')}\n"
+                    f"**告警总数**：{len(alerts)} 条（🔴 {len(critical)} / 🟡 {len(warning)}）"
+                ),
+            }
+        )
 
         # 告警详情（分等级）
         if critical:
             elements.append({"tag": "hr"})
-            elements.append({
-                "tag": "markdown",
-                "content": "**🔴 严重告警**",
-            })
+            elements.append(
+                {
+                    "tag": "markdown",
+                    "content": "**🔴 严重告警**",
+                }
+            )
             for a in critical:
                 elements.append(self._alert_markdown(a, "🔴"))
 
         if warning:
             elements.append({"tag": "hr"})
-            elements.append({
-                "tag": "markdown",
-                "content": "**🟡 警告**",
-            })
+            elements.append(
+                {
+                    "tag": "markdown",
+                    "content": "**🟡 警告**",
+                }
+            )
             for a in warning:
                 elements.append(self._alert_markdown(a, "🟡"))
 
         # 底部操作
         elements.append({"tag": "hr"})
-        elements.append({
-            "tag": "note",
-            "elements": [
-                {"tag": "plain_text", "content": "📊 期货策略监控系统 · 自动告警"},
-            ],
-        })
+        elements.append(
+            {
+                "tag": "note",
+                "elements": [
+                    {"tag": "plain_text", "content": "📊 期货策略监控系统 · 自动告警"},
+                ],
+            }
+        )
 
         success = self._send_card(title, template, elements)
         if success:
@@ -194,18 +201,22 @@ class FeishuAlert:
 
         for c in checks:
             status = "✅" if c.get("pass") else "❌"
-            elements.append({
-                "tag": "markdown",
-                "content": f"{status} **{c.get('name', '')}**：{c.get('value', '')} (阈值: {c.get('threshold', '')})",
-            })
+            elements.append(
+                {
+                    "tag": "markdown",
+                    "content": f"{status} **{c.get('name', '')}**：{c.get('value', '')} (阈值: {c.get('threshold', '')})",
+                }
+            )
 
         elements.append({"tag": "hr"})
-        elements.append({
-            "tag": "note",
-            "elements": [
-                {"tag": "plain_text", "content": "📊 灰度上线监控 · 自动评估"},
-            ],
-        })
+        elements.append(
+            {
+                "tag": "note",
+                "elements": [
+                    {"tag": "plain_text", "content": "📊 灰度上线监控 · 自动评估"},
+                ],
+            }
+        )
 
         success = self._send_card(title, template, elements)
         if success:
@@ -237,7 +248,7 @@ class FeishuAlert:
                     f"**日期**：{datetime.now().strftime('%Y-%m-%d')}\n"
                     f"**总收益**：{total_r:+.2f} R\n"
                     f"**交易笔数**：{n_trades} 笔\n"
-                    f"**胜率**：{win_rate*100:.0f}%"
+                    f"**胜率**：{win_rate * 100:.0f}%"
                 ),
             },
             {"tag": "hr"},
@@ -254,18 +265,22 @@ class FeishuAlert:
                 n = data.get("trades", 0)
                 emoji = "🟢" if expR > 0 else ("🔴" if expR < 0 else "⚪")
                 lines.append(f"{emoji} **{sym}**：{expR:+.2f}R ({n}笔)")
-            elements.append({
-                "tag": "markdown",
-                "content": "\n".join(lines),
-            })
+            elements.append(
+                {
+                    "tag": "markdown",
+                    "content": "\n".join(lines),
+                }
+            )
 
         elements.append({"tag": "hr"})
-        elements.append({
-            "tag": "note",
-            "elements": [
-                {"tag": "plain_text", "content": "📈 期货策略监控系统 · 每日自动推送"},
-            ],
-        })
+        elements.append(
+            {
+                "tag": "note",
+                "elements": [
+                    {"tag": "plain_text", "content": "📈 期货策略监控系统 · 每日自动推送"},
+                ],
+            }
+        )
 
         # 日报不做去重（每天一次）
         return self._send_card(title, template, elements)
@@ -310,12 +325,19 @@ class FeishuAlert:
         # 用 lark-cli 发送
         try:
             cmd = [
-                "lark-cli", "im", "+messages-send",
-                "--chat-id", self.chat_id,
-                "--msg-type", "interactive",
-                "--content", json.dumps(payload, ensure_ascii=False),
-                "--as", self.as_identity,
-                "--format", "json",
+                "lark-cli",
+                "im",
+                "+messages-send",
+                "--chat-id",
+                self.chat_id,
+                "--msg-type",
+                "interactive",
+                "--content",
+                json.dumps(payload, ensure_ascii=False),
+                "--as",
+                self.as_identity,
+                "--format",
+                "json",
             ]
             env = os.environ.copy()
             env["LARKSUITE_CLI_NO_UPDATE_NOTIFIER"] = "1"
@@ -354,19 +376,31 @@ class FeishuAlert:
         try:
             content = json.dumps({"text": text}, ensure_ascii=False)
             cmd = [
-                "lark-cli", "im", "+messages-send",
-                "--chat-id", self.chat_id,
-                "--msg-type", "text",
-                "--content", content,
-                "--as", self.as_identity,
-                "--format", "json",
+                "lark-cli",
+                "im",
+                "+messages-send",
+                "--chat-id",
+                self.chat_id,
+                "--msg-type",
+                "text",
+                "--content",
+                content,
+                "--as",
+                self.as_identity,
+                "--format",
+                "json",
             ]
             env = os.environ.copy()
             env["LARKSUITE_CLI_NO_UPDATE_NOTIFIER"] = "1"
             env["LARKSUITE_CLI_NO_SKILLS_NOTIFIER"] = "1"
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=10, env=env, cwd=SCRIPT_DIR,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env,
+                cwd=SCRIPT_DIR,
             )
 
             if result.returncode == 0:
@@ -384,17 +418,27 @@ class FeishuAlert:
         """根据群名搜索 chat_id"""
         try:
             cmd = [
-                "lark-cli", "im", "+chat-search",
-                "--query", name,
-                "--as", self.as_identity,
-                "--format", "json",
+                "lark-cli",
+                "im",
+                "+chat-search",
+                "--query",
+                name,
+                "--as",
+                self.as_identity,
+                "--format",
+                "json",
             ]
             env = os.environ.copy()
             env["LARKSUITE_CLI_NO_UPDATE_NOTIFIER"] = "1"
             env["LARKSUITE_CLI_NO_SKILLS_NOTIFIER"] = "1"
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=10, env=env, cwd=SCRIPT_DIR,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env,
+                cwd=SCRIPT_DIR,
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout)
@@ -415,8 +459,7 @@ class FeishuAlert:
         """生成告警去重 key"""
         # 按品种+指标排序，确保相同告警集合生成相同 key
         keys = sorted(
-            f"{getattr(a, 'symbol', '')}_{getattr(a, 'metric', '')}_{getattr(a, 'severity', '')}"
-            for a in alerts
+            f"{getattr(a, 'symbol', '')}_{getattr(a, 'metric', '')}_{getattr(a, 'severity', '')}" for a in alerts
         )
         raw = f"{alert_type}_{'|'.join(keys)}"
         return hashlib.md5(raw.encode()).hexdigest()
@@ -446,7 +489,8 @@ class FeishuAlert:
         now = time.time()
         # 清理超过 24 小时的条目
         self._dedup_cache = {
-            k: v for k, v in self._dedup_cache.items()
+            k: v
+            for k, v in self._dedup_cache.items()
             if now - v < 86400 * 7  # 保留 7 天
         }
         os.makedirs(os.path.dirname(self._dedup_file), exist_ok=True)

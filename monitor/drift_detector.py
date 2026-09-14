@@ -25,6 +25,7 @@ import numpy as np
 @dataclass
 class DriftAlert:
     """漂移告警数据结构"""
+
     symbol: str
     metric: str  # "expR" / "trades" / "win_rate"
     severity: str  # "warning" / "critical"
@@ -111,9 +112,7 @@ class DriftDetector:
 
         return alerts
 
-    def _check_expr_drift(
-        self, symbol: str, metrics: Dict[str, Any]
-    ) -> Optional[DriftAlert]:
+    def _check_expr_drift(self, symbol: str, metrics: Dict[str, Any]) -> Optional[DriftAlert]:
         """检测 expR 漂移"""
         base_expR = metrics.get("baseline_expR", 0)
         recent_expR = metrics.get("recent_expR", 0)
@@ -180,19 +179,14 @@ class DriftDetector:
             delta=round(delta, 4),
             delta_pct=round(delta_pct, 1),
             p_value=round(p_value, 4) if p_value is not None else None,
-            message=(
-                f"{symbol} expR {direction} {abs(delta):.3f} "
-                f"({delta_pct:+.1f}%){sig_note}"
-            ),
+            message=(f"{symbol} expR {direction} {abs(delta):.3f} ({delta_pct:+.1f}%){sig_note}"),
             details={
                 "base_trades": base_trades,
                 "recent_trades": recent_trades,
             },
         )
 
-    def _check_trade_drift(
-        self, symbol: str, metrics: Dict[str, Any]
-    ) -> Optional[DriftAlert]:
+    def _check_trade_drift(self, symbol: str, metrics: Dict[str, Any]) -> Optional[DriftAlert]:
         """检测交易频率漂移（信号密度变化）"""
         base_trades = metrics.get("baseline_trades", 0)
         recent_trades = metrics.get("recent_trades", 0)
@@ -229,8 +223,7 @@ class DriftDetector:
             delta=round(recent_rate - base_rate, 3),
             delta_pct=round((ratio - 1) * 100, 1),
             message=(
-                f"{symbol} 交易频率{direction} {(ratio * 100):.0f}% "
-                f"(基线{base_rate:.2f}/日 → 近期{recent_rate:.2f}/日)"
+                f"{symbol} 交易频率{direction} {(ratio * 100):.0f}% (基线{base_rate:.2f}/日 → 近期{recent_rate:.2f}/日)"
             ),
             details={
                 "base_trades": base_trades,
@@ -362,9 +355,7 @@ def _reg_beta(a: float, b: float, x: float) -> float:
         return 1 - _reg_beta(b, a, 1 - x)
 
     # 前因子
-    lbeta_ab = (
-        math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
-    )
+    lbeta_ab = math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
     front = math.exp(math.log(x) * a + math.log(1 - x) * b - lbeta_ab) / a
 
     # 连分数近似（修正 Lentz 方法）

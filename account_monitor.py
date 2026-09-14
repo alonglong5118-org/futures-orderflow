@@ -124,7 +124,7 @@ def _get_tqsdk_account(cfg):
     """TqSdk 只读账户（da龘 同款逻辑）。失败/未装返回 None。"""
     global _last_account, _last_fetch
     try:
-        from tqsdk import TqAccount, TqAuth, TqApi
+        from tqsdk import TqAccount, TqApi, TqAuth
     except Exception:
         print("[账户监控] tqsdk 未安装，跳过自动读取（维持手动记账）")
         return None
@@ -147,10 +147,10 @@ def _get_tqsdk_account(cfg):
             _tq_password = cfg.get("tq_password")
         if not _tq_username or not _tq_password:
             raise Exception("缺少 TqAuth 认证：tq_config.json 里没有 tq_username/tq_password")
-        
+
         api = TqApi(
             auth=TqAuth(_tq_username, _tq_password),
-            account=TqAccount(cfg.get("broker_id", ""), cfg.get("account_id", ""), cfg.get("password", ""))
+            account=TqAccount(cfg.get("broker_id", ""), cfg.get("account_id", ""), cfg.get("password", "")),
         )
         acc = api.get_account()
         pos_obj = api.get_position()
@@ -210,7 +210,7 @@ def _get_tqsdk_account(cfg):
 def auto_sync(account, prices=None, account_id=None):
     """把账户权益/持仓自动同步进 account_tracker + trade_journal。
     修正版：同时处理「新开仓 / 已平仓 / 手数变化」三种情况。
-    
+
     Args:
         account: get_account() 返回的快照 dict
         prices: {sym: price} 实时价 dict
@@ -305,7 +305,9 @@ def auto_sync(account, prices=None, account_id=None):
 
         if actions:
             _account_tag = f"[{account_id or at.get_account()}] "
-            print(f"[账户监控] {_account_tag}对账: 新开{opened_count}/平{closed_count}/调整{adjusted_count} ({len(actions)}项)")
+            print(
+                f"[账户监控] {_account_tag}对账: 新开{opened_count}/平{closed_count}/调整{adjusted_count} ({len(actions)}项)"
+            )
             for a in actions:
                 print(f"    {a[4]}")
 
@@ -321,6 +323,7 @@ def auto_sync(account, prices=None, account_id=None):
 
     except Exception as e:
         import traceback
+
         print(f"[账户监控] 自动同步异常: {repr(e)[:160]}")
         traceback.print_exc()
 
@@ -391,13 +394,15 @@ def _get_snapshot_account(cfg):
         if v["lots"] <= 0:
             continue
         avg = (v["cost"] / v["lots"]) if v["lots"] else 0
-        positions.append({
-            "symbol": sym,
-            "pos": v["lots"],
-            "open_price": round(avg, 2),
-            "direction": direction,
-            "margin": round(v["margin"], 2),
-        })
+        positions.append(
+            {
+                "symbol": sym,
+                "pos": v["lots"],
+                "open_price": round(avg, 2),
+                "direction": direction,
+                "margin": round(v["margin"], 2),
+            }
+        )
     snap_out = {
         "balance": round(total_balance, 2),
         "available": round(total_avail, 2),

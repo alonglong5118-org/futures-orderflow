@@ -95,7 +95,9 @@ def main():
         fds._atr_array = orig
 
     # ── 品种级报告 ──
-    print(f"{'品种':<6}{'基线折expR':<34}{'均值':>8}  {'测试折expR':<34}{'均值':>8}  {'改善':>8} {'折胜率':>7} {'笔数':>9} {'达标':>4}")
+    print(
+        f"{'品种':<6}{'基线折expR':<34}{'均值':>8}  {'测试折expR':<34}{'均值':>8}  {'改善':>8} {'折胜率':>7} {'笔数':>9} {'达标':>4}"
+    )
     print("-" * 160)
     rows = []
     for sym in PANEL:
@@ -109,16 +111,28 @@ def main():
         n = len(be)
         diff = tm - bm
         ok = diff > 0 and wins / n >= 0.6
-        rows.append({
-            "symbol": sym, "base_mean": bm, "test_mean": tm, "diff": diff,
-            "wins": wins, "n": n, "ok": ok,
-            "base_port": bp, "test_port": tp,
-            "base_trades": bt, "test_trades": tt,
-            "base_wr": bw, "test_wr": tw,
-        })
+        rows.append(
+            {
+                "symbol": sym,
+                "base_mean": bm,
+                "test_mean": tm,
+                "diff": diff,
+                "wins": wins,
+                "n": n,
+                "ok": ok,
+                "base_port": bp,
+                "test_port": tp,
+                "base_trades": bt,
+                "test_trades": tt,
+                "base_wr": bw,
+                "test_wr": tw,
+            }
+        )
         bs = " / ".join(f"{e:+.3f}" for e in be)
         ts = " / ".join(f"{e:+.3f}" for e in te)
-        print(f"{sym:<6}{bs:<34}{bm:>+8.4f}  {ts:<34}{tm:>+8.4f}  {diff:>+8.4f} {wins}/{n}{'':<2} {bt:>4}→{tt:<4} {'✓' if ok else '✗':>4}")
+        print(
+            f"{sym:<6}{bs:<34}{bm:>+8.4f}  {ts:<34}{tm:>+8.4f}  {diff:>+8.4f} {wins}/{n}{'':<2} {bt:>4}→{tt:<4} {'✓' if ok else '✗':>4}"
+        )
 
     # ── 组合级报告 ──
     print()
@@ -132,11 +146,15 @@ def main():
     print(f"组合级（交易加权全样本，{len(rows)} 品种）：")
     print(f"  ATR 基线： expR {base_port_all:+.4f} · {base_trades_all} 笔 · 胜率 {base_wr_all:.1%}")
     print(f"  DR/√N：    expR {test_port_all:+.4f} · {test_trades_all} 笔 · 胜率 {test_wr_all:.1%}")
-    print(f"  ΔexpR {test_port_all - base_port_all:+.4f} · Δ笔数 {test_trades_all - base_trades_all:+d} · Δ胜率 {test_wr_all - base_wr_all:+.1%}")
+    print(
+        f"  ΔexpR {test_port_all - base_port_all:+.4f} · Δ笔数 {test_trades_all - base_trades_all:+d} · Δ胜率 {test_wr_all - base_wr_all:+.1%}"
+    )
     print()
     passed = [r for r in rows if r["ok"]]
     improved = [r for r in rows if r["diff"] > 0]
-    print(f"品种级达标（改善>0 且折胜率>=60%）：{len(passed)}/{len(rows)} → {', '.join(r['symbol'] for r in passed) or '无'}")
+    print(
+        f"品种级达标（改善>0 且折胜率>=60%）：{len(passed)}/{len(rows)} → {', '.join(r['symbol'] for r in passed) or '无'}"
+    )
     print(f"品种级均值改善为正：{len(improved)}/{len(rows)} → {', '.join(r['symbol'] for r in improved) or '无'}")
     print()
     print(f"采纳线（组合级 expR 无恶化）：{'✓ 通过' if test_port_all >= base_port_all else '✗ 恶化'}")

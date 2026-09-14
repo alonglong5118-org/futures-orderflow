@@ -43,7 +43,6 @@ from four_dim_strategy import (  # noqa: E402
     walk_forward_backtest,
 )
 
-
 # ============================================================================
 # 常量
 # ============================================================================
@@ -60,13 +59,14 @@ DEFAULT_REOPT_FREQ_BARS = 250
 DEFAULT_MIN_TREND_TRADES = 5
 
 # 通过标准
-PASS_MIN_DELTA = 0.0       # ΔexpR > 0
-PASS_MIN_PERIOD_WIN = 0.4   # 周期胜率 ≥ 40%（放宽一点，样本少）
+PASS_MIN_DELTA = 0.0  # ΔexpR > 0
+PASS_MIN_PERIOD_WIN = 0.4  # 周期胜率 ≥ 40%（放宽一点，样本少）
 
 
 # ============================================================================
 # 核心函数
 # ============================================================================
+
 
 def make_trend_config(
     symbol: str,
@@ -76,9 +76,7 @@ def make_trend_config(
     """创建仅修改趋势市 T/stop 系数的配置"""
     cfg = copy.deepcopy(DEFAULT_CONFIG)
     cfg.setdefault("per_symbol_regime_coef", {})
-    cfg["per_symbol_regime_coef"][symbol] = {
-        "趋势": {"T": trend_T, "stop": trend_stop}
-    }
+    cfg["per_symbol_regime_coef"][symbol] = {"趋势": {"T": trend_T, "stop": trend_stop}}
     return cfg
 
 
@@ -87,8 +85,7 @@ def _run_bt(symbol: str, cfg: Dict[str, Any], df_slice=None) -> Dict[str, Any]:
     try:
         return walk_forward_backtest(symbol, cfg, window=300, min_bars=60, df_in=df_slice)
     except Exception as e:
-        return {"symbol": symbol, "trades": 0, "trades_detail": [],
-                "expR": 0, "note": f"异常:{repr(e)[:60]}"}
+        return {"symbol": symbol, "trades": 0, "trades_detail": [], "expR": 0, "note": f"异常:{repr(e)[:60]}"}
 
 
 def _trend_expR(trades: List[Dict[str, Any]]) -> Tuple[float, int]:
@@ -152,11 +149,17 @@ def trend_nested_rolling(
     """
     df = load_daily(symbol)
     if df is None or len(df) < init_train_bars + reopt_freq_bars:
-        return {"symbol": symbol, "n_periods": 0, "passes": False,
-                "baseline": {"expR": 0, "trades": 0, "win_rate": 0},
-                "optimized": {"expR": 0, "trades": 0, "win_rate": 0},
-                "delta_expR": 0, "period_win_rate": 0,
-                "optimal_params": None, "note": "数据不足"}
+        return {
+            "symbol": symbol,
+            "n_periods": 0,
+            "passes": False,
+            "baseline": {"expR": 0, "trades": 0, "win_rate": 0},
+            "optimized": {"expR": 0, "trades": 0, "win_rate": 0},
+            "delta_expR": 0,
+            "period_win_rate": 0,
+            "optimal_params": None,
+            "note": "数据不足",
+        }
 
     n_bars = len(df)
     baseline_cfg = DEFAULT_CONFIG
@@ -208,27 +211,35 @@ def trend_nested_rolling(
                 "opt_trades": len(o_rs),
             }
 
-        periods.append({
-            "period_idx": len(periods),
-            "oos_start": period_start,
-            "oos_end": period_end,
-            "base_expR": round(base_expR, 4),
-            "opt_expR": round(opt_expR, 4),
-            "delta_expR": round(opt_expR - base_expR, 4),
-            "base_trades": len(base_rs),
-            "opt_trades": len(opt_rs),
-            "regime_oos": regime_oos,
-        })
+        periods.append(
+            {
+                "period_idx": len(periods),
+                "oos_start": period_start,
+                "oos_end": period_end,
+                "base_expR": round(base_expR, 4),
+                "opt_expR": round(opt_expR, 4),
+                "delta_expR": round(opt_expR - base_expR, 4),
+                "base_trades": len(base_rs),
+                "opt_trades": len(opt_rs),
+                "regime_oos": regime_oos,
+            }
+        )
 
         period_start = period_end
 
     if not oos_base_rs:
-        return {"symbol": symbol, "n_periods": 0, "passes": False,
-                "baseline": {"expR": 0, "trades": 0, "win_rate": 0},
-                "optimized": {"expR": 0, "trades": 0, "win_rate": 0},
-                "delta_expR": 0, "period_win_rate": 0,
-                "optimal_params": None, "param_history": {"趋势": param_hist},
-                "note": "无OOS交易"}
+        return {
+            "symbol": symbol,
+            "n_periods": 0,
+            "passes": False,
+            "baseline": {"expR": 0, "trades": 0, "win_rate": 0},
+            "optimized": {"expR": 0, "trades": 0, "win_rate": 0},
+            "delta_expR": 0,
+            "period_win_rate": 0,
+            "optimal_params": None,
+            "param_history": {"趋势": param_hist},
+            "note": "无OOS交易",
+        }
 
     base_expR_total = float(np.mean(oos_base_rs))
     opt_expR_total = float(np.mean(oos_opt_rs))
@@ -294,6 +305,7 @@ def trend_nested_rolling(
 # 批量优化
 # ============================================================================
 
+
 def optimize_all(
     symbols: List[str],
     init_train_bars: int = DEFAULT_INIT_TRAIN_BARS,
@@ -315,21 +327,27 @@ def optimize_all(
             results[sym] = res
             if res["n_periods"] >= 2:
                 status = "✅ 通过" if res["passes"] else "❌ 未过"
-                print(f"{status} | "
-                      f"基线{res['baseline']['expR']:+.3f} → "
-                      f"优化{res['optimized']['expR']:+.3f} | "
-                      f"Δ={res['delta_expR']:+.3f} | "
-                      f"胜率{res['period_win_rate']*100:.0f}%")
+                print(
+                    f"{status} | "
+                    f"基线{res['baseline']['expR']:+.3f} → "
+                    f"优化{res['optimized']['expR']:+.3f} | "
+                    f"Δ={res['delta_expR']:+.3f} | "
+                    f"胜率{res['period_win_rate'] * 100:.0f}%"
+                )
             else:
                 print(f"周期不足({res['n_periods']})")
         except Exception as e:
             print(f"异常: {e}")
             results[sym] = {
-                "symbol": sym, "n_periods": 0, "passes": False,
+                "symbol": sym,
+                "n_periods": 0,
+                "passes": False,
                 "baseline": {"expR": 0, "trades": 0, "win_rate": 0},
                 "optimized": {"expR": 0, "trades": 0, "win_rate": 0},
-                "delta_expR": 0, "period_win_rate": 0,
-                "optimal_params": None, "note": str(e),
+                "delta_expR": 0,
+                "period_win_rate": 0,
+                "optimal_params": None,
+                "note": str(e),
             }
 
     # 汇总
@@ -397,6 +415,7 @@ def optimize_all(
 # ============================================================================
 # 保存参数版本
 # ============================================================================
+
 
 def save_phase8_version(data: Dict[str, Any], version_desc: str = "Phase 8 趋势市优化") -> str:
     """
@@ -474,6 +493,7 @@ def save_phase8_version(data: Dict[str, Any], version_desc: str = "Phase 8 趋�
 # HTML 报告
 # ============================================================================
 
+
 def generate_report(data: Dict[str, Any], output_path: str) -> str:
     """生成 Phase 8 最终报告"""
     summary = data["summary"]
@@ -493,15 +513,20 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
         name = res.get("name", "")
 
         if delta > 0.1:
-            dc = "pos"; di = "▲▲"
+            dc = "pos"
+            di = "▲▲"
         elif delta > 0.02:
-            dc = "pos"; di = "▲"
+            dc = "pos"
+            di = "▲"
         elif delta < -0.1:
-            dc = "neg"; di = "▼▼"
+            dc = "neg"
+            di = "▼▼"
         elif delta < -0.02:
-            dc = "neg"; di = "▼"
+            dc = "neg"
+            di = "▼"
         else:
-            dc = "neutral"; di = "—"
+            dc = "neutral"
+            di = "—"
 
         pass_icon = "✅" if passes else "❌"
         row_class = 'style="background:#f0fdf4"' if passes else ""
@@ -521,7 +546,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
           <td class="num">{bl:+.3f}</td>
           <td class="num">{opt:+.3f}</td>
           <td class="num {dc}">{di} {delta:+.3f}</td>
-          <td class="num">{period_wr*100:.0f}%</td>
+          <td class="num">{period_wr * 100:.0f}%</td>
           <td>{param_str}</td>
           <td>{pass_icon}</td>
         </tr>
@@ -625,9 +650,9 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
     <div class="subtitle">仅趋势市独立优化 T/stop 系数 — 嵌套滚动 OOS 验证结果</div>
     <div class="meta">
       <span>📅 {timestamp}</span>
-      <span>📊 品种：{summary['n_symbols']} 个</span>
-      <span>✅ 通过：{summary['n_passed']} 个 ({summary['pass_rate']:.0f}%)</span>
-      <span>🔬 {summary['init_train_bars']}训练 + {summary['reopt_freq_bars']}OOS</span>
+      <span>📊 品种：{summary["n_symbols"]} 个</span>
+      <span>✅ 通过：{summary["n_passed"]} 个 ({summary["pass_rate"]:.0f}%)</span>
+      <span>🔬 {summary["init_train_bars"]}训练 + {summary["reopt_freq_bars"]}OOS</span>
     </div>
   </div>
 </div>
@@ -636,32 +661,32 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
 
   <div class="callout success">
     <strong>Phase 8 趋势市优化完成</strong><br>
-    {summary['n_valid']} 个有效品种中，{summary['n_passed']} 个通过 OOS 验证（{summary['pass_rate']:.0f}%）。
-    通过品种的平均 ΔexpR = <strong>+{summary['passed_avg_delta_expR']:.3f}</strong>。
-    趋势市单独贡献平均 <strong>+{summary['avg_trend_delta_expR']:.3f}</strong> expR。
+    {summary["n_valid"]} 个有效品种中，{summary["n_passed"]} 个通过 OOS 验证（{summary["pass_rate"]:.0f}%）。
+    通过品种的平均 ΔexpR = <strong>+{summary["passed_avg_delta_expR"]:.3f}</strong>。
+    趋势市单独贡献平均 <strong>+{summary["avg_trend_delta_expR"]:.3f}</strong> expR。
   </div>
 
   <!-- KPI -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="label">基线 OOS expR</div>
-      <div class="value">{summary['avg_baseline_expR']:+.3f}</div>
-      <div class="sub">{summary['n_valid']} 个有效品种</div>
+      <div class="value">{summary["avg_baseline_expR"]:+.3f}</div>
+      <div class="sub">{summary["n_valid"]} 个有效品种</div>
     </div>
     <div class="kpi-card">
       <div class="label">优化后 OOS expR</div>
-      <div class="value pos">{summary['avg_optimized_expR']:+.3f}</div>
+      <div class="value pos">{summary["avg_optimized_expR"]:+.3f}</div>
       <div class="sub">趋势市差异化</div>
     </div>
     <div class="kpi-card">
       <div class="label">平均 ΔexpR</div>
-      <div class="value {'pos' if summary['avg_delta_expR']>0 else 'neg'}">{summary['avg_delta_expR']:+.3f}</div>
-      <div class="sub">中位数 {summary['median_delta_expR']:+.3f}</div>
+      <div class="value {"pos" if summary["avg_delta_expR"] > 0 else "neg"}">{summary["avg_delta_expR"]:+.3f}</div>
+      <div class="sub">中位数 {summary["median_delta_expR"]:+.3f}</div>
     </div>
     <div class="kpi-card">
       <div class="label">通过品种</div>
-      <div class="value pos">{summary['n_passed']}</div>
-      <div class="sub">{summary['pass_rate']:.0f}% 通过率</div>
+      <div class="value pos">{summary["n_passed"]}</div>
+      <div class="sub">{summary["pass_rate"]:.0f}% 通过率</div>
     </div>
   </div>
 
@@ -696,7 +721,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
   <section>
     <h2>关键发现</h2>
     <ul class="plain">
-      <li><strong>趋势市优化有效</strong>：趋势市平均 ΔexpR = +{summary['avg_trend_delta_expR']:.3f}，方向一致</li>
+      <li><strong>趋势市优化有效</strong>：趋势市平均 ΔexpR = +{summary["avg_trend_delta_expR"]:.3f}，方向一致</li>
       <li><strong>品种分化明显</strong>：部分品种提升显著（pp/ss/SR等），部分品种不优化更好（zn/fu等）</li>
       <li><strong>波动市跳过是正确决策</strong>：PoC 显示波动市优化 0/4 正收益，全部为负</li>
       <li><strong>不要加先验约束</strong>：让数据在滚动验证中说话，通不过就沿用基线，比人为约束更可靠</li>
@@ -719,7 +744,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
         <tr>
           <td>预期 ΔexpR</td>
           <td class="num">+0.05 ~ +0.08</td>
-          <td class="num">+{summary['avg_delta_expR']:.3f} (平均) / +{summary['passed_avg_delta_expR']:.3f} (通过品种)</td>
+          <td class="num">+{summary["avg_delta_expR"]:.3f} (平均) / +{summary["passed_avg_delta_expR"]:.3f} (通过品种)</td>
           <td><span class="pos">✅ 符合预期</span></td>
         </tr>
         <tr>
@@ -757,10 +782,10 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
   <div class="footnote">
     <strong>验证方法：</strong>
     嵌套滚动验证（Nested Walk-Forward Validation）。
-    训练期 {summary['init_train_bars']} 根，每 {summary['reopt_freq_bars']} 根重优化一次。
-    仅对趋势市 Regime 独立搜索 T 乘数（{len(summary['search_range']['T_mults'])} 档）× stop 乘数（{len(summary['search_range']['stop_mults'])} 档）。
+    训练期 {summary["init_train_bars"]} 根，每 {summary["reopt_freq_bars"]} 根重优化一次。
+    仅对趋势市 Regime 独立搜索 T 乘数（{len(summary["search_range"]["T_mults"])} 档）× stop 乘数（{len(summary["search_range"]["stop_mults"])} 档）。
     波动市和震荡市不做优化，沿用全局默认。
-    通过标准：OOS ΔexpR &gt; {summary['pass_criteria']['min_delta']} 且 周期胜率 ≥ {summary['pass_criteria']['min_period_win']*100:.0f}%。
+    通过标准：OOS ΔexpR &gt; {summary["pass_criteria"]["min_delta"]} 且 周期胜率 ≥ {summary["pass_criteria"]["min_period_win"] * 100:.0f}%。
     <br><br>
     <strong>重要提示：</strong>
     回测结果基于日线级别，未考虑交易摩擦和滑点。实盘收益可能低于回测结果。
@@ -781,6 +806,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
 # 命令行入口
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Phase 8：趋势市参数差异化优化",
@@ -793,24 +819,24 @@ def main():
   python -m monitor.trend_regime_opt --all --output phase8_report.html
         """,
     )
-    parser.add_argument("--symbols", type=str, default=None,
-                        help="优化品种列表，逗号分隔")
-    parser.add_argument("--all", action="store_true",
-                        help="优化所有非禁用品种")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="试运行模式（不保存版本）")
-    parser.add_argument("--save-version", action="store_true",
-                        help="保存参数版本（通过验证的品种）")
-    parser.add_argument("--output", type=str, default=None,
-                        help="HTML 报告输出路径")
-    parser.add_argument("--json", type=str, default=None,
-                        help="JSON 结果输出路径")
-    parser.add_argument("--train-bars", type=int, default=DEFAULT_INIT_TRAIN_BARS,
-                        help=f"训练期长度（默认 {DEFAULT_INIT_TRAIN_BARS}）")
-    parser.add_argument("--oos-bars", type=int, default=DEFAULT_REOPT_FREQ_BARS,
-                        help=f"OOS 周期长度（默认 {DEFAULT_REOPT_FREQ_BARS}）")
-    parser.add_argument("--min-trades", type=int, default=DEFAULT_MIN_TREND_TRADES,
-                        help=f"趋势市最少交易数（默认 {DEFAULT_MIN_TREND_TRADES}）")
+    parser.add_argument("--symbols", type=str, default=None, help="优化品种列表，逗号分隔")
+    parser.add_argument("--all", action="store_true", help="优化所有非禁用品种")
+    parser.add_argument("--dry-run", action="store_true", help="试运行模式（不保存版本）")
+    parser.add_argument("--save-version", action="store_true", help="保存参数版本（通过验证的品种）")
+    parser.add_argument("--output", type=str, default=None, help="HTML 报告输出路径")
+    parser.add_argument("--json", type=str, default=None, help="JSON 结果输出路径")
+    parser.add_argument(
+        "--train-bars", type=int, default=DEFAULT_INIT_TRAIN_BARS, help=f"训练期长度（默认 {DEFAULT_INIT_TRAIN_BARS}）"
+    )
+    parser.add_argument(
+        "--oos-bars", type=int, default=DEFAULT_REOPT_FREQ_BARS, help=f"OOS 周期长度（默认 {DEFAULT_REOPT_FREQ_BARS}）"
+    )
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=DEFAULT_MIN_TREND_TRADES,
+        help=f"趋势市最少交易数（默认 {DEFAULT_MIN_TREND_TRADES}）",
+    )
 
     args = parser.parse_args()
 

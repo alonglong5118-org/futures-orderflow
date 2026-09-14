@@ -73,7 +73,9 @@ def eval_oos(symbol, cfg=DEFAULT_CONFIG, frac=OOS_FRACTION):
         return {"symbol": symbol, "ok": False, "note": f"回测异常:{repr(e)[:60]}"}
     if int(r.get("trades", 0)) == 0:
         return {
-            "symbol": symbol, "ok": False, "trades": 0,
+            "symbol": symbol,
+            "ok": False,
+            "trades": 0,
             "note": "样本外 0 成交（早退）",
         }
     return {
@@ -131,9 +133,7 @@ def main(symbols=None, tail=250, with_baseline=True):
     # A 口径有效性自检：tail 窗口过短时 min_trades 几乎不可达，recovery_check 会
     # 系统性返回「样本不足」，导致自适应恢复机制形同虚设（2026-09-08 实测：
     # 11 个品种中 10 个因 n<10 无法判定）。此时判定必须以 B 口径为准。
-    a_blocked = sum(
-        1 for r in results if "样本不足" in str(r["A_recovery"].get("note", ""))
-    )
+    a_blocked = sum(1 for r in results if "样本不足" in str(r["A_recovery"].get("note", "")))
     if results and a_blocked / len(results) >= 0.5:
         print(
             f"\n[警告] A 口径(recovery_check tail={tail}) 有 {a_blocked}/{len(results)} "
@@ -173,9 +173,9 @@ def main(symbols=None, tail=250, with_baseline=True):
 
         verdicts[s] = verdict
         se = f"{a_e:+.4f}" if isinstance(a_e, (int, float)) else "   n/a"
-        sw = f"{a_w*100:6.1f}%" if isinstance(a_w, (int, float)) else "   n/a"
+        sw = f"{a_w * 100:6.1f}%" if isinstance(a_w, (int, float)) else "   n/a"
         be = f"{b_e:+.4f}" if isinstance(b_e, (int, float)) else "   n/a"
-        bw = f"{b_w*100:6.1f}%" if isinstance(b_w, (int, float)) else "   n/a"
+        bw = f"{b_w * 100:6.1f}%" if isinstance(b_w, (int, float)) else "   n/a"
         vs = f"{b_e - med:+.4f}" if (isinstance(b_e, (int, float)) and med is not None) else "     n/a"
         print(
             f"{s:<6}{se:>9}{sw:>8}{a_n:>6}{a_txt:>10}   "
@@ -197,7 +197,7 @@ def main(symbols=None, tail=250, with_baseline=True):
                 tot_r += r["B_oos"]["expR"] * r["B_oos"]["trades"]
                 tot_n += r["B_oos"]["trades"]
         if tot_n:
-            print(f"\n建议解禁组合并样本外 expR = {tot_r/tot_n:+.4f}R (n={tot_n})")
+            print(f"\n建议解禁组合并样本外 expR = {tot_r / tot_n:+.4f}R (n={tot_n})")
 
     out = {
         "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),

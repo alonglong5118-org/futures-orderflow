@@ -22,6 +22,7 @@
 
 防御性：任何未知格式一律返回 0（不参与计算），绝不抛异常。
 """
+
 from __future__ import annotations
 
 __all__ = ["dir_sign", "dir_norm", "LONG_KEYS", "SHORT_KEYS"]

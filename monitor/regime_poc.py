@@ -25,7 +25,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -38,7 +38,6 @@ from four_dim_strategy import (  # noqa: E402
     load_daily,
     walk_forward_backtest,
 )
-
 
 # ============================================================================
 # 常量
@@ -61,6 +60,7 @@ DEFAULT_REOPT_FREQ_BARS = 250
 # ============================================================================
 # 工具函数
 # ============================================================================
+
 
 def _make_regime_config(
     symbol: str,
@@ -91,7 +91,8 @@ def _run_backtest(symbol: str, cfg: Dict[str, Any], df_slice=None) -> Dict[str, 
     """运行单次回测，返回结果"""
     try:
         result = walk_forward_backtest(
-            symbol, cfg,
+            symbol,
+            cfg,
             window=300,
             min_bars=60,
             df_in=df_slice,
@@ -112,6 +113,7 @@ def _regime_expR(trades: List[Dict[str, Any]], regime: str) -> Tuple[float, int]
 # ============================================================================
 # 逐 Regime 网格搜索（在一个训练窗口内）
 # ============================================================================
+
 
 def _optimize_per_regime(
     symbol: str,
@@ -136,9 +138,7 @@ def _optimize_per_regime(
 
         for t_mult in t_mults:
             for stop_mult in stop_mults:
-                cfg = _make_regime_config(symbol, {
-                    regime: {"T": t_mult, "stop": stop_mult}
-                })
+                cfg = _make_regime_config(symbol, {regime: {"T": t_mult, "stop": stop_mult}})
                 bt = _run_backtest(symbol, cfg, df_slice=train_df)
                 trades = bt.get("trades_detail", [])
 
@@ -164,6 +164,7 @@ def _optimize_per_regime(
 # ============================================================================
 # 嵌套滚动验证
 # ============================================================================
+
 
 def regime_nested_rolling(
     symbol: str,
@@ -217,8 +218,8 @@ def regime_nested_rolling(
 
     # 滚动周期
     periods = []
-    oos_base_rs = []      # 基线每笔 R（用于总体 expR 计算）
-    oos_opt_rs = []       # 逐 Regime 优化每笔 R
+    oos_base_rs = []  # 基线每笔 R（用于总体 expR 计算）
+    oos_opt_rs = []  # 逐 Regime 优化每笔 R
     param_history = {r: [] for r in MAIN_REGIMES}  # 每周期的最优系数
 
     period_start = init_train_bars
@@ -229,17 +230,17 @@ def regime_nested_rolling(
         train_df = df.iloc[:period_start]
 
         # 逐 Regime 优化
-        opt_coefs = _optimize_per_regime(
-            symbol, train_df, t_mults, stop_mults, min_trades_per_regime
-        )
+        opt_coefs = _optimize_per_regime(symbol, train_df, t_mults, stop_mults, min_trades_per_regime)
 
         # 记录参数历史
         for regime in MAIN_REGIMES:
             if regime in opt_coefs:
-                param_history[regime].append({
-                    "T": opt_coefs[regime]["T"],
-                    "stop": opt_coefs[regime]["stop"],
-                })
+                param_history[regime].append(
+                    {
+                        "T": opt_coefs[regime]["T"],
+                        "stop": opt_coefs[regime]["stop"],
+                    }
+                )
             else:
                 param_history[regime].append(None)
 
@@ -251,10 +252,7 @@ def regime_nested_rolling(
         base_trades = base_bt.get("trades_detail", [])
 
         # 逐 Regime 优化 OOS
-        opt_cfg = _make_regime_config(symbol, {
-            r: {"T": c["T"], "stop": c["stop"]}
-            for r, c in opt_coefs.items()
-        })
+        opt_cfg = _make_regime_config(symbol, {r: {"T": c["T"], "stop": c["stop"]} for r, c in opt_coefs.items()})
         opt_bt = _run_backtest(symbol, opt_cfg, df_slice=oos_df)
         opt_trades = opt_bt.get("trades_detail", [])
 
@@ -280,19 +278,21 @@ def regime_nested_rolling(
                 "delta": round(float(np.mean(o_rs) - np.mean(b_rs)), 4) if b_rs and o_rs else 0,
             }
 
-        periods.append({
-            "period_idx": len(periods),
-            "train_end": period_start,
-            "oos_start": period_start,
-            "oos_end": period_end,
-            "opt_coefs": opt_coefs,
-            "base_expR": round(base_expR, 4),
-            "opt_expR": round(opt_expR, 4),
-            "delta_expR": round(opt_expR - base_expR, 4),
-            "base_trades": len(base_rs),
-            "opt_trades": len(opt_rs),
-            "regime_oos": regime_oos,
-        })
+        periods.append(
+            {
+                "period_idx": len(periods),
+                "train_end": period_start,
+                "oos_start": period_start,
+                "oos_end": period_end,
+                "opt_coefs": opt_coefs,
+                "base_expR": round(base_expR, 4),
+                "opt_expR": round(opt_expR, 4),
+                "delta_expR": round(opt_expR - base_expR, 4),
+                "base_trades": len(base_rs),
+                "opt_trades": len(opt_rs),
+                "regime_oos": regime_oos,
+            }
+        )
 
         period_start = period_end
 
@@ -365,6 +365,7 @@ def regime_nested_rolling(
 # 批量运行
 # ============================================================================
 
+
 def run_poc(
     symbols: List[str],
     init_train_bars: int = DEFAULT_INIT_TRAIN_BARS,
@@ -385,18 +386,23 @@ def run_poc(
             )
             results[sym] = res
             if res["n_periods"] > 0:
-                print(f"OOS: {res['baseline']['expR']:+.3f} → {res['regime_opt']['expR']:+.3f} "
-                      f"(Δ={res['delta_expR']:+.3f}, "
-                      f"胜率{res['period_win_rate']*100:.0f}%)")
+                print(
+                    f"OOS: {res['baseline']['expR']:+.3f} → {res['regime_opt']['expR']:+.3f} "
+                    f"(Δ={res['delta_expR']:+.3f}, "
+                    f"胜率{res['period_win_rate'] * 100:.0f}%)"
+                )
             else:
                 print(f"周期数不足: {res.get('note', '')}")
         except Exception as e:
             print(f"异常: {e}")
             results[sym] = {
-                "symbol": sym, "n_periods": 0, "passes": False,
+                "symbol": sym,
+                "n_periods": 0,
+                "passes": False,
                 "baseline": {"expR": 0, "trades": 0},
                 "regime_opt": {"expR": 0, "trades": 0},
-                "delta_expR": 0, "note": str(e),
+                "delta_expR": 0,
+                "note": str(e),
             }
 
     # 汇总
@@ -439,6 +445,7 @@ def run_poc(
 # HTML 报告
 # ============================================================================
 
+
 def generate_report(data: Dict[str, Any], output_path: str) -> str:
     """生成 PoC 验证 HTML 报告"""
     summary = data["summary"]
@@ -458,11 +465,14 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
         passes = res.get("passes", False)
 
         if delta > 0.02:
-            dc = "pos"; di = "▲"
+            dc = "pos"
+            di = "▲"
         elif delta < -0.02:
-            dc = "neg"; di = "▼"
+            dc = "neg"
+            di = "▼"
         else:
-            dc = "neutral"; di = "—"
+            dc = "neutral"
+            di = "—"
 
         pass_icon = "✅" if passes else "❌"
 
@@ -474,7 +484,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
           <td class="num">{bl:+.3f}</td>
           <td class="num">{opt:+.3f}</td>
           <td class="num {dc}">{di} {delta:+.3f}</td>
-          <td class="num">{period_wr*100:.0f}%</td>
+          <td class="num">{period_wr * 100:.0f}%</td>
           <td>{pass_icon}</td>
         </tr>
         """
@@ -494,7 +504,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
             color = "#059669" if d > 0 else "#dc2626"
             pos_class = "bar-pos" if d > 0 else "bar-neg"
             bars_html += f"""
-            <div class="bar-col" title="周期{p['period_idx']}: Δ{d:+.3f}">
+            <div class="bar-col" title="周期{p["period_idx"]}: Δ{d:+.3f}">
               <div class="bar {pos_class}" style="height:{h}%; background:{color}"></div>
             </div>
             """
@@ -503,8 +513,8 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
         <div class="period-chart-card">
           <div class="period-chart-header">
             <strong>{sym}</strong>
-            <span class="period-delta {'pos' if res['delta_expR']>0 else 'neg'}">
-              Δ {res['delta_expR']:+.3f} ({res['period_win_rate']*100:.0f}% 正收益周期)
+            <span class="period-delta {"pos" if res["delta_expR"] > 0 else "neg"}">
+              Δ {res["delta_expR"]:+.3f} ({res["period_win_rate"] * 100:.0f}% 正收益周期)
             </span>
           </div>
           <div class="bar-chart">
@@ -724,9 +734,9 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
     <div class="subtitle">嵌套滚动验证 — 逐 Regime 优化 T/stop 系数的 OOS 收益</div>
     <div class="meta">
       <span>📅 {timestamp}</span>
-      <span>📊 品种：{summary['n_symbols']} 个</span>
-      <span>🔄 滚动周期：{summary['init_train_bars']}训练 + {summary['reopt_freq_bars']}OOS</span>
-      <span>🔬 最小样本/Regime：{summary['min_trades_per_regime']} 笔</span>
+      <span>📊 品种：{summary["n_symbols"]} 个</span>
+      <span>🔄 滚动周期：{summary["init_train_bars"]}训练 + {summary["reopt_freq_bars"]}OOS</span>
+      <span>🔬 最小样本/Regime：{summary["min_trades_per_regime"]} 笔</span>
     </div>
   </div>
 </div>
@@ -736,31 +746,31 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
   <div class="callout {verdict_class}">
     <strong>{verdict}</strong><br>
     OOS 平均 ΔexpR = <strong>{avg_delta:+.3f}</strong>，
-    {summary['n_positive']}/{summary['n_valid']} 个品种正收益（{pos_rate:.0f}%），
-    平均周期胜率 {summary['avg_period_win_rate']*100:.0f}%。
+    {summary["n_positive"]}/{summary["n_valid"]} 个品种正收益（{pos_rate:.0f}%），
+    平均周期胜率 {summary["avg_period_win_rate"] * 100:.0f}%。
   </div>
 
   <!-- KPI -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="label">基线 OOS expR</div>
-      <div class="value">{summary['avg_baseline_expR']:+.3f}</div>
-      <div class="sub">{summary['n_valid']} 个有效品种</div>
+      <div class="value">{summary["avg_baseline_expR"]:+.3f}</div>
+      <div class="sub">{summary["n_valid"]} 个有效品种</div>
     </div>
     <div class="kpi-card">
       <div class="label">逐 Regime 优化 OOS expR</div>
-      <div class="value pos">{summary['avg_opt_expR']:+.3f}</div>
+      <div class="value pos">{summary["avg_opt_expR"]:+.3f}</div>
       <div class="sub">嵌套滚动验证</div>
     </div>
     <div class="kpi-card">
       <div class="label">OOS ΔexpR</div>
-      <div class="value {'pos' if avg_delta>0 else 'neg'}">{avg_delta:+.3f}</div>
-      <div class="sub">中位数 {summary['median_delta_expR']:+.3f}</div>
+      <div class="value {"pos" if avg_delta > 0 else "neg"}">{avg_delta:+.3f}</div>
+      <div class="sub">中位数 {summary["median_delta_expR"]:+.3f}</div>
     </div>
     <div class="kpi-card">
       <div class="label">正收益品种比例</div>
-      <div class="value {'pos' if pos_rate>=50 else 'neg'}">{pos_rate:.0f}%</div>
-      <div class="sub">{summary['n_positive']} / {summary['n_valid']}</div>
+      <div class="value {"pos" if pos_rate >= 50 else "neg"}">{pos_rate:.0f}%</div>
+      <div class="sub">{summary["n_positive"]} / {summary["n_valid"]}</div>
     </div>
   </div>
 
@@ -810,26 +820,33 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
 
     <h3>核心结论</h3>
     <ul style="padding-left:20px">
-      <li><strong>OOS 平均收益</strong>：ΔexpR = {avg_delta:+.3f}（{'正' if avg_delta>0 else '负'}向）</li>
-      <li><strong>稳定性</strong>：{pos_rate:.0f}% 品种正收益，平均周期胜率 {summary['avg_period_win_rate']*100:.0f}%</li>
-      <li><strong>样本量</strong>：{summary['n_valid']} 个品种，共 {sum(r['baseline']['trades'] for r in results.values() if r.get('n_periods',0)>=2)} 笔 OOS 交易</li>
+      <li><strong>OOS 平均收益</strong>：ΔexpR = {avg_delta:+.3f}（{"正" if avg_delta > 0 else "负"}向）</li>
+      <li><strong>稳定性</strong>：{pos_rate:.0f}% 品种正收益，平均周期胜率 {
+        summary["avg_period_win_rate"] * 100:.0f}%</li>
+      <li><strong>样本量</strong>：{summary["n_valid"]} 个品种，共 {
+        sum(r["baseline"]["trades"] for r in results.values() if r.get("n_periods", 0) >= 2)
+    } 笔 OOS 交易</li>
     </ul>
 
     <h3>下一步建议</h3>
     <div class="callout info">
-      {'<strong>建议推进 Phase 8 全量开发</strong><br>PoC 验证通过，OOS 收益显著且方向稳定。可以按 8 人日计划启动全品种优化与上线。' if avg_delta >= 0.03 and pos_rate >= 60 else
-       '<strong>建议扩大样本量后再决策</strong><br>当前样本量有限（品种少/交易数少），建议增加到 8-10 个品种再评估。如果结果一致，再推进 Phase 8。' if avg_delta > 0 and pos_rate >= 50 else
-       '<strong>建议暂不推进 Phase 8</strong><br>PoC 结果不达预期，逐 Regime 优化未带来稳定的 OOS 收益。可考虑其他方向（如多参数维度扩展、组合优化等）。'}
+      {
+        "<strong>建议推进 Phase 8 全量开发</strong><br>PoC 验证通过，OOS 收益显著且方向稳定。可以按 8 人日计划启动全品种优化与上线。"
+        if avg_delta >= 0.03 and pos_rate >= 60
+        else "<strong>建议扩大样本量后再决策</strong><br>当前样本量有限（品种少/交易数少），建议增加到 8-10 个品种再评估。如果结果一致，再推进 Phase 8。"
+        if avg_delta > 0 and pos_rate >= 50
+        else "<strong>建议暂不推进 Phase 8</strong><br>PoC 结果不达预期，逐 Regime 优化未带来稳定的 OOS 收益。可考虑其他方向（如多参数维度扩展、组合优化等）。"
+    }
     </div>
 
     <div class="footnote">
       <strong>验证方法：</strong>
       嵌套滚动验证（Nested Walk-Forward Validation）。
-      训练期 {summary['init_train_bars']} 根 K 线，每 {summary['reopt_freq_bars']} 根重优化一次。
+      训练期 {summary["init_train_bars"]} 根 K 线，每 {summary["reopt_freq_bars"]} 根重优化一次。
       内层：对趋势/震荡/波动三个 Regime 独立搜索 T 乘数（6 档）× stop 乘数（6 档），
       取该 Regime 下 expR 最高的组合。外层：用 IS 上找到的逐 Regime 最优系数在 OOS 上验证。
       基线为 DEFAULT_CONFIG 的全局 Regime 系数 + 逐品种手动调优值。
-      每 Regime 最少 {summary['min_trades_per_regime']} 笔交易才做优化，否则沿用全局默认。
+      每 Regime 最少 {summary["min_trades_per_regime"]} 笔交易才做优化，否则沿用全局默认。
     </div>
   </section>
 
@@ -848,6 +865,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
 # 命令行入口
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Phase 8 PoC：逐 Regime 参数差异化的嵌套滚动 OOS 验证",
@@ -859,18 +877,27 @@ def main():
   python -m monitor.regime_poc --symbols zn,al --output phase8_poc.html
         """,
     )
-    parser.add_argument("--symbols", type=str, default="zn,fu,pp",
-                        help="验证品种列表，逗号分隔（默认 zn,fu,pp）")
-    parser.add_argument("--train-bars", type=int, default=DEFAULT_INIT_TRAIN_BARS,
-                        help=f"初始训练期长度（默认 {DEFAULT_INIT_TRAIN_BARS}）")
-    parser.add_argument("--oos-bars", type=int, default=DEFAULT_REOPT_FREQ_BARS,
-                        help=f"每个 OOS 周期长度（默认 {DEFAULT_REOPT_FREQ_BARS}）")
-    parser.add_argument("--min-trades", type=int, default=DEFAULT_MIN_TRADES_PER_REGIME,
-                        help=f"每 Regime 最少交易笔数（默认 {DEFAULT_MIN_TRADES_PER_REGIME}）")
-    parser.add_argument("--output", type=str, default=None,
-                        help="HTML 报告输出路径")
-    parser.add_argument("--json", type=str, default=None,
-                        help="JSON 结果输出路径")
+    parser.add_argument("--symbols", type=str, default="zn,fu,pp", help="验证品种列表，逗号分隔（默认 zn,fu,pp）")
+    parser.add_argument(
+        "--train-bars",
+        type=int,
+        default=DEFAULT_INIT_TRAIN_BARS,
+        help=f"初始训练期长度（默认 {DEFAULT_INIT_TRAIN_BARS}）",
+    )
+    parser.add_argument(
+        "--oos-bars",
+        type=int,
+        default=DEFAULT_REOPT_FREQ_BARS,
+        help=f"每个 OOS 周期长度（默认 {DEFAULT_REOPT_FREQ_BARS}）",
+    )
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=DEFAULT_MIN_TRADES_PER_REGIME,
+        help=f"每 Regime 最少交易笔数（默认 {DEFAULT_MIN_TRADES_PER_REGIME}）",
+    )
+    parser.add_argument("--output", type=str, default=None, help="HTML 报告输出路径")
+    parser.add_argument("--json", type=str, default=None, help="JSON 结果输出路径")
 
     args = parser.parse_args()
 
@@ -896,7 +923,7 @@ def main():
     print(f"OOS 优化后 expR:   {s['avg_opt_expR']:+.4f}")
     print(f"OOS ΔexpR:        {s['avg_delta_expR']:+.4f} (中位数 {s['median_delta_expR']:+.4f})")
     print(f"正收益品种:       {s['n_positive']}/{s['n_valid']} ({s['positive_rate']:.0f}%)")
-    print(f"平均周期胜率:     {s['avg_period_win_rate']*100:.0f}%")
+    print(f"平均周期胜率:     {s['avg_period_win_rate'] * 100:.0f}%")
 
     # JSON 输出
     if args.json:

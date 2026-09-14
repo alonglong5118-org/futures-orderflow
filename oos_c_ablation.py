@@ -14,6 +14,7 @@
   python3 oos_c_ablation.py            # 默认 6 品种
   python3 oos_c_ablation.py jd lh      # 指定品种
 """
+
 import copy
 import fcntl
 import json
@@ -82,6 +83,7 @@ def slice_c_window(symbol):
     """取 C 数据真实存在的回测窗口（min C 日期起 → 日线末尾），
     使对比区间内 C 逐日真实、无'最新值回落'泄漏。返回 (df_slice, c_start, c_end)。"""
     import json
+
     CPOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cpos_cache.json")
     c = json.load(open(CPOS, encoding="utf-8"))
     # 缓存键统一大写（与 precompute_C_array/score_C 的 .upper() 查表一致）
@@ -113,8 +115,11 @@ def _build_out(targets, rows):
                 "delta_total_R": round(a["total_R"] - b["total_R"], 2),
                 "delta_win": round(a["win_rate"] - b["win_rate"], 3),
                 "delta_dd": round(a["max_dd_R"] - b["max_dd_R"], 3),
-                "delta_pf": (round(a["profit_factor"] - b["profit_factor"], 2)
-                             if a["profit_factor"] is not None and b["profit_factor"] is not None else None),
+                "delta_pf": (
+                    round(a["profit_factor"] - b["profit_factor"], 2)
+                    if a["profit_factor"] is not None and b["profit_factor"] is not None
+                    else None
+                ),
             }
             for s, a, b in rows
         ],
@@ -177,8 +182,7 @@ def main():
     print("回测窗口 = 各品种 C 数据真实存在的区间（~10个月），避免旧 bar 的'最新值回落'泄漏", flush=True)
     print(f"数据：本地日线 ｜ 回测：walk_forward_backtest ｜ 品种：{targets}", flush=True)
     print("=" * 82, flush=True)
-    hdr = (f"{'品种':4} {'模式':5} {'笔':>4} {'期望R':>8} {'总R':>9} {'PF':>6} "
-           f"{'胜率':>7} {'最大回撤R':>9}")
+    hdr = f"{'品种':4} {'模式':5} {'笔':>4} {'期望R':>8} {'总R':>9} {'PF':>6} {'胜率':>7} {'最大回撤R':>9}"
     print(hdr)
     print("-" * 82)
 
@@ -213,7 +217,7 @@ def main():
         de = r_on["expR"] - r_off["expR"]
         dt = r_on["total_R"] - r_off["total_R"]
         verdict = "C有增益▲" if de > 0.01 else ("C有损▼" if de < -0.01 else "C无影响=")
-        print(f"   └ ΔexpR={de:+.3f}  Δ总R={dt:+.2f}  → {verdict}  ({time.time()-t0:.0f}s)", flush=True)
+        print(f"   └ ΔexpR={de:+.3f}  Δ总R={dt:+.2f}  → {verdict}  ({time.time() - t0:.0f}s)", flush=True)
         print(flush=True)
         out = _build_out(targets, rows)
         with open(OUT_NAME, "w", encoding="utf-8") as f:

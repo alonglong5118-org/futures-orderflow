@@ -22,21 +22,24 @@ import math
 import sys
 from pathlib import Path
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).parent))
 
 from four_dim_strategy import (
-    DEFAULT_CONFIG, SYMBOLS, _atr_array, exit_plan, load_daily, risk_gate,
+    DEFAULT_CONFIG,
+    SYMBOLS,
+    _atr_array,
+    exit_plan,
+    load_daily,
+    risk_gate,
 )
 
 LABELS_FILE = Path(__file__).parent / "backtest_strategy_labels.json"
 
 # 加仓档位定义：(触发档, 保本档, 目标档)——R 计
 ADDONS = [
-    ("A1", 0.5, 0.0, 1.5),   # +0.5R 加仓，止损 0R，目标 +1.5R
-    ("A2", 1.0, 0.5, 2.0),   # +1.0R 加仓，止损 +0.5R，目标 +2.0R
-    ("A3", 1.5, 1.0, 3.0),   # +1.5R 加仓，止损 +1.0R，目标 +3.0R
+    ("A1", 0.5, 0.0, 1.5),  # +0.5R 加仓，止损 0R，目标 +1.5R
+    ("A2", 1.0, 0.5, 2.0),  # +1.0R 加仓，止损 +0.5R，目标 +2.0R
+    ("A3", 1.5, 1.0, 3.0),  # +1.5R 加仓，止损 +1.0R，目标 +3.0R
 ]
 # 随机漫步基准（无漂移）：P(先到目标) = 距离比
 BASELINE = {"A1": 0.5 / 2.0, "A2": 0.5 / 1.5, "A3": 0.5 / 2.0}
@@ -44,8 +47,7 @@ BASELINE = {"A1": 0.5 / 2.0, "A2": 0.5 / 1.5, "A3": 0.5 / 2.0}
 PAYOFF = {"A1": (1.0, 0.5), "A2": (1.0, 0.5), "A3": (1.5, 0.5)}
 
 
-def first_passage(high, low, close, start_j, n, direction, entry, sd,
-                  target_r, stop_r):
+def first_passage(high, low, close, start_j, n, direction, entry, sd, target_r, stop_r):
     """从 start_j 起步，返回 'target' / 'stop' / 'timeout'。
 
     价格先触及 target_r（R 计，同向）还是 stop_r（R 计，回落）。
@@ -60,7 +62,7 @@ def first_passage(high, low, close, start_j, n, direction, entry, sd,
         else:
             hit_stop = high[j] >= stp_price
             hit_tgt = low[j] <= tgt_price
-        if hit_stop:            # 保守：同 bar 双触算 stop
+        if hit_stop:  # 保守：同 bar 双触算 stop
             return "stop"
         if hit_tgt:
             return "target"
@@ -107,8 +109,11 @@ def analyze_symbol(sym, trades_detail, cfg, max_hold=120):
 
         # 每个加仓档：先定位"首达触发档"的 bar，再测首达博弈
         rec = {
-            "symbol": sym, "direction": direction, "regime": regime,
-            "strategy": t.get("strategy", ""), "R_adj": t.get("R_adj", 0),
+            "symbol": sym,
+            "direction": direction,
+            "regime": regime,
+            "strategy": t.get("strategy", ""),
+            "R_adj": t.get("R_adj", 0),
         }
         end = min(i + max_hold, n)
         for name, trig_r, stop_r, tgt_r in ADDONS:
@@ -125,8 +130,16 @@ def analyze_symbol(sym, trades_detail, cfg, max_hold=120):
                 continue
             # 从触发 bar 的下一根开始测首达博弈（触发当根已计入入场）
             rec[name] = first_passage(
-                high, low, close, trig_bar + 1, end, direction, entry, sd,
-                tgt_r, stop_r,
+                high,
+                low,
+                close,
+                trig_bar + 1,
+                end,
+                direction,
+                entry,
+                sd,
+                tgt_r,
+                stop_r,
             )
         results.append(rec)
     return results
@@ -148,7 +161,7 @@ def main():
     n = len(all_trades)
     print(f"金字塔加仓诊断 v3：首达博弈（加仓单精确期望）")
     print(f"样本：{n} 笔，持仓观察窗 120 bar")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print()
     print("随机漫步基准（无漂移时的 P(先到目标)）：")
     for name, base in BASELINE.items():
@@ -176,8 +189,10 @@ def main():
         if s:
             base = BASELINE[name]
             edge = s["p"] - base
-            print(f"{name:<5} {s['n']:>5} {s['p']:>10.1%} {s['stop']:>10.1%} {s['timeout']:>6.1%} "
-                  f"{s['ev']:>+8.3f} {edge:>+7.1%}")
+            print(
+                f"{name:<5} {s['n']:>5} {s['p']:>10.1%} {s['stop']:>10.1%} {s['timeout']:>6.1%} "
+                f"{s['ev']:>+8.3f} {edge:>+7.1%}"
+            )
     print()
 
     # ── 2) 按 regime 分层 ──

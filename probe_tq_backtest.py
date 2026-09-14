@@ -12,11 +12,12 @@ P0-1 历史 tick 回放探针（go/no-go 闸门）
   python3 probe_tq_backtest.py [SYMBOL] [START] [END] [MAX_TICKS]
 默认：FG2405  2024-03-04 09:00:00  2024-03-04 10:00:00  4000
 """
-import sys
-import os
+
 import json
-import time
+import os
 import signal
+import sys
+import time
 import traceback
 from datetime import datetime
 
@@ -60,7 +61,7 @@ def main():
                 print(f"[probe] reached MAX_TICKS={MAX_TICKS}, stop early", flush=True)
                 break
     except TimeoutError:
-        print(f"[probe] TIMEOUT after {time.time()-t0:.0f}s (collected {n} ticks)", flush=True)
+        print(f"[probe] TIMEOUT after {time.time() - t0:.0f}s (collected {n} ticks)", flush=True)
     except Exception as e:
         print(f"[probe] ERROR: {repr(e)[:200]}", flush=True)
         traceback.print_exc()
@@ -71,10 +72,13 @@ def main():
         except Exception:
             pass
 
-    print(f"[probe] total ticks={n}  elapsed={time.time()-t0:.0f}s", flush=True)
+    print(f"[probe] total ticks={n}  elapsed={time.time() - t0:.0f}s", flush=True)
 
     if n == 0:
-        print("[probe] ❌ NO TICKS — 天勤未返回该合约/时段历史 tick（可能：合约代码错/时段无交易/账户无该数据权限）", flush=True)
+        print(
+            "[probe] ❌ NO TICKS — 天勤未返回该合约/时段历史 tick（可能：合约代码错/时段无交易/账户无该数据权限）",
+            flush=True,
+        )
         return
 
     t = ticks.iloc[-1]
@@ -85,13 +89,19 @@ def main():
     has_vol = "volume" in keys
     has_last = "last_price" in keys
     print("[probe] last tick fields:", keys, flush=True)
-    print(f"[probe] 订单流字段可用：direction(主动方向)={has_dir}  bid_volume1(买一量)={has_bv}  "
-          f"ask_volume1(卖一量)={has_av}  volume(成交量)={has_vol}  last_price={has_last}", flush=True)
+    print(
+        f"[probe] 订单流字段可用：direction(主动方向)={has_dir}  bid_volume1(买一量)={has_bv}  "
+        f"ask_volume1(卖一量)={has_av}  volume(成交量)={has_vol}  last_price={has_last}",
+        flush=True,
+    )
 
     # 能力结论
     can_delta = has_dir and has_vol
     can_ofi_absorp = has_bv and has_av
-    print(f"[probe] 可算 Session Delta(主动买卖净流)={can_delta}  ｜ 可算 OFI/absorption(需盘口深度)={can_ofi_absorp}", flush=True)
+    print(
+        f"[probe] 可算 Session Delta(主动买卖净流)={can_delta}  ｜ 可算 OFI/absorption(需盘口深度)={can_ofi_absorp}",
+        flush=True,
+    )
     if can_delta:
         print("[probe] ✅ 至少可做订单流 Delta —— 比龙虎榜 C 强，可推进 Phase1/2", flush=True)
     else:

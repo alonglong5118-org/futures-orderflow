@@ -14,17 +14,19 @@ akshare 历史接口失效而恒为 0）。
 用法：
   python3 backfill_dce_tianqin.py [--days 300] [--start 2025-09-01]
 """
-import sys
-import os
-import json
-import datetime
+
 import argparse
+import datetime
+import json
+import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import long_hu_bang as lhb
 from tqsdk import TqApi, TqAuth
+
+import long_hu_bang as lhb
 
 CPOS = lhb.CPOS_JSON
 
@@ -35,7 +37,7 @@ COMMODITIES = {
     "JM": [("DCE.jm2609", "DCE")],
     "jd": [("DCE.jd2609", "DCE")],
     "lh": [("DCE.lh2609", "DCE")],
-    "J":  [("DCE.j2609", "DCE"), ("DCE.j2605", "DCE"), ("DCE.j2601", "DCE")],
+    "J": [("DCE.j2609", "DCE"), ("DCE.j2605", "DCE"), ("DCE.j2601", "DCE")],
 }
 
 
@@ -131,9 +133,7 @@ def backfill(days=300, start=None):
     cache["_meta"] = {
         "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "trade_date": datetime.date.today().strftime("%Y%m%d"),
-        "count": len(cache.get("_meta", {}).get("count", 0)) if False else sum(
-            1 for k in cache if k != "_meta"
-        ),
+        "count": len(cache.get("_meta", {}).get("count", 0)) if False else sum(1 for k in cache if k != "_meta"),
         "backfilled": True,
         "source": "backfill_dce_tianqin.py (天勤 query_symbol_ranking)",
     }

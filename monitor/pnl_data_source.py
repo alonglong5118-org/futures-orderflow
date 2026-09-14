@@ -44,7 +44,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SCRIPT_DIR not in sys.path:
@@ -52,25 +52,26 @@ if SCRIPT_DIR not in sys.path:
 
 from monitor.param_versions import ParamVersionManager
 
-
 # ============================================================================
 # 数据结构
 # ============================================================================
 
+
 @dataclass
 class TradeRecord:
     """标准化的单笔交易记录（已平仓）"""
+
     symbol: str
-    entry_time: str          # "YYYY-MM-DD HH:MM:SS"
-    exit_time: str           # "YYYY-MM-DD HH:MM:SS"
-    direction: str           # "long" / "short"
+    entry_time: str  # "YYYY-MM-DD HH:MM:SS"
+    exit_time: str  # "YYYY-MM-DD HH:MM:SS"
+    direction: str  # "long" / "short"
     lots: int
     entry_price: float
     exit_price: float
-    pnl: float               # 盈亏金额（含手续费）
-    fee: float               # 手续费总额
+    pnl: float  # 盈亏金额（含手续费）
+    fee: float  # 手续费总额
     r_multiple: float = 0.0  # R 倍数（= pnl / 风险预算）
-    strategy: str = ""       # 策略标签
+    strategy: str = ""  # 策略标签
     account: str = "主账户"  # 账户标签
     raw: Dict[str, Any] = field(default_factory=dict)  # 原始数据
 
@@ -78,8 +79,9 @@ class TradeRecord:
 @dataclass
 class SymbolDailyStats:
     """品种每日统计"""
+
     date: str
-    expR: float = 0.0        # 当日 R 倍数净值（sum of R-multiples）
+    expR: float = 0.0  # 当日 R 倍数净值（sum of R-multiples）
     trades: int = 0
     wins: int = 0
 
@@ -87,6 +89,7 @@ class SymbolDailyStats:
 # ============================================================================
 # 基类
 # ============================================================================
+
 
 class BasePnLSource:
     """PnL 数据源基类"""
@@ -112,6 +115,7 @@ class BasePnLSource:
 # ============================================================================
 # 数据源 1: trade_journal.json
 # ============================================================================
+
 
 class TradeJournalSource(BasePnLSource):
     """
@@ -187,6 +191,7 @@ class TradeJournalSource(BasePnLSource):
             if stop_dist and stop_dist > 0:
                 # 用实际止损距离计算 R
                 from trade_journal import _MULTIPLIERS
+
                 mult = _MULTIPLIERS.get(sym, 1)
                 risk = float(stop_dist) * mult * t.get("lots", 1)
                 r_mult = pnl / risk if risk > 0 else 0.0
@@ -194,21 +199,23 @@ class TradeJournalSource(BasePnLSource):
                 # 用固定风险预算推算
                 r_mult = pnl / self._risk_per_trade if self._risk_per_trade > 0 else 0.0
 
-            records.append(TradeRecord(
-                symbol=sym,
-                entry_time=t.get("time", ""),
-                exit_time=exit_time,
-                direction=t.get("direction", ""),
-                lots=int(t.get("lots", 1)),
-                entry_price=float(t.get("entry_price", 0)),
-                exit_price=float(t.get("exit_price", 0)),
-                pnl=pnl,
-                fee=fee,
-                r_multiple=r_mult,
-                strategy=strategy_t,
-                account=account_t,
-                raw=t,
-            ))
+            records.append(
+                TradeRecord(
+                    symbol=sym,
+                    entry_time=t.get("time", ""),
+                    exit_time=exit_time,
+                    direction=t.get("direction", ""),
+                    lots=int(t.get("lots", 1)),
+                    entry_price=float(t.get("entry_price", 0)),
+                    exit_price=float(t.get("exit_price", 0)),
+                    pnl=pnl,
+                    fee=fee,
+                    r_multiple=r_mult,
+                    strategy=strategy_t,
+                    account=account_t,
+                    raw=t,
+                )
+            )
 
         return records
 
@@ -216,6 +223,7 @@ class TradeJournalSource(BasePnLSource):
 # ============================================================================
 # 数据源 2: 模拟盘引擎 (paper_trading_engine)
 # ============================================================================
+
 
 class PaperTradingSource(BasePnLSource):
     """
@@ -249,6 +257,7 @@ class PaperTradingSource(BasePnLSource):
     def _get_engine(self):
         if self._engine is None:
             import importlib
+
             mod = importlib.import_module(self.engine_module)
             self._engine = mod
         return self._engine
@@ -290,21 +299,23 @@ class PaperTradingSource(BasePnLSource):
 
             r_mult = pnl / self._risk_per_trade if self._risk_per_trade > 0 else 0.0
 
-            records.append(TradeRecord(
-                symbol=sym,
-                entry_time=t.get("entry_time", t.get("open_time", "")),
-                exit_time=exit_time,
-                direction=t.get("direction", ""),
-                lots=int(t.get("lots", t.get("volume", 1))),
-                entry_price=float(t.get("entry_price", t.get("open_price", 0))),
-                exit_price=float(t.get("exit_price", t.get("close_price", 0))),
-                pnl=pnl,
-                fee=fee,
-                r_multiple=r_mult,
-                strategy=t.get("strategy", ""),
-                account=t.get("account", "模拟盘"),
-                raw=t,
-            ))
+            records.append(
+                TradeRecord(
+                    symbol=sym,
+                    entry_time=t.get("entry_time", t.get("open_time", "")),
+                    exit_time=exit_time,
+                    direction=t.get("direction", ""),
+                    lots=int(t.get("lots", t.get("volume", 1))),
+                    entry_price=float(t.get("entry_price", t.get("open_price", 0))),
+                    exit_price=float(t.get("exit_price", t.get("close_price", 0))),
+                    pnl=pnl,
+                    fee=fee,
+                    r_multiple=r_mult,
+                    strategy=t.get("strategy", ""),
+                    account=t.get("account", "模拟盘"),
+                    raw=t,
+                )
+            )
 
         return records
 
@@ -312,6 +323,7 @@ class PaperTradingSource(BasePnLSource):
 # ============================================================================
 # 数据源 3: CSV 文件
 # ============================================================================
+
 
 class CsvPnLSource(BasePnLSource):
     """
@@ -380,21 +392,23 @@ class CsvPnLSource(BasePnLSource):
                     else:
                         r_mult = pnl / self._risk_per_trade if self._risk_per_trade > 0 else 0.0
 
-                    records.append(TradeRecord(
-                        symbol=sym,
-                        entry_time=row.get("entry_time", row.get("开仓时间", "")).strip(),
-                        exit_time=exit_time,
-                        direction=row.get("direction", row.get("方向", "")).strip().lower(),
-                        lots=int(row.get("lots", row.get("手数", 1)) or 1),
-                        entry_price=float(row.get("entry_price", row.get("开仓价", 0)) or 0),
-                        exit_price=float(row.get("exit_price", row.get("平仓价", 0)) or 0),
-                        pnl=pnl,
-                        fee=fee,
-                        r_multiple=r_mult,
-                        strategy=strat,
-                        account=acc,
-                        raw=dict(row),
-                    ))
+                    records.append(
+                        TradeRecord(
+                            symbol=sym,
+                            entry_time=row.get("entry_time", row.get("开仓时间", "")).strip(),
+                            exit_time=exit_time,
+                            direction=row.get("direction", row.get("方向", "")).strip().lower(),
+                            lots=int(row.get("lots", row.get("手数", 1)) or 1),
+                            entry_price=float(row.get("entry_price", row.get("开仓价", 0)) or 0),
+                            exit_price=float(row.get("exit_price", row.get("平仓价", 0)) or 0),
+                            pnl=pnl,
+                            fee=fee,
+                            r_multiple=r_mult,
+                            strategy=strat,
+                            account=acc,
+                            raw=dict(row),
+                        )
+                    )
         except Exception:
             pass
 
@@ -404,6 +418,7 @@ class CsvPnLSource(BasePnLSource):
 # ============================================================================
 # 数据源 4: 自定义回调
 # ============================================================================
+
 
 class CustomPnLSource(BasePnLSource):
     """
@@ -441,6 +456,7 @@ class CustomPnLSource(BasePnLSource):
 # ============================================================================
 # 主适配器：PnLDataSource
 # ============================================================================
+
 
 class PnLDataSource:
     """
@@ -526,11 +542,13 @@ class PnLDataSource:
                 sources.append(TradeJournalSource(path, risk_pct, base_equity))
 
             elif stype == "paper_trading":
-                sources.append(PaperTradingSource(
-                    engine_module=src_cfg.get("module", "paper_trading_engine"),
-                    risk_per_trade_pct=risk_pct,
-                    base_equity=base_equity,
-                ))
+                sources.append(
+                    PaperTradingSource(
+                        engine_module=src_cfg.get("module", "paper_trading_engine"),
+                        risk_per_trade_pct=risk_pct,
+                        base_equity=base_equity,
+                    )
+                )
 
             elif stype == "csv":
                 path = src_cfg["path"]
@@ -782,6 +800,7 @@ class PnLDataSource:
 # 命令行入口
 # ============================================================================
 
+
 def _main():
     import argparse
 
@@ -807,8 +826,9 @@ def _main():
             trades = [t for t in trades if t.symbol == args.symbol]
         print(f"共 {len(trades)} 笔交易")
         for t in trades[-20:]:
-            print(f"  {t.exit_time}  {t.symbol:6s} {t.direction:5s} {t.lots}手 "
-                  f"R={t.r_multiple:+.3f}  PnL={t.pnl:+,.0f}")
+            print(
+                f"  {t.exit_time}  {t.symbol:6s} {t.direction:5s} {t.lots}手 R={t.r_multiple:+.3f}  PnL={t.pnl:+,.0f}"
+            )
 
     elif args.metrics:
         symbols = [args.symbol] if args.symbol else None

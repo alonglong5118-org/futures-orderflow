@@ -79,8 +79,12 @@ print("场景 2：阶梯数学（l 塑料 多 @4000, stop_dist=40, 首仓 4 手�
 print("=" * 66)
 rec = pyr.evaluate(symbol="l", market_state="trend_mid", strategy_label="趋势", **base)
 l1, l2 = rec["ladder"]
-print(f"  P1: 触发 {l1['trigger_price']}（4000+1.0R×40=4040 ✓）, 加 {l1['add_lots']} 手（4×50%=2 ✓）, 止损 {l1['new_stop_price']}（保本 4000 ✓）")
-print(f"  P2: 触发 {l2['trigger_price']}（4000+1.5R×40=4060 ✓）, 加 {l2['add_lots']} 手（4×25%=1 ✓）, 止损 {l2['new_stop_price']}（+0.5R=4020 ✓）")
+print(
+    f"  P1: 触发 {l1['trigger_price']}（4000+1.0R×40=4040 ✓）, 加 {l1['add_lots']} 手（4×50%=2 ✓）, 止损 {l1['new_stop_price']}（保本 4000 ✓）"
+)
+print(
+    f"  P2: 触发 {l2['trigger_price']}（4000+1.5R×40=4060 ✓）, 加 {l2['add_lots']} 手（4×25%=1 ✓）, 止损 {l2['new_stop_price']}（+0.5R=4020 ✓）"
+)
 print(f"  峰值 {rec['peak_lots']} 手（4+2+1=7 ✓）")
 print(f"  移动止损起点 {rec['trail']['start_price']}（+2.0R=4080）, 回撤距离 {rec['trail']['dist_r']}R")
 assert l1["trigger_price"] == 4040.0 and l1["add_lots"] == 2 and l1["new_stop_price"] == 4000.0
@@ -88,8 +92,15 @@ assert l2["trigger_price"] == 4060.0 and l2["add_lots"] == 1 and l2["new_stop_pr
 assert rec["peak_lots"] == 7
 
 # 空头镜像
-rec_s = pyr.evaluate(symbol="SR", direction="空", entry_price=4000.0, stop_dist=40.0,
-                     lots=4, market_state="trend_mid", strategy_label="趋势")
+rec_s = pyr.evaluate(
+    symbol="SR",
+    direction="空",
+    entry_price=4000.0,
+    stop_dist=40.0,
+    lots=4,
+    market_state="trend_mid",
+    strategy_label="趋势",
+)
 ls1, ls2 = rec_s["ladder"]
 print(f"  空头镜像: P1 触发 {ls1['trigger_price']}（3960 ✓）, 止损 {ls1['new_stop_price']}（4000 ✓）")
 assert ls1["trigger_price"] == 3960.0 and ls1["new_stop_price"] == 4000.0
@@ -113,8 +124,10 @@ for s in sigs:
         continue
     whitelist_hits.append(s)
     # 信号侧信息（历史信号无 strategy 标签，用回算判断留待实盘验证）
-    print(f"  {s.get('time', '?')[:16]} {sym:<4} {s.get('direction')} @ {s.get('price')} "
-          f"stop={s.get('stop')} t1={s.get('t1')} t2={s.get('t2')}")
+    print(
+        f"  {s.get('time', '?')[:16]} {sym:<4} {s.get('direction')} @ {s.get('price')} "
+        f"stop={s.get('stop')} t1={s.get('t1')} t2={s.get('t2')}"
+    )
 print(f"  白名单品种信号 {len(whitelist_hits)}/{len(sigs)} 条——这些是金字塔候选池的实盘信号")
 print(f"  （历史信号无 strategy 标签与实时状态，实际推荐在实盘信号产生时判定）")
 print()

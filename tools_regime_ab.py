@@ -23,6 +23,7 @@ expR +1.112 就是那一笔的盈亏。在 1–12 笔上比较 expR 没有统计
 实测（41 品种，2026-09-07）：V0 +0.6140R / V1 +0.2809R(p=0.004) / V2 +0.3882R(p=0.117) / V3 +0.4835R(p=0.028)
 → 四项中性化全部为负贡献，整改③ 已回滚。此脚本用于防止该改动被再次误提。
 """
+
 import copy
 import json
 import os
@@ -33,17 +34,40 @@ from math import comb
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import four_dim_strategy as fds
-from four_dim_strategy import (DEFAULT_CONFIG, DISABLED_SYMBOLS, SYMBOLS, load_daily,
-                               walk_forward_backtest)
+from four_dim_strategy import DEFAULT_CONFIG, DISABLED_SYMBOLS, SYMBOLS, load_daily, walk_forward_backtest
 
 # ── 历史（旧）参数，作为 A/B 的对照组 ──
 OLD_REGIME_W = {
-    "趋势": {"ma_break": 1.0, "dma": 1.0, "turtle": 1.0, "donchian": 1.0, "pullback": 1.0,
-             "boll": 0.3, "rsi": 0.3, "seasonal": 0.2},
-    "震荡": {"ma_break": 0.3, "dma": 0.3, "turtle": 0.3, "donchian": 0.3, "pullback": 0.3,
-             "boll": 1.0, "rsi": 1.0, "seasonal": 0.3},
-    "波动": {"ma_break": 0.5, "dma": 0.5, "turtle": 0.5, "donchian": 0.5, "pullback": 0.5,
-             "boll": 0.2, "rsi": 0.2, "seasonal": 0.1},
+    "趋势": {
+        "ma_break": 1.0,
+        "dma": 1.0,
+        "turtle": 1.0,
+        "donchian": 1.0,
+        "pullback": 1.0,
+        "boll": 0.3,
+        "rsi": 0.3,
+        "seasonal": 0.2,
+    },
+    "震荡": {
+        "ma_break": 0.3,
+        "dma": 0.3,
+        "turtle": 0.3,
+        "donchian": 0.3,
+        "pullback": 0.3,
+        "boll": 1.0,
+        "rsi": 1.0,
+        "seasonal": 0.3,
+    },
+    "波动": {
+        "ma_break": 0.5,
+        "dma": 0.5,
+        "turtle": 0.5,
+        "donchian": 0.5,
+        "pullback": 0.5,
+        "boll": 0.2,
+        "rsi": 0.2,
+        "seasonal": 0.1,
+    },
 }
 OLD_REGIME_COEF = {
     "趋势": {"T": 0.85, "conv": 0.90, "stop": 1.0, "cooldown": 300},
@@ -54,8 +78,7 @@ OLD_BIAS_HARD = {"趋势": 60, "波动": 65, "震荡": 70}
 OLD_FC_OFFSET = {"趋势": 0, "波动": 5, "震荡": 10}
 NEW_BIAS_HARD = {"趋势": 65, "波动": 65, "震荡": 65}
 # 中性侧 regime_coef：三档拉平（★必须显式写，不能依赖 DEFAULT_CONFIG 的当前值）
-NEW_REGIME_COEF = {rg: {"T": 1.0, "conv": 1.0, "stop": 1.0, "cooldown": 300}
-                   for rg in ("趋势", "震荡", "波动")}
+NEW_REGIME_COEF = {rg: {"T": 1.0, "conv": 1.0, "stop": 1.0, "cooldown": 300} for rg in ("趋势", "震荡", "波动")}
 
 VARIANTS = {
     "V0 全旧": dict(w_old=True, c_old=True),
@@ -120,7 +143,7 @@ def _sign_test(w_a, w_b):
     if m == 0:
         return None
     k = min(w_a, w_b)
-    return min(2 * sum(comb(m, i) for i in range(k + 1)) / (2 ** m), 1.0)
+    return min(2 * sum(comb(m, i) for i in range(k + 1)) / (2**m), 1.0)
 
 
 def main():
@@ -140,8 +163,10 @@ def main():
         w_new = sum(1 for s in syms if r["per"][s] > base["per"][s])
         w_old = sum(1 for s in syms if base["per"][s] > r["per"][s])
         p = _sign_test(w_new, w_old)
-        print(f"  {name:20} Δ vs V0 = {r['expR'] - base['expR']:+.4f}R   "
-              f"逐品种 新优 {w_new} / 旧优 {w_old}" + (f"   p ≈ {p:.3f}" if p is not None else ""))
+        print(
+            f"  {name:20} Δ vs V0 = {r['expR'] - base['expR']:+.4f}R   "
+            f"逐品种 新优 {w_new} / 旧优 {w_old}" + (f"   p ≈ {p:.3f}" if p is not None else "")
+        )
     print(f"耗时 {time.time() - t0:.0f}s")
     out = "/tmp/regime_ab_result.json"
     with open(out, "w") as f:

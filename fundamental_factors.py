@@ -194,6 +194,7 @@ def _sector_of(symbol):
     """获取品种所属板块（从 four_dim_strategy.SYMBOLS）。"""
     try:
         from four_dim_strategy import SYMBOLS
+
         return SYMBOLS.get(symbol, {}).get("group", "其他")
     except Exception:
         return "其他"
@@ -201,73 +202,73 @@ def _sector_of(symbol):
 
 def _compute_cs_ranks_for_date(target_date_int):
     """计算某一天全市场各板块内的基差截面排名。
-    
+
     返回 {symbol: rank_score (-100 to 100)}
     """
     data = _load_fundamentals()
-    
+
     # 收集各品种在该日的基差率
     sector_basis = {}  # sector -> {symbol: basis_rate}
-    
+
     for sym, sym_data in data.items():
         bs = sym_data.get("basis_series", [])
         if not bs:
             continue
-        
+
         # 双指针找最近日期
         dates = [int(d["date"]) for d in bs]
         rates = [d.get("dom_basis_rate", 0) for d in bs]
-        
+
         idx = bisect.bisect_right(dates, target_date_int) - 1
         if idx < 0:
             continue
-        
+
         rate = rates[idx]
         if rate is None:
             continue
-        
+
         sec = _sector_of(sym)
         if sec not in sector_basis:
             sector_basis[sec] = {}
         sector_basis[sec][sym] = rate
-    
+
     # 各板块内排名
     result = {}
     for sec, sym_rates in sector_basis.items():
         if len(sym_rates) < 3:
             # 板块内品种太少，截面排名无意义
             continue
-        
+
         syms = list(sym_rates.keys())
         vals = [sym_rates[s] for s in syms]
         n = len(syms)
-        
+
         # 排名 → [-1, 1] → [-100, 100]
         sorted_idx = np.argsort(vals)
         ranks = np.zeros(n)
         ranks[sorted_idx] = np.arange(1, n + 1)
         norm_ranks = (ranks - 1) / max(n - 1, 1) * 2 - 1  # [-1, 1]
-        
+
         for i, sym in enumerate(syms):
             result[sym] = norm_ranks[i] * 100  # [-100, 100]
-    
+
     return result
 
 
 def _get_smoothed_cs_rank(symbol, date_int, smooth=5):
     """获取平滑后的基差截面排名。
-    
+
     用最近 smooth 天的排名平均，减少单日波动。
     """
     if not has_basis_data(symbol):
         return 0.0
-    
+
     # 确保日期在缓存中
     for d_offset in range(smooth):
         d = date_int - d_offset
         if d not in _CS_RANK_CACHE:
             _CS_RANK_CACHE[d] = _compute_cs_ranks_for_date(d)
-    
+
     # 取最近 smooth 天的平均
     total = 0.0
     count = 0
@@ -277,16 +278,16 @@ def _get_smoothed_cs_rank(symbol, date_int, smooth=5):
         if symbol in ranks:
             total += ranks[symbol]
             count += 1
-    
+
     if count == 0:
         return 0.0
-    
+
     return total / count
 
 
 def basis_cs_rank_factor(symbol, date_int, smooth=5):
     """基差截面排名因子。
-    
+
     返回 dict:
       - basis_cs_rank: 同板块内基差排名 × 100（[-100, +100]）
         · 排名最高（基差最强）→ +100
@@ -893,6 +894,7 @@ def compute_enhanced_F(symbol, date_int, date_str=None, sector=None, df_cache=No
         # 获取板块
         if sector is None:
             from four_dim_strategy import SYMBOLS
+
             sector = SYMBOLS.get(symbol, {}).get("group", "其他")
         # 优先级 2：板块级权重
         weights = SECTOR_FACTOR_WEIGHTS.get(sector, DEFAULT_FACTOR_WEIGHTS)
@@ -946,6 +948,7 @@ def precompute_enhanced_F_array(symbol, date_ints=None, date_strs=None, sector=N
         # 获取板块
         if sector is None:
             from four_dim_strategy import SYMBOLS
+
             sector = SYMBOLS.get(symbol, {}).get("group", "其他")
         # 优先级 2：板块级权重
         weights = SECTOR_FACTOR_WEIGHTS.get(sector, DEFAULT_FACTOR_WEIGHTS)

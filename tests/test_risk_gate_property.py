@@ -28,6 +28,7 @@ import unittest
 try:
     from hypothesis import assume, given, settings
     from hypothesis import strategies as st
+
     _HAS_HYPOTHESIS = True
 except ImportError:
     _HAS_HYPOTHESIS = False

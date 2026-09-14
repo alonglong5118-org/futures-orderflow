@@ -16,11 +16,13 @@ build_kline_cflow_from_local.py —— 用 Ken 桌面 17 年 1 分钟 K 线造 P
       键用大写（FG/SA/JM/J/JD/LH）以匹配 four_dim_strategy.score_C 的 _CONTRACT_CPOS_KEY.upper() 查找。
       precompute_C_array(c_source="kline") 直接消费；回溯用 date_ints 走前向填充，对 1 日约定偏差鲁棒。
 """
+
+import json
 import os
 import re
-import json
-import zipfile
 import tempfile
+import zipfile
+
 import numpy as np
 import pandas as pd
 
@@ -33,10 +35,10 @@ OUT = os.path.join(HERE, "cflow_kline_cache.json")
 SYMS = {
     "FG": ("CZCE", "ZCE", 2012, "FG"),
     "SA": ("CZCE", "ZCE", 2019, "SA"),
-    "JM": ("DCE",  "DCE", 2013, "JM"),
-    "J":  ("DCE",  "DCE", 2011, "J"),
-    "jd": ("DCE",  "DCE", 2013, "JD"),
-    "lh": ("DCE",  "DCE", 2021, "LH"),
+    "JM": ("DCE", "DCE", 2013, "JM"),
+    "J": ("DCE", "DCE", 2011, "J"),
+    "jd": ("DCE", "DCE", 2013, "JD"),
+    "lh": ("DCE", "DCE", 2021, "LH"),
 }
 
 END_YEAR = 2026
@@ -140,8 +142,11 @@ def build_symbol(sym, ex, exsuf, listed, prefix):
             print(f"  [warn] {sym} proxy 空，跳过", flush=True)
             return None
         hist = [{"date": d, "C_score": v} for d, v in sorted(sm.items())]
-        print(f"  [ok] {sym}: {len(hist)} 交易日，{hist[0]['date']}~{hist[-1]['date']} "
-              f"范围 [{min(v for _,v in sm.items()):.1f}, {max(v for _,v in sm.items()):.1f}]", flush=True)
+        print(
+            f"  [ok] {sym}: {len(hist)} 交易日，{hist[0]['date']}~{hist[-1]['date']} "
+            f"范围 [{min(v for _, v in sm.items()):.1f}, {max(v for _, v in sm.items()):.1f}]",
+            flush=True,
+        )
         cache_key = sym.upper()
         return cache_key, {
             "symbol": cache_key,
@@ -150,6 +155,7 @@ def build_symbol(sym, ex, exsuf, listed, prefix):
         }
     finally:
         import shutil
+
         shutil.rmtree(tmp, ignore_errors=True)
 
 

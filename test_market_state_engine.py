@@ -52,25 +52,49 @@ def check(name, cond, detail=""):
 # ═══════════════════════════════════════════════════════════
 
 EXTRACT_FUNCS = [
-    "_calc_ma_alignment_score", "_calc_vol_level_score", "_calc_vol_change_score",
-    "_calc_volume_price_score", "_calc_trend_strength_score",
-    "calc_tech_market_state", "determine_market_state", "update_consensus_state",
-    "_save_market_states_locked", "restore_market_states",
-    "_update_market_states", "_update_market_states_impl",
+    "_calc_ma_alignment_score",
+    "_calc_vol_level_score",
+    "_calc_vol_change_score",
+    "_calc_volume_price_score",
+    "_calc_trend_strength_score",
+    "calc_tech_market_state",
+    "determine_market_state",
+    "update_consensus_state",
+    "_save_market_states_locked",
+    "restore_market_states",
+    "_update_market_states",
+    "_update_market_states_impl",
 ]
 EXTRACT_CONSTS = [
-    "MARKET_STATE_TREND_EARLY", "MARKET_STATE_TREND_MID", "MARKET_STATE_TREND_LATE",
+    "MARKET_STATE_TREND_EARLY",
+    "MARKET_STATE_TREND_MID",
+    "MARKET_STATE_TREND_LATE",
     "MARKET_STATE_SIDEWAYS",
-    "TECH_WEIGHT_MA_ALIGNMENT", "TECH_WEIGHT_VOL_LEVEL", "TECH_WEIGHT_VOL_CHANGE",
-    "TECH_WEIGHT_VOLUME_PRICE", "TECH_WEIGHT_TREND_STRENGTH",
-    "TECH_MA_FAST", "TECH_MA_SLOW", "TECH_ATR_PERIOD", "TECH_VOLUME_MA_PERIOD",
-    "TECH_ADX_PERIOD", "TECH_LOOKBACK_BARS",
-    "TECH_SCORE_TREND_MID_MIN", "TECH_SCORE_TREND_LATE_MIN", "TECH_SCORE_SIDEWAYS_MAX",
+    "TECH_WEIGHT_MA_ALIGNMENT",
+    "TECH_WEIGHT_VOL_LEVEL",
+    "TECH_WEIGHT_VOL_CHANGE",
+    "TECH_WEIGHT_VOLUME_PRICE",
+    "TECH_WEIGHT_TREND_STRENGTH",
+    "TECH_MA_FAST",
+    "TECH_MA_SLOW",
+    "TECH_ATR_PERIOD",
+    "TECH_VOLUME_MA_PERIOD",
+    "TECH_ADX_PERIOD",
+    "TECH_LOOKBACK_BARS",
+    "TECH_SCORE_TREND_MID_MIN",
+    "TECH_SCORE_TREND_LATE_MIN",
+    "TECH_SCORE_SIDEWAYS_MAX",
     "STATE_CONFIRM_BARS",
-    "SECOND_LEVEL_THINKING_ENABLED", "CONSENSUS_EXTREME_HIGH", "CONSENSUS_EXTREME_LOW",
+    "SECOND_LEVEL_THINKING_ENABLED",
+    "CONSENSUS_EXTREME_HIGH",
+    "CONSENSUS_EXTREME_LOW",
     "CONSENSUS_MIN_SAMPLES",
-    "_MS_STATE_FILE", "_MS_STATE_SAVE_INTERVAL", "_MS_STATE_MAX_AGE",
-    "_MS_STATE_UPDATE_INTERVAL", "_ms_state_last_save", "_MS_STATE_LAST_UPDATE",
+    "_MS_STATE_FILE",
+    "_MS_STATE_SAVE_INTERVAL",
+    "_MS_STATE_MAX_AGE",
+    "_MS_STATE_UPDATE_INTERVAL",
+    "_ms_state_last_save",
+    "_MS_STATE_LAST_UPDATE",
     "_ms_state_updating",
 ]
 
@@ -84,9 +108,12 @@ def _extract_code():
         if isinstance(node, ast.FunctionDef) and node.name in EXTRACT_FUNCS:
             funcs.append(node)
             got_f.add(node.name)
-        elif (isinstance(node, ast.Assign) and len(node.targets) == 1
-              and isinstance(node.targets[0], ast.Name)
-              and node.targets[0].id in EXTRACT_CONSTS):
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id in EXTRACT_CONSTS
+        ):
             consts.append(node)
             got_c.add(node.targets[0].id)
     missing = (set(EXTRACT_FUNCS) - got_f) | (set(EXTRACT_CONSTS) - got_c)
@@ -140,13 +167,16 @@ def make_sandbox(tmpdir, daily_map=None, roll_levels=None):
         transitions.append(kw)
 
     ns = {
-        "json": json, "os": os, "time": time, "threading": threading,
-        "HERE": str(tmpdir),                      # 持久化写入隔离临时目录
+        "json": json,
+        "os": os,
+        "time": time,
+        "threading": threading,
+        "HERE": str(tmpdir),  # 持久化写入隔离临时目录
         "market_state_cache": {},
         "consensus_state": {},
         "SYMBOLS": {"TST": {"name": "测试甲"}, "TS2": {"name": "测试乙"}, "TS3": {"name": "测试丙"}},
         "load_daily_refreshed": _load_daily,
-        "load_journal_trades_for_perf": lambda: (calls.__setitem__("journal", calls["journal"] + 1) or []),
+        "load_journal_trades_for_perf": lambda: calls.__setitem__("journal", calls["journal"] + 1) or [],
         "calc_performance_score": lambda trades: {"total_score": 50.0, "level": "mid"},
         "rollover_info": _rollover,
         "exp": exp,
@@ -161,16 +191,31 @@ def make_sandbox(tmpdir, daily_map=None, roll_levels=None):
 
 # ── 合成K线（开盘/最高/最低/收盘/成交量）──
 
+
 def kl_uptrend(n=120, start=100.0, step=1.0):
-    return [{"open": start + i * step - 0.5, "high": start + i * step + 1.5,
-             "low": start + i * step - 1.5, "close": start + i * step,
-             "volume": 1000 + i * 5} for i in range(n)]
+    return [
+        {
+            "open": start + i * step - 0.5,
+            "high": start + i * step + 1.5,
+            "low": start + i * step - 1.5,
+            "close": start + i * step,
+            "volume": 1000 + i * 5,
+        }
+        for i in range(n)
+    ]
 
 
 def kl_downtrend(n=120, start=300.0, step=1.2):
-    return [{"open": start - i * step, "high": start - i * step + 1.5,
-             "low": start - i * step - 1.5, "close": start - i * step,
-             "volume": 1000} for i in range(n)]
+    return [
+        {
+            "open": start - i * step,
+            "high": start - i * step + 1.5,
+            "low": start - i * step - 1.5,
+            "close": start - i * step,
+            "volume": 1000,
+        }
+        for i in range(n)
+    ]
 
 
 def kl_sideways(n=120, base=100.0, amp=0.4):
@@ -196,31 +241,50 @@ ns = make_sandbox(_new_tmpdir(prefix="mse_t1_"))
 calc = ns["calc_tech_market_state"]
 
 r = calc([], None)
-check("T1a 短序列兜底（<65根 → 50分/震荡）",
-      r["total_score"] == 50 and r["state_candidate"] == "sideways" and r["ma_fast"] == 0,
-      f"score={r['total_score']} state={r['state_candidate']}")
+check(
+    "T1a 短序列兜底（<65根 → 50分/震荡）",
+    r["total_score"] == 50 and r["state_candidate"] == "sideways" and r["ma_fast"] == 0,
+    f"score={r['total_score']} state={r['state_candidate']}",
+)
 
 up = calc(kl_uptrend(), [k["volume"] for k in kl_uptrend()])
-check("T1b 强上行 → 趋势态 + 方向 long",
-      up["state_candidate"] in TREND_STATES and up["trend_direction"] == "long",
-      f"score={up['total_score']} state={up['state_candidate']} dir={up['trend_direction']}")
+check(
+    "T1b 强上行 → 趋势态 + 方向 long",
+    up["state_candidate"] in TREND_STATES and up["trend_direction"] == "long",
+    f"score={up['total_score']} state={up['state_candidate']} dir={up['trend_direction']}",
+)
 
 sw = calc(kl_sideways(), [k["volume"] for k in kl_sideways()])
-check("T1c 区间震荡 → sideways",
-      sw["state_candidate"] == "sideways",
-      f"score={sw['total_score']} state={sw['state_candidate']}")
+check(
+    "T1c 区间震荡 → sideways",
+    sw["state_candidate"] == "sideways",
+    f"score={sw['total_score']} state={sw['state_candidate']}",
+)
 
 dn = calc(kl_downtrend(), None)
-check("T1d 下行趋势 → 方向 short",
-      dn["trend_direction"] == "short" and dn["state_candidate"] in TREND_STATES,
-      f"score={dn['total_score']} state={dn['state_candidate']} dir={dn['trend_direction']}")
+check(
+    "T1d 下行趋势 → 方向 short",
+    dn["trend_direction"] == "short" and dn["state_candidate"] in TREND_STATES,
+    f"score={dn['total_score']} state={dn['state_candidate']} dir={dn['trend_direction']}",
+)
 
 ind = up["indicators"]
-expect_total = round((ind["ma_alignment"] * 25 + ind["vol_level"] * 20 + ind["vol_change"] * 15
-                      + ind["volume_price"] * 20 + ind["trend_strength"] * 20) / 100, 1)
-check("T1e 加权结构（五维权重 25/20/15/20/20 复算一致）",
-      abs(up["total_score"] - expect_total) < 0.05,
-      f"实现={up['total_score']} 复算={expect_total} 子分={ind}")
+expect_total = round(
+    (
+        ind["ma_alignment"] * 25
+        + ind["vol_level"] * 20
+        + ind["vol_change"] * 15
+        + ind["volume_price"] * 20
+        + ind["trend_strength"] * 20
+    )
+    / 100,
+    1,
+)
+check(
+    "T1e 加权结构（五维权重 25/20/15/20/20 复算一致）",
+    abs(up["total_score"] - expect_total) < 0.05,
+    f"实现={up['total_score']} 复算={expect_total} 子分={ind}",
+)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -263,15 +327,22 @@ for _ in range(3):
     res = det(tr_te, pr_mid, prev_state="sideways", confirm_counter=counter)
     seq.append((res["state"], res["confirm_counter"], res["switched"]))
     counter = res["confirm_counter"]
-check("T2b 确认机制（前2根保持旧态，第3根切换）",
-      seq[0] == ("sideways", 1, False) and seq[1] == ("sideways", 2, False)
-      and seq[2] == ("trend_early", 0, True),
-      f"轨迹={seq}")
+check(
+    "T2b 确认机制（前2根保持旧态，第3根切换）",
+    seq[0] == ("sideways", 1, False) and seq[1] == ("sideways", 2, False) and seq[2] == ("trend_early", 0, True),
+    f"轨迹={seq}",
+)
 
 res = det(tr_te, pr_mid, prev_state=None)
-check("T2c prev=None 直接采用候选态", res["state"] == "trend_early" and res["confirm_counter"] == 0 and not res["switched"])
+check(
+    "T2c prev=None 直接采用候选态",
+    res["state"] == "trend_early" and res["confirm_counter"] == 0 and not res["switched"],
+)
 res = det(tr_te, pr_mid, prev_state="trend_early", confirm_counter=2)
-check("T2d prev==candidate 计数器归零", res["state"] == "trend_early" and res["confirm_counter"] == 0 and not res["switched"])
+check(
+    "T2d prev==candidate 计数器归零",
+    res["state"] == "trend_early" and res["confirm_counter"] == 0 and not res["switched"],
+)
 res = det({"state_candidate": "unknown_state", "total_score": 50.0}, pr_mid, prev_state=None)
 check("T2e 非法 tech 态透传 + low 置信", res["state"] == "unknown_state" and res["confidence"] == "low")
 
@@ -296,19 +367,27 @@ check("T3b 样本<门槛(10)不更新", "consensus_score" not in ns["consensus_s
 ns["consensus_state"] = {}
 ucs(mk_states(12, "trend_mid"))
 cs = ns["consensus_state"]
-check("T3c 全趋势 → 共识100 + 极端乐观", cs.get("consensus_score") == 100 and cs.get("extreme_high") is True and cs.get("extreme_low") is False)
+check(
+    "T3c 全趋势 → 共识100 + 极端乐观",
+    cs.get("consensus_score") == 100 and cs.get("extreme_high") is True and cs.get("extreme_low") is False,
+)
 
 ns["consensus_state"] = {}
 ucs(mk_states(12, "sideways"))
 cs = ns["consensus_state"]
-check("T3d 全震荡 → 共识0 + 极端悲观", cs.get("consensus_score") == 0 and cs.get("extreme_low") is True and cs.get("extreme_high") is False)
+check(
+    "T3d 全震荡 → 共识0 + 极端悲观",
+    cs.get("consensus_score") == 0 and cs.get("extreme_low") is True and cs.get("extreme_high") is False,
+)
 
 ns["consensus_state"] = {}
-mixed = {**{f"t{i}": {"state": "trend_mid"} for i in range(6)},
-         **{f"x{i}": {"state": "sideways"} for i in range(6)}}
+mixed = {**{f"t{i}": {"state": "trend_mid"} for i in range(6)}, **{f"x{i}": {"state": "sideways"} for i in range(6)}}
 ucs(mixed)
 cs = ns["consensus_state"]
-check("T3e 半趋势半震荡 → 共识50 + 双极端皆 False", cs.get("consensus_score") == 50 and not cs.get("extreme_high") and not cs.get("extreme_low"))
+check(
+    "T3e 半趋势半震荡 → 共识50 + 双极端皆 False",
+    cs.get("consensus_score") == 50 and not cs.get("extreme_high") and not cs.get("extreme_low"),
+)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -318,19 +397,31 @@ print("\n── T4 持久化 round-trip ──")
 tmp4 = _new_tmpdir(prefix="mse_t4_")
 ns = make_sandbox(tmp4)
 snap_path = Path(ns["_MS_STATE_FILE"])
-info = {"state": "trend_mid", "prev_state": "sideways", "confirm_counter": 0,
-        "tech_score": 72.1, "perf_score": 55.0, "confidence": "mid",
-        "trend_direction": "long", "tech_indicators": {"ma_alignment": 80.0},
-        "last_update": 1750000000.5, "switched": True}
+info = {
+    "state": "trend_mid",
+    "prev_state": "sideways",
+    "confirm_counter": 0,
+    "tech_score": 72.1,
+    "perf_score": 55.0,
+    "confidence": "mid",
+    "trend_direction": "long",
+    "tech_indicators": {"ma_alignment": 80.0},
+    "last_update": 1750000000.5,
+    "switched": True,
+}
 
 ns["market_state_cache"] = {"TST": info}
 ns["_save_market_states_locked"]()
-check("T4a 落盘结构（saved_at+states，原子写无 .tmp 残留）",
-      snap_path.exists() and not Path(str(snap_path) + ".tmp").exists(),
-      f"文件={snap_path.name}")
+check(
+    "T4a 落盘结构（saved_at+states，原子写无 .tmp 残留）",
+    snap_path.exists() and not Path(str(snap_path) + ".tmp").exists(),
+    f"文件={snap_path.name}",
+)
 snap = json.loads(snap_path.read_text(encoding="utf-8"))
-check("T4a2 saved_at 为当前时间且 states 与缓存一致",
-      abs(snap["saved_at"] - time.time()) < 5 and snap["states"] == {"TST": info})
+check(
+    "T4a2 saved_at 为当前时间且 states 与缓存一致",
+    abs(snap["saved_at"] - time.time()) < 5 and snap["states"] == {"TST": info},
+)
 
 fresh = make_sandbox(tmp4)  # 新命名空间模拟"重启"
 check("T4b 文件缺失 → 0", make_sandbox(_new_tmpdir(prefix="mse_t4b_"))["restore_market_states"]() == 0)
@@ -343,8 +434,10 @@ ghost_snap = {"saved_at": time.time(), "states": {"TST": info, "GHOST": info}}
 snap_path.write_text(json.dumps(ghost_snap), encoding="utf-8")
 f2 = make_sandbox(tmp4)
 n = f2["restore_market_states"]()
-check("T4d 只恢复 SYMBOLS 内品种（GHOST 被跳过）",
-      n == 1 and "GHOST" not in f2["market_state_cache"] and "TST" in f2["market_state_cache"])
+check(
+    "T4d 只恢复 SYMBOLS 内品种（GHOST 被跳过）",
+    n == 1 and "GHOST" not in f2["market_state_cache"] and "TST" in f2["market_state_cache"],
+)
 
 # 过期快照（>7天）
 stale = {"saved_at": time.time() - 8 * 86400, "states": {"TST": info}}
@@ -378,38 +471,62 @@ print("\n── T5 _update_market_states_impl（核心回归）──")
 # 旧实现读 state["klines_data"] 会判成趋势；新实现必须无视幽灵键、以日线为准判震荡。
 ghost_state = {"klines_data": {"TST": kl_uptrend(), "TS2": kl_uptrend()}}
 daily = {"TST": df_of(kl_sideways()), "TS2": df_of(kl_uptrend()), "TS3": df_of(kl_sideways()[:30])}
-ns = make_sandbox(_new_tmpdir(prefix="mse_t5a_"), daily_map=daily,
-                  roll_levels={"TST": "warn"})
+ns = make_sandbox(_new_tmpdir(prefix="mse_t5a_"), daily_map=daily, roll_levels={"TST": "warn"})
 ns["_ms_state_last_save"] = 0.0
 ns["_MS_STATE_LAST_UPDATE"] = 0.0
 ns["_update_market_states_impl"](None, ghost_state)
 cache = ns["market_state_cache"]
-check("T5a 🔴 幽灵键守卫：state.klines_data 被无视，以日线震荡判 sideways",
-      cache.get("TST", {}).get("state") == "sideways",
-      f"TST={cache.get('TST', {}).get('state')}（旧实现会判成 trend）")
+check(
+    "T5a 🔴 幽灵键守卫：state.klines_data 被无视，以日线震荡判 sideways",
+    cache.get("TST", {}).get("state") == "sideways",
+    f"TST={cache.get('TST', {}).get('state')}（旧实现会判成 trend）",
+)
 # 强趋势日线首轮不立即切换（确认机制）：candidate=trend_mid ≠ prev默认sideways，
 # counter 1<3 → 保持 sideways；连续 3 轮后才完成切换——跨轮确认轨迹完整验证
 ts2_round1 = cache.get("TS2", {})
-check("T5b 首轮强趋势不切换（确认机制：counter=1 保持旧态）",
-      ts2_round1.get("state") == "sideways" and ts2_round1.get("confirm_counter") == 1,
-      f"state={ts2_round1.get('state')} counter={ts2_round1.get('confirm_counter')}")
+check(
+    "T5b 首轮强趋势不切换（确认机制：counter=1 保持旧态）",
+    ts2_round1.get("state") == "sideways" and ts2_round1.get("confirm_counter") == 1,
+    f"state={ts2_round1.get('state')} counter={ts2_round1.get('confirm_counter')}",
+)
 for _ in range(2):
     ns["_MS_STATE_LAST_UPDATE"] = 0.0  # 绕过更新节流，模拟连续三轮
     ns["_update_market_states_impl"](None, ghost_state)
 ts2_final = ns["market_state_cache"]["TS2"]
-check("T5b2 三轮确认后切换为趋势态（counter 累积 1→2→3）",
-      ts2_final["state"] in TREND_STATES and ts2_final["confirm_counter"] == 0
-      and ts2_final["switched"] is True and ts2_final["trend_direction"] == "long",
-      f"最终={ts2_final['state']}")
+check(
+    "T5b2 三轮确认后切换为趋势态（counter 累积 1→2→3）",
+    ts2_final["state"] in TREND_STATES
+    and ts2_final["confirm_counter"] == 0
+    and ts2_final["switched"] is True
+    and ts2_final["trend_direction"] == "long",
+    f"最终={ts2_final['state']}",
+)
 check("T5c 日线<65根的品种被跳过", "TS3" not in cache and ns["_calls"]["load_daily"] >= 3)
-check("T5d 缓存条目十键结构完整",
-      all(k in cache["TST"] for k in ("state", "prev_state", "confirm_counter", "tech_score",
-                                      "perf_score", "confidence", "trend_direction",
-                                      "tech_indicators", "last_update", "switched")))
-check("T5e rollover 联动：warn 品种 set_roll_thin(True)，其余 False",
-      ("TST", True) in ns["exp"].roll_thin and ("TS2", False) in ns["exp"].roll_thin
-      and ("TS3", True) not in ns["exp"].roll_thin,
-      f"roll_thin={ns['exp'].roll_thin}")
+check(
+    "T5d 缓存条目十键结构完整",
+    all(
+        k in cache["TST"]
+        for k in (
+            "state",
+            "prev_state",
+            "confirm_counter",
+            "tech_score",
+            "perf_score",
+            "confidence",
+            "trend_direction",
+            "tech_indicators",
+            "last_update",
+            "switched",
+        )
+    ),
+)
+check(
+    "T5e rollover 联动：warn 品种 set_roll_thin(True)，其余 False",
+    ("TST", True) in ns["exp"].roll_thin
+    and ("TS2", False) in ns["exp"].roll_thin
+    and ("TS3", True) not in ns["exp"].roll_thin,
+    f"roll_thin={ns['exp'].roll_thin}",
+)
 
 # 节流：缓存非空 + 上轮更新在 600s 内 → 直接返回（日线零加载）
 ns["_calls"]["load_daily"] = 0
@@ -422,9 +539,11 @@ ns2 = make_sandbox(_new_tmpdir(prefix="mse_t5g_"), daily_map=daily)
 ns2["_MS_STATE_LAST_UPDATE"] = time.time()
 ns2["_ms_state_last_save"] = time.time()
 ns2["_update_market_states_impl"](None, {})
-check("T5g 空缓存不受节流拦截（首轮照常计算）",
-      ns2["_calls"]["load_daily"] == 3 and len(ns2["market_state_cache"]) == 2,
-      f"加载={ns2['_calls']['load_daily']} 产出={len(ns2['market_state_cache'])}（TS3 数据不足跳过）")
+check(
+    "T5g 空缓存不受节流拦截（首轮照常计算）",
+    ns2["_calls"]["load_daily"] == 3 and len(ns2["market_state_cache"]) == 2,
+    f"加载={ns2['_calls']['load_daily']} 产出={len(ns2['market_state_cache'])}（TS3 数据不足跳过）",
+)
 
 # 落盘节流：_ms_state_last_save=0 → 落盘一次；300s 内第二轮不再落盘
 save_calls = []
@@ -446,11 +565,14 @@ ns4["_MS_STATE_LAST_UPDATE"] = 0.0
 ns4["_ms_state_last_save"] = time.time()
 ns4["_update_market_states_impl"](None, {})
 entry = ns4["market_state_cache"]["TST"]
-check("T5i 确认切换 → log_state_transition 落日志",
-      entry["switched"] is True and entry["prev_state"] == "sideways"
-      and ns4["_calls"]["log_transition"] == 1
-      and ns4["_transitions"][0].get("symbol") == "TST",
-      f"new={entry['state']} 日志={ns4['_transitions']}")
+check(
+    "T5i 确认切换 → log_state_transition 落日志",
+    entry["switched"] is True
+    and entry["prev_state"] == "sideways"
+    and ns4["_calls"]["log_transition"] == 1
+    and ns4["_transitions"][0].get("symbol") == "TST",
+    f"new={entry['state']} 日志={ns4['_transitions']}",
+)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -468,14 +590,17 @@ def _slow_impl(feed, state):
 
 ns5["_update_market_states_impl"] = _slow_impl
 ns5["_ms_state_updating"] = False
-ns5["_update_market_states"](None, {})   # 启动 worker（同步置位去重标记）
-ns5["_update_market_states"](None, {})   # 应被去重
+ns5["_update_market_states"](None, {})  # 启动 worker（同步置位去重标记）
+ns5["_update_market_states"](None, {})  # 应被去重
 flag_during = ns5["_ms_state_updating"]
 t0 = time.time()
 while ns5["_ms_state_updating"] and time.time() - t0 < 5:
     time.sleep(0.05)
-check("T6a 去重：运行中重复调用不重入（impl 只执行一次）", impl_calls["n"] == 1,
-      f"impl_calls={impl_calls['n']} 运行中标记={flag_during}")
+check(
+    "T6a 去重：运行中重复调用不重入（impl 只执行一次）",
+    impl_calls["n"] == 1,
+    f"impl_calls={impl_calls['n']} 运行中标记={flag_during}",
+)
 check("T6b 线程结束后 _ms_state_updating 复位 False", ns5["_ms_state_updating"] is False)
 
 
@@ -496,26 +621,38 @@ def _find_func(name):
 _impl_node = _find_func("_update_market_states_impl")
 _ghost_access = []
 for node in ast.walk(_impl_node):
-    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "get" and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "state" and node.args
-            and isinstance(node.args[0], ast.Constant) and node.args[0].value == "klines_data"):
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "state"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == "klines_data"
+    ):
         _ghost_access.append("state.get('klines_data')")
-    if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
-            and node.value.id == "state" and isinstance(node.slice, ast.Constant)
-            and node.slice.value == "klines_data"):
+    if (
+        isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "state"
+        and isinstance(node.slice, ast.Constant)
+        and node.slice.value == "klines_data"
+    ):
         _ghost_access.append("state['klines_data']")
 check("T7a 🔴 impl 内无幽灵键访问（AST 级，docstring 不误报）", not _ghost_access, f"违规={_ghost_access}")
 
-_uses_daily = any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                  and node.func.id == "load_daily_refreshed"
-                  for node in ast.walk(_impl_node))
+_uses_daily = any(
+    isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "load_daily_refreshed"
+    for node in ast.walk(_impl_node)
+)
 check("T7b impl 以 load_daily_refreshed 为数据源", _uses_daily)
 
 _main_node = _find_func("main")
 _main_restores = _main_node is not None and any(
-    isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    and node.func.id == "restore_market_states" for node in ast.walk(_main_node))
+    isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "restore_market_states"
+    for node in ast.walk(_main_node)
+)
 check("T7c main() 启动时调用 restore_market_states", _main_restores)
 
 check("T7d /api/market-state 路由存在", 'self.path.startswith("/api/market-state")' in _SRC)
@@ -528,14 +665,19 @@ print("\n── T8 运行时只读 API 交叉验证 ──")
 try:
     with urllib.request.urlopen("http://127.0.0.1:8741/api/market-state", timeout=4) as resp:
         ms = json.loads(resp.read().decode("utf-8"))
-    check("T8a 线上 state_count > 0（幽灵键修复后引擎真实产出）",
-          (ms.get("state_count") or 0) > 0, f"state_count={ms.get('state_count')}")
+    check(
+        "T8a 线上 state_count > 0（幽灵键修复后引擎真实产出）",
+        (ms.get("state_count") or 0) > 0,
+        f"state_count={ms.get('state_count')}",
+    )
     if SNAPSHOT_FILE.exists():
         snap = json.loads(SNAPSHOT_FILE.read_text(encoding="utf-8"))
         fresh_ok = time.time() - float(snap.get("saved_at") or 0) < 7 * 86400
-        check("T8b 快照文件结构合法且未过期",
-              fresh_ok and len(snap.get("states") or {}) > 0,
-              f"states={len(snap.get('states') or {})}")
+        check(
+            "T8b 快照文件结构合法且未过期",
+            fresh_ok and len(snap.get("states") or {}) > 0,
+            f"states={len(snap.get('states') or {})}",
+        )
     else:
         check("T8b 快照文件存在", False, "market_state_cache.json 不存在")
 except Exception as e:

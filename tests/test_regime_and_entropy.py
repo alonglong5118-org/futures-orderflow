@@ -37,6 +37,7 @@ sys.path.insert(0, ROOT)
 
 try:
     from ga_group_six_factor_robust import _weight_entropy
+
     _HAS_DEAP = True
 except ImportError:
     _weight_entropy = None

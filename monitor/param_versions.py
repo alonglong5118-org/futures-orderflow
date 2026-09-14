@@ -26,7 +26,6 @@
 import copy
 import json
 import os
-import shutil
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -108,15 +107,17 @@ class ParamVersionManager:
             json.dump(version_data, f, indent=2, ensure_ascii=False)
 
         # 更新索引
-        self._index["versions"].append({
-            "version_id": version_id,
-            "timestamp": timestamp,
-            "description": description,
-            "author": author,
-            "filename": filename,
-            "n_symbols": len(params),
-            "validation_summary": validation_summary or {},
-        })
+        self._index["versions"].append(
+            {
+                "version_id": version_id,
+                "timestamp": timestamp,
+                "description": description,
+                "author": author,
+                "filename": filename,
+                "n_symbols": len(params),
+                "validation_summary": validation_summary or {},
+            }
+        )
 
         # 设为当前版本
         self._index["current_version"] = version_id
@@ -156,9 +157,7 @@ class ParamVersionManager:
             versions = versions[:limit]
         return versions
 
-    def compare_versions(
-        self, version_a: str, version_b: str
-    ) -> Dict[str, Dict[str, Dict[str, float]]]:
+    def compare_versions(self, version_a: str, version_b: str) -> Dict[str, Dict[str, Dict[str, float]]]:
         """
         比较两个版本的参数差异。
 
@@ -203,9 +202,7 @@ class ParamVersionManager:
         self._save_index()
         return self.load_version(version_id)
 
-    def export_per_symbol_risk(
-        self, version_id: Optional[str] = None
-    ) -> Dict[str, Dict[str, float]]:
+    def export_per_symbol_risk(self, version_id: Optional[str] = None) -> Dict[str, Dict[str, float]]:
         """
         导出为 four_dim_strategy 兼容的 per_symbol_risk 格式。
         只包含 stop_atr_mult 和 rr_ratio。

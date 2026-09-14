@@ -50,7 +50,7 @@ def run_backtest(symbols, tail=None):
         results[sym] = r
 
     elapsed = time.time() - t0
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"总计: {len(symbols)} 品种, {total_trades} 笔成交, 耗时 {elapsed:.1f}s")
     return results
 
@@ -67,14 +67,16 @@ def summarize(results):
             strat = t.get("strategy", "无标签")
             by_strat.setdefault(strat, []).append(t["R_adj"])
         for strat, rs in by_strat.items():
-            rows.append({
-                "symbol": sym,
-                "name": r.get("name", sym),
-                "strategy": strat,
-                "trades": len(rs),
-                "expR": round(float(np.mean(rs)), 4),
-                "win_rate": round(sum(1 for x in rs if x > 0) / len(rs), 3),
-            })
+            rows.append(
+                {
+                    "symbol": sym,
+                    "name": r.get("name", sym),
+                    "strategy": strat,
+                    "trades": len(rs),
+                    "expR": round(float(np.mean(rs)), 4),
+                    "win_rate": round(sum(1 for x in rs if x > 0) / len(rs), 3),
+                }
+            )
     return rows
 
 
@@ -100,9 +102,9 @@ def print_summary(rows):
 
 def print_cluster_analysis(results):
     """簇贡献维度分析：各品种 trend/mean/seasonal 贡献占比与期望R的关系。"""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("簇贡献分析（品种 × 主导簇 → 期望R）")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for sym, r in sorted(results.items()):
         trades_detail = r.get("trades_detail", [])
         if not trades_detail or len(trades_detail) < 5:

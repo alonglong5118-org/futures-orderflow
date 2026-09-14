@@ -8,7 +8,13 @@ NEW：trade_config.json 新 schema 折算成固定 元/手/单边：
 费用只缩放每笔 R_adj，不改成交集合 → OLD/NEW 逐笔一一对应，delta 可配对。
 输出：全品种 pooled expR / total_R、Δ、逐品种 Δ 表、配对 bootstrap CI 与 P(Δ<0)。
 """
-import os, sys, json, copy, time
+
+import copy
+import json
+import os
+import sys
+import time
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -115,24 +121,26 @@ def main():
     t0 = time.time()
     cfg_new, changes = build_cfg_new()
     print(f"[build] {len(changes)} 个品种费率有差异:")
-    for s, c in sorted(changes.items(), key=lambda kv: abs(kv[1]['new_fee'] - kv[1]['old_fee']), reverse=True):
-        print(f"   {s:4s} 旧 {c['old_fee']:>8.3f} → 新 {c['new_fee']:>8.3f}  "
-              f"(代表价 {c['rep_price']:>8.1f} ×{c['mult']}, src={c['src']})")
+    for s, c in sorted(changes.items(), key=lambda kv: abs(kv[1]["new_fee"] - kv[1]["old_fee"]), reverse=True):
+        print(
+            f"   {s:4s} 旧 {c['old_fee']:>8.3f} → 新 {c['new_fee']:>8.3f}  "
+            f"(代表价 {c['rep_price']:>8.1f} ×{c['mult']}, src={c['src']})"
+        )
 
     print("\n[run] OLD (当前 DEFAULT fee) …")
     po = run_all(S.DEFAULT_CONFIG)
-    print(f"   OLD 完成 {time.time()-t0:.1f}s")
+    print(f"   OLD 完成 {time.time() - t0:.1f}s")
 
     print("[run] NEW (live schema 折算) …")
     pn = run_all(cfg_new)
-    print(f"   NEW 完成 {time.time()-t0:.1f}s")
+    print(f"   NEW 完成 {time.time() - t0:.1f}s")
 
     n_o, tot_o, exp_o = pooled(po)
     n_n, tot_n, exp_n = pooled(pn)
     print("\n========== 全品种汇总 ==========")
     print(f"OLD : n={n_o}  expR={exp_o:.4f}  total_R={tot_o:.2f}")
     print(f"NEW : n={n_n}  expR={exp_n:.4f}  total_R={tot_n:.2f}")
-    print(f"Δ   : n={n_n-n_o}  ΔexpR={exp_n-exp_o:+.4f}  Δtotal_R={tot_n-tot_o:+.2f}")
+    print(f"Δ   : n={n_n - n_o}  ΔexpR={exp_n - exp_o:+.4f}  Δtotal_R={tot_n - tot_o:+.2f}")
 
     td, ci, p_neg, syms = paired_bootstrap(po, pn)
     print(f"\n配对 bootstrap (n={len(syms)} 品种, 4000 次):")
@@ -141,7 +149,8 @@ def main():
     # 逐品种 Δ 表（按 |Δtotal_R| 降序）
     rows = []
     for s in syms:
-        o = po[s]; nw = pn[s]
+        o = po[s]
+        nw = pn[s]
         rows.append((s, o["trades"], nw["total_R"] - o["total_R"], nw["expR"] - o["expR"]))
     rows.sort(key=lambda r: abs(r[2]), reverse=True)
     print("\n逐品种 Δtotal_R (top 20):")
@@ -149,15 +158,23 @@ def main():
     for s, n, dtr, de in rows[:20]:
         print(f"  {s:4s} {n:5d} {dtr:+10.3f} {de:+9.4f}")
 
-    print(f"\n[done] {time.time()-t0:.1f}s")
+    print(f"\n[done] {time.time() - t0:.1f}s")
     # 落盘供复核
     out = {
         "changes": changes,
         "OLD": {"n": n_o, "expR": exp_o, "total_R": tot_o},
         "NEW": {"n": n_n, "expR": exp_n, "total_R": tot_n},
-        "delta_total_R": td, "ci95": [float(x) for x in ci], "P_delta_neg": p_neg,
-        "per_symbol": {s: {"n": po[s]["trades"], "d_total_R": pn[s]["total_R"] - po[s]["total_R"],
-                           "d_expR": pn[s]["expR"] - po[s]["expR"]} for s in syms},
+        "delta_total_R": td,
+        "ci95": [float(x) for x in ci],
+        "P_delta_neg": p_neg,
+        "per_symbol": {
+            s: {
+                "n": po[s]["trades"],
+                "d_total_R": pn[s]["total_R"] - po[s]["total_R"],
+                "d_expR": pn[s]["expR"] - po[s]["expR"],
+            }
+            for s in syms
+        },
     }
     with open(os.path.join(HERE, "ab_fee_unify_result.json"), "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)

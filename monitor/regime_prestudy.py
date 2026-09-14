@@ -22,7 +22,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -36,8 +36,6 @@ from four_dim_strategy import (  # noqa: E402
     SYMBOLS,
     walk_forward_backtest,
 )
-from strategy_layer import REGIME_CODE_TO_NAME  # noqa: E402
-
 
 # ============================================================================
 # 常量
@@ -58,6 +56,7 @@ MIN_TRADES_PER_REGIME = 8
 # ============================================================================
 # 工具函数
 # ============================================================================
+
 
 def _make_regime_config(
     symbol: str,
@@ -126,6 +125,7 @@ def _regime_stats(trades: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
 # 基线分析
 # ============================================================================
 
+
 def analyze_baseline(symbol: str, tail: int = None) -> Dict[str, Any]:
     """
     分析基线参数下的 Regime 表现。
@@ -162,8 +162,7 @@ def analyze_baseline(symbol: str, tail: int = None) -> Dict[str, Any]:
         "overall_win_rate": result.get("win_rate", 0),
         "by_regime": regime_stats,
         "regime_distribution": {
-            r: round(s["trades"] / total * 100, 1) if total > 0 else 0
-            for r, s in regime_stats.items()
+            r: round(s["trades"] / total * 100, 1) if total > 0 else 0 for r, s in regime_stats.items()
         },
         "by_regime_result": result.get("by_regime", {}),
     }
@@ -172,6 +171,7 @@ def analyze_baseline(symbol: str, tail: int = None) -> Dict[str, Any]:
 # ============================================================================
 # 逐 Regime 网格搜索（IS 上界分析）
 # ============================================================================
+
 
 def optimize_per_regime(
     symbol: str,
@@ -232,9 +232,7 @@ def optimize_per_regime(
         for t_mult in GRID_T_MULT_RANGE:
             for stop_mult in GRID_STOP_MULT_RANGE:
                 # 构造配置：只修改该 regime 的 T 和 stop 系数
-                regime_cfg = _make_regime_config(symbol, {
-                    regime: {"T": t_mult, "stop": stop_mult}
-                })
+                regime_cfg = _make_regime_config(symbol, {regime: {"T": t_mult, "stop": stop_mult}})
 
                 result = _run_backtest(symbol, regime_cfg, tail=tail)
                 trades = result.get("trades_detail", [])
@@ -312,6 +310,7 @@ def optimize_per_regime(
 # 批量分析
 # ============================================================================
 
+
 def run_prestudy(
     symbols: List[str],
     tail: int = None,
@@ -334,13 +333,21 @@ def run_prestudy(
         try:
             opt = optimize_per_regime(sym, tail=tail, min_trades=min_trades)
             results[sym] = opt
-            print(f"expR: {opt['baseline_expR']:+.3f} → {opt['optimized_expR']:+.3f} "
-                  f"(Δ={opt['delta_expR']:+.3f}) "
-                  f"[{', '.join(opt['regimes_optimized'])}]")
+            print(
+                f"expR: {opt['baseline_expR']:+.3f} → {opt['optimized_expR']:+.3f} "
+                f"(Δ={opt['delta_expR']:+.3f}) "
+                f"[{', '.join(opt['regimes_optimized'])}]"
+            )
         except Exception as e:
             print(f"异常: {e}")
-            results[sym] = {"symbol": sym, "baseline_expR": 0, "optimized_expR": 0,
-                            "delta_expR": 0, "regimes_optimized": [], "note": str(e)}
+            results[sym] = {
+                "symbol": sym,
+                "baseline_expR": 0,
+                "optimized_expR": 0,
+                "delta_expR": 0,
+                "regimes_optimized": [],
+                "note": str(e),
+            }
 
     # 汇总
     valid_results = [r for r in results.values() if r.get("baseline_trades", 0) >= 10]
@@ -391,6 +398,7 @@ def run_prestudy(
 # ============================================================================
 # HTML 报告生成
 # ============================================================================
+
 
 def generate_report(data: Dict[str, Any], output_path: str) -> str:
     """生成 Phase 8 预研 HTML 报告"""
@@ -468,7 +476,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
               <div class="detail-grid">
                 <div><span class="muted">基线 expR</span><br><strong>{bl:+.3f}</strong></div>
                 <div><span class="muted">优化后</span><br><strong style="color:#059669">{opt_expR:+.3f}</strong></div>
-                <div><span class="muted">Δ</span><br><strong class="{'pos' if delta>0 else 'neg'}">{delta:+.3f}</strong></div>
+                <div><span class="muted">Δ</span><br><strong class="{"pos" if delta > 0 else "neg"}">{delta:+.3f}</strong></div>
                 <div><span class="muted">最优 T×</span><br><strong>{t_mult:.2f}</strong></div>
                 <div><span class="muted">最优 stop×</span><br><strong>{stop_mult:.2f}</strong></div>
               </div>
@@ -478,8 +486,8 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
         detail_cards += f"""
         <div class="detail-card">
           <div class="detail-card-header">
-            <strong>{sym}</strong> {res.get('name','')}
-            <span class="detail-delta">Δ {res.get('delta_expR',0):+.3f}</span>
+            <strong>{sym}</strong> {res.get("name", "")}
+            <span class="detail-delta">Δ {res.get("delta_expR", 0):+.3f}</span>
           </div>
           <div class="detail-regimes-grid">
             {card_content}
@@ -654,9 +662,9 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
     <div class="subtitle">逐 Regime 独立优化 T 阈值与止损系数的潜在收益分析</div>
     <div class="meta">
       <span>📅 {timestamp}</span>
-      <span>📊 分析品种：{summary['n_symbols']} 个</span>
-      <span>📈 有效样本：{summary['n_valid']} 个品种</span>
-      <span>🔬 最小样本/Regime：{summary['min_trades_per_regime']} 笔</span>
+      <span>📊 分析品种：{summary["n_symbols"]} 个</span>
+      <span>📈 有效样本：{summary["n_valid"]} 个品种</span>
+      <span>🔬 最小样本/Regime：{summary["min_trades_per_regime"]} 笔</span>
     </div>
   </div>
 </div>
@@ -673,23 +681,23 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="label">平均基线 expR</div>
-      <div class="value">{summary['avg_baseline_expR']:+.3f}</div>
-      <div class="sub">{summary['n_valid']} 个有效品种</div>
+      <div class="value">{summary["avg_baseline_expR"]:+.3f}</div>
+      <div class="sub">{summary["n_valid"]} 个有效品种</div>
     </div>
     <div class="kpi-card">
       <div class="label">优化后 expR（IS 上界）</div>
-      <div class="value pos">{summary['avg_optimized_expR']:+.3f}</div>
+      <div class="value pos">{summary["avg_optimized_expR"]:+.3f}</div>
       <div class="sub">逐 Regime 独立优化</div>
     </div>
     <div class="kpi-card">
       <div class="label">平均 ΔexpR</div>
-      <div class="value {'pos' if summary['avg_delta_expR']>0 else 'neg'}">{summary['avg_delta_expR']:+.3f}</div>
-      <div class="sub">中位数 {summary['median_delta_expR']:+.3f}</div>
+      <div class="value {"pos" if summary["avg_delta_expR"] > 0 else "neg"}">{summary["avg_delta_expR"]:+.3f}</div>
+      <div class="sub">中位数 {summary["median_delta_expR"]:+.3f}</div>
     </div>
     <div class="kpi-card">
       <div class="label">改善比例</div>
-      <div class="value pos">{summary['improvement_rate']:.0f}%</div>
-      <div class="sub">{summary['n_improved']} / {summary['n_valid']} 个品种提升</div>
+      <div class="value pos">{summary["improvement_rate"]:.0f}%</div>
+      <div class="sub">{summary["n_improved"]} / {summary["n_valid"]} 个品种提升</div>
     </div>
   </div>
 
@@ -734,11 +742,11 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
 
     <h3>1. 是否值得做 Phase 8？</h3>
     <p>
-      IS 平均提升 <strong>{summary['avg_delta_expR']:+.3f}</strong>，
-      按 OOS 折扣率 30%~50% 估算，实际收益约 <strong>+{summary['avg_delta_expR']*0.3:+.3f} ~ +{summary['avg_delta_expR']*0.5:+.3f}</strong>。
+      IS 平均提升 <strong>{summary["avg_delta_expR"]:+.3f}</strong>，
+      按 OOS 折扣率 30%~50% 估算，实际收益约 <strong>+{summary["avg_delta_expR"] * 0.3:+.3f} ~ +{summary["avg_delta_expR"] * 0.5:+.3f}</strong>。
     </p>
     <p style="margin-top:8px">
-      {'✅ 建议推进 Phase 8' if summary['avg_delta_expR']*0.3 >= 0.02 else '⚠️ 边际收益有限，建议优先其他方向'}
+      {"✅ 建议推进 Phase 8" if summary["avg_delta_expR"] * 0.3 >= 0.02 else "⚠️ 边际收益有限，建议优先其他方向"}
     </p>
 
     <h3>2. 优先级建议</h3>
@@ -777,6 +785,7 @@ def generate_report(data: Dict[str, Any], output_path: str) -> str:
 # 命令行入口
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Phase 8 预研：Regime 级参数差异化分析",
@@ -788,18 +797,17 @@ def main():
   python -m monitor.regime_prestudy --symbols zn --min-trades 5 --tail 500
         """,
     )
-    parser.add_argument("--symbols", type=str, default=None,
-                        help="分析品种列表，逗号分隔（如 zn,al,RB）")
-    parser.add_argument("--all", action="store_true",
-                        help="分析所有非禁用品种")
-    parser.add_argument("--output", type=str, default=None,
-                        help="HTML 报告输出路径")
-    parser.add_argument("--min-trades", type=int, default=MIN_TRADES_PER_REGIME,
-                        help=f"每 Regime 最少交易笔数（默认 {MIN_TRADES_PER_REGIME}）")
-    parser.add_argument("--tail", type=int, default=None,
-                        help="仅用尾部 N 根 K 线（快速验证用）")
-    parser.add_argument("--json", type=str, default=None,
-                        help="JSON 结果输出路径")
+    parser.add_argument("--symbols", type=str, default=None, help="分析品种列表，逗号分隔（如 zn,al,RB）")
+    parser.add_argument("--all", action="store_true", help="分析所有非禁用品种")
+    parser.add_argument("--output", type=str, default=None, help="HTML 报告输出路径")
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=MIN_TRADES_PER_REGIME,
+        help=f"每 Regime 最少交易笔数（默认 {MIN_TRADES_PER_REGIME}）",
+    )
+    parser.add_argument("--tail", type=int, default=None, help="仅用尾部 N 根 K 线（快速验证用）")
+    parser.add_argument("--json", type=str, default=None, help="JSON 结果输出路径")
 
     args = parser.parse_args()
 

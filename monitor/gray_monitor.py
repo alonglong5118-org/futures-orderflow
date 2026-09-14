@@ -47,7 +47,9 @@ def load_trade_journal(path: str) -> List[Dict[str, Any]]:
     return data.get("trades", data.get("closed_trades", []))
 
 
-def filter_gray_period(trades: List[Dict[str, Any]], start_date: str, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+def filter_gray_period(
+    trades: List[Dict[str, Any]], start_date: str, end_date: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """过滤灰度期内的交易"""
     result = []
     for t in trades:
@@ -105,17 +107,21 @@ def check_drift(
     if base_expR != 0:
         pct_change = (gray_expR - base_expR) / abs(base_expR) * 100
         if pct_change <= drift_config.get("expr_critical_pct", -30):
-            alerts.append({
-                "level": "critical",
-                "type": "expr_critical",
-                "message": f"expR 严重漂移: 基线{base_expR:+.3f} → 灰度{gray_expR:+.3f} ({pct_change:+.1f}%)",
-            })
+            alerts.append(
+                {
+                    "level": "critical",
+                    "type": "expr_critical",
+                    "message": f"expR 严重漂移: 基线{base_expR:+.3f} → 灰度{gray_expR:+.3f} ({pct_change:+.1f}%)",
+                }
+            )
         elif pct_change <= drift_config.get("expr_warning_pct", -15):
-            alerts.append({
-                "level": "warning",
-                "type": "expr_warning",
-                "message": f"expR 警告漂移: 基线{base_expR:+.3f} → 灰度{gray_expR:+.3f} ({pct_change:+.1f}%)",
-            })
+            alerts.append(
+                {
+                    "level": "warning",
+                    "type": "expr_warning",
+                    "message": f"expR 警告漂移: 基线{base_expR:+.3f} → 灰度{gray_expR:+.3f} ({pct_change:+.1f}%)",
+                }
+            )
 
     # 交易频率漂移
     base_n = baseline_metrics.get("trades", 0)
@@ -123,17 +129,21 @@ def check_drift(
     if base_n > 0:
         freq_pct = (gray_n - base_n) / base_n * 100
         if freq_pct <= drift_config.get("freq_critical_pct", -50):
-            alerts.append({
-                "level": "critical",
-                "type": "freq_critical",
-                "message": f"交易频率严重下降: 基线{base_n}笔 → 灰度{gray_n}笔 ({freq_pct:+.1f}%)",
-            })
+            alerts.append(
+                {
+                    "level": "critical",
+                    "type": "freq_critical",
+                    "message": f"交易频率严重下降: 基线{base_n}笔 → 灰度{gray_n}笔 ({freq_pct:+.1f}%)",
+                }
+            )
         elif freq_pct <= drift_config.get("freq_warning_pct", -30):
-            alerts.append({
-                "level": "warning",
-                "type": "freq_warning",
-                "message": f"交易频率下降: 基线{base_n}笔 → 灰度{gray_n}笔 ({freq_pct:+.1f}%)",
-            })
+            alerts.append(
+                {
+                    "level": "warning",
+                    "type": "freq_warning",
+                    "message": f"交易频率下降: 基线{base_n}笔 → 灰度{gray_n}笔 ({freq_pct:+.1f}%)",
+                }
+            )
 
     # 样本量判断
     min_trades = drift_config.get("min_trades_for_critical", 5)
@@ -211,21 +221,25 @@ def evaluate_batch(
     if base_expR > 0:
         ratio = gray_expR / base_expR
         pass_expR = ratio >= min_ratio
-        checks.append({
-            "name": "expR 比例",
-            "value": f"{ratio*100:.0f}%",
-            "threshold": f"≥ {min_ratio*100:.0f}%",
-            "pass": pass_expR,
-        })
+        checks.append(
+            {
+                "name": "expR 比例",
+                "value": f"{ratio * 100:.0f}%",
+                "threshold": f"≥ {min_ratio * 100:.0f}%",
+                "pass": pass_expR,
+            }
+        )
     elif base_expR < 0:
         # 基线就是负的，灰度后更好就算过
         pass_expR = gray_expR > base_expR
-        checks.append({
-            "name": "expR 改善",
-            "value": f"{gray_expR:+.3f} vs {base_expR:+.3f}",
-            "threshold": "优于基线",
-            "pass": pass_expR,
-        })
+        checks.append(
+            {
+                "name": "expR 改善",
+                "value": f"{gray_expR:+.3f} vs {base_expR:+.3f}",
+                "threshold": "优于基线",
+                "pass": pass_expR,
+            }
+        )
     else:
         pass_expR = True
         checks.append({"name": "expR 检查", "value": "基线为0，跳过", "threshold": "-", "pass": True})
@@ -233,12 +247,14 @@ def evaluate_batch(
     # 2. 严重告警次数
     max_alerts = pass_criteria.get("max_critical_alerts_per_week", 2)
     pass_alerts = critical_alerts <= max_alerts
-    checks.append({
-        "name": "严重告警数",
-        "value": str(critical_alerts),
-        "threshold": f"≤ {max_alerts}",
-        "pass": pass_alerts,
-    })
+    checks.append(
+        {
+            "name": "严重告警数",
+            "value": str(critical_alerts),
+            "threshold": f"≤ {max_alerts}",
+            "pass": pass_alerts,
+        }
+    )
 
     # 3. 回撤
     max_dd_ratio = pass_criteria.get("max_drawdown_ratio", 1.2)
@@ -247,24 +263,28 @@ def evaluate_batch(
     if base_dd > 0:
         dd_ratio = gray_dd / base_dd
         pass_dd = dd_ratio <= max_dd_ratio
-        checks.append({
-            "name": "回撤比例",
-            "value": f"{dd_ratio:.1f}x",
-            "threshold": f"≤ {max_dd_ratio}x",
-            "pass": pass_dd,
-        })
+        checks.append(
+            {
+                "name": "回撤比例",
+                "value": f"{dd_ratio:.1f}x",
+                "threshold": f"≤ {max_dd_ratio}x",
+                "pass": pass_dd,
+            }
+        )
     else:
         pass_dd = True
         checks.append({"name": "回撤检查", "value": "基线无回撤，跳过", "threshold": "-", "pass": True})
 
     # 4. 立即回滚条件
     pass_rollback = len(rollback_reasons) == 0
-    checks.append({
-        "name": "立即回滚条件",
-        "value": "未触发" if pass_rollback else f"触发: {rollback_reasons[0]}",
-        "threshold": "不触发",
-        "pass": pass_rollback,
-    })
+    checks.append(
+        {
+            "name": "立即回滚条件",
+            "value": "未触发" if pass_rollback else f"触发: {rollback_reasons[0]}",
+            "threshold": "不触发",
+            "pass": pass_rollback,
+        }
+    )
 
     # 综合判断
     all_pass = all(c["pass"] for c in checks)
@@ -348,11 +368,11 @@ def generate_gray_dashboard(
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
             <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:6px">
               <div style="font-size:11px;color:#64748b">交易数</div>
-              <div style="font-size:16px;font-weight:700">{gm.get('trades',0)} 笔</div>
+              <div style="font-size:16px;font-weight:700">{gm.get("trades", 0)} 笔</div>
             </div>
             <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:6px">
               <div style="font-size:11px;color:#64748b">灰度 expR</div>
-              <div style="font-size:16px;font-weight:700;{('color:#059669' if gm.get('expR',0)>0 else 'color:#dc2626')}">{gm.get('expR',0):+.3f}</div>
+              <div style="font-size:16px;font-weight:700;{("color:#059669" if gm.get("expR", 0) > 0 else "color:#dc2626")}">{gm.get("expR", 0):+.3f}</div>
             </div>
             <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:6px">
               <div style="font-size:11px;color:#64748b">Δ vs 基线</div>
@@ -360,7 +380,7 @@ def generate_gray_dashboard(
             </div>
           </div>
           <div style="font-size:12px;color:#64748b">
-            基线 expR: {bm.get('expR',0):+.3f} | 胜率: {gm.get('win_rate',0)*100:.0f}% | 累计: {gm.get('total_R',0):+.2f}R
+            基线 expR: {bm.get("expR", 0):+.3f} | 胜率: {gm.get("win_rate", 0) * 100:.0f}% | 累计: {gm.get("total_R", 0):+.2f}R
           </div>
         </div>
         """
@@ -395,13 +415,15 @@ def generate_gray_dashboard(
         checks_html = ""
         for c in evaluation["checks"]:
             status = "✅" if c["pass"] else "❌"
-            checks_html += f"<tr><td>{c['name']}</td><td>{c['value']}</td><td>{c['threshold']}</td><td>{status}</td></tr>"
+            checks_html += (
+                f"<tr><td>{c['name']}</td><td>{c['value']}</td><td>{c['threshold']}</td><td>{status}</td></tr>"
+            )
 
         eval_html = f"""
         <div style="padding:18px;background:{v_bg};border:1px solid {v_color}33;border-radius:10px;margin-bottom:16px">
-          <h3 style="color:{v_color};margin:0 0 10px 0">{v_icon} 批次评估结果：{evaluation['verdict_text']}</h3>
+          <h3 style="color:{v_color};margin:0 0 10px 0">{v_icon} 批次评估结果：{evaluation["verdict_text"]}</h3>
           <div style="font-size:13px;color:#334155">
-            通过 {evaluation['n_pass']} / {evaluation['n_total']} 项检查
+            通过 {evaluation["n_pass"]} / {evaluation["n_total"]} 项检查
           </div>
           <table style="margin-top:10px;font-size:12px">
             <thead><tr><th>检查项</th><th>实际值</th><th>阈值</th><th>结果</th></tr></thead>
@@ -443,7 +465,7 @@ def generate_gray_dashboard(
 <div class="header">
   <div class="container">
     <h1>Phase 8 灰度监控 — {batch}</h1>
-    <div class="sub">品种：{', '.join(gray_symbols)}</div>
+    <div class="sub">品种：{", ".join(gray_symbols)}</div>
     <div class="meta">
       <span>📅 开始：{start_date}</span>
       <span>⏱ 已运行：{days_passed} / {period_days} 天</span>
@@ -465,7 +487,7 @@ def generate_gray_dashboard(
     {alerts_html}
   </section>
   <div class="footnote">
-    生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 
+    生成时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | 
     数据来源：trade_journal.json | 
     灰度批次：{batch}
   </div>
@@ -479,8 +501,7 @@ def main():
     parser = argparse.ArgumentParser(description="Phase 8 灰度上线监控")
     parser.add_argument("--config", type=str, required=True, help="灰度监控配置文件路径")
     parser.add_argument("--evaluate", action="store_true", help="执行批次评估")
-    parser.add_argument("--baseline-path", type=str, default=None,
-                        help="基线交易数据路径（用于对比），默认用配置里的")
+    parser.add_argument("--baseline-path", type=str, default=None, help="基线交易数据路径（用于对比），默认用配置里的")
     parser.add_argument("--output", type=str, default=None, help="HTML 看板输出路径")
 
     args = parser.parse_args()
@@ -566,17 +587,21 @@ def main():
         n_crit = sum(1 for a in alerts if a["level"] == "critical")
         n_warn = sum(1 for a in alerts if a["level"] == "warning")
         status = "🔴" if n_crit > 0 else ("🟡" if n_warn > 0 else "🟢")
-        print(f"  {status} {sym:4s}: 灰度{gray_metrics['trades']}笔 expR={gray_metrics['expR']:+.3f} | "
-              f"基线{baseline_metrics['trades']}笔 expR={baseline_metrics['expR']:+.3f} | "
-              f"告警: {n_crit}严 {n_warn}警")
+        print(
+            f"  {status} {sym:4s}: 灰度{gray_metrics['trades']}笔 expR={gray_metrics['expR']:+.3f} | "
+            f"基线{baseline_metrics['trades']}笔 expR={baseline_metrics['expR']:+.3f} | "
+            f"告警: {n_crit}严 {n_warn}警"
+        )
 
     # 整体指标
     overall_gray = calc_metrics(gray_trades)
     overall_baseline = calc_metrics(baseline_trades)
 
     print("-" * 60)
-    print(f"整体: 灰度{overall_gray['trades']}笔 expR={overall_gray['expR']:+.3f} | "
-          f"基线{overall_baseline['trades']}笔 expR={overall_baseline['expR']:+.3f}")
+    print(
+        f"整体: 灰度{overall_gray['trades']}笔 expR={overall_gray['expR']:+.3f} | "
+        f"基线{overall_baseline['trades']}笔 expR={overall_baseline['expR']:+.3f}"
+    )
 
     # 立即回滚
     if all_rollback:
@@ -590,9 +615,11 @@ def main():
         print(f"\n=== 批次评估 ===")
         critical_count = sum(1 for a in all_alerts if a["level"] == "critical")
         evaluation = evaluate_batch(
-            overall_gray, overall_baseline,
+            overall_gray,
+            overall_baseline,
             config.get("pass_criteria", {}),
-            all_rollback, critical_count,
+            all_rollback,
+            critical_count,
         )
         print(f"结果: {evaluation['verdict_text']} ({evaluation['n_pass']}/{evaluation['n_total']} 通过)")
         for c in evaluation["checks"]:
@@ -602,15 +629,17 @@ def main():
     # 生成 HTML 看板
     output_dir = config.get("output_dir", "monitor/gray_rollout")
     output_file = args.output or os.path.join(
-        SCRIPT_DIR, output_dir,
-        config.get("dashboard_filename", "gray_dashboard.html")
+        SCRIPT_DIR, output_dir, config.get("dashboard_filename", "gray_dashboard.html")
     )
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     html = generate_gray_dashboard(
-        config, per_symbol,
+        config,
+        per_symbol,
         {"gray": overall_gray, "baseline": overall_baseline},
-        all_alerts, all_rollback, evaluation,
+        all_alerts,
+        all_rollback,
+        evaluation,
     )
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html)
