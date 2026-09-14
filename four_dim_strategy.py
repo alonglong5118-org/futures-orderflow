@@ -1287,6 +1287,101 @@ def _fetch_daily_robust(code):
     raise RuntimeError(f"{code} 所有日线源失败: {last_err}")
 
 
+# ─────────────────────── tqsdk 天勤日线兜底（2026-09-14 接入） ───────────────────────
+_TQ_API = None
+_TQ_API_TRIED = False
+_TQ_DAILY_LEN = 400  # 约 19 个月日线，覆盖 data_daily 停更缺口(2026-07-24) + 余量
+_TQ_EXECUTOR = None
+
+
+def _tqsdk_api():
+    """懒加载 tqsdk api 单例（复用 tq_config.json 现有天勤 auth）。失败返回 None 且不重试。"""
+    global _TQ_API, _TQ_API_TRIED
+    if _TQ_API_TRIED:
+        return _TQ_API
+    _TQ_API_TRIED = True
+    try:
+        from tqsdk import TqApi, TqAuth
+        import json as _json
+        _u = os.environ.get("TQ_USERNAME", "")
+        _p = os.environ.get("TQ_PASSWORD", "")
+        if not _u:
+            _cfgp = os.path.join(HERE, "tq_config.json")
+            if os.path.exists(_cfgp):
+                _cfg = _json.load(open(_cfgp, encoding="utf-8"))
+                _u = _cfg.get("tq_username", "")
+                _p = _cfg.get("tq_password", "")
+        if not _u or not _p:
+            print("  [tqsdk] 未配置天勤账号，跳过日线兜底")
+            return None
+        _TQ_API = TqApi(auth=TqAuth(_u, _p))
+        return _TQ_API
+    except Exception as e:
+        print(f"  [tqsdk] api 初始化失败: {e}")
+        return None
+
+
+def _tq_executor():
+    """tqsdk 专属单线程池：把阻塞的 tqsdk 抓取与 wait_update 隔离在独立线程，
+    避免 live runner 中已运行事件循环的线程里调用 wait_update 触发
+    '不能在协程中调用 wait_update' 报错（与离线同步脚本行为一致）。"""
+    global _TQ_EXECUTOR
+    if _TQ_EXECUTOR is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _TQ_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tqsdk_daily")
+    return _TQ_EXECUTOR
+
+
+def _fetch_daily_tqsdk(symbol):
+    """tqsdk 天勤主连日线兜底。返回 date 索引标准化 df(open/high/low/close/volume/oi)。
+    失败/无数据返回 None（调用方降级到本地 7/24 数据，不阻断主流程）。
+    阻塞抓取在独立线程执行（见 _tq_executor 说明），对协程/事件循环上下文免疫。"""
+    # SYMBOLS 的 key 大小写不统一（rb/i/hc 小写、FG/SA/JM 大写），做大小写不敏感解析
+    _key = None
+    for _cand in (symbol, symbol.upper(), symbol.lower()):
+        if _cand in SYMBOLS:
+            _key = _cand
+            break
+    if _key is None:
+        return None
+    info = SYMBOLS[_key]
+    exch = info.get("exchange")
+    if not exch:
+        return None
+    # tqsdk 主连代码大小写规则：CZCE 用大写，其余交易所(SHFE/DCE/INE/GFEX)用小写
+    # （与 SYMBOLS key 大小写无关，故按交易所决定，避免 JM/DCE 被拼成大写而合约不存在）
+    _tq_sym = symbol.upper() if exch == "CZCE" else symbol.lower()
+    tq_code = f"KQ.m@{exch}.{_tq_sym}"
+
+    def _blocking():
+        api = _tqsdk_api()  # 在 executor 线程内创建/复用 api（线程绑定，避免跨线程事件循环冲突）
+        if api is None:
+            return None
+        import time as _t
+        try:
+            ks = api.get_kline_serial(tq_code, 86400, _TQ_DAILY_LEN)
+            dl = _t.time() + 45
+            while (not api.is_serial_ready(ks)) and (_t.time() < dl):
+                api.wait_update()
+            if ks is None or len(ks) == 0:
+                return None
+            df = ks.copy()
+            df = df.rename(columns={"close_oi": "oi", "datetime": "date"})
+            df["date"] = pd.to_datetime(df["date"], unit="ns")
+            df = df.set_index("date").sort_index()
+            keep = [c for c in ["open", "high", "low", "close", "volume", "oi"] if c in df.columns]
+            return df[keep]
+        except Exception as e:
+            print(f"  [tqsdk] {symbol}({tq_code}) 失败: {e}")
+            return None
+
+    try:
+        return _tq_executor().submit(_blocking).result(timeout=70)
+    except Exception as e:
+        print(f"  [tqsdk] {symbol}({tq_code}) 线程执行失败: {e}")
+        return None
+
+
 def load_daily_refreshed(symbol, ttl=1800):
     """P1-5 重构：load_daily + akshare 近期日线追加（minishare 无 fut_daily 权限，按分工走免费源兜底）。
     仅用于实盘/纸面追踪，绝不在 walk_forward_backtest 中使用（避免前视）。ttl 秒缓存。
@@ -1335,6 +1430,19 @@ def load_daily_refreshed(symbol, ttl=1800):
         _DAILY_CACHE[symbol] = (df, _t.time())
     except Exception as e:
         print(f"  [daily refresh] {symbol} akshare 兜底失败: {e}")
+    # ★ 2026-09-14: tqsdk 天勤主连日线兜底（akshare/sina/东财/tushare 免费源全挂时的可靠源）
+    try:
+        raw_tq = _fetch_daily_tqsdk(symbol)
+        if raw_tq is not None and len(raw_tq) >= 1:
+            if df is not None and len(df) >= 1:
+                new = raw_tq[raw_tq.index > df.index[-1]]
+                if len(new):
+                    df = pd.concat([df, new])
+            else:
+                df = raw_tq
+            _DAILY_CACHE[symbol] = (df, _t.time())
+    except Exception as e:
+        print(f"  [daily refresh] {symbol} tqsdk 兜底失败: {e}")
     return df
 
 
