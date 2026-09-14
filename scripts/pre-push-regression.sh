@@ -36,14 +36,19 @@ echo -e "${BOLD}${CYAN}═══════════════════
 echo ""
 
 # ── 检查 Python ──────────────────────────────────────────────────────────────
-if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
+# 优先使用项目 .venv（Python>=3.10 且含核心依赖），否则回退系统 python3/python
+if [ -x ".venv/bin/python" ]; then
+    PYTHON_CMD=".venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD=$(command -v python3 2>/dev/null)
+elif command -v python &> /dev/null; then
+    PYTHON_CMD=$(command -v python 2>/dev/null)
+else
     echo -e "${RED}❌  找不到 Python，无法运行测试${RESET}"
     echo -e "${DIM}   请安装 Python 3 后重试，或使用 git push --no-verify 跳过${RESET}"
     echo ""
     exit 1
 fi
-
-PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null)
 
 # ── 检查测试入口 ──────────────────────────────────────────────────────────────
 if [ ! -f "run_tests.py" ]; then

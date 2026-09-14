@@ -196,12 +196,17 @@ if [ "$need_test" = false ]; then
 fi
 
 # ── 检查 Python ───────────────────────────────────────────────────────────────
-if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
+# 优先使用项目 .venv（Python>=3.10 且含核心依赖），否则回退系统 python3/python
+if [ -x ".venv/bin/python" ]; then
+    PYTHON_CMD=".venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD=$(command -v python3 2>/dev/null)
+elif command -v python &> /dev/null; then
+    PYTHON_CMD=$(command -v python 2>/dev/null)
+else
     echo -e "${YELLOW}⚠️  找不到 Python，跳过单元测试${RESET}"
     exit 0
 fi
-
-PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null)
 
 if [ ! -f "run_tests.py" ]; then
     echo -e "${YELLOW}⚠️  run_tests.py 不存在，跳过单元测试${RESET}"
