@@ -10933,6 +10933,11 @@ def start_dashboard(state):
                                 state["usage_rate"] = float(_snap.get("usage_rate", _acc_st.get("usage_rate", 0) * 100))
                                 state["snapshot_mode"] = True
                                 state["snapshot_until"] = _acc_st.get("snapshot_until")
+                            else:
+                                # ★ 2026-09-14: 到期自动回退 —— 清除快照注入的顶层字段，恢复实时口径，不残留快照值
+                                for _k in ("snapshot_mode", "snapshot_until", "equity", "available",
+                                           "total_margin", "float_total", "mtm_pnl", "usage_rate"):
+                                    state.pop(_k, None)
                         except Exception:
                             pass
                 except Exception:
