@@ -360,7 +360,7 @@
       "margin_rate": 0.16,
       "limit_pct": 0.08,
       "name": "原油",
-      "contract": "SC2610",
+      "contract": "SC2611",
       "fee_type": "fixed",
       "fee_exchange": 20,
       "broker_fee_type": "fixed",
@@ -864,6 +864,10 @@
     "warn": 1,
     "lock": 2,
     "_note": "小资金验证模式：1笔警告，2笔当日冻结"
+  },
+  "kill_switch": {
+    "auto_recover": false,
+    "_note": "P1-1 修复：硬熔断自动恢复开关。默认 false（熔断后必须人工在面板解除，符合「永不自动恢复」安全语义）。true 时才允许 _maybe_recover 在冷却满+权益/连亏收敛后自动解除。"
   },
   "thresholds_by_symbol": {
     "_note": "2026-09-06 清空：统一使用 four_dim_strategy.py 中的长期数据优化值（P1 普查）"

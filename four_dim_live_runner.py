@@ -13588,6 +13588,18 @@ def _update_aux(feed, state):
         if DAY_OPEN_EQUITY is None or DAY_OPEN_LABEL != _td:
             DAY_OPEN_EQUITY = eq
             DAY_OPEN_LABEL = _td
+            # P0-2 fix: 新交易日跨日重置风控（连亏锁/日亏锁跨日解除）并重定日初权益锚点。
+            # 原实现从未调用 reset_daily → 连亏锁/日亏锁跨日永不解除（永久 LOCKED）。
+            _acc = at.get_account()
+            try:
+                rsm.get_fsm(_acc).reset_daily()
+            except Exception as e:
+                print(f"[跨日风控重置] FSM 异常: {repr(e)[:80]}")
+            try:
+                if eq > 0:
+                    rsm.get_kill(_acc).set_opening_equity(eq)
+            except Exception as e:
+                print(f"[跨日风控重置] KillSwitch 异常: {repr(e)[:80]}")
         account_daily_pnl = (eq - DAY_OPEN_EQUITY) if DAY_OPEN_EQUITY > 0 else 0.0  # 亏为负
         journal_daily = tj.today_pnl()  # 自然日已实现盈亏（交叉验证/展示）
         daily_pnl = min(account_daily_pnl, journal_daily)  # 取更亏者（更保守）
@@ -13627,14 +13639,21 @@ def _update_aux(feed, state):
         )
         new_state = rsm.get_fsm(at.get_account()).summary()  # 含 daily_loss_pct / daily_loss_stop / killswitch
         state["risk_state"] = new_state
-        # ── v5 新增：10%回撤硬熔断检测 ──
-        _current_dd = new_state.get("drawdown", 0)
-        if _current_dd >= DRAWDOWN_FULL_STOP_PCT and new_state.get("state") != "HALTED":
-            new_state["state"] = "HALTED"
-            new_state["halted_at"] = time.time()
-            new_state["halted_reason"] = f"10%回撤硬熔断（当前{_current_dd:.1f}%）"
-            new_state["force_rest_until"] = time.time() + DRAWDOWN_FORCE_REST_SEC
-            new_state["scale"] = 0.0
+        # ── v5 新增：10%回撤硬熔断检测（P0-1 修复）──
+        # 原实现读 new_state.get("drawdown") 恒为 0（summary 无此字段）→ 永不触发；
+        # 且只改内存 dict，开仓拦截读真实 KillSwitch → 即使字段对也拦不住。
+        # 现改读 drawdown_guard 的 dd_pct（百分比），并真正调 force_halt 落盘。
+        _current_dd = float(_dd_state.get("dd_pct", 0) or 0)
+        _acc = at.get_account()
+        _kill = rsm.get_kill(_acc)
+        if _current_dd >= DRAWDOWN_FULL_STOP_PCT and not _kill.halted:
+            _kill.force_halt(
+                f"账户回撤{_current_dd:.1f}%≥{DRAWDOWN_FULL_STOP_PCT}%，强制全平+休息24小时",
+                positions=snap.get("positions") or [],
+                force_rest_until=time.time() + DRAWDOWN_FORCE_REST_SEC,
+            )
+            new_state = rsm.get_fsm(_acc).summary()
+            state["risk_state"] = new_state
             log_alert(
                 "硬熔断触发",
                 None,
@@ -13643,7 +13662,7 @@ def _update_aux(feed, state):
                 {"drawdown": _current_dd},
             )
 
-        state["killswitch"] = new_state.get("killswitch", {})
+        state["killswitch"] = _kill.summary()
         if _res.get("kill_newly"):
             _ks = new_state.get("killswitch", {})
             try:

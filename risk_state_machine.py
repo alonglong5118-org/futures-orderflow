@@ -64,6 +64,29 @@ def _load_consec_gate():
 
 _load_consec_gate()
 
+# ============ 熔断自动恢复开关（P1-1） ============
+# 默认 False：硬熔断（15%回撤/8%日亏/6连亏，或 10%回撤休息熔断）一律需人工在面板解除，
+# 符合「永不自动恢复」的安全语义。仅当 trade_config.json 显式设 kill_switch.auto_recover=true
+# 时才启用 _maybe_recover 自动恢复（冷却满 + 权益/连亏收敛）。
+KILL_AUTO_RECOVER = False
+
+
+def _load_kill_switch_config():
+    """从 trade_config.json 读取 kill_switch 配置（自动恢复开关）。"""
+    global KILL_AUTO_RECOVER
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trade_config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, encoding="utf-8") as f:
+                cfg = json.load(f) or {}
+            ks = cfg.get("kill_switch") or {}
+            KILL_AUTO_RECOVER = bool(ks.get("auto_recover", False))
+    except Exception:
+        pass
+
+
+_load_kill_switch_config()
+
 # ============ 分品种专项风控（回测结论 2026-08-16） ============
 # 回测(全市场5m出场 + 红线①探针)显示：
 #   · JM/J 实盘 on 胜率低于 off（焦煤27.2% / 焦炭34.2%），靠 R 乘数盈利
@@ -353,6 +376,7 @@ class KillSwitch:
         self.ack = False  # 用户是否已确认（已按清单全平）
         self._opening_equity = None  # P0-7 fix: 日初权益(固定值)，稳定风控阈值
         self.reset_at = None  # 最近一次人工解除熔断的时间戳
+        self.force_rest_until = None  # P0-1: 10%回撤休息熔断的强制休息截止时间戳（None=永久熔断）
         self._lock = threading.RLock()
         self._load()
 
@@ -372,6 +396,7 @@ class KillSwitch:
                 self.ack = bool(d.get("ack"))
                 self._opening_equity = d.get("_opening_equity")
                 self.reset_at = d.get("reset_at")
+                self.force_rest_until = d.get("force_rest_until")
         except Exception as e:
             print(f"[熔断] 状态载入失败(忽略): {repr(e)[:80]}")
 
@@ -391,6 +416,7 @@ class KillSwitch:
                         "ack": self.ack,
                         "_opening_equity": self._opening_equity,
                         "reset_at": self.reset_at,
+                        "force_rest_until": self.force_rest_until,
                     },
                     f,
                     ensure_ascii=False,
@@ -431,6 +457,10 @@ class KillSwitch:
                 self.triggers = trig
                 self.reason = "；".join(trig)
                 self.triggered_at = time.time()
+                # P1-2 fix: 记录熔断瞬间的原始盈亏/权益/回撤，供 _maybe_recover 判断是否收敛
+                self.metrics["orig_daily_pnl_at_kill"] = float(daily_pnl or 0)
+                self.metrics["orig_equity_at_kill"] = float(equity or 0)
+                self.metrics["orig_drawdown_at_kill"] = round(dd, 4)
                 self.flatten_plan = build_flatten_plan(positions)
                 self.history.append(
                     {
@@ -446,7 +476,8 @@ class KillSwitch:
                 # 持续熔断中：刷新全平清单（可能又被动成交/部分平仓）
                 self.flatten_plan = build_flatten_plan(positions) or self.flatten_plan
             # P1-12 fix: 尝试自动恢复（熔断条件已解除 + 冷却足够）
-            if not trig and self.halted and self.ack:
+            # P1-1 fix: 仅当 kill_switch.auto_recover=true 才允许自动恢复（默认人工解除）
+            if not trig and self.halted and self.ack and KILL_AUTO_RECOVER:
                 self._maybe_recover(equity, peak_equity, daily_pnl, consec_losses)
             return {
                 "halted": self.halted,
@@ -475,6 +506,11 @@ class KillSwitch:
         if not (self.halted and self.ack):
             return
         now = time.time()
+        if not KILL_AUTO_RECOVER:
+            return
+        # P0-1: 10%回撤休息熔断需满 24h 强制休息期后才允许恢复
+        if self.force_rest_until and now < self.force_rest_until:
+            return
         if self.triggered_at and (now - self.triggered_at) < RECOVER_COOLDOWN_SEC:
             return
         # 条件 3: 权益未继续恶化
@@ -489,17 +525,20 @@ class KillSwitch:
         if consec_losses is not None and consec_losses > RECOVER_CONSEC_MAX:
             return
         # 所有条件满足 → 自动恢复
+        # P1-3 fix: 先缓存冷却秒数再重置 triggered_at，避免日志算成 now-0 的荒谬值
+        _cooled = int(now - self.triggered_at) if self.triggered_at else 0
         self.halted = False
         self.ack = False
         self.reason = ""
         self.triggers = []
         self.triggered_at = 0.0
         self.flatten_plan = []
+        self.force_rest_until = None
         self.history.append(
             {
                 "t": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "AUTO_RECOVER",
-                "note": f"熔断自动恢复（冷却{int(now - self.triggered_at)}s + 权益{equity:.0f} + 连亏{consec_losses}）",
+                "note": f"熔断自动恢复（冷却{_cooled}s + 权益{equity:.0f} + 连亏{consec_losses}）",
             }
         )
         self._save()
@@ -513,6 +552,42 @@ class KillSwitch:
                 self._save()
             return self.summary()
 
+    def force_halt(self, reason, positions=None, force_rest_until=None):
+        """P0-1: 外部强制熔断（10% 回撤硬熔断）。真正置 halted=True 并落盘，
+        使 get_combined_risk_scale / is_locked 立即拦截新开仓（修复原仅改内存 dict 的空转）。
+
+        force_rest_until: 时间戳；设置后代表「休息式」熔断，若开启自动恢复，
+        需等越过该时间点（休息期）才能解除。
+        """
+        with self._lock:
+            self.halted = True
+            self.ack = False
+            self.reason = reason
+            self.triggers = [reason]
+            self.triggered_at = time.time()
+            self.flatten_plan = build_flatten_plan(positions)
+            self.force_rest_until = float(force_rest_until) if force_rest_until else None
+            self.history.append(
+                {
+                    "t": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "event": "FORCE_HALT",
+                    "reason": reason,
+                }
+            )
+            self._save()
+            return self.summary()
+
+    def set_opening_equity(self, equity):
+        """P0-2/P1-4: 设置日初权益锚点（线程安全 + 落盘）。跨日重置时更新，稳定日亏阈值。"""
+        with self._lock:
+            try:
+                eq = float(equity)
+            except Exception:
+                return
+            if eq > 0:
+                self._opening_equity = eq
+                self._save()
+
     def reset(self, note="人工解除", reset_peak_to=None):
         """人工解除熔断（唯一出口）。可顺便把峰值权益重置到当前，避免刚解除又被旧峰值秒杀。"""
         with self._lock:
@@ -523,6 +598,7 @@ class KillSwitch:
             self.reason = ""
             self.triggers = []
             self.flatten_plan = []
+            self.force_rest_until = None  # P0-1: 人工解除时清休息截止时间戳
             # 清除旧 metrics 快照：防止非熔断态检查误报"数据不新鲜"
             self.metrics = {"equity": 0, "peak_equity": 0, "drawdown": 0.0, "daily_loss_pct": 0.0, "consec_losses": 0}
             if was:
@@ -551,6 +627,8 @@ class KillSwitch:
                 },
                 "history": self.history[-10:],
             }
+            if self.force_rest_until:
+                d["force_rest_until"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.force_rest_until))
             if self.triggered_at:
                 d["triggered_at"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.triggered_at))
                 d["halted_min"] = round((time.time() - self.triggered_at) / 60, 1)
@@ -823,19 +901,25 @@ def is_halted(account_id=None):
 
 def reset_daily_if_new_day(last_day_str, account_id=None):
     """跨日重置连续止损计数（可选，配合 runner 跨日逻辑调用）。
-    仅当 last_day_str 与今日日期不同时才重置。"""
+    仅当 last_day_str 与今日日期不同时才重置。
+
+    P1-4 fix: 原实现直接操作全局 KILL（default 账户）且 at.load_state() 未按账户加载，
+    导致多账户下重置错账户。现改用 get_kill(account_id) + account_context 精确隔离。
+    """
+    account_id = account_id or "default"
     today_str = time.strftime("%Y-%m-%d")
     if last_day_str != today_str:
         get_fsm(account_id).reset_daily()
-        # P0-7 fix: 同时记录日初权益
+        kill = get_kill(account_id)
+        # P0-7 fix: 同时记录日初权益（按账户隔离读取）
         try:
             import account_tracker as at
 
-            st = at.load_state()
+            with at.account_context(account_id):
+                st = at.load_state()
             eq = st.get("equity", 0) if st else 0
             if eq > 0:
-                KILL._opening_equity = eq
-                KILL._save()
+                kill.set_opening_equity(eq)
         except Exception:
             pass
         return today_str
@@ -868,7 +952,9 @@ if __name__ == "__main__":
     print("回升后仍熔断?", s3["killswitch"]["halted"], "state=", s3["state"])
     print("人工解除:", KILL.reset("自测解除", reset_peak_to=990000)["halted"], "| 恢复 scale=", RISK_FSM.scale())
 
-    # —— P-连损自测（2026-08-19 模板H）：consec=2→WARNING / consec=3→LOCKED+consec_lock / reset_daily 解锁 ——
+    # —— P-连损自测（配置感知）：consec=CONSEC_WARN→WARNING / consec=CONSEC_LOCK→LOCKED+consec_lock / reset_daily 解锁 ——
+    # P2-1 修复：原硬编码 consec=2→WARNING/3→LOCKED，与 trade_config.json 的 consec_loss_gate
+    # (warn=1/lock=2) 不符，导致自测恒 FAIL。现改用模块级 CONSEC_WARN/CONSEC_LOCK 动态判定。
     _consec_ok = True
     # 清场：模拟新进程/新交易日干净状态（reset_daily 只清 consec 计数，不清 state；此处显式重置避免被前序硬熔断测试污染）
     RISK_FSM.state = RiskStateMachine.NORMAL
@@ -876,17 +962,18 @@ if __name__ == "__main__":
     RISK_FSM.consec_losses = 0
     RISK_FSM.consec_lock = False
     RISK_FSM.daily_loss_locked = False
-    _w = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=2)
-    if _w["state"] != "WARNING":
-        _consec_ok = False
-        print(f"[FAIL] consec=2 应 WARNING，实际 {_w['state']}")
-    _l = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=3)
+    if CONSEC_WARN < CONSEC_LOCK:
+        _w = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=CONSEC_WARN)
+        if _w["state"] != "WARNING":
+            _consec_ok = False
+            print(f"[FAIL] consec={CONSEC_WARN} 应 WARNING，实际 {_w['state']}")
+    _l = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=CONSEC_LOCK)
     if _l["state"] != "LOCKED":
         _consec_ok = False
-        print(f"[FAIL] consec=3 应 LOCKED，实际 {_l['state']}")
+        print(f"[FAIL] consec={CONSEC_LOCK} 应 LOCKED，实际 {_l['state']}")
     if not RISK_FSM.consec_lock:
         _consec_ok = False
-        print("[FAIL] consec=3 应置 consec_lock=True")
+        print(f"[FAIL] consec={CONSEC_LOCK} 应置 consec_lock=True")
     RISK_FSM.reset_daily()
     if RISK_FSM.consec_lock or RISK_FSM.consec_losses != 0:
         _consec_ok = False
