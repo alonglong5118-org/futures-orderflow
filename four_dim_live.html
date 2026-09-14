@@ -2725,7 +2725,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       <span class="ic">☰</span><span class="lbl">更多</span>
     </button>
     <div class="nav-foot">
-      <div class="nf-line"><b id="navver">v3.8.0 (双差值止损：RM/m/p/FG/ru 止损通道换 DR(14)/√14 跳空鲁棒波动估计，行情分类保持 ATR)</b></div>
+      <div class="nf-line"><b id="navver">v3.11.0 (双差值止损：RM/m/p/FG/ru 止损通道换 DR(14)/√14 跳空鲁棒波动估计，行情分类保持 ATR)</b></div>
       <div class="nf-sub">端口 8741 · 15 pane · 55 品种</div>
     </div>
   </aside>
@@ -10000,7 +10000,9 @@ async function refreshDailyReviewSummary(force){
 
     // 2) 账户维度（来自 /api/state 或 journal）
     const st = stRes || {};
-    const positions = (st.positions || (stRes && stRes.positions)) || [];
+    const rawPositions = (st.positions || (stRes && stRes.positions)) || [];
+    // /api/state 的 positions 是 dict(symbol→持仓)，/api/account 是数组；统一转数组再 filter
+    const positions = Array.isArray(rawPositions) ? rawPositions : Object.values(rawPositions);
     const activePos = positions.filter(p => Number(p.lots) > 0);
     _setDrsText('drs-positions', String(activePos.length));
     document.getElementById('drs-positions-sub').textContent = positions.length ? ('总 ' + positions.length + ' 条 · 占用 ' + fmt(st.usage_rate||0,1) + '%') : '无持仓';
@@ -10162,7 +10164,9 @@ function renderDRSPositions(stRes){
   const box = document.getElementById('drs-positions-snapshot');
   if(!box) return;
   const st = stRes || {};
-  const positions = (st.positions || []) || [];
+  const rawPos = (st.positions || []) || [];
+  // /api/state 的 positions 是 dict(symbol→持仓)，补 symbol 字段后转数组；/api/account 是数组
+  const positions = Array.isArray(rawPos) ? rawPos : Object.entries(rawPos).map(([sym, v]) => ({ symbol: sym, ...v }));
   const active = positions.filter(p => Number(p.lots) > 0);
   if(!active.length){ box.innerHTML = '<div class="stamp">当前无持仓</div>'; return; }
   let h = '<table class="review-pos-table"><thead><tr><th>品种</th><th>方向</th><th>手数</th><th>均价</th><th>浮动</th><th>占用</th></tr></thead><tbody>';

@@ -43,7 +43,7 @@ CALIB_FILE = os.path.join(HERE, "calibration_params.json")
 sys.path.insert(0, HERE)
 
 # 系统版本号（方案 B：由 /api/state 暴露，前端侧栏实时渲染，避免文档升级漏改面板标签）
-APP_VERSION = "v3.9.0"
+APP_VERSION = "v3.11.0"
 
 # —— 日志强化（P1 + P2-2，2026-08-13）——
 # launchd 下 stdout/stderr 是管道而非 TTY：①Python 默认块缓冲(~8KB)，print 的异常会滞留
