@@ -14,6 +14,9 @@ _*.py
 # Python 缓存
 __pycache__/
 *.pyc
+# 虚拟环境（uv venv / python -m venv）
+.venv/
+venv/
 
 # macOS 元数据
 .DS_Store
