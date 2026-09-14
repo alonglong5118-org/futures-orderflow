@@ -683,6 +683,7 @@ def set_equity(equity, prices=None):
                     px = None
             if px:
                 float_at_sync += (px - avg) * mult * pos["lots"] * ds
+                pos["price"] = float(px)  # ★ 同步更新存储价，保证 float_at_sync 与 price 同刻同口径
         st["float_at_sync"] = round(float_at_sync, 2)
         st["equity_synced"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # 记录同步时刻的已实现盈亏，作为动态权益推算的基准：
@@ -1199,7 +1200,13 @@ def snapshot(prices=None):
             lots = pos["lots"]
             avg = pos["avg"]
             ds = _dir_sign(pos["direction"])
-            margin_used = lots * avg * mult * mrate
+            # 保证金：优先用 CTP 同步的权威 margin_used（结算价口径，精确）；
+            # 兜底 margin_rate 重算（新开仓无同步值时近似）
+            _stored_margin = pos.get("margin_used")
+            if _stored_margin is not None and float(_stored_margin) > 0:
+                margin_used = float(_stored_margin)
+            else:
+                margin_used = round(lots * avg * mult * mrate, 2)
             total_margin += margin_used
             float_pnl = None
             if px is not None:
@@ -1295,6 +1302,18 @@ def snapshot(prices=None):
     if not self_check_ok:
         self_check_msg = f"[自检失败] equity={dynamic_equity} != anchor={equity_anchor}+dR={delta_realized}+dF={delta_float}"
         print(f"[SELF_CHECK] {self_check_msg}")
+    # ★ 2026-09-14: float_at_sync 口径对账（防 mtm/持仓累计浮盈混淆复发）
+    # float_at_sync 必须 = 同步时刻持仓累计浮盈 = Σ(存储price - avg) × mult × lots × 方向
+    # 若被误存成盯市浮盈(mtm，基于结算价)，动态权益会被系统性抬/压 → 面板漂移
+    _expected_fa = 0.0
+    for _sym, _pos in st["positions"].items():
+        if _pos.get("lots") and _pos.get("avg") and _pos.get("price") is not None:
+            _m = specs.get(_sym, {}).get("multiplier", 1)
+            _expected_fa += (float(_pos["price"]) - float(_pos["avg"])) * _m * float(_pos["lots"]) * _dir_sign(_pos.get("direction"))
+    if float_at_sync and abs(float_at_sync - _expected_fa) > 1.0:
+        _recon_msg = f"[对账漂移] float_at_sync={float_at_sync} ≠ 持仓累计浮盈和={round(_expected_fa,2)}（疑似误存 mtm 盯市浮盈口径）"
+        self_check_msg = (self_check_msg + " " if self_check_msg else "") + _recon_msg
+        print(f"[RECONCILE] {_recon_msg}")
     # return 里引用的变量（从新公式语义填充）
     computed_realized = realized_pnl  # journal 真实值
     float_computed = float_total
