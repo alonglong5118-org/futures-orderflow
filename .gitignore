@@ -130,3 +130,6 @@ statements/
 
 # ---- data_daily 里的 5m 缓存（27M，data_5m 已有同数据；日线 _*0_daily.csv 需入库，勿忽略）----
 data_daily/*_min5.csv
+
+# launchd 日志轮转文件（体积大，不入库）
+launchd.log.*

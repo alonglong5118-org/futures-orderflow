@@ -27,39 +27,39 @@ CACHE_FILE = os.path.join(HERE, "fundamentals.json")
 # 全品种（不含中金所）：symbol → akshare 基差 vars_list 代码 / 库存中文名
 SYMBOL_MAP = {
     # 上期所 SHFE
-    "cu": {"basis_code": "CU", "inv_name": "铜"},
-    "al": {"basis_code": "AL", "inv_name": "铝"},
-    "zn": {"basis_code": "ZN", "inv_name": "锌"},
+    "cu": {"basis_code": "CU", "inv_name": "沪铜"},
+    "al": {"basis_code": "AL", "inv_name": "沪铝"},
+    "zn": {"basis_code": "ZN", "inv_name": "沪锌"},
     "ni": {"basis_code": "NI", "inv_name": "镍"},
     "sn": {"basis_code": "SN", "inv_name": "锡"},
     "ao": {"basis_code": "AO", "inv_name": "氧化铝"},
-    "au": {"basis_code": "AU", "inv_name": "黄金"},
-    "ag": {"basis_code": "AG", "inv_name": "白银"},
+    "au": {"basis_code": "AU", "inv_name": "沪金"},
+    "ag": {"basis_code": "AG", "inv_name": "沪银"},
     "rb": {"basis_code": "RB", "inv_name": "螺纹钢"},
     "hc": {"basis_code": "HC", "inv_name": "热卷"},
     "ss": {"basis_code": "SS", "inv_name": "不锈钢"},
     "bu": {"basis_code": "BU", "inv_name": "沥青"},
-    "fu": {"basis_code": "FU", "inv_name": "燃料油"},
+    "fu": {"basis_code": "FU", "inv_name": "燃油"},
     "ru": {"basis_code": "RU", "inv_name": "橡胶"},
     "sp": {"basis_code": "SP", "inv_name": "纸浆"},
     # 上期能源 INE
-    "sc": {"basis_code": "SC", "inv_name": "原油"},
-    "ec": {"basis_code": "EC", "inv_name": "集运欧线"},
+    "sc": {"basis_code": "SC", "inv_name": None},
+    "ec": {"basis_code": "EC", "inv_name": None},
     # 大商所 DCE
     "i": {"basis_code": "I", "inv_name": "铁矿石"},
     "J": {"basis_code": "J", "inv_name": "焦炭"},
     "JM": {"basis_code": "JM", "inv_name": "焦煤"},
     "eb": {"basis_code": "EB", "inv_name": "苯乙烯"},
     "eg": {"basis_code": "EG", "inv_name": "乙二醇"},
-    "l": {"basis_code": "L", "inv_name": "LLDPE"},
+    "l": {"basis_code": "L", "inv_name": "塑料"},
     "pp": {"basis_code": "PP", "inv_name": "聚丙烯"},
     "v": {"basis_code": "V", "inv_name": "PVC"},
-    "pg": {"basis_code": "PG", "inv_name": "液化气"},
+    "pg": {"basis_code": "PG", "inv_name": "液化石油气"},
     "m": {"basis_code": "M", "inv_name": "豆粕"},
     "y": {"basis_code": "Y", "inv_name": "豆油"},
     "a": {"basis_code": "A", "inv_name": "豆一"},
     "b": {"basis_code": "B", "inv_name": "豆二"},
-    "p": {"basis_code": "P", "inv_name": "棕榈油"},
+    "p": {"basis_code": "P", "inv_name": "棕榈"},
     "c": {"basis_code": "C", "inv_name": "玉米"},
     "cs": {"basis_code": "CS", "inv_name": "玉米淀粉"},
     "jd": {"basis_code": "JD", "inv_name": "鸡蛋"},
@@ -76,7 +76,7 @@ SYMBOL_MAP = {
     "UR": {"basis_code": "UR", "inv_name": "尿素"},
     "PR": {"basis_code": "PR", "inv_name": "瓶片"},
     "SR": {"basis_code": "SR", "inv_name": "白糖"},
-    "CF": {"basis_code": "CF", "inv_name": "棉花"},
+    "CF": {"basis_code": "CF", "inv_name": "郑棉"},
     "RM": {"basis_code": "RM", "inv_name": "菜粕"},
     "OI": {"basis_code": "OI", "inv_name": "菜油"},
     "PK": {"basis_code": "PK", "inv_name": "花生"},
@@ -139,6 +139,8 @@ def fetch_inventory():
 
     out = {k: [] for k in SYMBOL_MAP}
     for sym, m in SYMBOL_MAP.items():
+        if not m.get("inv_name"):
+            continue  # 东财无该品种库存数据（原油/集运欧线等），静默跳过，不刷屏
         try:
             df = ak.futures_inventory_em(symbol=m["inv_name"])
         except Exception as e:

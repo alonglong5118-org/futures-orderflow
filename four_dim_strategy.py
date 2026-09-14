@@ -1364,6 +1364,7 @@ def _norm_daily_cols(raw):
 def _fetch_daily_eastmoney(code):
     """东财期货主连日K（公开 HTTP，无需 token；best-effort）。返回已标准化(date索引)的 df。"""
     import json as _json
+    import ssl
     import urllib.request
 
     secid = "114." + code.lower()
@@ -1373,7 +1374,16 @@ def _fetch_daily_eastmoney(code):
         f"&klt=101&fqt=0&secid={secid}&beg=0&end=20500101"
     )
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    data = _json.loads(urllib.request.urlopen(req, timeout=12).read().decode("utf-8"))
+    # SSL 证书链修复（2026-09-14）：部分环境 certifi CA 缺失导致
+    # CERTIFICATE_VERIFY_FAILED（曾致 SA2701 等品种东财源全挂）。先尝试系统 CA，
+    # 仍失败回退不验证证书（公开行情数据、无敏感信息，风险可接受）。
+    try:
+        _ctx = ssl.create_default_context()
+        _resp = urllib.request.urlopen(req, timeout=12, context=_ctx)
+    except Exception:
+        _ctx = ssl._create_unverified_context()
+        _resp = urllib.request.urlopen(req, timeout=12, context=_ctx)
+    data = _json.loads(_resp.read().decode("utf-8"))
     kls = (data.get("data") or {}).get("klines") or []
     rows = []
     for kl in kls:
@@ -1479,11 +1489,19 @@ def _tq_executor():
     return _TQ_EXECUTOR
 
 
-def _fetch_daily_tqsdk(symbol):
-    """tqsdk 天勤主连日线兜底。返回 date 索引标准化 df(open/high/low/close/volume/oi)。
-    失败/无数据返回 None（调用方降级到本地 7/24 数据，不阻断主流程）。
-    阻塞抓取在独立线程执行（见 _tq_executor 说明），对协程/事件循环上下文免疫。"""
-    # SYMBOLS 的 key 大小写不统一（rb/i/hc 小写、FG/SA/JM 大写），做大小写不敏感解析
+def _tq_code_for(symbol):
+    """symbol -> tqsdk 合约代码（主连 KQ.m@ 或具体交割合约）。
+
+    - 具体交割合约（_CONTRACT_CPOS_KEY，如 SA01→SA701）：返回 CZCE.SA701
+      （直接按真实合约取日线；主连代码 KQ.m@CZCE.SA01 并不存在）。
+    - 其余：返回主连 KQ.m@{exch}.{sym}；CZCE 大写、SHFE/DCE/INE/GFEX 小写。
+    无法解析返回 None。"""
+    if symbol in _CONTRACT_CPOS_KEY:
+        info = SYMBOLS.get(symbol)
+        exch = info.get("exchange") if info else None
+        if exch:
+            return f"{exch}.{_CONTRACT_CPOS_KEY[symbol]}"
+        return None
     _key = None
     for _cand in (symbol, symbol.upper(), symbol.lower()):
         if _cand in SYMBOLS:
@@ -1495,10 +1513,18 @@ def _fetch_daily_tqsdk(symbol):
     exch = info.get("exchange")
     if not exch:
         return None
-    # tqsdk 主连代码大小写规则：CZCE 用大写，其余交易所(SHFE/DCE/INE/GFEX)用小写
-    # （与 SYMBOLS key 大小写无关，故按交易所决定，避免 JM/DCE 被拼成大写而合约不存在）
     _tq_sym = symbol.upper() if exch == "CZCE" else symbol.lower()
-    tq_code = f"KQ.m@{exch}.{_tq_sym}"
+    return f"KQ.m@{exch}.{_tq_sym}"
+
+
+def _fetch_daily_tqsdk(symbol):
+    """tqsdk 天勤主连日线兜底。返回 date 索引标准化 df(open/high/low/close/volume/oi)。
+    失败/无数据返回 None（调用方降级到本地 7/24 数据，不阻断主流程）。
+    阻塞抓取在独立线程执行（见 _tq_executor 说明），对协程/事件循环上下文免疫。"""
+    # 具体交割合约(SA01→CZCE.SA701)与主连(KQ.m@)统一走 _tq_code_for 解析
+    tq_code = _tq_code_for(symbol)
+    if not tq_code:
+        return None
 
     def _blocking():
         api = _tqsdk_api()  # 在 executor 线程内创建/复用 api（线程绑定，避免跨线程事件循环冲突）
@@ -1546,10 +1572,19 @@ def load_daily_refreshed(symbol, ttl=1800):
     if cached and (_t.time() - cached[1]) < ttl:
         return cached[0]
 
-    # 分支 1: 具体交割合约（如 SA01）—— 只走 akshare 单源，fall-through 被根治
+    # 分支 1: 具体交割合约（如 SA01）—— tqsdk 具体合约优先，免费源兜底，fall-through 根治
     if symbol in _CONTRACT_AKSHARE:
+        code = _CONTRACT_AKSHARE[symbol]
+        # ① tqsdk 天勤具体合约（SA01→CZCE.SA701，认证稳定；免费源已 IP 限流）
         try:
-            code = _CONTRACT_AKSHARE[symbol]
+            raw_tq = _fetch_daily_tqsdk(symbol)
+            if raw_tq is not None and len(raw_tq) > 0:
+                _DAILY_CACHE[symbol] = (raw_tq, _t.time())
+                return raw_tq
+        except Exception as e:
+            print(f"  [daily refresh] {symbol}({code}) tqsdk 具体合约失败: {e}")
+        # ② 免费源兜底（sina/sina-main/东财；IP 被限流时全挂）
+        try:
             raw = _fetch_daily_robust(code)
             if len(raw) >= 60:
                 _DAILY_CACHE[symbol] = (raw, _t.time())
@@ -1562,23 +1597,9 @@ def load_daily_refreshed(symbol, ttl=1800):
             print(f"  [daily refresh] {symbol}({code}) 全部源失败: {e}")
             return None
 
-    # 分支 2: 常规品种 —— load_daily 本地主连 + akshare 近期追加
+    # 分支 2: 常规品种 —— load_daily 本地主连 + tqsdk 主连追加（可靠）+ 免费源兜底
     df = load_daily(symbol)
-    try:
-        # akshare sina 主力连续代码（symbol → sina code）
-        code = _AKSHARE_MAP.get(symbol, symbol.upper() + "0")
-        raw = _fetch_daily_robust(code)
-        if raw is not None and len(raw) >= 1:
-            if df is not None and len(df) >= 1:
-                new = raw[raw.index > df.index[-1]]
-                if len(new):
-                    df = pd.concat([df, new])
-            else:
-                df = raw
-        _DAILY_CACHE[symbol] = (df, _t.time())
-    except Exception as e:
-        print(f"  [daily refresh] {symbol} akshare 兜底失败: {e}")
-    # ★ 2026-09-14: tqsdk 天勤主连日线兜底（akshare/sina/东财/tushare 免费源全挂时的可靠源）
+    # ① tqsdk 天勤主连优先（sina/东财 免费源已 IP 限流，tqsdk 认证稳定且全品种覆盖）
     try:
         raw_tq = _fetch_daily_tqsdk(symbol)
         if raw_tq is not None and len(raw_tq) >= 1:
@@ -1591,6 +1612,21 @@ def load_daily_refreshed(symbol, ttl=1800):
             _DAILY_CACHE[symbol] = (df, _t.time())
     except Exception as e:
         print(f"  [daily refresh] {symbol} tqsdk 兜底失败: {e}")
+    # ② 免费源兜底：仅当本地+tqsdk 都无足够数据时才尝试（避免刷屏 + 二次触发 IP 封禁）
+    if df is None or len(df) < 60:
+        try:
+            code = _AKSHARE_MAP.get(symbol, symbol.upper() + "0")
+            raw = _fetch_daily_robust(code)
+            if raw is not None and len(raw) >= 1:
+                if df is not None and len(df) >= 1:
+                    new = raw[raw.index > df.index[-1]]
+                    if len(new):
+                        df = pd.concat([df, new])
+                else:
+                    df = raw
+            _DAILY_CACHE[symbol] = (df, _t.time())
+        except Exception as e:
+            print(f"  [daily refresh] {symbol} akshare 兜底失败: {e}")
     return df
 
 

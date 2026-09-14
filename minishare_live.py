@@ -288,16 +288,20 @@ class MinishareLiveFeed:
 
     def _pin_account_positions(self):
         """读取 account_state 持仓，把有持仓品种强制钉到其开仓合约（未记录则回退 trade_config），
-        覆盖 auto_main 的 OI 换月，避免账户总览现价/浮盈亏错用非持仓合约。"""
+        覆盖 auto_main 的 OI 换月，避免账户总览现价/浮盈亏错用非持仓合约。
+        2026-09-14：① 钉死日志仅在映射变化时打印（根治每轮刷屏）；
+        ② 新增临近交割换月告警（距交割月 <30 天主动提示，节流 30 分钟）。"""
         try:
             st_path = os.path.join(HERE, "account_state.json")
             if not os.path.exists(st_path):
                 return
-            st = json.load(open(st_path, encoding="utf-8"))
+            with open(st_path, encoding="utf-8") as _f:
+                st = json.load(_f)
             positions = st.get("positions", {})
             tcfg = {}
             try:
-                tcfg = json.load(open(os.path.join(HERE, "trade_config.json"), encoding="utf-8"))
+                with open(os.path.join(HERE, "trade_config.json"), encoding="utf-8") as _f:
+                    tcfg = json.load(_f)
             except Exception:
                 pass
             specs = tcfg.get("contract_specs", {})
@@ -322,9 +326,49 @@ class MinishareLiveFeed:
                 self._auth[sym] = contract
                 pinned.append(f"{sym}={contract}")
             if pinned:
-                print(f"[minishare_live] 持仓合约钉死: {', '.join(pinned)}")
+                _sig = ",".join(sorted(pinned))
+                if _sig != getattr(self, "_last_pin_sig", None):
+                    self._last_pin_sig = _sig
+                    print(f"[minishare_live] 持仓合约钉死: {', '.join(pinned)}")
+            # 换月告警（节流 30 分钟）
+            self._warn_contract_roll(pinned)
         except Exception as e:
             print(f"[minishare_live] 持仓合约钉死失败: {e}")
+
+    @staticmethod
+    def _contract_delivery_days(code):
+        """从合约代码(如 ZN2610/RU2701/SA701)解析距交割月首日天数；无法解析返回 None。
+        4 位码(YYMM)与 3 位码(CZCE 末位年份+两位月份)均支持。"""
+        m = re.match(r"^([A-Za-z]+?)(\d{3,4})$", str(code or "").strip().upper())
+        if not m:
+            return None
+        digits = m.group(2)
+        if len(digits) == 4:
+            yy = 2000 + int(digits[:2])
+            mm = int(digits[2:])
+        else:  # 3 位：CZCE 末位年份(2020s)+两位月份，如 SA701 -> 2027-01
+            yy = 2020 + int(digits[0])
+            mm = int(digits[1:])
+        if mm < 1 or mm > 12:
+            return None
+        first = datetime(yy, mm, 1).date()
+        return (first - datetime.now().date()).days
+
+    def _warn_contract_roll(self, pinned):
+        """临近交割换月告警：有持仓合约距交割月 <30 天（含已进入/越过交割月）时打印
+        醒目告警，节流为每 30 分钟一次，避免每轮刷屏。"""
+        now = time.time()
+        if now - getattr(self, "_last_roll_alert_ts", 0) < 1800:
+            return
+        roll = []
+        for item in pinned:
+            sym, code = item.split("=", 1)
+            days = self._contract_delivery_days(code)
+            if days is not None and days < 30:
+                roll.append(f"{sym}={code}({'已到期' if days <= 0 else f'距交割{days}天'})")
+        if roll:
+            self._last_roll_alert_ts = now
+            print(f"[minishare_live] ⚠️ 换月告警：以下持仓临近交割，需人工换月/平仓：{', '.join(roll)}")
 
     def _set_pin(self, sym, code):
         """钉死 sym→code（权威映射），并清除该 sym 的旧反向映射，

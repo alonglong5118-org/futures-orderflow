@@ -328,7 +328,8 @@ def _authoritative_contract(sym, fallback):
     """优先用 main_overrides.json 的主力合约覆盖（避免 account 总览用陈旧 contract_specs）。
     fallback 来自 trade_config.json 的 contract_specs。两者不一致时以 main_overrides 为准。"""
     try:
-        mo = json.load(open(OVERRIDE_FILE, encoding="utf-8"))
+        with open(OVERRIDE_FILE, encoding="utf-8") as _f:
+            mo = json.load(_f)
         v = mo.get(sym)
         if v:
             return str(v)
@@ -340,7 +341,8 @@ def _authoritative_contract(sym, fallback):
 def load_config():
     if not os.path.exists(CONFIG_FILE):
         return {"account": {}, "risk_gate": {}, "contract_specs": {}}
-    return json.load(open(CONFIG_FILE, encoding="utf-8"))
+    with open(CONFIG_FILE, encoding="utf-8") as _f:
+        return json.load(_f)
 
 
 def load_state():

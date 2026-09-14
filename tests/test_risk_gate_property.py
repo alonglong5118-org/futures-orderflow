@@ -32,6 +32,25 @@ try:
     _HAS_HYPOTHESIS = True
 except ImportError:
     _HAS_HYPOTHESIS = False
+    # 占位：使模块在无 hypothesis 时可正常导入（属性测试类经 skipUnless 整体跳过）。
+    # 否则模块级 st.floats(...)/@given(...)/@settings(...) 会在 import 阶段抛 NameError，
+    # 导致整个测试模块无法被 unittest 发现（曾致全量测试 collection 失败）。
+    class _DummyStrategies:
+        def __getattr__(self, _name):
+            def _any(*_a, **_k):
+                return None
+            return _any
+
+    st = _DummyStrategies()
+
+    def _noop_decorator(*_a, **_k):
+        def _wrap(fn):
+            return fn
+        return _wrap
+
+    given = _noop_decorator
+    settings = _noop_decorator
+    assume = _noop_decorator
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -188,6 +207,7 @@ class TestMinLotFloorProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestKellyScalingProperty(unittest.TestCase):
     """apply_kelly_scaling 属性测试。"""
 
@@ -231,6 +251,7 @@ class TestKellyScalingProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestTStrengthScaleProperty(unittest.TestCase):
     """calc_t_strength_scale 属性测试。"""
 
@@ -281,6 +302,7 @@ class TestTStrengthScaleProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestDeductHeldLotsProperty(unittest.TestCase):
     """deduct_held_lots 属性测试。"""
 
@@ -322,6 +344,7 @@ class TestDeductHeldLotsProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestLimitGateProperty(unittest.TestCase):
     """check_limit_gate 属性测试。"""
 
@@ -364,6 +387,7 @@ class TestLimitGateProperty(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+@unittest.skipUnless(_HAS_HYPOTHESIS, "hypothesis 未安装，跳过属性测试")
 class TestPositionPlanProperty(unittest.TestCase):
     """calc_position_plan 集成属性测试。"""
 

@@ -14501,6 +14501,22 @@ def refresh_gates():
         GATE_CACHE["gates"] = pt.compute_symbol_gates()
     except Exception as e:
         print(f"[门控] 计算异常: {repr(e)[:120]}")
+    # ★ 2026-09-14 修复 FG 门控盲区：一致性看门狗判 broken_serving（漂移判 broken 但
+    #   未被动态门控压制的失效模型）自动升级为门控，堵住「失效模型仍在发信号」的漏洞。
+    #   此前 consistency_watchdog 只报告不修正，导致 FG 漂移 47% 仍发信号。
+    try:
+        _cw = cw.check_consistency()
+        for _bs in _cw.get("broken_serving", []):
+            _sym = _bs.get("symbol")
+            if not _sym:
+                continue
+            _g = GATE_CACHE["gates"].setdefault(_sym, {})
+            if not _g.get("gated"):
+                _g["gated"] = True
+                _g["reason"] = "一致性看门狗·漂移判broken未禁用→自动升级门控"
+                print(f"[门控] 一致性看门狗升级门控: {_sym} (current_expR={_bs.get('current_expR')})")
+    except Exception as e:
+        print(f"[门控] 一致性看门狗合并异常: {repr(e)[:120]}")
     GATE_CACHE["ts"] = time.time()
     gated = [s for s, g in GATE_CACHE["gates"].items() if g.get("gated")]
     if gated:
