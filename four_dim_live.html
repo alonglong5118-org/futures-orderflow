@@ -9954,7 +9954,7 @@ async function refreshDailyReviewSummary(force){
     if(!force && window._DRS_CACHE && (Date.now() - window._DRS_CACHE.ts < 10000)) return;
 
     // 并行拉取各维度数据（优先失败隔离）
-    const [jRes, dRes, rRes, vRes, sRes, secRes, stRes, jsRes, stratRes, jlRes, pbRes] = await Promise.all([
+    const [jRes, dRes, rRes, vRes, sRes, secRes, stRes, jsRes, stratRes, jlRes, pbRes, accRes] = await Promise.all([
       _smartFetch('/api/journal').then(r=>r.json()).catch(e=>({error:e})),
       _smartFetch('/api/discipline').then(r=>r.json()).catch(e=>({error:e})),
       _smartFetch('/api/risk').then(r=>r.json()).catch(e=>({error:e})),
@@ -9965,7 +9965,8 @@ async function refreshDailyReviewSummary(force){
       _smartFetch('/api/journal_session').then(r=>r.json()).catch(e=>({error:e})),
       _smartFetch('/api/journal_strategy?group_by=strategy').then(r=>r.json()).catch(e=>({error:e})),
       _smartFetch('/api/journal_list').then(r=>r.json()).catch(e=>({error:e})),
-      _smartFetch('/api/playback?force=1').then(r=>r.json()).catch(e=>({error:e}))
+      _smartFetch('/api/playback?force=1').then(r=>r.json()).catch(e=>({error:e})),
+      _smartFetch('/api/account').then(r=>r.json()).catch(e=>({error:e}))
     ]);
 
     const today = new Date();
@@ -9980,7 +9981,8 @@ async function refreshDailyReviewSummary(force){
     const dayPnl = jIntra.day_pnl != null ? jIntra.day_pnl : (jSummary.day_pnl || 0);
     const dayPnlPct = jIntra.day_pnl_pct != null ? jIntra.day_pnl_pct : 0;
     const totalPnl = jSummary.total_pnl || 0;
-    const equity = (jEquity.last_equity != null ? jEquity.last_equity : (jRes && jRes.equity)) || 0;
+    const acc = accRes || {};
+    const equity = (acc.equity != null ? acc.equity : (jEquity.last_equity != null ? jEquity.last_equity : (jRes && jRes.equity))) || 0;
     const winRate = jSummary.win_rate || 0;
     const profitFactor = jPerf.profit_factor || 0;
     const avgR = jSummary.avg_R || 0;
@@ -10004,9 +10006,10 @@ async function refreshDailyReviewSummary(force){
     // /api/state 的 positions 是 dict(symbol→持仓)，/api/account 是数组；统一转数组再 filter
     const positions = Array.isArray(rawPositions) ? rawPositions : Object.values(rawPositions);
     const activePos = positions.filter(p => Number(p.lots) > 0);
+    const accUsage = (acc.usage_rate != null ? acc.usage_rate : (st.usage_rate || 0));
     _setDrsText('drs-positions', String(activePos.length));
-    document.getElementById('drs-positions-sub').textContent = positions.length ? ('总 ' + positions.length + ' 条 · 占用 ' + fmt(st.usage_rate||0,1) + '%') : '无持仓';
-    document.getElementById('drs-usage').textContent = fmt(st.usage_rate||0,1) + '%';
+    document.getElementById('drs-positions-sub').textContent = positions.length ? ('总 ' + positions.length + ' 条 · 占用 ' + fmt(accUsage,1) + '%') : '无持仓';
+    document.getElementById('drs-usage').textContent = fmt(accUsage,1) + '%';
 
     // 3) 回撤维度
     const cdd = jEquity.current_dd_pct || 0;

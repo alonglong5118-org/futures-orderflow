@@ -169,6 +169,16 @@ class RiskStateMachine:
         self.daily_loss_locked = False
         self.consec_lock = False  # 当日连续止损冻结标记（跨日解除，类似 daily_loss_locked）
         self._lock = threading.RLock()  # 可重入：update() 内调用 summary() 不会死锁
+        # 多账户隔离：本状态机关联的 KillSwitch 实例。None 表示回退全局 KILL（default 账户）。
+        self._kill = None
+
+    def _get_kill(self):
+        """返回本状态机关联的 KillSwitch；未关联则回退全局 KILL（default 账户）。
+
+        修复实盘/模拟盘交叉：summary() 与 scale() 原硬编码 KILL（default 账户），
+        导致 /api/risk?account=live 泄漏 default 账户的熔断指标。
+        """
+        return getattr(self, "_kill", None) or KILL
 
     def mark_loss(self):
         with self._lock:
@@ -181,7 +191,7 @@ class RiskStateMachine:
             self.consec_lock = False  # 跨日解除当日连续止损冻结
 
     def scale(self):
-        if _kill_halted() or self.state == self.LOCKED:
+        if self._get_kill().halted or self.state == self.LOCKED:
             return 0.0
         base = 0.5 if self.state == self.WARNING else 1.0
         loss_factor = max(LOSS_FLOOR, LOSS_DECAY**self.consec_losses)
@@ -259,7 +269,7 @@ class RiskStateMachine:
                 "updated": time.strftime("%H:%M:%S"),
             }
             try:
-                d["killswitch"] = KILL.summary()
+                d["killswitch"] = self._get_kill().summary()
                 if d["killswitch"].get("halted"):
                     d["state"] = "HALTED"  # 面板显示最高优先级状态
             except Exception:
@@ -581,6 +591,8 @@ def get_fsm(account_id=None):
         fsm = _FSM_REGISTRY.get(account_id)
         if fsm is None:
             fsm = RiskStateMachine()
+            # 账户隔离：关联同账户的 KillSwitch（复用 get_kill 单例，避免同文件双实例写冲突）
+            fsm._kill = get_kill(account_id)
             _FSM_REGISTRY[account_id] = fsm
         return fsm
 

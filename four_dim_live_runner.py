@@ -2872,7 +2872,7 @@ def correlation_matrix():
 # 与 #92 相关性矩阵同源（持仓日收益率协方差），但与「计划风险R(基于止损)」互补：
 # 此处是市值暴露的逐日盯市 VaR，回答「一天内组合最多可能亏多少」。
 # ----------------------------------------------------------------------------
-_VAR_CACHE = {"t": 0.0, "v": None}
+_VAR_CACHE = {"t": 0.0, "v": None, "account": None}  # account 键用于多账户隔离，防止缓存跨账户串味
 # ── ①②（2026-08-16）VaR 升级：250 日历史模拟 + EVT 尾部压力 + 协方差/收益率缓存 ──
 # ② 两层数据缓存：逐品种日收益率（_VAR_RETS_CACHE）+ 对齐矩阵/协方差（_VAR_DATA_CACHE，
 # 按品种集合+窗口做 key）；candidate_combined_var_pct 高频逐仓调用时复用，不再每次全量重算。
@@ -3005,7 +3005,14 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
     global _VAR_CACHE
     _now = datetime.now().timestamp()
     _injected = positions is not None
-    if not _injected and not force and _VAR_CACHE["v"] is not None and (_now - _VAR_CACHE["t"]) < cache_sec:
+    _acc_key = at.get_account() if not _injected else None
+    if (
+        not _injected
+        and not force
+        and _VAR_CACHE["v"] is not None
+        and (_now - _VAR_CACHE["t"]) < cache_sec
+        and _VAR_CACHE.get("account") == _acc_key
+    ):
         return _VAR_CACHE["v"]
     if not _injected:
         try:
@@ -3016,7 +3023,7 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
     if not positions:
         r = {"ok": False, "reason": "当前无持仓，无法计算组合 VaR"}
         if not _injected:
-            _VAR_CACHE = {"t": _now, "v": r}
+            _VAR_CACHE = {"t": _now, "v": r, "account": _acc_key}
         return r
     # 持仓市值暴露（带符号，元）：方向 × 手数 × 现价 × 乘数
     X, info = {}, {}
@@ -3037,7 +3044,7 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
     if not X:
         r = {"ok": False, "reason": "持仓无可用价格"}
         if not _injected:
-            _VAR_CACHE = {"t": _now, "v": r}
+            _VAR_CACHE = {"t": _now, "v": r, "account": _acc_key}
         return r
     # ①② 日收益率对齐 + 协方差（缓存复用：逐品种收益率 + 矩阵两层缓存，窗口尾部 var_hist_window 日）
     vcfg = _var_cfg()
@@ -3045,19 +3052,19 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
     if not valid:
         r = {"ok": False, "reason": "有效日线不足（需 ≥20 个交易日）"}
         if not _injected:
-            _VAR_CACHE = {"t": _now, "v": r}
+            _VAR_CACHE = {"t": _now, "v": r, "account": _acc_key}
         return r
     if aligned is None or len(aligned) < 20:
         r = {"ok": False, "reason": "对齐样本不足 20 日"}
         if not _injected:
-            _VAR_CACHE = {"t": _now, "v": r}
+            _VAR_CACHE = {"t": _now, "v": r, "account": _acc_key}
         return r
     xr = pd.Series({s: X[s] for s in valid})
     var_pnl = float(xr @ cov_df @ xr)  # 组合 P&L 方差（元²）
     if var_pnl <= 0:
         r = {"ok": False, "reason": "协方差非正，无法计算"}
         if not _injected:
-            _VAR_CACHE = {"t": _now, "v": r}
+            _VAR_CACHE = {"t": _now, "v": r, "account": _acc_key}
         return r
     sigma = math.sqrt(var_pnl)  # 组合日 P&L 标准差（元）
     prices_eq = {s: p.get("price") for s, p in positions.items() if p.get("price")}
@@ -3143,7 +3150,7 @@ def portfolio_var(conf=(0.95, 0.99), force=False, cache_sec=60, positions=None):
             f"（var_method=param 或对齐样本不足 var_hist_min_samples={vcfg['min_samples']} → 参数法回退）"
         )
     if not _injected:
-        _VAR_CACHE = {"t": _now, "v": out}
+        _VAR_CACHE = {"t": _now, "v": out, "account": _acc_key}
     return out
 
 
@@ -10942,6 +10949,15 @@ def start_dashboard(state):
                             pass
                 except Exception:
                     pass
+                # ★ 多账户隔离（v3.11.1）：state 全局 dict 的 drawdown/risk_state/killswitch 由 default
+                #   后台循环写入；非 default 账户需按账户重路由，否则实盘视图会泄漏模拟盘风控指标。
+                if at.get_account() != "default":
+                    try:
+                        state["drawdown"] = ddg.current(account_id=at.get_account())
+                        state["risk_state"] = rsm.get_fsm(at.get_account()).summary()
+                        state["killswitch"] = rsm.get_kill(at.get_account()).summary()
+                    except Exception:
+                        pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
             elif self.path.split("?")[0] == "/api/account":
                 try:
