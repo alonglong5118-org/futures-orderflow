@@ -14,6 +14,9 @@
 
 set -e
 
+# 清空环境污染变量（TRAE/Codex 会设置 PYTHONHOME/PYTHONPATH 导致 encodings 丢失）
+unset PYTHONHOME PYTHONPATH 2>/dev/null || true
+
 # ── 颜色 ──────────────────────────────────────────────────────────────────────
 RED='\033[91m'
 GREEN='\033[92m'
@@ -36,8 +39,11 @@ echo -e "${BOLD}${CYAN}═══════════════════
 echo ""
 
 # ── 检查 Python ──────────────────────────────────────────────────────────────
-# 优先使用项目 .venv（Python>=3.10 且含核心依赖），否则回退系统 python3/python
-if [ -x ".venv/bin/python" ]; then
+# 优先生产 Python（TRAE/Codex 环境专用），其次 .venv，最后系统 python3/python
+PROD_PY="/Users/ken/.workbuddy/binaries/python/envs/default/bin/python3"
+if [ -x "$PROD_PY" ]; then
+    PYTHON_CMD="$PROD_PY"
+elif [ -x ".venv/bin/python" ]; then
     PYTHON_CMD=".venv/bin/python"
 elif command -v python3 &> /dev/null; then
     PYTHON_CMD=$(command -v python3 2>/dev/null)
