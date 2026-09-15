@@ -13849,7 +13849,8 @@ def _recalibrate_tick():
         _cs = _cw["summary"]
         print(
             f"[一致性] 偏离={_cs['divergences']} 未校验={_cs['unvalidated']} "
-            f"失效服务={_cs['broken_serving']} 陈旧={_cs['stale']} "
+            f"失效服务={_cs['broken_serving']} 回测失效={_cs.get('broken_model', 0)} "
+            f"已门控={_cs['broken_gated']} 陈旧={_cs['stale']} "
             f"{'(✅一致)' if _cw['ok'] else '(⚠️存在不一致)'}"
         )
     except Exception as _e:

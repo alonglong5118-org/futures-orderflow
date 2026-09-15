@@ -13,9 +13,10 @@ consistency_watchdog — 单元测试
 2. 未校验检测（unvalidated）
    - calib 有条目但缺 mean_oos → 报警
    - 不在 calib 中（纯默认）→ 不报警
-3. 漂移失效检测（broken_serving / broken_gated）
-   - broken + 未禁用 + 未门控 → broken_serving（计入 ok=false）
+3. 漂移失效检测（broken_serving / broken_gated / broken_model）
+   - broken + 未禁用 + 未门控 + evidence≠model → broken_serving（计入 ok=false）
    - broken + 未禁用 + 已门控 → broken_gated（不计入 ok=false）
+   - broken + 未禁用 + 未门控 + evidence=model（回测）→ broken_model（只提示，不计入 ok=false）
    - broken + 已禁用 → 不报警
    - 非 broken → 不报警
 4. 陈旧重校检测（stale）
@@ -297,6 +298,60 @@ class TestBrokenDetection(unittest.TestCase):
         # broken_gated 不计入 ok=false
         self.assertTrue(result["ok"])
 
+    def test_broken_model_evidence_not_escalated(self):
+        """broken + evidence=model（walk_forward 回测，非真实交易）→ broken_model（只提示，不硬门控）"""
+        result = _run_check(
+            {"MA": {"T_thresh": 2.0}},
+            {"MA": {"T_thresh": 2.0, "mean_oos": 1.5}},
+            drift_items=[
+                {
+                    "symbol": "MA",
+                    "status": "broken",
+                    "current_expR": -1.0,
+                    "evidence": "model",
+                    "papertrack_gated": False,
+                }
+            ],
+        )
+        self.assertEqual(len(result["broken_model"]), 1)
+        self.assertEqual(len(result["broken_serving"]), 0)
+        self.assertEqual(len(result["broken_gated"]), 0)
+        self.assertEqual(result["broken_model"][0]["symbol"], "MA")
+        self.assertEqual(result["broken_model"][0]["evidence"], "model")
+        # broken_model 不计入 ok=false（只提示重校，不触发升级门控）
+        self.assertTrue(result["ok"])
+
+    def test_broken_missing_evidence_defaults_real(self):
+        """broken 但缺 evidence 字段 → 默认按 real（fail-closed，宁升级勿漏报）"""
+        result = _run_check(
+            {"RB": {"T_thresh": 2.0}},
+            {"RB": {"T_thresh": 2.0, "mean_oos": 1.5}},
+            drift_items=[{"symbol": "RB", "status": "broken", "current_expR": -0.8}],
+        )
+        self.assertEqual(len(result["broken_serving"]), 1)
+        self.assertEqual(len(result["broken_model"]), 0)
+        self.assertFalse(result["ok"])
+
+    def test_broken_model_evidence_gated_still_gated(self):
+        """evidence=model 但已被门控 → 仍归 broken_gated（门控优先级最高）"""
+        result = _run_check(
+            {"MA": {"T_thresh": 2.0}},
+            {"MA": {"T_thresh": 2.0, "mean_oos": 1.5}},
+            drift_items=[
+                {
+                    "symbol": "MA",
+                    "status": "broken",
+                    "current_expR": -1.0,
+                    "evidence": "model",
+                    "papertrack_gated": True,
+                }
+            ],
+        )
+        self.assertEqual(len(result["broken_gated"]), 1)
+        self.assertEqual(len(result["broken_model"]), 0)
+        self.assertEqual(len(result["broken_serving"]), 0)
+        self.assertTrue(result["ok"])
+
     def test_broken_disabled_no_alert(self):
         """broken + 已禁用 → 不报警"""
         result = _run_check(
@@ -467,12 +522,20 @@ class TestOverallScenarios(unittest.TestCase):
                     "evidence": "drop",
                     "papertrack_gated": True,
                 },  # broken_gated
+                {
+                    "symbol": "PP",
+                    "status": "broken",
+                    "current_expR": -0.7,
+                    "evidence": "model",
+                    "papertrack_gated": False,
+                },  # broken_model（walk_forward 回测，非真实交易）
             ],
         )
         self.assertEqual(result["summary"]["divergences"], len(result["divergences"]))
         self.assertEqual(result["summary"]["unvalidated"], len(result["unvalidated"]))
         self.assertEqual(result["summary"]["broken_serving"], len(result["broken_serving"]))
         self.assertEqual(result["summary"]["broken_gated"], len(result["broken_gated"]))
+        self.assertEqual(result["summary"]["broken_model"], len(result["broken_model"]))
         self.assertEqual(result["summary"]["stale"], len(result["stale"]))
         self.assertEqual(result["summary"]["focus_count"], 4)
 
