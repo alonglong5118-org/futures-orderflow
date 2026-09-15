@@ -713,7 +713,7 @@ DEFAULT_CONFIG = {
         "FG": ["pullback"],  # +0.31R
         "sp": ["boll", "ma_break", "seasonal"],  # +0.17R +ma_break/seasonal OOS双窗口一致+联合正贡献
         "b": ["ma_break", "pullback", "dma", "rsi"],  # +0.36R (v1) +rsi OOS双窗口一致(后1/3 +0.22R)
-        "lc": ["donchian", "ma_break", "seasonal"],  # +0.14R +ma_break/seasonal OOS双窗口一致+联合正贡献
+        "lc": ["donchian", "ma_break"],  # +0.14R ma_break OOS双窗口一致+联合正贡献；seasonal 被迭代贪心(3窗口一致)移除
         "zn": ["boll"],  # +0.13R (贪心搜索v2)
         "p": ["donchian", "turtle"],  # +0.13R (贪心搜索v2)
         "PK": ["boll"],  # +0.06R
@@ -740,6 +740,10 @@ DEFAULT_CONFIG = {
         "jd": ["pullback", "seasonal"],  # 双策略 OOS双窗口一致+联合正贡献
         "rr": ["seasonal"],  # seasonal OOS双窗口一致+联合正贡献(品种已判死)
         "v": ["seasonal"],  # seasonal OOS双窗口一致+联合正贡献
+        # --- 迭代贪心重估（2026-09-16）：三窗口一致(后1/3+后1/2+中1/3 全提升) + 联合ablation 5/5正贡献 ---
+        #     净效果：后1/3 +0.0179R / 后1/2 +0.0266R / 中1/3 +0.0241R / 全样本 +0.0100R
+        "y": ["dma", "ma_break", "seasonal"],  # 迭代贪心三窗口一致（实盘品种，禁用三策略）
+        "RM": ["turtle"],  # 迭代贪心三窗口一致（RM 已判死无实盘效应，仅 54 品种 OOS 口径一致）
     },
     # 策略权重（P-W，2026-09-07）：簇内策略的相对权重。
     #   为空 dict 时=等权（默认行为，向后兼容）。
