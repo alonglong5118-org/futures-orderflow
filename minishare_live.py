@@ -259,6 +259,35 @@ def _save_mapping_cache(data):
         pass
 
 
+def _iter_account_positions():
+    """扫描所有账户（default + account_state_*.json）的持仓，yield (account_id, positions)。
+    行情层需把所有账户的有持仓品种钉到各自开仓合约，避免账户总览现价漂移到主力合约。
+    不能 import account_tracker（其反向 import 本模块），故直接扫 state 文件。"""
+    p = os.path.join(HERE, "account_state.json")
+    if os.path.exists(p):
+        try:
+            with open(p, encoding="utf-8") as _f:
+                yield "default", (json.load(_f) or {}).get("positions", {})
+        except Exception:
+            pass
+    try:
+        names = sorted(os.listdir(HERE))
+    except Exception:
+        names = []
+    for fn in names:
+        if (
+            fn.startswith("account_state_")
+            and fn.endswith(".json")
+            and not fn.endswith(".bak")
+            and not fn.endswith(".tmp")
+        ):
+            aid = fn[len("account_state_") : -len(".json")]
+            try:
+                with open(os.path.join(HERE, fn), encoding="utf-8") as _f:
+                    yield aid, (json.load(_f) or {}).get("positions", {})
+            except Exception:
+                continue
+
 class MinishareLiveFeed:
     """维护所有活跃品种的实时快照 + 5m 合成 K 线 + C_flow 累加器。
     品种映射通过 rt_fut_k 全量数据的 name 字段自动发现，缓存到 minishare_cache.json。"""
@@ -292,12 +321,6 @@ class MinishareLiveFeed:
         2026-09-14：① 钉死日志仅在映射变化时打印（根治每轮刷屏）；
         ② 新增临近交割换月告警（距交割月 <30 天主动提示，节流 30 分钟）。"""
         try:
-            st_path = os.path.join(HERE, "account_state.json")
-            if not os.path.exists(st_path):
-                return
-            with open(st_path, encoding="utf-8") as _f:
-                st = json.load(_f)
-            positions = st.get("positions", {})
             tcfg = {}
             try:
                 with open(os.path.join(HERE, "trade_config.json"), encoding="utf-8") as _f:
@@ -305,19 +328,30 @@ class MinishareLiveFeed:
             except Exception:
                 pass
             specs = tcfg.get("contract_specs", {})
+            # 遍历所有账户（含 live）持仓：有持仓品种一律钉到其开仓合约，
+            # 避免 live 账户总览现价漂移到主力合约（此前只钉 default 持仓）。
+            target = {}    # sym -> contract（多账户合并后最终钉定目标）
+            owner = {}     # sym -> account_id
+            conflicts = []  # 同品种多账户钉到不同合约的冲突告警
+            for aid, positions in _iter_account_positions():
+                for sym, pos in positions.items():
+                    if not (pos and int(pos.get("lots", 0) or 0) > 0):
+                        continue
+                    contract = (
+                        pos.get("contract")
+                        or MAIN_OVERRIDE.get(sym.lower())
+                        or MAIN_OVERRIDE.get(sym)
+                        or specs.get(sym, {}).get("contract")
+                    )
+                    if not contract:
+                        continue
+                    contract = normalize_contract_code(contract)
+                    if sym in target and target[sym] != contract:
+                        conflicts.append(f"{sym}: {owner[sym]}={target[sym]} vs {aid}={contract}")
+                    target[sym] = contract
+                    owner[sym] = aid
             pinned = []
-            for sym, pos in positions.items():
-                if not (pos and int(pos.get("lots", 0) or 0) > 0):
-                    continue
-                contract = (
-                    pos.get("contract")
-                    or MAIN_OVERRIDE.get(sym.lower())
-                    or MAIN_OVERRIDE.get(sym)
-                    or specs.get(sym, {}).get("contract")
-                )
-                if not contract:
-                    continue
-                contract = normalize_contract_code(contract)
+            for sym, contract in target.items():
                 # 若持仓合约发生变化，清除旧快照避免错价继续显示
                 old_code = self.sym2code.get(sym)
                 if old_code and old_code != contract and sym in self.last_snap:
@@ -325,6 +359,8 @@ class MinishareLiveFeed:
                 self._set_pin(sym, contract)
                 self._auth[sym] = contract
                 pinned.append(f"{sym}={contract}")
+            if conflicts:
+                print(f"[minishare_live] ⚠️ 多账户同品种钉到不同合约，全局映射仅保留后者: {'; '.join(conflicts)}")
             if pinned:
                 _sig = ",".join(sorted(pinned))
                 if _sig != getattr(self, "_last_pin_sig", None):
@@ -634,10 +670,10 @@ class MinishareLiveFeed:
         # 持仓品种不参与 auto_main 换月：账户总览盯市价必须与真实持仓合约一致
         held = set()
         try:
-            st_path = os.path.join(HERE, "account_state.json")
-            if os.path.exists(st_path):
-                st = json.load(open(st_path, encoding="utf-8"))
-                held = {s for s, p in st.get("positions", {}).items() if p and int(p.get("lots", 0) or 0) > 0}
+            for _aid, _positions in _iter_account_positions():
+                for _s, _p in _positions.items():
+                    if _p and int(_p.get("lots", 0) or 0) > 0:
+                        held.add(_s)
         except Exception:
             pass
         for sym in SYMBOLS:

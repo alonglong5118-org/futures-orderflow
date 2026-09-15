@@ -43,6 +43,42 @@ ACCOUNT_FILE = os.path.join(HERE, "account_state.json")
 CONFIG_FILE = os.path.join(HERE, "trade_config.json")
 EVENTS_FILE = os.path.join(HERE, "discipline_events.json")
 
+
+def _account():
+    """当前线程账户（HTTP ?account= 已切换，后台主循环为 default）。"""
+    try:
+        import account_tracker as at
+
+        return at.get_account()
+    except Exception:
+        return "default"
+
+
+def _journal_file():
+    try:
+        import trade_journal as tj
+
+        return tj._journal_file_for(_account())
+    except Exception:
+        return JOURNAL_FILE
+
+
+def _account_file():
+    try:
+        import account_tracker as at
+
+        return at.state_file_for(_account())
+    except Exception:
+        return ACCOUNT_FILE
+
+
+def _events_file():
+    a = _account()
+    if a == "default":
+        return EVENTS_FILE
+    return os.path.join(HERE, f"discipline_events_{a}.json")
+
+
 _EVENT_LOCK = threading.Lock()
 
 # 评分权重
@@ -116,14 +152,14 @@ def log_event(etype, state=None, reason="", symbol="", direction="", lots=0, ris
         rec["lots"] = int(lots)
         rec["risk_state"] = risk_state or ""
     with _EVENT_LOCK:
-        arr = _load(EVENTS_FILE, [])
+        arr = _load(_events_file(), [])
         if not isinstance(arr, list):
             arr = []
         arr.append(rec)
         # 只保留近 180 天，防无限增长
         cutoff = (datetime.now() - timedelta(days=180)).timestamp()
         arr = [e for e in arr if (_parse_time(e.get("time", "")) or datetime.now()).timestamp() >= cutoff]
-        json.dump(arr[-5000:], open(EVENTS_FILE, "w"), ensure_ascii=False, indent=2)
+        json.dump(arr[-5000:], open(_events_file(), "w"), ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +199,7 @@ def _is_manual_record(trade):
 # 仓位纪律（来自 account_state + trade_config 合约参数）
 # ---------------------------------------------------------------------------
 def _position_metrics():
-    st = _load(ACCOUNT_FILE, {})
+    st = _load(_account_file(), {})
     cfg = _load(CONFIG_FILE, {})
     specs = cfg.get("contract_specs", {})
     acc = cfg.get("account", {})
@@ -174,7 +210,7 @@ def _position_metrics():
     total_margin = 0.0
     positions = []
     # 从 trade_journal 匹配当前未平持仓的来源
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     open_source = {}
     for t in trades:
         if t.get("exit_time"):
@@ -224,9 +260,9 @@ def _position_metrics():
 def _card(kind, now=None):
     now = now or datetime.now()
     start, end = _period_bounds(kind, now)
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     sig_map = _signal_map()
-    events = _load(EVENTS_FILE, [])
+    events = _load(_events_file(), [])
     if not isinstance(events, list):
         events = []
 
@@ -564,7 +600,7 @@ def _day_operations(date_str):
         d0 = datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
         return []
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     ops = []
     for t in trades:
         sym = t.get("symbol")
@@ -685,13 +721,13 @@ def _has_activity(date_str):
         d0 = datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
         return False
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     for t in trades:
         et = _parse_time(t.get("time", ""))
         xt = _parse_time(t.get("exit_time", ""))
         if (et and et.date() == d0) or (xt and xt.date() == d0):
             return True
-    events = _load(EVENTS_FILE, [])
+    events = _load(_events_file(), [])
     if isinstance(events, list):
         for e in events:
             et = _parse_time(e.get("time", ""))

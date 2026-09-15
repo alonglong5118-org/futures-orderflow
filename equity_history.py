@@ -199,7 +199,9 @@ def _anchor():
         st = at.load_state()
     except Exception:
         try:
-            p = os.path.join(HERE, "account_state.json")
+            import account_tracker as _at2
+
+            p = _at2.state_file_for()
             if os.path.exists(p):
                 with open(p, encoding="utf-8") as f:
                     st = json.load(f)
@@ -250,7 +252,12 @@ def journal_sanity(max_move_ratio=0.50):
             specs = c.get("contract_specs") or {}
             if specs:
                 break
-        jp = os.path.join(HERE, "trade_journal.json")
+        try:
+            import trade_journal as tj
+
+            jp = tj._journal_file_for()
+        except Exception:
+            jp = os.path.join(HERE, "trade_journal.json")
         if not os.path.exists(jp):
             return out
         with open(jp, encoding="utf-8") as f:
