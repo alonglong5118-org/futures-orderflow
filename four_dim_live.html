@@ -9035,6 +9035,9 @@ window._DATABUS.subscribe('refreshSectorHeatmap', ['market'], 1);// 已注册，
 // meta 域（合约/元数据）
 window._DATABUS.subscribe('refreshPlayback', ['meta'], 1);
 window._DATABUS.subscribe('refreshGatedNotices', ['meta'], 1);
+// adv 风控建议组（工具模块）：account/risk 域变化 → 整体联动（2026-09-15 补，消除仅切 tab 才刷新盲区）
+window._DATABUS.subscribe('refreshAdv', ['account'], 2);
+window._DATABUS.subscribe('refreshAdv', ['risk'], 2);
 
 // ===== 复盘分析书签激活态自动轮询 =====
 // 当用户位于 analyze 标签且页面可见时，每 30s 自动刷新 DRS 与关联模块，保证复盘视图实时性
