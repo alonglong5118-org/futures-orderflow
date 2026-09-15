@@ -805,7 +805,9 @@ def load_robust_gate_file(path=None):
 
 def backfill_robust_pool_gate(drift_json=None, out_path=None, auto_adapt=None, cfg=None):
     """从 calibration_drift.json 回灌稳健池 OOS_expR 门槛。"""
-    c = cfg or _ROBUST_GATE_CFG
+    # cfg 可能只覆盖部分键（如 _STRAT_CFG["robust_pool_gate"] 缺 default_stability/default_oos_expR），
+    # 用默认配置打底再合并，缺键回落到 _ROBUST_GATE_CFG，避免 KeyError 导致回灌静默空转。
+    c = {**_ROBUST_GATE_CFG, **(cfg or {})}
     aa = auto_adapt if auto_adapt is not None else c["auto_adapt"]
     drift_json = drift_json or DRIFT_JSON_PATH
     out_path = out_path or ROBUST_GATE_FILE
