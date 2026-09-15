@@ -712,15 +712,21 @@ DEFAULT_CONFIG = {
         "eg": ["seasonal"],  # +0.33R (贪心搜索v2)
         "rb": ["ma_break"],  # +0.33R
         "FG": ["pullback"],  # +0.31R
-        "MA": ["rsi"],  # +0.27R
         "sp": ["boll"],  # +0.17R
-        "b": ["ma_break", "pullback", "dma"],  # +0.36R (v1验证有效，组合效应>贪心)
+        "b": ["ma_break", "pullback", "dma", "rsi"],  # +0.36R (v1) +rsi OOS双窗口一致(后1/3 +0.22R)
         "lc": ["donchian"],  # +0.14R
         "zn": ["boll"],  # +0.13R (贪心搜索v2)
         "p": ["donchian", "turtle"],  # +0.13R (贪心搜索v2)
         "PK": ["boll"],  # +0.06R
         "UR": ["seasonal"],  # +0.06R (贪心搜索v2)
         "TA": ["rsi"],  # +0.05R
+        # --- rsi 品种级 OOS 校准（2026-09-16）：后1/3+后1/2 双窗口一致支持禁用 rsi ---
+        "ru": ["rsi"],  # +0.85R (rsi OOS双窗口一致)
+        "cs": ["rsi"],  # +0.47R (rsi OOS双窗口一致)
+        "hc": ["rsi"],  # +0.24R (rsi OOS双窗口一致)
+        "lh": ["rsi"],  # +0.23R (rsi OOS双窗口一致)
+        "ni": ["rsi"],  # +0.19R (rsi OOS双窗口一致)
+        "l": ["rsi"],  # +0.07R (rsi OOS双窗口一致)
     },
     # 策略权重（P-W，2026-09-07）：簇内策略的相对权重。
     #   为空 dict 时=等权（默认行为，向后兼容）。

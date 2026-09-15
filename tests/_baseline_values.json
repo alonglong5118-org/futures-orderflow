@@ -92,20 +92,22 @@
   },
   "backtest_hc_tail500": {
     "symbol": "hc",
-    "trades": 10,
-    "expR": -0.2025,
-    "win_rate": 0.3,
+    "trades": 14,
+    "expR": 0.0179,
+    "win_rate": 0.357,
     "roll_skipped": 0,
     "exit_reasons": {
-      "止损": 7,
-      "尾仓离场": 2,
+      "止损": 9,
+      "尾仓离场": 3,
+      "止盈2R": 1,
       "期末平": 1
     },
     "by_regime_keys": [
-      "趋势"
+      "趋势",
+      "过渡"
     ],
-    "trades_min": 8,
-    "trades_max": 14
+    "trades_min": 12,
+    "trades_max": 16
   },
   "backtest_rb_tail500": {
     "symbol": "rb",
