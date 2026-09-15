@@ -2319,9 +2319,14 @@ def precompute_T_array(
         cluster_mean = np.zeros(n)
         agree_mean = np.zeros(n)
 
-    # seasonal 簇：1 个策略
-    cluster_seasonal = sig_arrays["seasonal"].astype(np.float64)
-    agree_seasonal = np.where(cluster_seasonal != 0, 1.0, 0.0)
+    # seasonal 簇：1 个策略（走 active_clusters 过滤，与 compute_T 一致；修复黑名单禁用 seasonal 失效）
+    seasonal_members = active_clusters.get("seasonal", ())
+    if len(seasonal_members) > 0:
+        cluster_seasonal = sig_arrays["seasonal"].astype(np.float64)
+        agree_seasonal = np.where(cluster_seasonal != 0, 1.0, 0.0)
+    else:
+        cluster_seasonal = np.zeros(n)
+        agree_seasonal = np.zeros(n)
 
     # 2) 为每个 regime 预计算簇权重（cw 和 cw_base）
     # cw: 含 seasonal_boost + 品种级覆盖的实际权重；cw_base: 未加权基础权重（用于归一化分母）
