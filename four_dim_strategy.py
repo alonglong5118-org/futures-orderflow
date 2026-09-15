@@ -713,12 +713,9 @@ DEFAULT_CONFIG = {
         "rb": ["ma_break"],  # +0.33R
         "FG": ["pullback"],  # +0.31R
         "MA": ["rsi"],  # +0.27R
-        "eb": ["seasonal"],  # +0.17R (贪心搜索v2)
         "sp": ["boll"],  # +0.17R
         "b": ["ma_break", "pullback", "dma"],  # +0.36R (v1验证有效，组合效应>贪心)
         "lc": ["donchian"],  # +0.14R
-        "pp": ["seasonal"],  # +0.13R (贪心搜索v2)
-        "AP": ["seasonal"],  # +0.13R (贪心搜索v2)
         "zn": ["boll"],  # +0.13R (贪心搜索v2)
         "p": ["donchian", "turtle"],  # +0.13R (贪心搜索v2)
         "PK": ["boll"],  # +0.06R
