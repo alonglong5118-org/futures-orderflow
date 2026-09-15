@@ -13586,18 +13586,30 @@ def _update_aux(feed, state):
         # ---- 账户级日亏（主源=动态权益回撤，含浮亏、不依赖手动录入）----
         _td = _trading_day_label()
         if DAY_OPEN_EQUITY is None or DAY_OPEN_LABEL != _td:
-            DAY_OPEN_EQUITY = eq
-            DAY_OPEN_LABEL = _td
             # P0-2 fix: 新交易日跨日重置风控（连亏锁/日亏锁跨日解除）并重定日初权益锚点。
             # 原实现从未调用 reset_daily → 连亏锁/日亏锁跨日永不解除（永久 LOCKED）。
             _acc = at.get_account()
+            _kill = rsm.get_kill(_acc)
+            if DAY_OPEN_EQUITY is None:
+                # 重启/首次启动：优先恢复同交易日的持久化日初锚点，避免盘中浮亏被洗掉
+                # （否则 DAY_OPEN_EQUITY 直接用当前权益，account_daily_pnl 浮亏归零 → 日亏熔断延迟）。
+                _saved_oe = getattr(_kill, "_opening_equity", None)
+                _saved_date = getattr(_kill, "_opening_equity_date", None)
+                if _saved_oe and _saved_date == _td:
+                    DAY_OPEN_EQUITY = float(_saved_oe)
+                else:
+                    DAY_OPEN_EQUITY = eq
+            else:
+                # 跨日：新交易日重新锚定当前权益
+                DAY_OPEN_EQUITY = eq
+            DAY_OPEN_LABEL = _td
             try:
                 rsm.get_fsm(_acc).reset_daily()
             except Exception as e:
                 print(f"[跨日风控重置] FSM 异常: {repr(e)[:80]}")
             try:
-                if eq > 0:
-                    rsm.get_kill(_acc).set_opening_equity(eq)
+                if DAY_OPEN_EQUITY > 0:
+                    _kill.set_opening_equity(DAY_OPEN_EQUITY, date_str=_td)
             except Exception as e:
                 print(f"[跨日风控重置] KillSwitch 异常: {repr(e)[:80]}")
         account_daily_pnl = (eq - DAY_OPEN_EQUITY) if DAY_OPEN_EQUITY > 0 else 0.0  # 亏为负

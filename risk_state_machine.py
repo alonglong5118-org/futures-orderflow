@@ -376,6 +376,7 @@ class KillSwitch:
         self.history = []  # 历次熔断/解除记录
         self.ack = False  # 用户是否已确认（已按清单全平）
         self._opening_equity = None  # P0-7 fix: 日初权益(固定值)，稳定风控阈值
+        self._opening_equity_date = None  # 日初锚点所属交易日(YYYY-MM-DD)，重启恢复用
         self.reset_at = None  # 最近一次人工解除熔断的时间戳
         self.force_rest_until = None  # P0-1: 10%回撤休息熔断的强制休息截止时间戳（None=永久熔断）
         self._lock = threading.RLock()
@@ -396,6 +397,7 @@ class KillSwitch:
                 self.history = d.get("history", []) or []
                 self.ack = bool(d.get("ack"))
                 self._opening_equity = d.get("_opening_equity")
+                self._opening_equity_date = d.get("_opening_equity_date")
                 self.reset_at = d.get("reset_at")
                 self.force_rest_until = d.get("force_rest_until")
         except Exception as e:
@@ -416,6 +418,7 @@ class KillSwitch:
                         "history": self.history[-50:],
                         "ack": self.ack,
                         "_opening_equity": self._opening_equity,
+                        "_opening_equity_date": self._opening_equity_date,
                         "reset_at": self.reset_at,
                         "force_rest_until": self.force_rest_until,
                     },
@@ -578,8 +581,12 @@ class KillSwitch:
             self._save()
             return self.summary()
 
-    def set_opening_equity(self, equity):
-        """P0-2/P1-4: 设置日初权益锚点（线程安全 + 落盘）。跨日重置时更新，稳定日亏阈值。"""
+    def set_opening_equity(self, equity, date_str=None):
+        """P0-2/P1-4: 设置日初权益锚点（线程安全 + 落盘）。跨日重置时更新，稳定日亏阈值。
+
+        date_str: 日初锚点所属交易日标签(YYYY-MM-DD)。用于重启时判断持久化锚点是否仍属
+                  当前交易日，避免把「昨天的日初权益」错误恢复到「今天」。
+        """
         with self._lock:
             try:
                 eq = float(equity)
@@ -587,7 +594,13 @@ class KillSwitch:
                 return
             if eq > 0:
                 self._opening_equity = eq
+                if date_str is not None:
+                    self._opening_equity_date = date_str
                 self._save()
+
+    def opening_equity(self):
+        """返回日初权益锚点（供软层 risk_guard 统一日亏分母口径）。"""
+        return self._opening_equity
 
     def reset(self, note="人工解除", reset_peak_to=None):
         """人工解除熔断（唯一出口）。可顺便把峰值权益重置到当前，避免刚解除又被旧峰值秒杀。"""
@@ -752,7 +765,10 @@ def update_risk_state(
                     fsm.peak_equity = pe
         except Exception:
             pass
-    rg = risk_guard(equity, used_margin, daily_pnl, proposed_margin, symbol=symbol)
+    rg = risk_guard(
+        equity, used_margin, daily_pnl, proposed_margin, symbol=symbol,
+        opening_equity=kill.opening_equity(),
+    )
     fsm.update(rg, equity=equity)
     ks = kill.check(equity, fsm.peak_equity, daily_pnl, fsm.consec_losses, positions)
     out = fsm.summary()
