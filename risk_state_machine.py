@@ -364,7 +364,8 @@ class KillSwitch:
     状态落盘 killswitch_state.json，进程重启后仍然是熔断态（防「重启洗白」）。
     """
 
-    def __init__(self, path=KILL_STATE_FILE):
+    def __init__(self, path=KILL_STATE_FILE, account_id=None):
+        self.account_id = account_id or "default"
         self.path = path
         self.halted = False
         self.reason = ""
@@ -606,7 +607,7 @@ class KillSwitch:
             self._save()
             if reset_peak_to:
                 try:
-                    RISK_FSM.peak_equity = float(reset_peak_to)
+                    get_fsm(self.account_id).peak_equity = float(reset_peak_to)
                 except Exception:
                     pass
             return self.summary()
@@ -685,7 +686,7 @@ def get_kill(account_id=None):
     with _REGISTRY_LOCK:
         ks = _KILL_REGISTRY.get(account_id)
         if ks is None:
-            ks = KillSwitch(path=_kill_state_file_for(account_id))
+            ks = KillSwitch(path=_kill_state_file_for(account_id), account_id=account_id)
             _KILL_REGISTRY[account_id] = ks
         return ks
 

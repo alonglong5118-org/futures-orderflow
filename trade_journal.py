@@ -1789,7 +1789,9 @@ def current_loss_streak():
 
     data = _load()
     # 查找最近的熔断解除时间戳
-    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "killswitch_state.json")
+    _ks_acc = _journal_account()
+    _ks_name = "killswitch_state.json" if (_ks_acc is None or _ks_acc == "default") else f"killswitch_{_ks_acc}.json"
+    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _ks_name)
     reset_time = None
     try:
         if os.path.exists(ks_path):
