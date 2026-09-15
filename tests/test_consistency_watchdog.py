@@ -245,6 +245,37 @@ class TestBrokenDetection(unittest.TestCase):
         self.assertFalse(result["broken_serving"][0]["papertrack_gated"])
         self.assertFalse(result["ok"])
 
+    def test_broken_low_confidence_not_escalated(self):
+        """broken + confidence=low（样本不足）→ 不升级 broken_serving（防单笔误判永久门控）"""
+        result = _run_check(
+            {"FG": {"T_thresh": 2.0}},
+            {"FG": {"T_thresh": 2.0, "mean_oos": 1.5}},
+            drift_items=[
+                {
+                    "symbol": "FG",
+                    "status": "broken",
+                    "current_expR": -1.0,
+                    "current_trades": 1,
+                    "evidence": "real",
+                    "confidence": "low",
+                    "papertrack_gated": False,
+                }
+            ],
+        )
+        self.assertEqual(len(result["broken_serving"]), 0)
+        self.assertEqual(len(result["broken_gated"]), 0)
+        self.assertTrue(result["ok"])
+
+    def test_broken_missing_confidence_defaults_escalate(self):
+        """broken 但缺 confidence 字段 → 默认按高置信升级（fail-closed 防漏报失效模型）"""
+        result = _run_check(
+            {"RB": {"T_thresh": 2.0}},
+            {"RB": {"T_thresh": 2.0, "mean_oos": 1.5}},
+            drift_items=[{"symbol": "RB", "status": "broken", "current_expR": -0.8, "evidence": "drop"}],
+        )
+        self.assertEqual(len(result["broken_serving"]), 1)
+        self.assertFalse(result["ok"])
+
     def test_broken_gated_reports_broken_gated(self):
         """broken + 未禁用 + 已门控 → broken_gated（不计入 ok=false）"""
         result = _run_check(
