@@ -707,12 +707,9 @@ DEFAULT_CONFIG = {
         "fu": ["rsi", "pullback", "dma"],  # +1.74R (贪心v2) +dma OOS双窗口一致+联合正贡献
         "ag": ["rsi", "seasonal", "boll", "ma_break"],  # +0.60R (贪心v2) +boll/ma_break OOS双窗口一致
         "c": ["ma_break"],  # +0.51R
-        "m": ["rsi", "pullback"],  # +0.38R (贪心搜索v2)
-        "eg": ["seasonal", "boll"],  # +0.33R (贪心v2) +boll OOS双窗口一致(后1/3 +0.31R, 品种已判死)
         "rb": ["ma_break", "seasonal"],  # +0.33R +seasonal OOS双窗口一致+联合正贡献
         "FG": ["pullback"],  # +0.31R
         "sp": ["boll", "ma_break", "seasonal"],  # +0.17R +ma_break/seasonal OOS双窗口一致+联合正贡献
-        "b": ["ma_break", "pullback", "dma", "rsi"],  # +0.36R (v1) +rsi OOS双窗口一致(后1/3 +0.22R)
         "lc": ["donchian", "ma_break"],  # +0.14R ma_break OOS双窗口一致+联合正贡献；seasonal 被迭代贪心(3窗口一致)移除
         "zn": ["boll"],  # +0.13R (贪心搜索v2)
         "p": ["donchian", "turtle"],  # +0.13R (贪心搜索v2)
@@ -722,7 +719,7 @@ DEFAULT_CONFIG = {
         # --- rsi 品种级 OOS 校准（2026-09-16）：后1/3+后1/2 双窗口一致支持禁用 rsi ---
         "ru": ["rsi"],  # +0.85R (rsi OOS双窗口一致)
         "cs": ["rsi", "ma_break", "dma"],  # +0.47R (rsi OOS) +ma_break/dma OOS双窗口一致+联合正贡献
-        "hc": ["rsi"],  # +0.24R (rsi OOS双窗口一致)
+        "hc": ["rsi"],  # +0.24R (rsi OOS双窗口一致；hc 在 AUTO_RECOVER 白名单，保留防恢复后失效)
         "lh": ["rsi", "pullback"],  # +0.23R (rsi OOS) +pullback OOS双窗口一致+联合正贡献
         "ni": ["rsi", "boll"],  # +0.19R (rsi OOS) +boll OOS双窗口一致(后1/3 +0.39R)
         "l": ["rsi", "ma_break", "seasonal"],  # +0.07R (rsi OOS) +ma_break/seasonal OOS双窗口一致+联合正贡献
@@ -736,14 +733,14 @@ DEFAULT_CONFIG = {
         "PF": ["dma"],  # dma OOS双窗口一致+联合正贡献
         "SA": ["dma"],  # dma OOS双窗口一致+联合正贡献
         "SR": ["seasonal"],  # seasonal OOS双窗口一致+联合正贡献
-        "a": ["pullback"],  # pullback OOS双窗口一致+联合正贡献(品种已判死)
         "jd": ["pullback", "seasonal"],  # 双策略 OOS双窗口一致+联合正贡献
-        "rr": ["seasonal"],  # seasonal OOS双窗口一致+联合正贡献(品种已判死)
-        "v": ["seasonal"],  # seasonal OOS双窗口一致+联合正贡献
-        # --- 迭代贪心重估（2026-09-16）：三窗口一致(后1/3+后1/2+中1/3 全提升) + 联合ablation 5/5正贡献 ---
-        #     净效果：后1/3 +0.0179R / 后1/2 +0.0266R / 中1/3 +0.0241R / 全样本 +0.0100R
+        "v": ["ma_break", "seasonal"],  # seasonal OOS双窗口一致+联合正贡献；ma_break 迭代贪心(43实盘口径)新增
+        # --- 迭代贪心重估（2026-09-16，54品种口径）：三窗口一致 + 联合ablation 5/5正贡献 ---
+        #     净效果（54口径）：后1/3 +0.0179R / 后1/2 +0.0266R / 中1/3 +0.0241R / 全样本 +0.0100R
         "y": ["dma", "ma_break", "seasonal"],  # 迭代贪心三窗口一致（实盘品种，禁用三策略）
-        "RM": ["turtle"],  # 迭代贪心三窗口一致（RM 已判死无实盘效应，仅 54 品种 OOS 口径一致）
+        # --- 43 实盘品种口径重估（2026-09-16）：剔除 11 死品种 pooled 污染 + 清理死品种条目 ---
+        #     净效果（43口径）：后1/3 +0.7862→+0.7992 / 后1/2 +0.8007→+0.8061 / 中1/3 +0.4117→+0.4143
+        #     清理死品种 a/b/eg/m/rr/RM 条目（不交易无实盘效应）；hc 保留 rsi（AUTO_RECOVER 白名单防恢复失效）；v 新增 ma_break 禁用
     },
     # 策略权重（P-W，2026-09-07）：簇内策略的相对权重。
     #   为空 dict 时=等权（默认行为，向后兼容）。

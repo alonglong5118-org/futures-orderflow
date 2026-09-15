@@ -65,6 +65,7 @@ def main():
     ap.add_argument("--min-delta", type=float, default=0.001)
     ap.add_argument("--max-iter", type=int, default=300)
     ap.add_argument("--strict", action="store_true", help="三窗口验收（含中1/3 独立OOS）")
+    ap.add_argument("--live-only", action="store_true", help="仅实盘品种（SYMBOLS - DISABLED_SYMBOLS）算 pooled")
     ap.add_argument("--symbols", type=str, default=None)
     args = ap.parse_args()
 
@@ -74,6 +75,8 @@ def main():
     if args.symbols:
         want = {x.strip() for x in args.symbols.split(",") if x.strip()}
         syms = [s for s in syms if s in want]
+    if args.live_only:
+        syms = [s for s in syms if s not in fd.DISABLED_SYMBOLS]
 
     data = {}
     for sym in syms:
