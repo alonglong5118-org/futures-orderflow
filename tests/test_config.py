@@ -30,7 +30,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from four_dim_strategy import DEFAULT_CONFIG, SYMBOLS
+from four_dim_strategy import (
+    DEFAULT_CONFIG,
+    SYMBOLS,
+    apply_symbol_cluster_override,
+    effective_weights,
+)
 from strategy_layer import (
     _ROBUST_GATE,
     _ROBUST_GATE_CFG,
@@ -302,6 +307,55 @@ class TestConfigCrossConsistency(unittest.TestCase):
         for regime, params in coef.items():
             for key in ["T", "conv", "stop", "cooldown"]:
                 self.assertGreater(params[key], 0, f"regime_coef[{regime}][{key}] = {params[key]}，应该 > 0")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  4. F601 合并修复回归（2026-09-14）
+#     历史 bug：per_symbol_regime_coef / thresholds_by_symbol 内重复 key，
+#     导致 y/ag/b 的 cluster_w 与波动市 T 乘数、RM 的 combine_weights 被静默覆盖丢失。
+#     这些用例驱动真实代码路径，防止未来再次引入重复 key 造成配置覆盖。
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestRegimeConfigMergeIntegrity(unittest.TestCase):
+    """F601 修复回归：cluster_w 与 T 乘数 / RM combine_weights 必须共存。"""
+
+    def setUp(self):
+        self.cfg = DEFAULT_CONFIG
+
+    def test_y_cluster_w_and_t_coexist(self):
+        """y（豆油）：波动市 cluster_w 与 P2 T 乘数必须同时存在"""
+        prc = self.cfg["per_symbol_regime_coef"]["y"]
+        self.assertEqual(prc["波动"]["cluster_w"], {"mean": 0.3}, "y 波动 cluster_w 被覆盖丢失")
+        self.assertEqual(prc["波动"]["T"], 1.30, "y 波动 T 乘数丢失")
+        # 驱动真实代码路径：cluster_w 应把 mean 权重 ×0.3
+        cw = {"trend": 0.6, "mean": 0.25, "seasonal": 0.15}
+        out = apply_symbol_cluster_override(cw, "y", "波动", self.cfg)
+        self.assertAlmostEqual(out["mean"], 0.25 * 0.3, places=6, msg="y cluster_w 未生效")
+
+    def test_ag_cluster_w_and_t_coexist(self):
+        """ag（沪银）：波动市 cluster_w 与 P2 T 乘数必须同时存在"""
+        prc = self.cfg["per_symbol_regime_coef"]["ag"]
+        self.assertEqual(prc["波动"]["cluster_w"], {"mean": 0.3}, "ag 波动 cluster_w 被覆盖丢失")
+        self.assertEqual(prc["波动"]["T"], 1.30, "ag 波动 T 乘数丢失")
+
+    def test_b_regime_t_and_vol_t_coexist(self):
+        """b（豆二）：趋势市 T/stop 与波动市 T 乘数必须同时存在"""
+        prc = self.cfg["per_symbol_regime_coef"]["b"]
+        self.assertEqual(prc["趋势"]["T"], 1.00, "b 趋势 T 丢失")
+        self.assertEqual(prc["趋势"]["stop"], 1.30, "b 趋势 stop 丢失")
+        self.assertEqual(prc["波动"]["T"], 1.30, "b 波动 T 乘数丢失")
+
+    def test_rm_t_thresh_and_combine_weights_coexist(self):
+        """RM（菜粕）：P6 T_thresh=24 与 P0 combine_weights 必须同时存在"""
+        rm = self.cfg["thresholds_by_symbol"]["RM"]
+        self.assertEqual(rm["T_thresh"], 24, "RM T_thresh 被覆盖为旧值")
+        self.assertEqual(rm["combine_weights"], {"T": 0.45, "F": 0.40, "C": 0.15}, "RM combine_weights 被覆盖丢失")
+        # 驱动真实代码路径：combine_weights 优先于板块/全局
+        w = effective_weights("RM", self.cfg)
+        self.assertAlmostEqual(w["T"], 0.45, places=6, msg="RM combine_weights T 未生效")
+        self.assertAlmostEqual(w["F"], 0.40, places=6, msg="RM combine_weights F 未生效")
+        self.assertAlmostEqual(w["C"], 0.15, places=6, msg="RM combine_weights C 未生效")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

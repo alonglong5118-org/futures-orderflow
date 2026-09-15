@@ -3,7 +3,7 @@
 #  多阶段构建：deps 层编译依赖 → runtime 层精简镜像
 #
 #  构建参数：
-#    PYTHON_VERSION  Python 版本（默认 3.11）
+#    PYTHON_VERSION  Python 版本（默认 3.13）
 #    TUSHARE_TOKEN   Tushare Pro token（构建时测试用，不会留在镜像中）
 #
 #  构建：
@@ -18,7 +18,7 @@
 # ==============================================================================
 
 # ── 可配置参数 ────────────────────────────────────────────────────────────────
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.13
 
 # ── Base 层：共用基础（apt 依赖 + 时区）─────────────────────────────────────
 FROM python:${PYTHON_VERSION}-slim AS base

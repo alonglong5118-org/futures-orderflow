@@ -100,6 +100,23 @@ class FeatureManager:
                 return {"ok": False, "error": f"未知开关: {feature_name}"}
 
             old_state = bool(feat.get("enabled", False))
+
+            # ── 未接线开关守卫（2026-09-08）──────────────────────────────
+            # feature_flags.json 里存在若干「装饰性」开关：代码从不读取它们，
+            # 对应模块本身硬生效（如 drawdown_guard / kill_switch 属保护性机制，
+            # 历史上有意设计为不可关闭）。UI 上却可点，造成「能点但没用」的错觉。
+            # 处理原则：不真接线（关闭保护性机制会引入风险），而是显式拒绝切换
+            # 并说明原因，把「无效」变成「明确告知不可切换」。
+            if feat.get("_wired") is False:
+                return {
+                    "ok": False,
+                    "error": "该开关未接线：代码不读取此 flag，对应模块硬生效，切换无效",
+                    "feature": feature_name,
+                    "enabled": old_state,
+                    "wired": False,
+                    "note": feat.get("_wired_note", ""),
+                }
+
             if old_state == bool(enabled):
                 return {
                     "ok": True,

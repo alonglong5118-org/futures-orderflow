@@ -27,39 +27,39 @@ CACHE_FILE = os.path.join(HERE, "fundamentals.json")
 # 全品种（不含中金所）：symbol → akshare 基差 vars_list 代码 / 库存中文名
 SYMBOL_MAP = {
     # 上期所 SHFE
-    "cu": {"basis_code": "CU", "inv_name": "铜"},
-    "al": {"basis_code": "AL", "inv_name": "铝"},
-    "zn": {"basis_code": "ZN", "inv_name": "锌"},
+    "cu": {"basis_code": "CU", "inv_name": "沪铜"},
+    "al": {"basis_code": "AL", "inv_name": "沪铝"},
+    "zn": {"basis_code": "ZN", "inv_name": "沪锌"},
     "ni": {"basis_code": "NI", "inv_name": "镍"},
     "sn": {"basis_code": "SN", "inv_name": "锡"},
     "ao": {"basis_code": "AO", "inv_name": "氧化铝"},
-    "au": {"basis_code": "AU", "inv_name": "黄金"},
-    "ag": {"basis_code": "AG", "inv_name": "白银"},
+    "au": {"basis_code": "AU", "inv_name": "沪金"},
+    "ag": {"basis_code": "AG", "inv_name": "沪银"},
     "rb": {"basis_code": "RB", "inv_name": "螺纹钢"},
     "hc": {"basis_code": "HC", "inv_name": "热卷"},
     "ss": {"basis_code": "SS", "inv_name": "不锈钢"},
     "bu": {"basis_code": "BU", "inv_name": "沥青"},
-    "fu": {"basis_code": "FU", "inv_name": "燃料油"},
+    "fu": {"basis_code": "FU", "inv_name": "燃油"},
     "ru": {"basis_code": "RU", "inv_name": "橡胶"},
     "sp": {"basis_code": "SP", "inv_name": "纸浆"},
     # 上期能源 INE
-    "sc": {"basis_code": "SC", "inv_name": "原油"},
-    "ec": {"basis_code": "EC", "inv_name": "集运欧线"},
+    "sc": {"basis_code": "SC", "inv_name": None},
+    "ec": {"basis_code": "EC", "inv_name": None},
     # 大商所 DCE
     "i": {"basis_code": "I", "inv_name": "铁矿石"},
     "J": {"basis_code": "J", "inv_name": "焦炭"},
     "JM": {"basis_code": "JM", "inv_name": "焦煤"},
     "eb": {"basis_code": "EB", "inv_name": "苯乙烯"},
     "eg": {"basis_code": "EG", "inv_name": "乙二醇"},
-    "l": {"basis_code": "L", "inv_name": "LLDPE"},
+    "l": {"basis_code": "L", "inv_name": "塑料"},
     "pp": {"basis_code": "PP", "inv_name": "聚丙烯"},
     "v": {"basis_code": "V", "inv_name": "PVC"},
-    "pg": {"basis_code": "PG", "inv_name": "液化气"},
+    "pg": {"basis_code": "PG", "inv_name": "液化石油气"},
     "m": {"basis_code": "M", "inv_name": "豆粕"},
     "y": {"basis_code": "Y", "inv_name": "豆油"},
     "a": {"basis_code": "A", "inv_name": "豆一"},
     "b": {"basis_code": "B", "inv_name": "豆二"},
-    "p": {"basis_code": "P", "inv_name": "棕榈油"},
+    "p": {"basis_code": "P", "inv_name": "棕榈"},
     "c": {"basis_code": "C", "inv_name": "玉米"},
     "cs": {"basis_code": "CS", "inv_name": "玉米淀粉"},
     "jd": {"basis_code": "JD", "inv_name": "鸡蛋"},
@@ -76,7 +76,7 @@ SYMBOL_MAP = {
     "UR": {"basis_code": "UR", "inv_name": "尿素"},
     "PR": {"basis_code": "PR", "inv_name": "瓶片"},
     "SR": {"basis_code": "SR", "inv_name": "白糖"},
-    "CF": {"basis_code": "CF", "inv_name": "棉花"},
+    "CF": {"basis_code": "CF", "inv_name": "郑棉"},
     "RM": {"basis_code": "RM", "inv_name": "菜粕"},
     "OI": {"basis_code": "OI", "inv_name": "菜油"},
     "PK": {"basis_code": "PK", "inv_name": "花生"},
@@ -139,6 +139,8 @@ def fetch_inventory():
 
     out = {k: [] for k in SYMBOL_MAP}
     for sym, m in SYMBOL_MAP.items():
+        if not m.get("inv_name"):
+            continue  # 东财无该品种库存数据（原油/集运欧线等），静默跳过，不刷屏
         try:
             df = ak.futures_inventory_em(symbol=m["inv_name"])
         except Exception as e:
@@ -503,7 +505,7 @@ if __name__ == "__main__":
 # 接入方式：分板块配置，默认全部关闭，可按板块/全局启用
 # ===========================================================================
 
-# 全局开关（优先于分板块配置，用于快速全局切换）
+# 全局开关（优先于分板块/分品种配置，用于快速全局切换）
 ENHANCED_F_ENABLED = False  # 默认关闭
 
 # 分板块增强 F 配置（ENHANCED_F_ENABLED=False 时按此配置逐板块启用）
@@ -513,10 +515,38 @@ SECTOR_ENHANCED_F = {
     "黑系": True,  # ✅ 提升显著（+0.061）
     "有色": True,  # ✅ 提升较好（+0.026）
     "贵金属": True,  # ✅ 小幅提升（+0.009）
-    "化工": False,  # ❌ 下降，保持旧版
-    "能源": False,  # ❌ 下降，保持旧版
+    "化工": False,  # ❌ 板块级下降，但部分品种已单独启用
+    "能源": False,  # ❌ 板块级下降，但部分品种已单独启用
     "航运": False,  # 无数据影响
     "其他": False,
+}
+
+# 品种级增强 F 开关（优先级最高，覆盖板块级配置）
+# Phase 5 品种级精细化配置：仅对 OOS 提升显著的品种启用定制化 F
+PER_VARIETY_ENHANCED_F = {
+    # 化工（板块级关闭，但这些品种品种级配置提升显著）
+    "SH": True,  # 烧碱：Δ=+0.568
+    "UR": True,  # 尿素：Δ=+0.190
+    "PF": True,  # 短纤：Δ=+0.135
+    "SA": True,  # 纯碱：Δ=+0.122
+    "PR": True,  # 瓶片：Δ=+0.097（减亏）
+    "PX": True,  # 对二甲苯：Δ=+0.085
+    "MA": True,  # 甲醇：Δ=+0.055
+    "eg": True,  # 乙二醇：Δ=+0.025
+    # 农产品（板块级已开，这些品种有定制权重）
+    "lh": True,  # 生猪：Δ=+0.345
+    "a": True,  # 豆一：Δ=+0.068（减亏）
+    "SR": True,  # 白糖：Δ=+0.029
+    # 有色（板块级已开，这些品种有定制权重）
+    "lc": True,  # 碳酸锂：Δ=+0.258
+    "si": True,  # 工业硅：Δ=+0.132
+    "zn": True,  # 沪锌：Δ=+0.035
+    # 黑系（板块级已开，这些品种有定制权重）
+    "rb": True,  # 螺纹钢：Δ=+0.105
+    "hc": True,  # 热卷：Δ=+0.045
+    # 能源（板块级关闭，品种级验证效果不佳，暂不启用）
+    # pg: 优化时显示+0.077，但全量验证实际-0.069，移除
+    # "pg": True,   # 液化气：已移除（验证不达预期）
 }
 
 
@@ -529,12 +559,16 @@ def enable_enhanced_F(enable=True):
 def is_enhanced_F_for(symbol):
     """判断指定品种是否使用增强版 F。
 
-    优先级：全局开关 > 分板块配置 > 默认 False
+    优先级：全局开关 > 品种级开关 > 分板块配置 > 默认 False
     """
     if ENHANCED_F_ENABLED:
         return True
 
-    # 尝试从 SYMBOLS 获取板块
+    # 优先级 2：品种级开关（覆盖板块级）
+    if symbol in PER_VARIETY_ENHANCED_F:
+        return PER_VARIETY_ENHANCED_F[symbol]
+
+    # 优先级 3：分板块配置
     try:
         from four_dim_strategy import SYMBOLS
 

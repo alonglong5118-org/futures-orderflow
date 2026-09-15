@@ -27,6 +27,8 @@ import threading
 import time
 from datetime import datetime
 
+from dir_utils import dir_norm, dir_sign
+
 # ★ 2026-08-27: akshare 实时行情（分钟级，新浪数据源）
 # ★ 2026-08-28: minishare_live 主数据源（rt_fut_k 不限次快照）
 try:
@@ -259,16 +261,75 @@ def stop_ak_poller():
 # 在服务器启动时调用 start_ak_poller() 即可
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(HERE, "trade_config.json")
-STATE_FILE = os.path.join(HERE, "account_state.json")
 OVERRIDE_FILE = os.path.join(HERE, "main_overrides.json")  # 主力合约权威源（v2.5.0+）
 _LOCK = threading.Lock()
+
+# ===== 多账户支持（v3.9.1）=====
+# 使用线程局部存储，确保并发请求下账户上下文互不干扰
+# 默认账户：default（原模拟/实盘主账户）
+# 新增账户：live（三感参谋实盘跟踪账户）
+_tls = threading.local()  # 线程局部存储
+
+
+def get_account():
+    """获取当前线程的账户 ID。"""
+    return getattr(_tls, "current_account", "default")
+
+
+def set_account(account_id):
+    """设置当前线程的账户 ID。返回旧的账户 ID。"""
+    old = get_account()
+    _tls.current_account = account_id
+    return old
+
+
+def state_file_for(account_id=None):
+    """获取指定账户的 state 文件路径。不传则用当前线程账户。"""
+    if account_id is None:
+        account_id = get_account()
+    if account_id == "default":
+        return os.path.join(HERE, "account_state.json")
+    return os.path.join(HERE, f"account_state_{account_id}.json")
+
+
+def list_accounts():
+    """列出所有已知账户（通过扫描 state 文件发现）。"""
+    accounts = ["default"]
+    for fn in os.listdir(HERE):
+        if (
+            fn.startswith("account_state_")
+            and fn.endswith(".json")
+            and not fn.endswith(".bak")
+            and not fn.endswith(".tmp")
+        ):
+            aid = fn[len("account_state_") : -len(".json")]
+            if aid not in accounts:
+                accounts.append(aid)
+    return accounts
+
+
+class account_context:
+    """上下文管理器：临时切换当前线程的账户，退出时恢复。"""
+
+    def __init__(self, account_id):
+        self.account_id = account_id
+        self._old = None
+
+    def __enter__(self):
+        self._old = set_account(self.account_id)
+        return self
+
+    def __exit__(self, *args):
+        set_account(self._old)
+        return False
 
 
 def _authoritative_contract(sym, fallback):
     """优先用 main_overrides.json 的主力合约覆盖（避免 account 总览用陈旧 contract_specs）。
     fallback 来自 trade_config.json 的 contract_specs。两者不一致时以 main_overrides 为准。"""
     try:
-        mo = json.load(open(OVERRIDE_FILE, encoding="utf-8"))
+        with open(OVERRIDE_FILE, encoding="utf-8") as _f:
+            mo = json.load(_f)
         v = mo.get(sym)
         if v:
             return str(v)
@@ -280,17 +341,18 @@ def _authoritative_contract(sym, fallback):
 def load_config():
     if not os.path.exists(CONFIG_FILE):
         return {"account": {}, "risk_gate": {}, "contract_specs": {}}
-    return json.load(open(CONFIG_FILE, encoding="utf-8"))
+    with open(CONFIG_FILE, encoding="utf-8") as _f:
+        return json.load(_f)
 
 
 def load_state():
     """读取账户状态。文件不存在/为空/解析失败均返回安全默认，不抛异常（防止 /api/account 500）。
     若当前文件损坏，尝试从 .bak 恢复上一份好状态。"""
     default = {"equity": 0, "realized_pnl": 0.0, "positions": {}, "updated": "", "equity_synced": ""}
-    if not os.path.exists(STATE_FILE):
+    if not os.path.exists(state_file_for()):
         return default
     try:
-        with open(STATE_FILE, encoding="utf-8") as f:
+        with open(state_file_for(), encoding="utf-8") as f:
             text = f.read().strip()
     except OSError as e:
         sys.stderr.write("[account_tracker] load_state 读文件失败，返回默认: %s\n" % e)
@@ -306,7 +368,7 @@ def load_state():
 
 def _load_state_from_bak(default):
     """从 .bak 恢复上一份好状态；不存在或损坏则返回 default。"""
-    bak = STATE_FILE + ".bak"
+    bak = state_file_for() + ".bak"
     if not os.path.exists(bak):
         return default
     try:
@@ -323,23 +385,23 @@ def save_state(st):
     """原子写盘：先写临时文件再 os.replace，消除「半写空文件」竞态窗口（修复 /api/account 偶发 500）。
     写入前把当前好状态备份为 .bak，供 load_state 失败时恢复。"""
     # 备份当前好状态（若存在且非空）
-    if os.path.exists(STATE_FILE):
+    if os.path.exists(state_file_for()):
         try:
-            with open(STATE_FILE, encoding="utf-8") as f:
+            with open(state_file_for(), encoding="utf-8") as f:
                 cur = f.read()
             if cur.strip():
-                with open(STATE_FILE + ".bak", "w", encoding="utf-8") as f:
+                with open(state_file_for() + ".bak", "w", encoding="utf-8") as f:
                     f.write(cur)
         except OSError:
             pass
-    # 原子写：temp 与 STATE_FILE 同目录（保证 os.replace 同 fs）
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(STATE_FILE), suffix=".tmp")
+    # 原子写：temp 与 state_file_for() 同目录（保证 os.replace 同 fs）
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(state_file_for()), suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, STATE_FILE)
+        os.replace(tmp, state_file_for())
     except Exception:
         try:
             os.remove(tmp)
@@ -349,7 +411,18 @@ def save_state(st):
 
 
 def _dir_sign(direction):
-    return 1 if direction == "多" else (-1 if direction == "空" else 0)
+    """方向归一化为 +1(多/long) / -1(空/short) / 0(未知)。
+
+    唯一真源为 dir_utils.dir_sign（并集：另支持数字方向、duo/kong/做多/多头
+    等）。旧实现只支持字符串，_dir_sign(1) 会返回 0 —— 若上游传入数字方向，
+    浮动盈亏 gross 会被乘成 0。保留本名是因为其它模块与测试按模块导入。
+    """
+    return dir_sign(direction)
+
+
+def _dir_norm(direction):
+    """把任何方向格式归一化为中文：long→多, short→空, 未知→—"""
+    return dir_norm(direction)
 
 
 def _fmt_price(v):
@@ -623,6 +696,7 @@ def set_equity(equity, prices=None):
                     px = None
             if px:
                 float_at_sync += (px - avg) * mult * pos["lots"] * ds
+                pos["price"] = float(px)  # ★ 同步更新存储价，保证 float_at_sync 与 price 同刻同口径
         st["float_at_sync"] = round(float_at_sync, 2)
         st["equity_synced"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # 记录同步时刻的已实现盈亏，作为动态权益推算的基准：
@@ -677,6 +751,42 @@ def _auto_tp_targets(sym, pos):
         }
     except Exception:
         return None
+
+
+def _auto_stop_levels(sym, pos, _cfg=None):
+    """为无 stop/t1/t2 的持仓自动生成止损止盈位（ATR 规则）。
+    规则（与 runner _auto_levels 口径一致）:
+      atr = abs(stop - avg) if stop else avg * 0.02  (2% ATR 近似)
+      stop = avg - dir * atr          (ATR × 1 止损)
+      t1   = avg + dir * atr * 3.0    (ATR × 3 第一目标)
+      t2   = avg + dir * atr * 5.0    (ATR × 5 第二目标)
+    返回 (stop, t1, t2) 或 (None, None, None)。"""
+    try:
+        avg = float(pos.get("avg", 0))
+        if avg <= 0:
+            return None, None, None
+        direction = pos.get("direction", "多")
+        ds = 1 if direction in ("多", "long") else -1
+        # 已有 stop 用它反推 ATR
+        atr_val = 0.0
+        if pos.get("stop"):
+            atr_val = abs(float(pos["stop"]) - avg)
+        if atr_val <= 0:
+            # 用 stop_dist 如果有
+            if _cfg and _cfg.get("stop_dist"):
+                atr_val = abs(float(_cfg["stop_dist"]))
+        if atr_val <= 0:
+            # 兜底：2% 近似 ATR
+            atr_val = avg * 0.02
+        if atr_val <= 0:
+            return None, None, None
+        # ATR × 1 止损（多单止损在下方，空单止损在上方）
+        stop = round(avg - ds * atr_val, 2)
+        t1 = round(avg + ds * atr_val * 3.0, 2)
+        t2 = round(avg + ds * atr_val * 5.0, 2)
+        return stop, t1, t2
+    except Exception:
+        return None, None, None
 
 
 def _heal_position_levels(sym, pos, jlv, changes):
@@ -841,25 +951,52 @@ def heal_from_journal():
             st["realized_pnl"] = jrealized
             st["realized_pnl_at_sync"] = jrealized
         # ★ 清除 journal 中已平仓的僵尸持仓（防止 account_state 残留过期持仓）
-        _closed_syms = set()
+        # ★ 2026-09-11 v2 加固：双重检查防止 journal 不完整时误删 state 持仓
+        #   条件 A: journal OPEN == 0 但 state 有持仓 → 跳过（journal 完全空）
+        #   条件 B: state 有持仓，但 journal 对某些品种只有 CLOSED 没有 OPEN → 跳过（journal 部分缺失）
+        _all_open_in_journal = sum(1 for t in jdata.get("trades", []) if t.get("pnl") is None)
+        _state_has_positions = any((p.get("lots") or 0) > 0 for p in (st.get("positions") or {}).values())
+        _journal_incomplete = _all_open_in_journal == 0 and _state_has_positions
+        # 条件 B: state 持仓中有品种 journal 只记了 CLOSED 没记 OPEN（典型的跨账户 journal 污染）
+        _journal_syms_open = set()
         for t in jdata.get("trades", []):
-            if t.get("pnl") is not None:  # 已平仓
-                _closed_syms.add((t.get("symbol"), t.get("direction")))
-        for _csym, _cdir in _closed_syms:
-            _csym_norm = _normalize_sym_for_heal(_csym, specs)
-            if _csym_norm in st["positions"]:
-                _cpos = st["positions"][_csym_norm]
-                if _cpos.get("direction") == _cdir and (_cpos.get("lots") or 0) > 0:
-                    # 检查 journal 中该品种/方向是否还有未平仓记录（P1-11 fix: 标准化匹配）
-                    _has_open = any(
-                        _normalize_sym_for_heal(t.get("symbol", ""), specs) == _csym_norm
-                        and t.get("direction") == _cdir
-                        and t.get("pnl") is None
-                        for t in jdata.get("trades", [])
-                    )
-                    if not _has_open:
-                        del st["positions"][_csym_norm]
-                        changes.append(f"清除僵尸持仓: {_csym_norm} {_cdir}（journal 已平仓无剩余）")
+            if t.get("pnl") is None:
+                _s = _normalize_sym_for_heal(t.get("symbol", ""), specs)
+                _journal_syms_open.add((_s, t.get("direction")))
+        _journal_incomplete_b = False
+        for _sym, _pos in (st.get("positions") or {}).items():
+            if (_pos.get("lots") or 0) > 0:
+                _k = (_sym, _pos.get("direction"))
+                if _k not in _journal_syms_open:
+                    _journal_incomplete_b = True
+                    break
+        if _journal_incomplete or _journal_incomplete_b:
+            _reason = (
+                f"journal 无 OPEN ({_all_open_in_journal}条) vs state {sum(1 for p in (st.get('positions') or {}).values() if (p.get('lots') or 0) > 0)}个持仓"
+                if _journal_incomplete
+                else f"journal 对 state 持仓品种记录缺失"
+            )
+            changes.append(f"⚠️ 僵尸清除跳过: {_reason}")
+        else:
+            _closed_syms = set()
+            for t in jdata.get("trades", []):
+                if t.get("pnl") is not None:  # 已平仓
+                    _closed_syms.add((t.get("symbol"), t.get("direction")))
+            for _csym, _cdir in _closed_syms:
+                _csym_norm = _normalize_sym_for_heal(_csym, specs)
+                if _csym_norm in st["positions"]:
+                    _cpos = st["positions"][_csym_norm]
+                    if _cpos.get("direction") == _cdir and (_cpos.get("lots") or 0) > 0:
+                        # 检查 journal 中该品种/方向是否还有未平仓记录（P1-11 fix: 标准化匹配）
+                        _has_open = any(
+                            _normalize_sym_for_heal(t.get("symbol", ""), specs) == _csym_norm
+                            and t.get("direction") == _cdir
+                            and t.get("pnl") is None
+                            for t in jdata.get("trades", [])
+                        )
+                        if not _has_open:
+                            del st["positions"][_csym_norm]
+                            changes.append(f"清除僵尸持仓: {_csym_norm} {_cdir}（journal 已平仓无剩余）")
         for sym, pos in list(st["positions"].items()):  # list() 防止迭代时修改
             k = (sym, pos.get("direction"))
             je = javg.get(k)
@@ -868,6 +1005,32 @@ def heal_from_journal():
                 pos["avg"] = round(je, 2)
             # 修正止损止盈位，防止方向错误/移动止损污染
             _heal_position_levels(sym, pos, jlevels.get(k), changes)
+            # ★ 2026-08-31: 兜底补算 —— 若 _heal_position_levels 没能生成 stop/t1/t2（journal 无 stop_dist）
+            # 则用 _auto_stop_levels 纯数学生成（ATR × 1 止损 / × 3 T1 / × 5 T2）
+            # 情况 A: 全缺 → 全补
+            # 情况 B: 有 t1/t2 但缺 stop → 用 t1 反推 stop
+            _fs, _ft1, _ft2 = _auto_stop_levels(sym, pos)
+            if _fs is not None:
+                _changed = False
+                if pos.get("stop") is None:
+                    pos["stop"] = _fs
+                    _changed = True
+                if pos.get("t1") is None:
+                    pos["t1"] = _ft1
+                    _changed = True
+                if pos.get("t2") is None:
+                    pos["t2"] = _ft2
+                    _changed = True
+                if _changed:
+                    _ftp = _auto_tp_targets(sym, pos)
+                    if _ftp:
+                        pos["tp_targets"] = [
+                            {"level": "t1", "price": round(_ftp["t1_price"], 2), "ratio": 0.5, "lots": 0.5},
+                            {"level": "t2", "price": round(_ftp["t2_price"], 2), "ratio": 1.0, "lots": 0.5},
+                        ]
+                    changes.append(
+                        f"兜底补算: {sym} {pos.get('direction')} → stop={pos.get('stop')} t1={pos.get('t1')} t2={pos.get('t2')}"
+                    )
             # 补齐 tp_targets（分级止盈目标价）：journal 有 stop/stop_dist → 反推；无则用 2% ATR 默认
             if (pos.get("lots") or 0) > 0 and pos.get("tp_targets") is None and pos.get("avg"):
                 _tp_tgt = _auto_tp_targets(sym, pos)
@@ -915,6 +1078,86 @@ def snapshot(prices=None):
     acc = cfg.get("account", {})
     specs = cfg.get("contract_specs", {})
     st = load_state()
+
+    # ★ 2026-09-13: 静态快照模式（以用户最新模拟盘截图为唯一基准）
+    # 在 snapshot_until 之前，直接返回 account_state.json 中的快照数据，不动态计算。
+    # 到期后自动恢复实时联动，无需手动干预。
+    if st.get("snapshot_mode"):
+        try:
+            _until = datetime.strptime(str(st.get("snapshot_until", "")), "%Y-%m-%d %H:%M:%S")
+            if datetime.now() < _until:
+                _snap = st.get("snapshot", {})
+                _snap_positions = _snap.get("positions", [])
+                _pos_dict = st.get("positions", {}) if isinstance(st.get("positions"), dict) else {}
+                _merged_positions = []
+                for _p in _snap_positions:
+                    _sym = _p.get("symbol", "")
+                    _stored = _pos_dict.get(_sym, {}) if isinstance(_pos_dict, dict) else {}
+                    _merged_positions.append(
+                        {
+                            "symbol": _sym,
+                            "name": _p.get("name", _stored.get("name", _sym)),
+                            "contract": _p.get("contract", _stored.get("contract", _sym)),
+                            "direction": _p.get("direction", _stored.get("direction", "多")),
+                            "lots": _p.get("lots", _stored.get("lots", 0)),
+                            "avg": _p.get("avg", _stored.get("avg", 0)),
+                            "stop": _stored.get("stop"),
+                            "target": _stored.get("target"),
+                            "t1": _stored.get("t1"),
+                            "t2": _stored.get("t2"),
+                            "tp_level": _stored.get("tp_level", "tp_none"),
+                            "tp_targets": _stored.get("tp_targets"),
+                            "trailing_stop": _stored.get("trailing_stop"),
+                            "trail_state": _stored.get("trail_state"),
+                            "init_qty": _stored.get("init_qty", _p.get("lots", 0)),
+                            "price": _p.get("price"),
+                            "float_pnl": _p.get("float_pnl"),
+                            "margin_used": _p.get("margin_used", 0),
+                            "margin_pct": _p.get("margin_pct", 0),
+                            "dist_to_cap": 0,
+                        }
+                    )
+                _eq = float(_snap.get("equity", st.get("equity", 0)))
+                _avail = float(_snap.get("available", st.get("available", 0)))
+                _margin = float(_snap.get("total_margin", st.get("margin_occupied", 0)))
+                _float = float(_snap.get("float_total", _snap.get("mtm_pnl", st.get("mtm_pnl", 0))))
+                _usage = float(_snap.get("usage_rate", st.get("usage_rate", 0) * 100))
+                _now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                return {
+                    "equity": _eq,
+                    "equity_synced_raw": _eq,
+                    "available": _avail,
+                    "realized_pnl": float(st.get("realized_pnl", 0)),
+                    "realized_pnl_at_sync": float(st.get("realized_pnl_at_sync", 0)),
+                    "float_total": _float,
+                    "mtm_pnl": _float,
+                    "total_margin": _margin,
+                    "usage_rate": _usage,
+                    "portfolio_cap": 0,
+                    "dist_to_portfolio_cap": 0,
+                    "margin_cap_pct": acc.get("margin_cap_pct", 30),
+                    "portfolio_margin_cap_pct": acc.get("portfolio_margin_cap_pct", 60),
+                    "max_lots": acc.get("max_lots", 6),
+                    "max_total_lots": acc.get("max_total_lots", 15),
+                    "risk_pct": acc.get("risk_pct", 1.5),
+                    "equity_synced": _now,
+                    "updated": _now,
+                    "positions": _merged_positions,
+                    "init_capital": float(st.get("initial_balance", 1000000)),
+                    "self_check": {
+                        "ok": True,
+                        "msg": "静态快照模式生效中，到期自动恢复实时联动",
+                        "equity_verified": _eq,
+                        "realized_computed": float(st.get("realized_pnl", 0)),
+                        "float_computed": _float,
+                        "total_verified": 0,
+                    },
+                    "snapshot_mode": True,
+                    "snapshot_until": st.get("snapshot_until"),
+                }
+        except Exception as _e:
+            print(f"[snapshot] 静态快照模式解析异常，回退实时计算: {_e}")
+
     # 兼容 positions 格式：list -> dict（key=symbol）
     _raw_positions = st.get("positions", {})
     if isinstance(_raw_positions, list):
@@ -932,8 +1175,12 @@ def snapshot(prices=None):
     positions = []
     total_margin = 0.0
     float_total = 0.0
+    # ★ 大小写不敏感查找表（state 里可能是 'SS' 大写，specs 里是 'ss' 小写）
+    _state_pos_ci = {k.lower(): v for k, v in st["positions"].items()}
     for sym, sp in specs.items():
-        pos = st["positions"].get(sym)
+        pos = st["positions"].get(sym)  # 先精确匹配
+        if pos is None and sym.lower() in _state_pos_ci:
+            pos = _state_pos_ci[sym.lower()]  # 回退：大小写不敏感
         lots = (pos or {}).get("lots", 0) if pos else 0
         mult = sp["multiplier"]
         mrate = sp["margin_rate"]
@@ -977,7 +1224,13 @@ def snapshot(prices=None):
             lots = pos["lots"]
             avg = pos["avg"]
             ds = _dir_sign(pos["direction"])
-            margin_used = lots * avg * mult * mrate
+            # 保证金：优先用 CTP 同步的权威 margin_used（结算价口径，精确）；
+            # 兜底 margin_rate 重算（新开仓无同步值时近似）
+            _stored_margin = pos.get("margin_used")
+            if _stored_margin is not None and float(_stored_margin) > 0:
+                margin_used = float(_stored_margin)
+            else:
+                margin_used = round(lots * avg * mult * mrate, 2)
             total_margin += margin_used
             float_pnl = None
             if px is not None:
@@ -989,7 +1242,7 @@ def snapshot(prices=None):
                     "symbol": sym,
                     "name": sp.get("name", sym),
                     "contract": _authoritative_contract(sym, sp.get("contract", sym)),
-                    "direction": pos["direction"],
+                    "direction": _dir_norm(pos["direction"]),
                     "lots": lots,
                     "avg": avg,
                     "stop": pos.get("stop"),
@@ -1025,14 +1278,25 @@ def snapshot(prices=None):
                 }
             )
     # 动态权益：让账户总览与持仓实时行情保持同步
-    # ★ 2026-08-28: 已实现盈亏采用反推法（权益 - 初始资金 - 浮动盈亏）
-    #   确保各板块数据自洽，不依赖可能不完整的交易记录
-    INIT_CAPITAL = 1000000.0
-    realized_pnl = round(equity_synced - INIT_CAPITAL - float_total, 2)
-    realized_pnl_at_sync = st.get("realized_pnl_at_sync", realized_pnl)
-    delta_realized = realized_pnl - realized_pnl_at_sync
-    float_at_sync = st.get("float_at_sync", 0.0)
-    dynamic_equity = equity_synced + delta_realized + float_total - float_at_sync
+    # ★★ 2026-08-31 v2: 正确公式 — 以 st.equity（用户同步基准）为锚
+    #   equity = st.equity + (journal已实现增量) + (当前浮动 - 上次浮动)
+    #   既覆盖手动入金/出金，又跟随行情实时波动
+    # 本金从账户状态文件读取（default=100600, 不同账户不同）
+    INIT_CAPITAL = float(st.get("initial_balance", 100600) or 100600)
+    try:
+        import trade_journal as _tj
+
+        realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
+    except Exception:
+        realized_pnl = st.get("realized_pnl_at_sync", 0) or 0
+    float_at_sync = st.get("float_at_sync", 0.0) or 0.0
+    realized_at_sync = st.get("realized_pnl_at_sync", realized_pnl) or 0.0
+    equity_anchor = st.get("equity", INIT_CAPITAL) or INIT_CAPITAL
+    # journal 已实现增量（从上次 snapshot 到现在）
+    delta_realized = realized_pnl - realized_at_sync
+    # 浮动盈亏变化（从上次 snapshot 到现在）
+    delta_float = float_total - float_at_sync
+    dynamic_equity = round(equity_anchor + delta_realized + delta_float, 2)
     if dynamic_equity <= 0:
         dynamic_equity = 1  # 防除零
     # 基于动态权益重新计算占用率 / 距上限（使上下板块同步）
@@ -1043,40 +1307,53 @@ def snapshot(prices=None):
     usage_rate = round(total_margin / dynamic_equity * 100, 2)
     portfolio_cap = round(dynamic_equity * portfolio_cap_pct / 100, 2)
 
-    # ── 自动刷新同步基准：每次 snapshot 都将「权益同步基准」推进到当前时刻 ──
-    # ★ 2026-08-28: 不再修改 st["equity"]，保持用户设定的同步权益不变
-    #   动态权益仅用于前端显示，不回写到基准权益，避免漂移
+    # ── 2026-09-09: 禁用自动刷新同步基准 ──
+    # 只更新 updated 时间戳，绝不修改 equity / realized_pnl_at_sync / float_at_sync
+    # anchor 三元组只在用户手动点「同步权益」(set_equity) 时才更新
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with _LOCK:
-        # 只更新同步时间戳和快照值，不修改基准权益
-        st["equity_synced"] = now_str
-        st["realized_pnl_at_sync"] = realized_pnl
-        st["float_at_sync"] = round(float_total, 2)
-        st["updated"] = now_str
-        # 计算动态权益后回写（但不改变用户的同步基准）
-        dynamic_eq = round(dynamic_equity, 2)
-        save_state(st)
+    st["updated"] = now_str
+    # ★ 2026-09-15: 实盘(live)账户不自动写盘 —— 实盘数据以 CTP 截图为唯一基准，
+    # snapshot 每次请求刷新 updated 会反复触碰 live 文件，违反「程序不自动覆盖实盘」铁律。
+    # default 等模拟账户保持原行为（仅写 updated 时间戳，不碰 anchor 三元组）。
+    if get_account() != "live":
+        with _LOCK:
+            save_state(st)
 
     available = round(dynamic_equity - total_margin, 2)
     # ★ 2026-08-28: 使用用户设定的同步权益作为基准，动态权益仅用于显示
     base_equity = equity_synced  # 用户/同步时设定的基准权益
 
-    # ★★ 2026-08-28: 数据自洽验证（确保各板块数据一致）
-    # 基本恒等式：权益 = 初始资金 + 已实现盈亏 + 浮动盈亏
-    INIT_CAPITAL = 1000000.0
+    # ★★ 2026-08-31 v2: 自洽验证
+    # 恒等式：dynamic_equity = anchor + delta_realized + delta_float
     self_check_ok = True
     self_check_msg = ""
-
-    # 反向计算已实现盈亏，确保自洽
-    computed_realized = round(dynamic_equity - INIT_CAPITAL - float_total, 2)
-
-    # 自洽检查
-    expected_total = round(computed_realized + float_total, 2)
-    actual_total = round(dynamic_equity - INIT_CAPITAL, 2)
-    if abs(expected_total - actual_total) > 0.01:
-        self_check_ok = False
-        self_check_msg = f"[自检失败] 盈亏不平衡: {expected_total} != {actual_total}"
+    self_check_ok = abs(dynamic_equity - (equity_anchor + delta_realized + delta_float)) < 0.5
+    if not self_check_ok:
+        self_check_msg = (
+            f"[自检失败] equity={dynamic_equity} != anchor={equity_anchor}+dR={delta_realized}+dF={delta_float}"
+        )
         print(f"[SELF_CHECK] {self_check_msg}")
+    # ★ 2026-09-14: float_at_sync 口径对账（防 mtm/持仓累计浮盈混淆复发）
+    # float_at_sync 必须 = 同步时刻持仓累计浮盈 = Σ(存储price - avg) × mult × lots × 方向
+    # 若被误存成盯市浮盈(mtm，基于结算价)，动态权益会被系统性抬/压 → 面板漂移
+    _expected_fa = 0.0
+    for _sym, _pos in st["positions"].items():
+        if _pos.get("lots") and _pos.get("avg") and _pos.get("price") is not None:
+            _m = specs.get(_sym, {}).get("multiplier", 1)
+            _expected_fa += (
+                (float(_pos["price"]) - float(_pos["avg"]))
+                * _m
+                * float(_pos["lots"])
+                * _dir_sign(_pos.get("direction"))
+            )
+    if float_at_sync and abs(float_at_sync - _expected_fa) > 1.0:
+        _recon_msg = f"[对账漂移] float_at_sync={float_at_sync} ≠ 持仓累计浮盈和={round(_expected_fa, 2)}（疑似误存 mtm 盯市浮盈口径）"
+        self_check_msg = (self_check_msg + " " if self_check_msg else "") + _recon_msg
+        print(f"[RECONCILE] {_recon_msg}")
+    # return 里引用的变量（从新公式语义填充）
+    computed_realized = realized_pnl  # journal 真实值
+    float_computed = float_total
+    total_verified = round(dynamic_equity - equity_anchor, 2)  # 相对 anchor 的变化
 
     # 防负值保护
     if available < 0:
@@ -1091,9 +1368,10 @@ def snapshot(prices=None):
         "equity": round(dynamic_equity, 2),
         "equity_synced_raw": round(dynamic_equity, 2),
         "available": available,
-        "realized_pnl": realized_pnl,
-        "realized_pnl_at_sync": realized_pnl,
+        "realized_pnl": round(realized_pnl, 2),
+        "realized_pnl_at_sync": round(realized_pnl, 2),
         "float_total": round(float_total, 2),
+        "mtm_pnl": round(float_total, 2),
         "total_margin": round(total_margin, 2),
         "usage_rate": usage_rate,
         "portfolio_cap": portfolio_cap,
@@ -1113,7 +1391,7 @@ def snapshot(prices=None):
             "equity_verified": round(dynamic_equity, 2),
             "realized_computed": computed_realized,
             "float_computed": round(float_total, 2),
-            "total_verified": round(dynamic_equity - INIT_CAPITAL, 2),
+            "total_verified": total_verified,
         },
     }
 
