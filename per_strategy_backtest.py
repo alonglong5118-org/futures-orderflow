@@ -79,6 +79,11 @@ def strat_summary(rows):
     }
 
 
+def _dump(result):
+    with open("per_strategy_backtest_result.json", "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--with-5m", action="store_true", help="追加 5m 出场口径（慢，每品种约12s）")
@@ -101,6 +106,9 @@ def main():
         for strat in ALL_STRATS:
             rows = run_one_strategy(strat, syms, mode)
             strat_rows[strat] = rows
+            # 增量落盘（抗中断）：每策略完成即写盘，5m 长任务中途崩溃不丢已完成结果
+            result[mode] = {"rows_by_strategy": strat_rows, "in_progress": True}
+            _dump(result)
             ss = strat_summary(rows)
             print(
                 f"[{strat:10}] 有信号={ss['active']:2}/{len(syms)}  "
@@ -109,7 +117,8 @@ def main():
                 f"总笔数={ss['total_trades']}",
                 flush=True,
             )
-        result[mode] = {"rows_by_strategy": strat_rows, "elapsed_sec": round(time.time() - t0, 1)}
+        result[mode] = {"rows_by_strategy": strat_rows, "elapsed_sec": round(time.time() - t0, 1), "in_progress": False}
+        _dump(result)
 
         # 打印矩阵
         print(f"\n----- {mode} 口径 expR 矩阵（策略 × 品种，+为盈 -为亏）-----")
@@ -125,8 +134,7 @@ def main():
             print(f"{strat:10} " + " ".join(cells))
         print("(· = 无信号/0笔)")
 
-    with open("per_strategy_backtest_result.json", "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+    _dump(result)
     print(f"\n结果已落盘: per_strategy_backtest_result.json")
 
 
