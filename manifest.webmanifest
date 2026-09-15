@@ -1,7 +1,7 @@
 {
-  "name": "四维策略盯盘系统",
-  "short_name": "四维策略",
-  "description": "期货交易四维策略盯盘面板（账户/信号/风控/复盘/绩效/聚焦）",
+  "name": "三感参谋 · 期货策略决策系统",
+  "short_name": "三感参谋",
+  "description": "三感参谋期货策略决策系统（账户/信号/风控/复盘/绩效/聚焦）",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

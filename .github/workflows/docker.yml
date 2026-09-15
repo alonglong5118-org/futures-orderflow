@@ -145,7 +145,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            PYTHON_VERSION=3.11
+            PYTHON_VERSION=3.13
 
       - name: 输出镜像信息
         run: |
@@ -288,7 +288,7 @@ jobs:
           tags: futures-orderflow:test
           cache-from: type=gha
           build-args: |
-            PYTHON_VERSION=3.11
+            PYTHON_VERSION=3.13
 
       - name: 冒烟测试
         run: |

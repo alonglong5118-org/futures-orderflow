@@ -10,8 +10,11 @@ consistency_watchdog.py · #5 训练/服务一致性看门狗（train/serve pari
   1. train_serve_divergence：每个关注品种的 校验基线T(DEFAULT_CONFIG) vs 服务T(calibration_params)，
      偏离超 DEVIATE_PCT 则标 needs_revalidation。
   2. unvalidated：关注品种在 calibration_params 中缺 mean_oos（从未被 OOS 校验，用默认 T 在服务）。
-  3. broken_serving：漂移判 broken 且未禁用、且未被动态门控压制 → 真在服务一个失效模型（计入 ok=false）。
+  3. broken_serving：漂移判 broken（且高置信，confidence≠low）且未禁用、且未被动态门控压制
+     → 真在服务一个失效模型（计入 ok=false）。低置信（样本不足）broken 不升级，避免单笔误判永久门控。
   3b. broken_gated：漂移判 broken 但已被动态门控 papertrack_gated 压制（不发信号）→ 风险已控，仅提示（不计入 ok=false）。
+  3c. broken_model：漂移判 broken（高置信）但证据来源是 walk_forward 回测(evidence=model，非真实交易)
+     → 只提示重校、不硬门控（回测有偏差，真实交易才是金标准；不计入 ok=false、不触发升级门控）。
   4. stale：recalibrated_at 超过 STALE_DAYS 天未刷新 → 建议重校。
 """
 
@@ -61,7 +64,7 @@ def check_consistency(focus_symbols=None, disabled_set=None):
     drift_map = {it.get("symbol"): it for it in drift.get("items", [])}
 
     base_ts = fd.DEFAULT_CONFIG.get("thresholds_by_symbol", {})
-    divergences, unvalidated, broken_serving, broken_gated, stale = [], [], [], [], []
+    divergences, unvalidated, broken_serving, broken_gated, broken_model, stale = [], [], [], [], [], []
 
     for sym in focus:
         base_cfg = base_ts.get(sym, {})
@@ -107,13 +110,23 @@ def check_consistency(focus_symbols=None, disabled_set=None):
 
         # 3) 失效却在服务。已被动态门控 papertrack_gated 压制 → 归入 broken_gated（风险已控，仅提示）；
         #    未门控且未禁用 → 真在服务失效模型，归入 broken_serving（计入 ok=false）。
+        # ★ 低置信(confidence=="low"，样本不足)的 broken 判定不可靠：如 FG 仅 1 笔止损就被判 broken，
+        #   若按 broken_serving 升级门控会把「本可正常发信号的品种」永久锁死。故只对高置信 broken 升级，
+        #   低置信 broken 交由漂移报告(calibration_drift.json)提示人工重校。缺 confidence 字段默认按高置信
+        #   (fail-closed，宁升级勿漏报失效模型)。
         d = drift_map.get(sym)
-        if d and d.get("status") == "broken" and sym not in disabled:
+        if (
+            d
+            and d.get("status") == "broken"
+            and sym not in disabled
+            and d.get("confidence", "high") != "low"
+        ):
             _gated = bool(d.get("papertrack_gated"))
+            _evidence = d.get("evidence", "real")  # 缺省 real（fail-closed，宁升级勿漏报）
             _entry = {
                 "symbol": sym,
                 "current_expR": d.get("current_expR"),
-                "evidence": d.get("evidence"),
+                "evidence": _evidence,
                 "papertrack_gated": _gated,
                 "note": (
                     "漂移判 broken 且已被动态门控压制（不发信号），风险已控"
@@ -123,6 +136,9 @@ def check_consistency(focus_symbols=None, disabled_set=None):
             }
             if _gated:
                 broken_gated.append(_entry)
+            elif _evidence == "model":
+                # walk_forward 回测为负：非真实交易证据，只提示重校，不升级硬门控
+                broken_model.append(_entry)
             else:
                 broken_serving.append(_entry)
 
@@ -144,6 +160,7 @@ def check_consistency(focus_symbols=None, disabled_set=None):
             "unvalidated": len(unvalidated),
             "broken_serving": len(broken_serving),
             "broken_gated": len(broken_gated),
+            "broken_model": len(broken_model),
             "stale": len(stale),
             "focus_count": len(focus),
         },
@@ -151,6 +168,7 @@ def check_consistency(focus_symbols=None, disabled_set=None):
         "unvalidated": unvalidated,
         "broken_serving": broken_serving,
         "broken_gated": broken_gated,
+        "broken_model": broken_model,
         "stale": stale,
         "ok": (len(divergences) + len(unvalidated) + len(broken_serving) + len(stale)) == 0,
     }

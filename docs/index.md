@@ -4,14 +4,15 @@ hide:
   - navigation
 ---
 
-# Futures OrderFlow · 期货订单流策略系统
+# 三感参谋 · 期货信号决策系统（TriSense Advisor）
 
 <div class="grid" markdown>
 
-:material-chart-line:{ .lg .middle } **四维策略引擎**
+:material-chart-line:{ .lg .middle } **F/T/C 三维打分引擎**
 { .card }
 
-基于成交量、持仓量、价格、时间四个维度的综合研判，构建多维度交易决策体系。
+基本面偏置 F、技术触发 T、资金确认 C 三维打分合成 `bias_G`，经四层风控输出
+「方向 + 手数 + 止损 + T1/T2」——**顾问式输出，绝不自动下单**。
 
 :material-shield-check:{ .lg .middle } **多层风控体系**
 { .card }
@@ -70,7 +71,7 @@ pip install -r requirements.txt
 
 ## 3 分钟上手
 
-按照以下步骤，快速体验期货订单流策略系统的核心功能。
+按照以下步骤，快速体验三感参谋的核心功能。
 
 ### 第 1 步：安装依赖
 
@@ -173,7 +174,7 @@ graph TB
     end
 
     subgraph 策略层["🧠 策略层"]
-        FDS[四维策略核心<br/>four_dim_strategy]
+        FDS[三维打分+风控核心<br/>four_dim_strategy]
         SL[策略层管理<br/>strategy_layer]
         SE[情绪引擎<br/>sentiment_engine]
         GA[遗传算法优化<br/>ga_* 系列]
@@ -223,11 +224,11 @@ graph TB
 
 <div class="grid cards" markdown>
 
--   :material-brain:{ .lg .middle } **四维策略**
+-   :material-brain:{ .lg .middle } **F/T/C 三维打分**
 
     ---
 
-    基于成交量、持仓量、价格、时间四个维度的综合策略引擎，支持参数校准、模拟盘运行与 OOS 样本外验证。
+    基本面 F / 技术 T / 资金 C 三维打分合成信号，支持参数校准、回测与 OOS 样本外验证。
 
     [:octicons-arrow-right-24: 了解更多](architecture/four-dim-strategy.md)
 
@@ -296,7 +297,7 @@ graph TB
 :material-sitemap:{ .lg .middle } **架构设计**
 { .card }
 
-深入了解四维策略、风控体系、方向源监控等核心架构设计。
+深入了解三维打分、风控四层、数据链路等核心架构设计。
 
 [架构概览 :octicons-arrow-right-24:](architecture/overview.md)
 

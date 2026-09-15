@@ -1,0 +1,24 @@
+{
+  "output_path": "account_monitor_ctp.json",
+  "poll_seconds": 30,
+  "accounts": [
+    {
+      "name": "西南期货",
+      "broker_id": "<西南BrokerID>",
+      "investor_id": "<你的资金账号>",
+      "password": "<交易密码>",
+      "td_front": "tcp://<西南期货实盘交易前置IP:端口>",
+      "app_id": "<期货公司给的AppID>",
+      "auth_code": "<AuthCode>"
+    },
+    {
+      "name": "中信期货",
+      "broker_id": "<中信BrokerID>",
+      "investor_id": "<你的资金账号>",
+      "password": "<交易密码>",
+      "td_front": "tcp://<中信实盘交易前置IP:端口>",
+      "app_id": "<AppID>",
+      "auth_code": "<AuthCode>"
+    }
+  ]
+}
