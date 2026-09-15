@@ -1311,9 +1311,13 @@ def snapshot(prices=None):
     # 只更新 updated 时间戳，绝不修改 equity / realized_pnl_at_sync / float_at_sync
     # anchor 三元组只在用户手动点「同步权益」(set_equity) 时才更新
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with _LOCK:
-        st["updated"] = now_str
-        save_state(st)
+    st["updated"] = now_str
+    # ★ 2026-09-15: 实盘(live)账户不自动写盘 —— 实盘数据以 CTP 截图为唯一基准，
+    # snapshot 每次请求刷新 updated 会反复触碰 live 文件，违反「程序不自动覆盖实盘」铁律。
+    # default 等模拟账户保持原行为（仅写 updated 时间戳，不碰 anchor 三元组）。
+    if get_account() != "live":
+        with _LOCK:
+            save_state(st)
 
     available = round(dynamic_equity - total_margin, 2)
     # ★ 2026-08-28: 使用用户设定的同步权益作为基准，动态权益仅用于显示
