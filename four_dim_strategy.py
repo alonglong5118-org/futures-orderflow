@@ -705,11 +705,10 @@ DEFAULT_CONFIG = {
     #   来源：逐策略 ablation + 贪心验证（全品种平均 +0.12R，14 个品种全部提升）。
     "strat_blacklist": {
         "fu": ["rsi", "pullback"],  # +1.74R (贪心搜索v2)
-        "ag": ["rsi", "seasonal"],  # +0.60R (贪心搜索v2)
+        "ag": ["rsi", "seasonal", "boll"],  # +0.60R (贪心v2) +boll OOS双窗口一致(后1/3 +0.21R)
         "c": ["ma_break"],  # +0.51R
         "m": ["rsi", "pullback"],  # +0.38R (贪心搜索v2)
-        "y": ["boll"],  # +0.37R
-        "eg": ["seasonal"],  # +0.33R (贪心搜索v2)
+        "eg": ["seasonal", "boll"],  # +0.33R (贪心v2) +boll OOS双窗口一致(后1/3 +0.31R, 品种已判死)
         "rb": ["ma_break"],  # +0.33R
         "FG": ["pullback"],  # +0.31R
         "sp": ["boll"],  # +0.17R
@@ -718,15 +717,18 @@ DEFAULT_CONFIG = {
         "zn": ["boll"],  # +0.13R (贪心搜索v2)
         "p": ["donchian", "turtle"],  # +0.13R (贪心搜索v2)
         "PK": ["boll"],  # +0.06R
-        "UR": ["seasonal"],  # +0.06R (贪心搜索v2)
+        "UR": ["seasonal", "boll"],  # +0.06R (贪心v2) +boll OOS双窗口一致(后1/3 +0.19R)
         "TA": ["rsi"],  # +0.05R
         # --- rsi 品种级 OOS 校准（2026-09-16）：后1/3+后1/2 双窗口一致支持禁用 rsi ---
         "ru": ["rsi"],  # +0.85R (rsi OOS双窗口一致)
         "cs": ["rsi"],  # +0.47R (rsi OOS双窗口一致)
         "hc": ["rsi"],  # +0.24R (rsi OOS双窗口一致)
         "lh": ["rsi"],  # +0.23R (rsi OOS双窗口一致)
-        "ni": ["rsi"],  # +0.19R (rsi OOS双窗口一致)
+        "ni": ["rsi", "boll"],  # +0.19R (rsi OOS) +boll OOS双窗口一致(后1/3 +0.39R)
         "l": ["rsi"],  # +0.07R (rsi OOS双窗口一致)
+        # --- boll 品种级 OOS 校准（2026-09-16）：boll 整体启用更优(pooled Δ<0)，仅采纳双窗口一致的品种禁用；y 恢复 ---
+        "al": ["boll"],  # +0.25R (boll OOS双窗口一致)
+        "ao": ["boll"],  # +0.97R (boll OOS双窗口一致)
     },
     # 策略权重（P-W，2026-09-07）：簇内策略的相对权重。
     #   为空 dict 时=等权（默认行为，向后兼容）。
