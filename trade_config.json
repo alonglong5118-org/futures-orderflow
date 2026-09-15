@@ -426,7 +426,7 @@
       "margin_rate": 0.11,
       "limit_pct": 0.08,
       "name": "苯乙烯",
-      "contract": "EB2610",
+      "contract": "EB2611",
       "fee_type": "fixed",
       "fee_exchange": 3,
       "broker_fee_type": "fixed",
