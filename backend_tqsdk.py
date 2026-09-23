@@ -104,6 +104,7 @@ def run_tqsdk():
     api = TqApi(auth=TqAuth(_tq_user, _tq_pass))
     quotes = {}  # sym -> (code, quote)
     prev_vol = {}
+    prev_price = {}  # 2026-09-23 新增：上一轮询的 last_price，用于按区间净价格变动定方向
     for sym, m in SYMBOL_MAP.items():
         if m["ex"] != "CZCE":
             continue  # DCE 走 akshare 回退，不在天勤订阅
@@ -139,13 +140,25 @@ def run_tqsdk():
             lp = q.last_price
             ask1 = q.ask_price1
             bid1 = q.bid_price1
-            # 盘口推导主动方向（技能坑3）：>=ask1 主动买；<=bid1 主动卖；中间裂解用 U
-            if ask1 and lp >= ask1:
+            # ⚠️ 2026-09-23 修复：dvol 是【自上次轮询以来累积】的成交量，这段区间内通常含
+            # 多笔双向成交。用"当前快照 lp 落在 ask1/bid1 哪一侧"给整段量贴一个方向标签，
+            # 会把方向系统性错配 —— 实测 FG/SA 的 delta 同期 corr 因此从 0.23 掉到 -0.04
+            # （同一份数据改用价格变动定方向即可回到 0.21~0.26）。
+            # 改为按区间【净价格变动】定方向：期间净涨→主动买主导，净跌→主动卖主导。
+            pv = prev_price.get(sym)
+            if pv is not None and lp > pv:
                 side = "B"
-            elif bid1 and lp <= bid1:
+            elif pv is not None and lp < pv:
                 side = "S"
             else:
-                side = "U"
+                # 价格未变动：退回盘口位置法；仍无法判定则 U
+                if ask1 and lp >= ask1:
+                    side = "B"
+                elif bid1 and lp <= bid1:
+                    side = "S"
+                else:
+                    side = "U"
+            prev_price[sym] = lp
             rec = {
                 "ts": time.time(),
                 "symbol": sym,
@@ -327,8 +340,19 @@ def selftest():
 def main():
     signal.signal(signal.SIGTERM, lambda *a: _stop.set())
     signal.signal(signal.SIGINT, lambda *a: _stop.set())
-    # 新会话从头开始：truncate 流文件（避免与旧进程残留行混叠）
-    open(TICK_STREAM_FILE, "w", encoding="utf-8").close()
+    # ⚠️ 2026-09-23 修复：原实现【每次启动无条件 truncate 流文件】，一次 launchd 重启
+    # 即清空全部历史 tick —— 09-23 事故：丢失 09-21~09-23 共 148,336 行 / 21.4MB FG/SA 真 tick，
+    # 且该文件未被 git 跟踪、Time Machine 亦无可用副本，不可恢复。
+    # 改为默认【追加写入】不清空历史；仅在显式设置 TQ_TRUNCATE_ON_START=1 时才清空（换日/自测用）。
+    if os.environ.get("TQ_TRUNCATE_ON_START", "0") == "1":
+        open(TICK_STREAM_FILE, "w", encoding="utf-8").close()
+        print(f"[main] 已清空 {TICK_STREAM_FILE}（TQ_TRUNCATE_ON_START=1）", flush=True)
+    else:
+        try:
+            _n = sum(1 for _ in open(TICK_STREAM_FILE, encoding="utf-8"))
+        except Exception:
+            _n = 0
+        print(f"[main] 追加写入 {TICK_STREAM_FILE}（保留历史 {_n} 行；需清空请设 TQ_TRUNCATE_ON_START=1）", flush=True)
     print(f"[main] tick_stream={TICK_STREAM_FILE} http={TQ_HTTP_PORT} selftest={SELFTEST}", flush=True)
     if SELFTEST:
         selftest()
