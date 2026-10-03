@@ -130,6 +130,8 @@ TEST_MODULES = {
     "performance": "tests.test_performance",
     "consistency_watchdog": "tests.test_consistency_watchdog",
     "risk_gate_property": "tests.test_risk_gate_property",
+    # 配置治理：短路（DISABLED_SYMBOLS）必须每个条目都有「可核查原因」
+    "disabled_contract": "tests.test_disabled_contract",
 }
 
 # 默认全量测试时跳过的模块（性能测试等耗时/波动大的）
@@ -146,6 +148,7 @@ SMOKE_TESTS = {
     "regime",  # 市场状态
     "property_fuzz",  # 属性测试（快速验证数学属性）
     "four_dim_pure",  # 四维纯函数
+    "disabled_contract",  # 短路原因契约（配置治理：被禁品种必须有可核查原因）
 }
 
 # 单元测试（不含集成/属性/基准/性能）

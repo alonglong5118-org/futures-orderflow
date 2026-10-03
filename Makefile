@@ -84,6 +84,8 @@ help:
 	@echo "  make advanced       属性测试 + 基准回归 + 性能测试"
 	@echo "  make perf           性能基准测试"
 	@echo "  make all            跑全部测试（含属性/基准/性能）"
+	@echo "  make contract-check 校验 DISABLED_SYMBOLS 短路原因契约（治理门）"
+	@echo "  make contract-check-strict  同上，但强制与生产配置对账（读不到即失败）"
 	@echo ""
 	@echo "── 分析工具 ──────────────────────────────────────────────────"
 	@echo "  make coverage       生成覆盖率 HTML 报告"
@@ -160,6 +162,19 @@ bench-update:
 
 all:
 	@$(PYTHON) run_tests.py all --py-only
+
+# 短路原因契约门（配置治理）：校验 DISABLED_SYMBOLS 每个条目都有「可核查原因」，
+# 且与 AUTO_RECOVER_SYMBOLS 一致；禁止「结果不好」类不可核查理由。见 disabled_contract.py
+#
+# 两档强度：
+#   contract-check         —— 允许降级：读不到 four_dim_strategy 时只查登记表内部一致性并**显式告警**
+#   contract-check-strict  —— 必须对账：读不到生产配置即判违规（供 CI / 发布前硬门）
+# CI 侧另有测试链兜底：run_tests.py 的 `unit` scope 会自动收录 tests/test_disabled_contract.py
+contract-check:
+	@$(PYTHON) disabled_contract.py
+
+contract-check-strict:
+	@$(PYTHON) disabled_contract.py --require-live
 
 # ── 分析工具 ──────────────────────────────────────────────────────────
 
