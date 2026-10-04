@@ -160,6 +160,17 @@ def _resolve_backtest_dir():
 
 BACKTEST_DIR = _resolve_backtest_dir()
 FUNDAMENTALS_JSON = os.path.join(HERE, "fundamentals.json")
+# ── 输入快照钩子（内容寻址，默认关闭；置 VANTA_SNAPSHOT_INPUTS=1 启用）──
+# 回测前启用则把 fundamentals.json/info_dimension.json 按 sha256 固化到 snapshots/ 并打印 hash，
+# 便于在回测产物中记录、后续用 snapshot_inputs.py restore 还原。详见 snapshot_inputs.py。
+if os.environ.get("VANTA_SNAPSHOT_INPUTS") == "1":
+    try:
+        from snapshot_inputs import snapshot_all
+
+        _snap = snapshot_all()
+        print(f"[input-snapshot] fundamentals={_snap['fundamentals']} info_dimension={_snap['info_dimension']}")
+    except Exception as _e:
+        print(f"[input-snapshot] 跳过: {_e}")
 CPOS_JSON = os.path.join(HERE, "cpos_cache.json")
 # score_C 缓存（walk-forward 场景下每根 K 线都调用，缓存可省 40ms+/500bars）
 _CPOS_CACHE = {"mtime": 0.0, "data": None}

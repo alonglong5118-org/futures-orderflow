@@ -135,3 +135,7 @@ data_daily/*_min5.csv
 
 # launchd 日志轮转文件（体积大，不入库）
 launchd.log.*
+
+# ---- 内容寻址输入快照库（fundamentals/info_dimension 按 sha256 固化；重文件不入库，仅 MANIFEST.json 可入库做跨会话追溯）----
+snapshots/*
+!snapshots/MANIFEST.json
