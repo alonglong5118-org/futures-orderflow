@@ -123,7 +123,9 @@ backup_v*/
 backup_clean*/
 
 # ---- 外挂盘数据软链接（/Volumes/Expansion，他人机器上不一定存在）----
+# 17 年重建长历史孤儿资产（喂 M2 four_dim_strategy.py 引擎；与闸门无关，可 build_ohlcv_long.py 重建）
 data_5m_long
+data_daily_long
 
 # ---- cfmmc 结算单运行时目录（含真实财务数据；脚本会自动 mkdir）----
 statements/
