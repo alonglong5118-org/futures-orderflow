@@ -82,7 +82,7 @@ class TestSimExit5mStopLoss(unittest.TestCase):
         bars = [(100, 101, 90, 92)]  # low=90 < stop=95
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(exit_price, 95)
         self.assertEqual(reason, "止损")
         self.assertEqual(exit_idx, 0)
@@ -92,7 +92,7 @@ class TestSimExit5mStopLoss(unittest.TestCase):
         bars = [(100, 110, 98, 108)]  # high=110 > stop=105
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(exit_price, 105)
         self.assertEqual(reason, "止损")
         self.assertEqual(exit_idx, 0)
@@ -106,7 +106,7 @@ class TestSimExit5mStopLoss(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "止损")
         self.assertEqual(exit_idx, 2)
 
@@ -119,7 +119,7 @@ class TestSimExit5mStopLoss(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=120)  # t2 也没到
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         # 没触止损也没触止盈 → 期末平
         self.assertEqual(reason, "期末平")
         self.assertEqual(exit_idx, 2)
@@ -141,7 +141,7 @@ class TestSimExit5mTakeProfit(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=False)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(exit_price, 110)
         self.assertEqual(reason, "止盈2R")
         self.assertEqual(exit_idx, 1)
@@ -154,7 +154,7 @@ class TestSimExit5mTakeProfit(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90, tail_enabled=False)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(exit_price, 90)
         self.assertEqual(reason, "止盈2R")
         self.assertEqual(exit_idx, 1)
@@ -166,7 +166,7 @@ class TestSimExit5mTakeProfit(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=False)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "止损")
         self.assertNotEqual(reason, "止盈2R")
 
@@ -193,7 +193,7 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=True, tail_stop_dist=10)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "尾仓离场")
         self.assertEqual(exit_idx, 2)
         self.assertEqual(exit_price, 100)  # 尾仓止损价
@@ -212,7 +212,7 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=True, tail_stop_dist=10)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "尾仓离场")
         # 尾仓止损应该是 110（被 ratchet 上去了）
         self.assertAlmostEqual(exit_price, 110, places=1)
@@ -231,7 +231,7 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90, tail_enabled=True, tail_stop_dist=10)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "尾仓离场")
         self.assertEqual(exit_idx, 2)
         self.assertEqual(exit_price, 100)  # 尾仓止损价
@@ -255,7 +255,7 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=105, t2=90, tail_enabled=True, tail_stop_dist=10)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=-1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "尾仓离场")
         self.assertAlmostEqual(exit_price, 87, places=1)
 
@@ -268,7 +268,7 @@ class TestSimExit5mTrailingTail(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=False)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "止盈2R")
         self.assertEqual(exit_idx, 1)  # 第 1 根就出场了
 
@@ -290,7 +290,7 @@ class TestSimExit5mEndOfPeriod(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=90, t2=120)  # 都很远
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "期末平")
         self.assertEqual(exit_price, 103)  # 最后一根 close
         self.assertEqual(exit_idx, 2)  # 最后一根索引
@@ -300,7 +300,7 @@ class TestSimExit5mEndOfPeriod(unittest.TestCase):
         bars = [(100, 102, 98, 101)]
         df = _make_df5(bars)
         ep = _make_ep(stop=90, t2=120)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(reason, "期末平")
         self.assertEqual(exit_idx, 0)
 
@@ -324,7 +324,7 @@ class TestSimExit5mPriority(unittest.TestCase):
         bars = [(100, 120, 90, 105)]  # low=90 < stop=95, high=120 > t2=110
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110, tail_enabled=False)
-        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        exit_price, reason, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         # 代码先检查止损，所以止损优先
         self.assertEqual(reason, "止损")
 
@@ -342,7 +342,7 @@ class TestSimExit5mReturnValue(unittest.TestCase):
         bars = [(100, 101, 99, 100)]
         df = _make_df5(bars)
         ep = _make_ep(stop=90, t2=120)
-        result = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        result = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(len(result), 3)
 
     def test_exit_idx_within_bars(self):
@@ -351,7 +351,7 @@ class TestSimExit5mReturnValue(unittest.TestCase):
         bars = [(100 + i, 101 + i, 99 + i, 100 + i) for i in range(n)]
         df = _make_df5(bars)
         ep = _make_ep(stop=80, t2=150)
-        _, _, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        _, _, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertGreaterEqual(exit_idx, 0)
         self.assertLess(exit_idx, n)
 
@@ -365,7 +365,7 @@ class TestSimExit5mReturnValue(unittest.TestCase):
         ]
         df = _make_df5(bars)
         ep = _make_ep(stop=95, t2=110)
-        _, _, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=0)
+        _, _, exit_idx = _sim_exit_5m(df, dir_T=1, entry=100, ep=ep, sd=ep["stop_dist"])
         self.assertEqual(exit_idx, 2)
 
 

@@ -1,7 +1,7 @@
 {
   "_version": "1.0",
-  "_last_updated": "2026-08-25T17:18:16",
-  "_note": "特性开关配置文件。修改后系统自动热加载（60s内），无需重启。",
+  "_last_updated": "2026-09-08T09:33:52",
+  "_note": "特性开关配置文件。修改后系统自动热加载（60s内），无需重启。`_wired: false` 表示该开关未被代码读取——对应模块硬生效，切换请求会被 feature_manager.toggle_feature 拒绝。",
   "market_state_engine": {
     "name": "市场状态引擎",
     "description": "识别当前市场状态（趋势初/中/末/震荡），用于动态调整参数",
@@ -15,7 +15,8 @@
       "confirmation_periods": 3
     },
     "_last_changed": "2026-08-25T15:38:46",
-    "_last_operator": "migration"
+    "_last_operator": "migration",
+    "_wired": true
   },
   "take_profit_state_machine": {
     "name": "分级止盈状态机",
@@ -29,7 +30,9 @@
       "t1_atr_mult": 3.0,
       "t2_atr_mult": 5.0,
       "t3_trail_atr_mult": 2.0
-    }
+    },
+    "_wired": false,
+    "_wired_note": "分级止盈由 four_dim_strategy 硬实现（P0-6/P0-7 partial_take 系列参数），不读本 flag"
   },
   "auto_optimize": {
     "name": "参数自优化",
@@ -48,7 +51,8 @@
       "auto_adapt": false
     },
     "_last_changed": "2026-08-25T17:18:16",
-    "_last_operator": "migration"
+    "_last_operator": "migration",
+    "_wired": true
   },
   "corr_gate": {
     "name": "相关性门控",
@@ -62,7 +66,9 @@
       "gate_threshold": 0.8
     },
     "_last_changed": "2026-08-25T15:21:35",
-    "_last_operator": "e2e-test"
+    "_last_operator": "e2e-test",
+    "_wired": false,
+    "_wired_note": "实际由 DEFAULT_CONFIG['corr_gate'] 配置键控制（four_dim_strategy.py:606），不读本 flag"
   },
   "drawdown_guard": {
     "name": "回撤保护",
@@ -75,7 +81,9 @@
     "config": {
       "dd_warn_pct": 5,
       "dd_lock_pct": 10
-    }
+    },
+    "_wired": false,
+    "_wired_note": "drawdown_guard.py 模块硬生效；属保护性机制，设计上不可关闭"
   },
   "kill_switch": {
     "name": "熔断机制",
@@ -89,7 +97,9 @@
       "daily_loss_pct": 8,
       "consec_losses": 6,
       "cool_down_hours": 24
-    }
+    },
+    "_wired": false,
+    "_wired_note": "risk_state_machine.py 的 KillSwitch 硬生效（回撤15%/日亏8%/连亏6笔）；属保护性机制，不可关闭"
   },
   "signal_explain_llm": {
     "name": "LLM信号解释",
@@ -102,7 +112,9 @@
     "config": {
       "model": "deepseek-chat",
       "max_tokens": 500
-    }
+    },
+    "_wired": false,
+    "_wired_note": "信号解释由 signal_explain.py 驱动，LLM 增强层取决于 DEEPSEEK_API_KEY 是否配置，不读本 flag"
   },
   "trailing_stop": {
     "name": "分级止损",
@@ -114,7 +126,8 @@
     "dangerous": false,
     "config": {},
     "_last_changed": "2026-08-25T16:01:57",
-    "_last_operator": "migration"
+    "_last_operator": "migration",
+    "_wired": true
   },
   "seasonal_boost": {
     "name": "季节性增强",
@@ -128,7 +141,8 @@
       "global_mult": 1.5
     },
     "_last_changed": "2026-08-25T16:28:32",
-    "_last_operator": "migration"
+    "_last_operator": "migration",
+    "_wired": true
   },
   "decorrelate": {
     "name": "去相关性",
@@ -143,7 +157,8 @@
       "crowd_thresh": 0.8
     },
     "_last_changed": "2026-08-25T16:07:32",
-    "_last_operator": "migration"
+    "_last_operator": "migration",
+    "_wired": true
   },
   "robust_pool_gate": {
     "name": "稳健池子门控",
@@ -158,7 +173,8 @@
       "floor_oos": 0.1
     },
     "_last_changed": "2026-08-25T17:08:13",
-    "_last_operator": "migration"
+    "_last_operator": "migration",
+    "_wired": true
   },
   "notify": {
     "name": "消息推送",
@@ -171,7 +187,9 @@
     "config": {
       "telegram_enabled": true,
       "wechat_enabled": true
-    }
+    },
+    "_wired": false,
+    "_wired_note": "推送由 push_notify 模块 + trade_config.json 的 notify 键 + /api/notify 控制，不读本 flag"
   },
   "tick_connector": {
     "name": "盘口订单流",
@@ -184,6 +202,8 @@
     "config": {
       "source": "minishare",
       "websocket_url": ""
-    }
+    },
+    "_wired": false,
+    "_wired_note": "tick_orderflow.TickFeedConnector 由 runner 决定是否启动，不读本 flag"
   }
 }

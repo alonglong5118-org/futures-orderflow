@@ -125,7 +125,7 @@ jobs:
           fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Syntax check
         run: |
           find . -name "*.py" -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./ponytail/*" | xargs python -m py_compile 2>&1
@@ -145,7 +145,7 @@ jobs:
           fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Test file naming
         run: |
           mismatched=$(find tests/ -name "*.py" -not -name "test_*" -not -name "_*" 2>/dev/null || true)
@@ -174,7 +174,7 @@ jobs:
           fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Test discovery
         run: |
           python scripts/discover_tests.py > /tmp/discovered.txt
@@ -247,7 +247,7 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Restore Ruff cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
@@ -291,7 +291,7 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Run format check
         run: |
@@ -317,7 +317,7 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Restore Ruff cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
@@ -354,7 +354,7 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Restore mypy cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5

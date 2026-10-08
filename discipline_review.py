@@ -43,6 +43,42 @@ ACCOUNT_FILE = os.path.join(HERE, "account_state.json")
 CONFIG_FILE = os.path.join(HERE, "trade_config.json")
 EVENTS_FILE = os.path.join(HERE, "discipline_events.json")
 
+
+def _account():
+    """当前线程账户（HTTP ?account= 已切换，后台主循环为 default）。"""
+    try:
+        import account_tracker as at
+
+        return at.get_account()
+    except Exception:
+        return "default"
+
+
+def _journal_file():
+    try:
+        import trade_journal as tj
+
+        return tj._journal_file_for(_account())
+    except Exception:
+        return JOURNAL_FILE
+
+
+def _account_file():
+    try:
+        import account_tracker as at
+
+        return at.state_file_for(_account())
+    except Exception:
+        return ACCOUNT_FILE
+
+
+def _events_file():
+    a = _account()
+    if a == "default":
+        return EVENTS_FILE
+    return os.path.join(HERE, f"discipline_events_{a}.json")
+
+
 _EVENT_LOCK = threading.Lock()
 
 # 评分权重
@@ -116,14 +152,14 @@ def log_event(etype, state=None, reason="", symbol="", direction="", lots=0, ris
         rec["lots"] = int(lots)
         rec["risk_state"] = risk_state or ""
     with _EVENT_LOCK:
-        arr = _load(EVENTS_FILE, [])
+        arr = _load(_events_file(), [])
         if not isinstance(arr, list):
             arr = []
         arr.append(rec)
         # 只保留近 180 天，防无限增长
         cutoff = (datetime.now() - timedelta(days=180)).timestamp()
         arr = [e for e in arr if (_parse_time(e.get("time", "")) or datetime.now()).timestamp() >= cutoff]
-        json.dump(arr[-5000:], open(EVENTS_FILE, "w"), ensure_ascii=False, indent=2)
+        json.dump(arr[-5000:], open(_events_file(), "w"), ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +199,7 @@ def _is_manual_record(trade):
 # 仓位纪律（来自 account_state + trade_config 合约参数）
 # ---------------------------------------------------------------------------
 def _position_metrics():
-    st = _load(ACCOUNT_FILE, {})
+    st = _load(_account_file(), {})
     cfg = _load(CONFIG_FILE, {})
     specs = cfg.get("contract_specs", {})
     acc = cfg.get("account", {})
@@ -174,7 +210,7 @@ def _position_metrics():
     total_margin = 0.0
     positions = []
     # 从 trade_journal 匹配当前未平持仓的来源
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     open_source = {}
     for t in trades:
         if t.get("exit_time"):
@@ -224,9 +260,9 @@ def _position_metrics():
 def _card(kind, now=None):
     now = now or datetime.now()
     start, end = _period_bounds(kind, now)
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     sig_map = _signal_map()
-    events = _load(EVENTS_FILE, [])
+    events = _load(_events_file(), [])
     if not isinstance(events, list):
         events = []
 
@@ -465,7 +501,32 @@ def _card(kind, now=None):
         "checks": checks,
         "open_positions": pm["positions"],
         "notes": notes,
+        # 2026-09-12：权益可信度前置自检（C3/C4/C5 的分母是否可信）
+        "data_integrity": _data_integrity(),
     }
+
+
+def _data_integrity():
+    """权益数据可信度前置自检（2026-09-12 新增）。
+
+    discipline_review 的 C3/C4/C5 三项（单品/组合/日亏线）全部以 dynamic_equity
+    为分母。若 journal 里有物理上不可能的盈亏，权益锚会被抬高 → 这三项会显示
+    "很安全"，而实际早已超限。所以复盘卡必须先声明权益可不可信。
+    """
+    out = {"equity_trustworthy": True, "data_alerts": [], "suspicious": []}
+    try:
+        import equity_history as eh
+
+        san = eh.journal_sanity()
+        susp = san.get("suspicious") or []
+        if susp:
+            out["equity_trustworthy"] = False
+            out["suspicious"] = susp
+            rec = {"date": datetime.now().strftime("%Y-%m-%d"), "ok": False, "suspicious": susp, "anchor": eh._anchor()}
+            out["data_alerts"] = eh.audit_alerts(rec)
+    except Exception:
+        pass
+    return out
 
 
 def get_all(now=None):
@@ -539,7 +600,7 @@ def _day_operations(date_str):
         d0 = datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
         return []
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     ops = []
     for t in trades:
         sym = t.get("symbol")
@@ -600,19 +661,19 @@ def snapshot_day(date_str):
     rec["operations"] = ops
     rec["ops_count"] = len(ops)
     rec["snapshot_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    records = _load(RECORDS_FILE, {})
+    records = _load(_records_file(), {})
     if not isinstance(records, dict):
         records = {}
     records[date_str] = rec
     try:
-        json.dump(records, open(RECORDS_FILE, "w"), ensure_ascii=False, indent=2)
+        json.dump(records, open(_records_file(), "w"), ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[复盘快照] 写文件失败: {repr(e)[:80]}")
     return rec
 
 
 def get_record(date_str):
-    records = _load(RECORDS_FILE, {})
+    records = _load(_records_file(), {})
     return records.get(date_str) if isinstance(records, dict) else None
 
 
@@ -627,11 +688,13 @@ def _after_cutoff(date_str):
 
 
 def list_records():
-    records = _load(RECORDS_FILE, {})
+    records = _load(_records_file(), {})
     if not isinstance(records, dict):
         records = {}
     out = []
     for dt, rec in records.items():
+        if not isinstance(rec, dict):  # 跳过 records/daily/weekly/monthly 等 list 条目
+            continue
         if not _after_cutoff(dt):
             continue
         out.append(
@@ -658,13 +721,13 @@ def _has_activity(date_str):
         d0 = datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
         return False
-    trades = _load(JOURNAL_FILE, {}).get("trades", [])
+    trades = _load(_journal_file(), {}).get("trades", [])
     for t in trades:
         et = _parse_time(t.get("time", ""))
         xt = _parse_time(t.get("exit_time", ""))
         if (et and et.date() == d0) or (xt and xt.date() == d0):
             return True
-    events = _load(EVENTS_FILE, [])
+    events = _load(_events_file(), [])
     if isinstance(events, list):
         for e in events:
             et = _parse_time(e.get("time", ""))
@@ -678,7 +741,7 @@ def pending_close_dates(now=None):
     已过收盘时点（23:20）、records 中尚无记录、且当日确有交易活动的。
     （无活动的旧日不补，避免造空记录；严格从「今天」起有操作才落账。）"""
     now = now or datetime.now()
-    records = _load(RECORDS_FILE, {})
+    records = _load(_records_file(), {})
     if not isinstance(records, dict):
         records = {}
     pending = []
@@ -711,6 +774,28 @@ def run_close_snapshots(now=None, verbose=True):
 # ---------------------------------------------------------------------------
 WEEKLY_RECORDS_FILE = os.path.join(HERE, "discipline_weekly_records.json")
 MONTHLY_RECORDS_FILE = os.path.join(HERE, "discipline_monthly_records.json")
+
+
+def _records_file():
+    a = _account()
+    if a == "default":
+        return RECORDS_FILE
+    return os.path.join(HERE, f"discipline_records_{a}.json")
+
+
+def _weekly_file():
+    a = _account()
+    if a == "default":
+        return WEEKLY_RECORDS_FILE
+    return os.path.join(HERE, f"discipline_weekly_records_{a}.json")
+
+
+def _monthly_file():
+    a = _account()
+    if a == "default":
+        return MONTHLY_RECORDS_FILE
+    return os.path.join(HERE, f"discipline_monthly_records_{a}.json")
+
 
 
 # 周/月聚合时各检查项的汇总文案模板
@@ -890,12 +975,12 @@ def snapshot_week(friday_str):
     }
     rec = _aggregate_card(day_recs, "weekly", meta)
     rec["snapshot_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    records = _load(WEEKLY_RECORDS_FILE, {})
+    records = _load(_weekly_file(), {})
     if not isinstance(records, dict):
         records = {}
     records[friday_str] = rec
     try:
-        json.dump(records, open(WEEKLY_RECORDS_FILE, "w"), ensure_ascii=False, indent=2)
+        json.dump(records, open(_weekly_file(), "w"), ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[周复盘] 写文件失败: {repr(e)[:80]}")
     return rec
@@ -923,7 +1008,7 @@ def snapshot_month(month_str):
             fridays.append(dt.strftime("%Y-%m-%d"))
     # 先补齐各周卡
     for fr in fridays:
-        recs = _load(WEEKLY_RECORDS_FILE, {})
+        recs = _load(_weekly_file(), {})
         if not isinstance(recs, dict):
             recs = {}
         if fr not in recs:
@@ -933,7 +1018,7 @@ def snapshot_month(month_str):
                 print(f"[月复盘] 补周卡 {fr} 失败: {repr(e)[:60]}")
     week_recs = []
     for fr in fridays:
-        r = _load(WEEKLY_RECORDS_FILE, {}).get(fr)
+        r = _load(_weekly_file(), {}).get(fr)
         if r:
             week_recs.append(r)
     if not week_recs:
@@ -946,33 +1031,35 @@ def snapshot_month(month_str):
     }
     rec = _aggregate_card(week_recs, "monthly", meta)
     rec["snapshot_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    records = _load(MONTHLY_RECORDS_FILE, {})
+    records = _load(_monthly_file(), {})
     if not isinstance(records, dict):
         records = {}
     records[month_str] = rec
     try:
-        json.dump(records, open(MONTHLY_RECORDS_FILE, "w"), ensure_ascii=False, indent=2)
+        json.dump(records, open(_monthly_file(), "w"), ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[月复盘] 写文件失败: {repr(e)[:80]}")
     return rec
 
 
 def get_weekly_record(friday_str):
-    records = _load(WEEKLY_RECORDS_FILE, {})
+    records = _load(_weekly_file(), {})
     return records.get(friday_str) if isinstance(records, dict) else None
 
 
 def get_monthly_record(month_str):
-    records = _load(MONTHLY_RECORDS_FILE, {})
+    records = _load(_monthly_file(), {})
     return records.get(month_str) if isinstance(records, dict) else None
 
 
 def list_weekly_records():
-    records = _load(WEEKLY_RECORDS_FILE, {})
+    records = _load(_weekly_file(), {})
     if not isinstance(records, dict):
         records = {}
     out = []
     for fr, rec in records.items():
+        if not isinstance(rec, dict):
+            continue
         if not _after_cutoff(fr):
             continue
         out.append(
@@ -995,11 +1082,13 @@ def list_weekly_records():
 
 
 def list_monthly_records():
-    records = _load(MONTHLY_RECORDS_FILE, {})
+    records = _load(_monthly_file(), {})
     if not isinstance(records, dict):
         records = {}
     out = []
     for mo, rec in records.items():
+        if not isinstance(rec, dict):
+            continue
         if not _after_cutoff(mo + "-01"):
             continue
         out.append(
@@ -1024,7 +1113,7 @@ def list_monthly_records():
 def pending_weekly(now=None):
     """待生成的周复盘：最近 10 天内、周五、且 15:10 已过、records 尚无记录的。"""
     now = now or datetime.now()
-    recs = _load(WEEKLY_RECORDS_FILE, {})
+    recs = _load(_weekly_file(), {})
     if not isinstance(recs, dict):
         recs = {}
     pending = []
@@ -1041,7 +1130,7 @@ def pending_weekly(now=None):
 def pending_monthly(now=None):
     """待生成的月复盘：最近 40 天内、最后交易日、且 15:10 已过、records 尚无记录的。"""
     now = now or datetime.now()
-    recs = _load(MONTHLY_RECORDS_FILE, {})
+    recs = _load(_monthly_file(), {})
     if not isinstance(recs, dict):
         recs = {}
     pending = []

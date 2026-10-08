@@ -23,8 +23,10 @@
    - 5种状态全覆盖
 """
 
+import json
 import os
 import sys
+import tempfile
 import unittest
 
 import pandas as pd
@@ -33,7 +35,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from strategy_layer import classify_regime, crossover
+from strategy_layer import (
+    OOS_EXPR_THRESHOLD,
+    STABILITY_THRESHOLD,
+    backfill_robust_pool_gate,
+    classify_regime,
+    crossover,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. crossover
@@ -290,6 +298,43 @@ class TestClassifyRegime(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 #  main
 # ═══════════════════════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  3. backfill_robust_pool_gate — 稳健池门槛回灌
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestBackfillRobustPoolGate(unittest.TestCase):
+    """稳健池门槛回灌：缺键 config 不 KeyError，auto_adapt 正常落盘。"""
+
+    def test_missing_default_keys_no_keyerror(self):
+        """生产调用传入缺 default_stability/default_oos_expR 的非空 dict → 回落到默认，不 KeyError。"""
+        cfg = {"enabled": True, "auto_adapt": False}  # 缺 default_stability / default_oos_expR
+        missing_drift = os.path.join(tempfile.gettempdir(), "__no_such_drift_%d__.json" % os.getpid())
+        result = backfill_robust_pool_gate(drift_json=missing_drift, auto_adapt=False, cfg=cfg)
+        self.assertEqual(result["stability"], STABILITY_THRESHOLD)
+        self.assertEqual(result["oos_expR"], OOS_EXPR_THRESHOLD)
+        self.assertFalse(result["written"])
+        self.assertIsNone(result["ensemble_recent_expR"])
+
+    def test_auto_adapt_writes_file(self):
+        """auto_adapt=True 且缺键 config → 正常落盘，文件含 stability/oos_expR。"""
+        with tempfile.TemporaryDirectory() as td:
+            out_path = os.path.join(td, "robust_pool_gate.json")
+            cfg = {"enabled": True, "auto_adapt": True}  # 缺 default_stability / default_oos_expR
+            missing_drift = os.path.join(td, "__no_such_drift__.json")
+            result = backfill_robust_pool_gate(drift_json=missing_drift, out_path=out_path, auto_adapt=True, cfg=cfg)
+            self.assertTrue(result["written"])
+            self.assertEqual(result["stability"], STABILITY_THRESHOLD)
+            self.assertEqual(result["oos_expR"], OOS_EXPR_THRESHOLD)
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path, encoding="utf-8") as f:
+                d = json.load(f)
+            self.assertEqual(d["stability"], STABILITY_THRESHOLD)
+            self.assertEqual(d["oos_expR"], OOS_EXPR_THRESHOLD)
+            self.assertTrue(d["auto_adapt"])
+
 
 if __name__ == "__main__":
     print("=" * 60)

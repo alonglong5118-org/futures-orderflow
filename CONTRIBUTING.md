@@ -300,7 +300,7 @@ make coverage
 
 | type | 说明 | 示例 |
 |---|---|---|
-| `feat` | 新功能 | `feat(strategy): 新增四维策略第五维度` |
+| `feat` | 新功能 | `feat(strategy): 新增三维打分权重调制` |
 | `fix` | Bug 修复 | `fix(risk): 修复风险门禁计算错误` |
 | `perf` | 性能优化 | `perf(sr): 优化支撑阻力检测算法` |
 | `refactor` | 代码重构 | `refactor(utils): 提取公共校准函数` |

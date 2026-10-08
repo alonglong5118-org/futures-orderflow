@@ -14,6 +14,9 @@
 
 set -e
 
+# 清空环境污染变量（TRAE/Codex 会设置 PYTHONHOME/PYTHONPATH 导致 encodings 丢失）
+unset PYTHONHOME PYTHONPATH 2>/dev/null || true
+
 # ── 颜色 ──────────────────────────────────────────────────────────────────────
 RED='\033[91m'
 GREEN='\033[92m'
@@ -137,6 +140,38 @@ if [ "$py_count" -gt 0 ]; then
     fi
 fi
 
+
+# ── HTML/JS 前端防御性 lint ──────────────────────────────────────────────────
+# 变更 HTML/JS 时自动检查 9 条 API 漂移反模式（仅检查 blocking 级违规）
+all_changed=$(git diff --cached --name-only 2>/dev/null)
+if grep -qE '\.(html|js)$' <<< "$all_changed" 2>/dev/null && [ -f "scripts/lint_frontend.py" ]; then
+    echo ""
+    echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${BOLD}${CYAN}  🛡️  前端防御性 lint (9 条 API 漂移反模式)${RESET}"
+    echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
+    echo ""
+
+    set +e
+    python3 scripts/lint_frontend.py four_dim_live.html 2>&1
+    lint_exit=$?
+    set -e
+
+    if [ $lint_exit -eq 0 ]; then
+        echo -e "${GREEN}${BOLD}✅  前端 lint 通过${RESET}"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}❌  存在前端防御性违规，请修复后再提交${RESET}"
+        echo -e "${DIM}   详细报告：python3 scripts/lint_frontend.py four_dim_live.html --report${RESET}"
+        echo ""
+        exit 1
+    fi
+elif [ ! -f "scripts/lint_frontend.py" ]; then
+    echo -e "${DIM}⏭  lint_frontend.py 不存在，跳过前端检查${RESET}"
+else
+    echo -e "${DIM}⏭  无 HTML/JS 改动，跳过前端 lint${RESET}"
+fi
+
+
 # ── 检查是否需要跑测试 ────────────────────────────────────────────────────────
 need_test=false
 changed_count=0
@@ -164,12 +199,20 @@ if [ "$need_test" = false ]; then
 fi
 
 # ── 检查 Python ───────────────────────────────────────────────────────────────
-if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
+# 优先生产 Python（TRAE/Codex 环境专用），其次 .venv，最后系统 python3/python
+PROD_PY="/Users/ken/.workbuddy/binaries/python/envs/default/bin/python3"
+if [ -x "$PROD_PY" ]; then
+    PYTHON_CMD="$PROD_PY"
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON_CMD=".venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD=$(command -v python3 2>/dev/null)
+elif command -v python &> /dev/null; then
+    PYTHON_CMD=$(command -v python 2>/dev/null)
+else
     echo -e "${YELLOW}⚠️  找不到 Python，跳过单元测试${RESET}"
     exit 0
 fi
-
-PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null)
 
 if [ ! -f "run_tests.py" ]; then
     echo -e "${YELLOW}⚠️  run_tests.py 不存在，跳过单元测试${RESET}"

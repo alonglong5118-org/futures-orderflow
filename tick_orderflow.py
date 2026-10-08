@@ -44,6 +44,10 @@ class TickOrderflow:
         self.cum_delta = 0.0  # 窗口内累计 Delta（带符号量）
         self.last_price = None
         self.last_ts = None
+        # 吸收比的长期基线（慢速 EMA），用于自归一化。
+        # 2026-09-23 新增：各品种「每笔成交量 / 盘口厚度」的量级相差可达 1000 倍
+        # （实测 FG 中位 0.0007 vs sc 中位 0.48），固定映射会让因子再次退化为常数。
+        self._abs_base = None
 
     def push(self, price, vol, side=None, bid_vol=None, ask_vol=None, ts=None):
         ts = ts or time.time()
@@ -84,18 +88,45 @@ class TickOrderflow:
         return max(-100.0, min(100.0, 100.0 * (bv - av) / tot))
 
     def absorption_score(self):
-        """吸收分数 ∈ [-100,100]：主动流吃掉盘口的程度。
-        用 带符号量 的绝对值 相对 盘口总量 的占比近似（盘口薄却大主动流=强吸收）。"""
+        """吸收分数 ∈ [-100,100]：主动流吃掉盘口的程度（盘口薄却被大主动流扫过=强吸收）。
+
+        ⚠️ 2026-09-23 修复（原实现退化为常数，std 仅 0.15~0.43、取值恒 ≈-44）：
+          原分母 `book = sum(t[2]+t[3])` 是 **window 个盘口快照求和**（600 笔 → 放大约 600 倍），
+          而分子 flow_mag 是该窗口真实成交量 —— 量纲不一致，ratio 恒 ≈0.03，
+          tanh(0.03-0.5) 恒 ≈-0.44，因子对 score 只贡献常数偏移 ≈-6.6，方差≈0。
+
+        修复要点：
+          1. 分母改为【每笔盘口厚度的均值】，与分子的「每笔平均成交量」同量纲；
+          2. 与该品种自身长期基线（慢速 EMA）比较后取对数再 tanh —— 自归一化，
+             避免跨品种量级差 1000 倍导致再次退化。
+        """
         wt = self._window_ticks()
         if not wt:
             return 0.0
         flow_mag = sum(abs(t[1]) for t in wt)
-        book = sum(t[2] + t[3] for t in wt)
-        if book <= 0:
+        books = [t[2] + t[3] for t in wt if (t[2] + t[3]) > 0]
+        if not books or flow_mag <= 0:
             return 0.0
-        ratio = flow_mag / book
-        # ratio>=1 表示主动流超过盘口总量（强吸收），封顶 100
-        return max(-100.0, min(100.0, 100.0 * math.tanh(ratio - 0.5)))
+        book_avg = sum(books) / len(books)
+        per_tick_flow = flow_mag / len(wt)
+        r = per_tick_flow / book_avg if book_avg > 0 else 0.0
+        if r <= 0:
+            return 0.0
+        # 自归一化基线：在【对数域】取累计均值（= 几何均值）。
+        # 迭代记录：① EMA(α=0.01) 有初始化偏差（开盘最活跃把基线拉高 → 整日恒为负，
+        #   rb 实测 max 恰为 0.00）；② 改用算术累计均值后，因 r 重尾被极值拉高，
+        #   负值仍占 73~87%。对数域均值等价于几何均值，对重尾稳健，正负基本对称。
+        lr = math.log(r)
+        if self._abs_base is None:
+            self._abs_base = lr
+            self._abs_n = 1
+            return 0.0
+        self._abs_n += 1
+        self._abs_base += (lr - self._abs_base) / self._abs_n
+        # 前 3 个窗口基线样本太少、噪声主导，不产出分数
+        if self._abs_n < 4:
+            return 0.0
+        return max(-100.0, min(100.0, 100.0 * math.tanh(lr - self._abs_base)))
 
     def score(self):
         """综合订单流分数（喂给 push_tick）。Delta 为主，失衡/吸收加权。"""

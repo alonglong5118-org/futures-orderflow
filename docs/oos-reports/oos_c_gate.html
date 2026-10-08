@@ -1,0 +1,484 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C 感知方向门 IS/OOS 验证</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2129;--ink:#e6edf3;--mut:#8b98a5;--line:#2a323c;
+--red:#ff5c5c;--grn:#3fb950;--amber:#d29922;--blue:#58a6ff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;padding:24px}
+h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:28px 0 10px;color:var(--blue);border-left:3px solid var(--blue);padding-left:8px}
+.sub{color:var(--mut);font-size:11px}
+.kpis{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;min-width:150px}
+.kpi .v{font-size:24px;font-weight:700} .kpi .l{color:var(--mut);font-size:12px;margin-top:4px}
+.pos{color:var(--red)} .neg{color:var(--grn)}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+th,td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;position:sticky;top:0;background:var(--bg)}
+td.sym{font-weight:700;text-align:left}
+.gain{color:var(--red);font-weight:700} .loss{color:var(--grn);font-weight:700} .flat{color:var(--mut)}
+td.dec.on{color:var(--red);font-weight:700} td.dec.off{color:var(--mut)}
+.note{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;color:var(--mut);margin:10px 0}
+.note b{color:var(--ink)} .wrap{max-width:1180px;margin:0 auto}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;background:#223;color:var(--blue);margin-right:6px}
+</style></head><body><div class="wrap">
+<h1>C 感知方向门（threshold 增强）IS/OOS 验证</h1>
+<div class="sub">三感参谋 · 四维信号系统 · 让资金面 C 真正参与决策（不部署 combined）｜ 生成于 2026-09-07 09:52</div>
+<div class="kpis">
+<div class="kpi"><div class="v">41</div><div class="l">回测有效品种</div></div>
+<div class="kpi"><div class="v">41</div><div class="l">门可用总体(有kline C)</div></div>
+<div class="kpi"><div class="v">15</div><div class="l">IS 决定启用 C 门</div></div>
+<div class="kpi"><div class="v">+0.729</div><div class="l">基线 OOS 期望R(均值)</div></div>
+<div class="kpi"><div class="v">+0.867</div><div class="l">same_sign OOS</div></div>
+<div class="kpi"><div class="v">+0.796</div><div class="l">oppose OOS</div></div>
+</div>
+<div class="note">
+<b>动机</b>：threshold 模式下 C 维度<b>结构性惰性</b>（kline C 与 dragon C 回测逐笔一致）→ 单纯喂 C 不改交易。
+本验证给 threshold 加<b>C 感知方向门</b>（不让 C 定方向，只拦单）：门消费<b>丰富的 kline C</b>（17 年 1 分钟 K 线造）。
+<span class="tag">same_sign</span>T 看多但 C 反向(且≠0)则不开多；<span class="tag">oppose</span>仅 |C|&gt;30.0 反向才拦（更温和）。
+<b>方法</b>：全部 41 个有 kline C 的品种（17 年 1 分钟 K 线批量造）；按基线交易日切 <b>IS(前60%)</b>/<b>OOS(后40%)</b>，
+决策仅看 IS（护栏 MIN_T=12、IS增益≥0.06、IS_ss_expR&gt;0），OOS 仅验证；
+<b>二项双尾检验</b>判断「增益品种占比」是否显著&gt;50%（H0: 门无方向性增益）。
+</div>
+
+<h2>一、组合层面结论</h2>
+<table><tr><th>指标</th><th>基线(threshold)</th><th>same_sign</th><th>oppose(30.0)</th><th>Δss−基</th><th>Δot−基</th></tr>
+<tr><td>OOS 期望R 均值(逐品种)</td><td>+0.729</td><td>+0.867</td><td>+0.796</td><td class="pos">+0.137</td><td class="pos">+0.066</td></tr>
+</table>
+<div class="note">
+<b>读图</b>：same_sign / oppose 相对基线的 Δ（红=增益/绿=有损，A股惯例）。
+same_sign OOS：<b class="pos">增益 22</b> / <b class="neg">有损 19</b> / 持平 0；
+oppose OOS：<b class="pos">增益 23</b> / <b class="neg">有损 10</b> / 持平 8。
+</div>
+
+<h2>一·二、统计显著性（门可用总体，二项双尾）</h2>
+<table><tr><th>门模式</th><th>样本n</th><th>增益</th><th>有损</th><th>持平</th><th>中位数Δ</th><th>均值Δ</th><th>增益占比</th><th>二项p(双尾)</th><th>显著?</th></tr>
+<tr><td>same_sign</td><td>41</td><td class='gain'>22</td><td class='loss'>19</td><td>0</td><td>+0.131</td><td>+0.137</td><td>0.537</td><td class='flat'>0.7552</td><td class='flat'>不显著</td></tr>
+<tr><td>oppose(30.0)</td><td>41</td><td class='gain'>23</td><td class='loss'>10</td><td>8</td><td>+0.065</td><td>+0.066</td><td>0.561</td><td class='gain'>0.0351</td><td class='gain'>显著✓</td></tr>
+</table>
+<div class="sub">「二项p」= 对（增益 vs 有损）做精确二项双尾检验（H0: 增益占比=50%）。p&lt;0.05 视为门在该模式上显著稳定增益；p 越大越像随机抛硬币，门不值得全市场部署。</div>
+
+<h2>二、逐品种明细（按 same_sign OOS Δ 排序）</h2>
+<table><thead><tr><th>品种</th><th>名称</th><th>板块</th><th>IS edge</th><th>IS决策</th>
+<th>OOS_ss</th><th>OOS_base</th><th>Δss</th><th>OOS_ot</th><th>Δot</th><th>拦单数</th></tr></thead>
+<tbody><tr>
+<td class="sym">J</td><td>焦炭</td><td>黑系</td>
+<td>-7.136</td>
+<td class="dec off">保持threshold</td>
+<td>+0.774<br><span class="sub">2笔</span></td>
+<td>-1.106<br><span class="sub">1笔</span></td>
+<td class="gain">+1.880</td>
+<td>-1.106<br><span class="sub">1笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">ss拦15/ot拦2</td>
+</tr><tr>
+<td class="sym">ec</td><td>欧线</td><td>航运</td>
+<td>-0.009</td>
+<td class="dec off">保持threshold</td>
+<td>+2.869<br><span class="sub">3笔</span></td>
+<td>+1.213<br><span class="sub">4笔</span></td>
+<td class="gain">+1.656</td>
+<td>+0.959<br><span class="sub">3笔</span></td>
+<td class="loss">-0.254</td>
+<td class="sub">ss拦3/ot拦2</td>
+</tr><tr>
+<td class="sym">jd</td><td>鸡蛋</td><td>农产品</td>
+<td>+0.016</td>
+<td class="dec off">保持threshold</td>
+<td>+2.907<br><span class="sub">5笔</span></td>
+<td>+1.661<br><span class="sub">8笔</span></td>
+<td class="gain">+1.245</td>
+<td>+2.562<br><span class="sub">6笔</span></td>
+<td class="gain">+0.900</td>
+<td class="sub">ss拦12/ot拦5</td>
+</tr><tr>
+<td class="sym">rb</td><td>螺纹钢</td><td>黑系</td>
+<td>+0.733</td>
+<td class="dec off">保持threshold</td>
+<td>+2.431<br><span class="sub">4笔</span></td>
+<td>+1.280<br><span class="sub">6笔</span></td>
+<td class="gain">+1.150</td>
+<td>+1.742<br><span class="sub">5笔</span></td>
+<td class="gain">+0.462</td>
+<td class="sub">ss拦6/ot拦2</td>
+</tr><tr>
+<td class="sym">l</td><td>塑料</td><td>化工</td>
+<td>+0.125</td>
+<td class="dec on">启用C门</td>
+<td>+1.802<br><span class="sub">9笔</span></td>
+<td>+0.782<br><span class="sub">18笔</span></td>
+<td class="gain">+1.020</td>
+<td>+0.964<br><span class="sub">15笔</span></td>
+<td class="gain">+0.182</td>
+<td class="sub">ss拦13/ot拦4</td>
+</tr><tr>
+<td class="sym">ru</td><td>橡胶</td><td>化工</td>
+<td>+0.332</td>
+<td class="dec on">启用C门</td>
+<td>+1.427<br><span class="sub">16笔</span></td>
+<td>+0.538<br><span class="sub">28笔</span></td>
+<td class="gain">+0.889</td>
+<td>+1.073<br><span class="sub">22笔</span></td>
+<td class="gain">+0.535</td>
+<td class="sub">ss拦25/ot拦10</td>
+</tr><tr>
+<td class="sym">c</td><td>玉米</td><td>农产品</td>
+<td>+0.000</td>
+<td class="dec off">保持threshold</td>
+<td>+2.985<br><span class="sub">8笔</span></td>
+<td>+2.166<br><span class="sub">10笔</span></td>
+<td class="gain">+0.818</td>
+<td>+2.527<br><span class="sub">9笔</span></td>
+<td class="gain">+0.360</td>
+<td class="sub">ss拦3/ot拦1</td>
+</tr><tr>
+<td class="sym">ao</td><td>氧化铝</td><td>有色</td>
+<td>-0.439</td>
+<td class="dec off">保持threshold</td>
+<td>+1.383<br><span class="sub">5笔</span></td>
+<td>+0.690<br><span class="sub">7笔</span></td>
+<td class="gain">+0.694</td>
+<td>+1.383<br><span class="sub">5笔</span></td>
+<td class="gain">+0.694</td>
+<td class="sub">ss拦8/ot拦5</td>
+</tr><tr>
+<td class="sym">PF</td><td>短纤</td><td>化工</td>
+<td>-0.849</td>
+<td class="dec off">保持threshold</td>
+<td>+1.427<br><span class="sub">3笔</span></td>
+<td>+0.814<br><span class="sub">4笔</span></td>
+<td class="gain">+0.613</td>
+<td>+0.814<br><span class="sub">4笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">ss拦7/ot拦3</td>
+</tr><tr>
+<td class="sym">eb</td><td>苯乙烯</td><td>化工</td>
+<td>+0.139</td>
+<td class="dec on">启用C门</td>
+<td>+2.462<br><span class="sub">9笔</span></td>
+<td>+1.907<br><span class="sub">11笔</span></td>
+<td class="gain">+0.555</td>
+<td>+2.129<br><span class="sub">10笔</span></td>
+<td class="gain">+0.222</td>
+<td class="sub">ss拦17/ot拦9</td>
+</tr><tr>
+<td class="sym">JM</td><td>焦煤</td><td>黑系</td>
+<td>+0.791</td>
+<td class="dec on">启用C门</td>
+<td>+0.756<br><span class="sub">10笔</span></td>
+<td>+0.311<br><span class="sub">15笔</span></td>
+<td class="gain">+0.446</td>
+<td>+0.406<br><span class="sub">13笔</span></td>
+<td class="gain">+0.095</td>
+<td class="sub">ss拦24/ot拦11</td>
+</tr><tr>
+<td class="sym">OI</td><td>菜油</td><td>农产品</td>
+<td>+0.038</td>
+<td class="dec off">保持threshold</td>
+<td>+0.549<br><span class="sub">10笔</span></td>
+<td>+0.189<br><span class="sub">13笔</span></td>
+<td class="gain">+0.360</td>
+<td>+0.189<br><span class="sub">13笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">ss拦10/ot拦1</td>
+</tr><tr>
+<td class="sym">p</td><td>棕榈油</td><td>农产品</td>
+<td>+0.102</td>
+<td class="dec on">启用C门</td>
+<td>+0.385<br><span class="sub">60笔</span></td>
+<td>+0.034<br><span class="sub">84笔</span></td>
+<td class="gain">+0.350</td>
+<td>+0.231<br><span class="sub">71笔</span></td>
+<td class="gain">+0.197</td>
+<td class="sub">ss拦152/ot拦71</td>
+</tr><tr>
+<td class="sym">al</td><td>沪铝</td><td>有色</td>
+<td>+0.029</td>
+<td class="dec off">保持threshold</td>
+<td>+0.178<br><span class="sub">19笔</span></td>
+<td>-0.077<br><span class="sub">21笔</span></td>
+<td class="gain">+0.255</td>
+<td>+0.144<br><span class="sub">20笔</span></td>
+<td class="gain">+0.221</td>
+<td class="sub">ss拦32/ot拦24</td>
+</tr><tr>
+<td class="sym">bu</td><td>沥青</td><td>能源</td>
+<td>+0.008</td>
+<td class="dec off">保持threshold</td>
+<td>+0.058<br><span class="sub">20笔</span></td>
+<td>-0.191<br><span class="sub">31笔</span></td>
+<td class="gain">+0.249</td>
+<td>-0.024<br><span class="sub">25笔</span></td>
+<td class="gain">+0.167</td>
+<td class="sub">ss拦46/ot拦19</td>
+</tr><tr>
+<td class="sym">ag</td><td>沪银</td><td>贵金属</td>
+<td>+0.217</td>
+<td class="dec on">启用C门</td>
+<td>+2.436<br><span class="sub">12笔</span></td>
+<td>+2.194<br><span class="sub">15笔</span></td>
+<td class="gain">+0.241</td>
+<td>+2.759<br><span class="sub">12笔</span></td>
+<td class="gain">+0.565</td>
+<td class="sub">ss拦34/ot拦16</td>
+</tr><tr>
+<td class="sym">FG</td><td>玻璃</td><td>化工</td>
+<td>-0.579</td>
+<td class="dec off">保持threshold</td>
+<td>+0.769<br><span class="sub">7笔</span></td>
+<td>+0.545<br><span class="sub">8笔</span></td>
+<td class="gain">+0.223</td>
+<td>+0.541<br><span class="sub">8笔</span></td>
+<td class="flat">-0.005</td>
+<td class="sub">ss拦4/ot拦1</td>
+</tr><tr>
+<td class="sym">CF</td><td>棉花</td><td>农产品</td>
+<td>+0.043</td>
+<td class="dec off">保持threshold</td>
+<td>+2.385<br><span class="sub">27笔</span></td>
+<td>+2.188<br><span class="sub">30笔</span></td>
+<td class="gain">+0.196</td>
+<td>+2.374<br><span class="sub">27笔</span></td>
+<td class="gain">+0.185</td>
+<td class="sub">ss拦15/ot拦9</td>
+</tr><tr>
+<td class="sym">v</td><td>PVC</td><td>化工</td>
+<td>-0.343</td>
+<td class="dec off">保持threshold</td>
+<td>+0.920<br><span class="sub">25笔</span></td>
+<td>+0.770<br><span class="sub">29笔</span></td>
+<td class="gain">+0.149</td>
+<td>+0.903<br><span class="sub">29笔</span></td>
+<td class="gain">+0.133</td>
+<td class="sub">ss拦60/ot拦31</td>
+</tr><tr>
+<td class="sym">cu</td><td>沪铜</td><td>有色</td>
+<td>+0.108</td>
+<td class="dec on">启用C门</td>
+<td>+0.692<br><span class="sub">23笔</span></td>
+<td>+0.554<br><span class="sub">22笔</span></td>
+<td class="gain">+0.138</td>
+<td>+0.897<br><span class="sub">19笔</span></td>
+<td class="gain">+0.344</td>
+<td class="sub">ss拦21/ot拦8</td>
+</tr><tr>
+<td class="sym">si</td><td>工业硅</td><td>有色</td>
+<td>-0.704</td>
+<td class="dec off">保持threshold</td>
+<td>-0.753<br><span class="sub">3笔</span></td>
+<td>-0.883<br><span class="sub">6笔</span></td>
+<td class="gain">+0.131</td>
+<td>-0.819<br><span class="sub">4笔</span></td>
+<td class="gain">+0.065</td>
+<td class="sub">ss拦15/ot拦5</td>
+</tr><tr>
+<td class="sym">AP</td><td>苹果</td><td>农产品</td>
+<td>-0.663</td>
+<td class="dec off">保持threshold</td>
+<td>-0.133<br><span class="sub">19笔</span></td>
+<td>-0.149<br><span class="sub">21笔</span></td>
+<td class="gain">+0.017</td>
+<td>-0.294<br><span class="sub">19笔</span></td>
+<td class="loss">-0.145</td>
+<td class="sub">ss拦46/ot拦22</td>
+</tr><tr>
+<td class="sym">cs</td><td>淀粉</td><td>农产品</td>
+<td>+0.122</td>
+<td class="dec on">启用C门</td>
+<td>-0.907<br><span class="sub">8笔</span></td>
+<td>-0.880<br><span class="sub">9笔</span></td>
+<td class="loss">-0.026</td>
+<td>-0.880<br><span class="sub">9笔</span></td>
+<td class="flat">+0.000</td>
+<td class="sub">ss拦5/ot拦2</td>
+</tr><tr>
+<td class="sym">pp</td><td>聚丙烯</td><td>化工</td>
+<td>+0.346</td>
+<td class="dec on">启用C门</td>
+<td>+0.373<br><span class="sub">16笔</span></td>
+<td>+0.434<br><span class="sub">17笔</span></td>
+<td class="loss">-0.061</td>
+<td>+0.368<br><span class="sub">17笔</span></td>
+<td class="loss">-0.066</td>
+<td class="sub">ss拦31/ot拦18</td>
+</tr><tr>
+<td class="sym">ni</td><td>沪镍</td><td>有色</td>
+<td>+0.049</td>
+<td class="dec off">保持threshold</td>
+<td>-0.054<br><span class="sub">33笔</span></td>
+<td>+0.022<br><span class="sub">33笔</span></td>
+<td class="loss">-0.076</td>
+<td>+0.138<br><span class="sub">31笔</span></td>
+<td class="gain">+0.116</td>
+<td class="sub">ss拦95/ot拦37</td>
+</tr><tr>
+<td class="sym">fu</td><td>燃油</td><td>能源</td>
+<td>+0.073</td>
+<td class="dec on">启用C门</td>
+<td>+0.501<br><span class="sub">23笔</span></td>
+<td>+0.614<br><span class="sub">37笔</span></td>
+<td class="loss">-0.113</td>
+<td>+0.388<br><span class="sub">33笔</span></td>
+<td class="loss">-0.226</td>
+<td class="sub">ss拦41/ot拦13</td>
+</tr><tr>
+<td class="sym">TA</td><td>PTA</td><td>化工</td>
+<td>+0.042</td>
+<td class="dec off">保持threshold</td>
+<td>+0.498<br><span class="sub">34笔</span></td>
+<td>+0.632<br><span class="sub">40笔</span></td>
+<td class="loss">-0.134</td>
+<td>+0.827<br><span class="sub">36笔</span></td>
+<td class="gain">+0.196</td>
+<td class="sub">ss拦82/ot拦41</td>
+</tr><tr>
+<td class="sym">zn</td><td>沪锌</td><td>有色</td>
+<td>-0.218</td>
+<td class="dec off">保持threshold</td>
+<td>+0.217<br><span class="sub">10笔</span></td>
+<td>+0.432<br><span class="sub">17笔</span></td>
+<td class="loss">-0.215</td>
+<td>+0.258<br><span class="sub">14笔</span></td>
+<td class="loss">-0.174</td>
+<td class="sub">ss拦18/ot拦10</td>
+</tr><tr>
+<td class="sym">pg</td><td>液化气</td><td>能源</td>
+<td>-0.879</td>
+<td class="dec off">保持threshold</td>
+<td>-0.133<br><span class="sub">9笔</span></td>
+<td>+0.112<br><span class="sub">11笔</span></td>
+<td class="loss">-0.245</td>
+<td>+0.281<br><span class="sub">10笔</span></td>
+<td class="gain">+0.169</td>
+<td class="sub">ss拦25/ot拦14</td>
+</tr><tr>
+<td class="sym">sp</td><td>纸浆</td><td>化工</td>
+<td>+0.030</td>
+<td class="dec off">保持threshold</td>
+<td>+0.157<br><span class="sub">16笔</span></td>
+<td>+0.473<br><span class="sub">18笔</span></td>
+<td class="loss">-0.316</td>
+<td>+0.527<br><span class="sub">16笔</span></td>
+<td class="gain">+0.054</td>
+<td class="sub">ss拦36/ot拦17</td>
+</tr><tr>
+<td class="sym">UR</td><td>尿素</td><td>化工</td>
+<td>+0.138</td>
+<td class="dec on">启用C门</td>
+<td>-0.309<br><span class="sub">24笔</span></td>
+<td>+0.040<br><span class="sub">21笔</span></td>
+<td class="loss">-0.349</td>
+<td>-0.100<br><span class="sub">23笔</span></td>
+<td class="loss">-0.140</td>
+<td class="sub">ss拦54/ot拦21</td>
+</tr><tr>
+<td class="sym">SA</td><td>纯碱</td><td>化工</td>
+<td>+0.388</td>
+<td class="dec off">保持threshold</td>
+<td>+0.835<br><span class="sub">5笔</span></td>
+<td>+1.186<br><span class="sub">5笔</span></td>
+<td class="loss">-0.351</td>
+<td>+1.185<br><span class="sub">5笔</span></td>
+<td class="flat">-0.001</td>
+<td class="sub">ss拦7/ot拦3</td>
+</tr><tr>
+<td class="sym">sn</td><td>沪锡</td><td>有色</td>
+<td>-1.188</td>
+<td class="dec off">保持threshold</td>
+<td>+2.021<br><span class="sub">10笔</span></td>
+<td>+2.378<br><span class="sub">6笔</span></td>
+<td class="loss">-0.357</td>
+<td>+2.376<br><span class="sub">7笔</span></td>
+<td class="flat">-0.002</td>
+<td class="sub">ss拦27/ot拦4</td>
+</tr><tr>
+<td class="sym">SH</td><td>烧碱</td><td>化工</td>
+<td>-0.001</td>
+<td class="dec off">保持threshold</td>
+<td>+0.953<br><span class="sub">5笔</span></td>
+<td>+1.312<br><span class="sub">6笔</span></td>
+<td class="loss">-0.360</td>
+<td>+1.367<br><span class="sub">5笔</span></td>
+<td class="gain">+0.055</td>
+<td class="sub">ss拦6/ot拦2</td>
+</tr><tr>
+<td class="sym">y</td><td>豆油</td><td>农产品</td>
+<td>+0.140</td>
+<td class="dec on">启用C门</td>
+<td>-0.429<br><span class="sub">12笔</span></td>
+<td>-0.041<br><span class="sub">18笔</span></td>
+<td class="loss">-0.388</td>
+<td>-0.039<br><span class="sub">16笔</span></td>
+<td class="flat">+0.002</td>
+<td class="sub">ss拦18/ot拦11</td>
+</tr><tr>
+<td class="sym">lc</td><td>碳酸锂</td><td>有色</td>
+<td>+0.083</td>
+<td class="dec on">启用C门</td>
+<td>+1.028<br><span class="sub">15笔</span></td>
+<td>+1.431<br><span class="sub">16笔</span></td>
+<td class="loss">-0.403</td>
+<td>+0.931<br><span class="sub">16笔</span></td>
+<td class="loss">-0.500</td>
+<td class="sub">ss拦40/ot拦19</td>
+</tr><tr>
+<td class="sym">PK</td><td>花生</td><td>农产品</td>
+<td>+0.022</td>
+<td class="dec off">保持threshold</td>
+<td>-0.373<br><span class="sub">14笔</span></td>
+<td>+0.076<br><span class="sub">16笔</span></td>
+<td class="loss">-0.449</td>
+<td>+0.397<br><span class="sub">15笔</span></td>
+<td class="gain">+0.321</td>
+<td class="sub">ss拦31/ot拦11</td>
+</tr><tr>
+<td class="sym">lh</td><td>生猪</td><td>农产品</td>
+<td>-0.215</td>
+<td class="dec off">保持threshold</td>
+<td>+0.601<br><span class="sub">11笔</span></td>
+<td>+1.125<br><span class="sub">11笔</span></td>
+<td class="loss">-0.524</td>
+<td>+0.466<br><span class="sub">12笔</span></td>
+<td class="loss">-0.659</td>
+<td class="sub">ss拦13/ot拦6</td>
+</tr><tr>
+<td class="sym">SR</td><td>白糖</td><td>农产品</td>
+<td>+0.108</td>
+<td class="dec on">启用C门</td>
+<td>+0.035<br><span class="sub">10笔</span></td>
+<td>+0.590<br><span class="sub">14笔</span></td>
+<td class="loss">-0.556</td>
+<td>+0.515<br><span class="sub">13笔</span></td>
+<td class="loss">-0.075</td>
+<td class="sub">ss拦11/ot拦3</td>
+</tr><tr>
+<td class="sym">ss</td><td>不锈钢</td><td>黑系</td>
+<td>+0.287</td>
+<td class="dec on">启用C门</td>
+<td>-0.592<br><span class="sub">12笔</span></td>
+<td>+0.141<br><span class="sub">15笔</span></td>
+<td class="loss">-0.733</td>
+<td>+0.225<br><span class="sub">14笔</span></td>
+<td class="gain">+0.084</td>
+<td class="sub">ss拦26/ot拦12</td>
+</tr><tr>
+<td class="sym">PX</td><td>对二甲苯</td><td>化工</td>
+<td>+0.051</td>
+<td class="dec off">保持threshold</td>
+<td>+2.406<br><span class="sub">3笔</span></td>
+<td>+4.396<br><span class="sub">3笔</span></td>
+<td class="loss">-1.989</td>
+<td>+3.039<br><span class="sub">4笔</span></td>
+<td class="loss">-1.357</td>
+<td class="sub">ss拦19/ot拦7</td>
+</tr></tbody></table>
+<div class="sub">红=增益 / 绿=有损。OOS_ss=启用 same_sign 门；OOS_base=永远 threshold；OOS_ot=oppose 门。拦单数=该模式在 IS+OOS 全样本拦下的信号数。</div>
+
+<h2>三、结论</h2>
+<div class="note">
+1. <b>门能否让 C 真正起作用</b>：取决于 OOS 相对基线是否稳定增益。见上表 Δss/Δot 与各品种增益/有损计数。<br>
+2. <b>护栏防过拟合</b>：IS 决定、OOS 仅验证；仅 15 个品种被放行启用 same_sign 门。<br>
+3. <b>生产建议</b>：若 same_sign / oppose 的 OOS 均值 Δ 为负或增益≪有损（二项p不显著），则门不值得全市场部署，维持 threshold（现状）；若某品种 IS+OOS 双优可单独启用。<br>
+4. <b>结论判据</b>：门是否有意义 = 门可用总体(有 kline C)上 OOS 均值 Δ 为正 <b>且</b> 二项双尾 p&lt;0.05（增益品种占比显著&gt;50%）。仅 6 样本时易过拟合，现已扩到 41 个品种大样本复核。
+</div>
+</div></body></html>
