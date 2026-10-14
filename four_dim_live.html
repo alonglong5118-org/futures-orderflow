@@ -6809,7 +6809,7 @@ function switchTab(name){
     if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
     if(typeof refreshMetrics==='function') refreshMetrics();
   }
-  if(name==='paper'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
+  if(name==='paper' || name==='execution'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
   if(name==='trade'){
@@ -8816,6 +8816,13 @@ const _T = _IS_MOBILE
 // 1. 账户+持仓表格（3秒 —— 行情波动秒级同步）
 setTimeout(() => { if(!_userActionInProgress) refreshAccount(); }, 500);
 setInterval(() => { if(!_userActionInProgress && !_refreshBusy) refreshAccount(); }, _T.acct);
+
+// 1.5 模拟盘沙盒（pane-paper）周期刷新。
+// 2026-10-14 修复：switchTab 的按需刷新钩子只认 pane 名 'paper'，但 UI 无独立
+// 「模拟盘」tab（pane 藏在 execution 组内），钩子永不触发 → 打开「账户交易」tab
+// 时沙盒永远显示占位符。此处补全局轮询兜底（_smartFetch 对 /api/paper 有 30s 缓存）。
+setTimeout(() => { if(!_userActionInProgress && typeof refreshPaper==='function') refreshPaper(); }, 900);
+setInterval(() => { if(!_userActionInProgress && !_refreshBusy && typeof refreshPaper==='function') refreshPaper(); }, _T.acct);
 
 // 2. 信号面板（10秒）
 setTimeout(() => { if(!_userActionInProgress) refresh(); }, 1000);
