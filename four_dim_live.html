@@ -2943,6 +2943,8 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
       <div class="pane-status">
         <div class="kpi st-info kpi-focus"><b id="pp-eq" class="mv">—</b><i>虚拟权益</i></div>
         <div class="kpi st-info"><b id="pp-cash" class="mv">—</b><i>可用资金</i></div>
+        <div class="kpi st-info"><b id="pp-margin" class="mv">—</b><i>持仓保证金</i></div>
+        <div class="kpi st-info"><b id="pp-use" class="mv">—</b><i>资金使用率</i></div>
         <div class="kpi st-info"><b id="pp-real" class="mv">—</b><i>盯市收益</i></div>
         <div class="kpi st-info"><b id="pp-mtm" class="mv">—</b><i>浮动盈亏</i></div>
       </div>
@@ -9560,7 +9562,9 @@ async function refreshPaper(){
     const d=await (await _smartFetch('/api/paper')).json();
     if(!d.ok){ box.innerHTML='<div class="stamp">加载失败</div>'; return; }
     document.getElementById('pp-eq').textContent=d.equity.toFixed(0);
-    document.getElementById('pp-cash').textContent=d.cash.toFixed(0);
+    document.getElementById('pp-cash').textContent=(d.available!=null?d.available:d.cash).toFixed(0);
+    const mg=document.getElementById('pp-margin'); if(mg) mg.textContent=(d.margin||0).toFixed(0);
+    const ur=document.getElementById('pp-use'); if(ur) ur.textContent=(d.use_rate||0).toFixed(2)+'%';
     const rp=document.getElementById('pp-real'); rp.textContent=(d.realized>=0?'+':'')+d.realized.toFixed(0); rp.style.color=d.realized>=0?'var(--red)':'var(--green)';
     const mp=document.getElementById('pp-mtm'); mp.textContent=(d.mtm>=0?'+':'')+d.mtm.toFixed(0); mp.style.color=d.mtm>=0?'var(--red)':'var(--green)';
     const pos=d.positions||{}; const keys=Object.keys(pos);
@@ -9573,6 +9577,8 @@ async function refreshPaper(){
           <b>${SYM_META[s]?SYM_META[s].name:s} <span class="ccode">${cc(s)}</span></b>
           <span style="color:${col}">${p.direction} ${p.lots}手</span>
           <span style="opacity:.8">均价 ${p.avg}</span>
+          <span style="opacity:.8">现价 ${p.cur!=null?p.cur:'—'}</span>
+          <span style="color:${(p.pnl||0)>=0?'var(--red)':'var(--green)'}">${p.pnl!=null?((p.pnl>=0?'+':'')+p.pnl.toFixed(0)):'—'}</span>
           <div style="display:flex;gap:4px">
             <button class="green" onclick="ppClose('${s}')">平</button>
             <button class="amber" onclick="toggleKline('${s}')" id="btn-${kid}" style="padding:2px 8px;font-size:11px">📈</button>
