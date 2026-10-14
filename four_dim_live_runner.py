@@ -11109,16 +11109,20 @@ def start_dashboard(state):
                         if _cur_acc == "live":
                             snap["ctp_connected"] = False
                             snap["ctp_balance"] = None
+                            snap["datasource"] = "manual"
                         else:
-                            _ctp_acc = am.get_account()
+                            _ctp_acc = am.get_account(prices=prices)
                             snap["ctp_connected"] = _ctp_acc is not None
                             if _ctp_acc:
                                 snap["ctp_balance"] = _ctp_acc.get("balance", 0)
+                                snap["datasource"] = _ctp_acc.get("backend", "ctp")
                             else:
                                 snap["ctp_balance"] = None
+                                snap["datasource"] = "manual"
                     except Exception:
                         snap["ctp_connected"] = False
                         snap["ctp_balance"] = None
+                        snap["datasource"] = "manual"
                     # 行情健康指示
                     snap["feed_status"] = "正常" if FEED_AVAILABLE else "离线"
                     snap["feed_last"] = (

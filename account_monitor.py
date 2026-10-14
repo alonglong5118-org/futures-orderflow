@@ -116,6 +116,8 @@ def get_account():
         return _get_tqsdk_account(cfg)
     if backend in ("ctp", "snapshot"):
         return _get_snapshot_account(cfg)
+    if backend == "sandbox":
+        return _get_sandbox_account(cfg, prices)
     # 其他后端可在此扩展
     return None
 
@@ -415,6 +417,166 @@ def _get_snapshot_account(cfg):
         _last_account = snap_out
         _last_fetch = time.time()
     return snap_out
+
+
+def _get_sandbox_account(cfg, prices=None):
+    """本地模拟盘沙盒后端（根治「手动记账模式」警告，零外部依赖、不碰任何券商实盘）。
+    读 paper_account.json —— 即 F8 沙盒，也就是用户在券商模拟终端操作的「模拟盘」。
+    该文件由 /api/paper 实时维护，所以面板账户区会随沙盒自动刷新，无需再手动喂截图。
+    同时把沙盒镜像进 account_state（保留既有止损/目标位），作为账户区真相源。"""
+    global _last_account, _last_fetch
+    try:
+        paper_path = os.path.join(HERE, cfg.get("sandbox_path", "paper_account.json"))
+        if not os.path.exists(paper_path):
+            print(f"[账户监控] 沙盒文件 {paper_path} 不存在（维持手动记账）")
+            return None
+        d = json.load(open(paper_path, encoding="utf-8"))
+        cash = float(d.get("cash", 0) or 0)
+        realized = float(d.get("realized", 0) or 0)
+        # 合约乘数（ru=10）
+        mult_map = {}
+        try:
+            _tc = json.load(open(os.path.join(HERE, "trade_config.json"), encoding="utf-8"))
+            for _s, _v in _tc.get("contract_specs", {}).items():
+                mult_map[_s.lower()] = float(_v.get("multiplier", 10) or 10)
+        except Exception:
+            pass
+        positions = []
+        mtm_total = 0.0
+        margin_total = 0.0
+        for sym, p in (d.get("positions") or {}).items():
+            try:
+                lots = int(p.get("lots", 0) or 0)
+                if lots <= 0:
+                    continue
+                avg = float(p.get("avg", 0) or 0)
+                direction = p.get("direction", "多")
+                margin = float(p.get("margin", 0) or 0)
+                margin_total += margin
+                mult = mult_map.get(sym.lower(), 10)
+                price = (prices or {}).get(sym)
+                if price is None:
+                    price = p.get("mark")  # 价真空期（收盘后/开盘前）回落标记价
+                if price is None:
+                    price = avg
+                if direction == "空":
+                    pl = (avg - price) * lots * mult
+                else:
+                    pl = (price - avg) * lots * mult
+                mtm_total += pl
+                positions.append(
+                    {
+                        "symbol": sym,
+                        "pos": lots,
+                        "open_price": round(avg, 2),
+                        "direction": direction,
+                        "margin": round(margin, 2),
+                        "profit": round(pl, 2),
+                    }
+                )
+            except Exception:
+                continue
+        equity = round(cash + realized + mtm_total, 2)
+        avail = round(equity - margin_total, 2)
+        snap = {
+            "balance": equity,
+            "available": avail,
+            "profit": round(mtm_total, 2),
+            "positions": positions,
+            "updated": time.strftime("%H:%M:%S"),
+            "backend": "sandbox",
+        }
+        # 镜像进 account_state，作为账户区真相源（保留止损/目标位）；内容不变则不写盘
+        _sync_sandbox_to_account_state(d, positions, equity, avail, mtm_total, margin_total, prices)
+        with _lock:
+            _last_account = snap
+            _last_fetch = time.time()
+        return snap
+    except Exception as e:
+        print(f"[账户监控] 沙盒读取失败: {repr(e)[:120]}（维持手动记账）")
+        return None
+
+
+def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin, prices):
+    """把沙盒（模拟盘）镜像进 account_state.json，面板账户区即显示模拟盘数据。
+    设计要点（针对 2026-09-12 账户混淆事故）：
+      · 仅当内容哈希变化才写盘，避免每次轮询空写；
+      · 既有止损/目标位(stop/t1/t2/tp_targets)一律保留，不覆盖用户手动风控设定；
+      · 沙盒就是模拟盘真相源，不存在「模拟盘快照误标实盘」的错位。"""
+    try:
+        import account_tracker as at
+
+        st = at.load_state()
+        new_hash = (
+            round(equity, 0),
+            round(mtm, 0),
+            tuple(sorted((p["symbol"], p["pos"], round(p["open_price"], 0)) for p in positions)),
+        )
+        if st.get("_sandbox_hash") == new_hash:
+            return
+        prev_positions = st.get("positions") or {}
+        snap_positions = []
+        new_positions = {}
+        for p in positions:
+            sym = p["symbol"]
+            mult = 10
+            try:
+                _tc = json.load(open(os.path.join(HERE, "trade_config.json"), encoding="utf-8"))
+                mult = float(_tc.get("contract_specs", {}).get(sym.upper(), {}).get("multiplier", 10) or 10)
+            except Exception:
+                pass
+            # 价格优先级：实时价 → 标记价（paper 持仓 mark 字段）→ 开仓均价
+            _mark = (prices or {}).get(sym) or prev_positions.get(sym, {}).get("mark") or p.get("mark") or p["open_price"]
+            price = round(_mark, 2)
+            float_pnl = round((price - p["open_price"]) * p["pos"] * mult, 2)
+            margin_pct = round(p["margin"] / equity * 100, 2) if equity else 0
+            prev = prev_positions.get(sym, {})
+            contract = prev.get("contract") or (sym.upper() + "2701")
+            snap_positions.append(
+                {
+                    "symbol": sym,
+                    "name": sym.upper(),
+                    "contract": contract,
+                    "direction": p["direction"],
+                    "lots": p["pos"],
+                    "avg": p["open_price"],
+                    "price": price,
+                    "float_pnl": float_pnl,
+                    "margin_used": p["margin"],
+                    "margin_pct": margin_pct,
+                }
+            )
+            # 保留既有风控字段
+            new_positions[sym] = dict(
+                prev,
+                direction=p["direction"],
+                lots=p["pos"],
+                avg=p["open_price"],
+                contract=contract,
+            )
+        st["snapshot_mode"] = True
+        st["snapshot_until"] = "2099-12-31 23:59:59"
+        st["snapshot"] = {
+            "equity": equity,
+            "available": avail,
+            "total_margin": round(margin, 2),
+            "float_total": round(mtm, 2),
+            "mtm_pnl": round(mtm, 2),
+            "usage_rate": round(margin / equity * 100, 2) if equity else 0,
+            "positions": snap_positions,
+        }
+        st["positions"] = new_positions
+        st["realized_pnl"] = float(paper.get("realized", 0) or 0)
+        st["realized_pnl_at_sync"] = st["realized_pnl"]
+        st["float_at_sync"] = round(mtm, 2)
+        st["margin_occupied"] = round(margin, 2)
+        st["available"] = avail
+        st["equity"] = equity
+        st["_sandbox_hash"] = new_hash
+        st["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        at.save_state(st)
+    except Exception as e:
+        print(f"[账户监控] 沙盒→账户态同步跳过: {repr(e)[:120]}")
 
 
 def get_last():

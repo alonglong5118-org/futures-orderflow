@@ -7556,8 +7556,11 @@ async function refreshAccount(force){
     // 数据源状态显示
     const dsEl = document.getElementById('a-datasource');
     if(dsEl){
-      const ctpConnected = a.ctp_connected || false;
-      if(ctpConnected){
+      const ds = a.datasource || (a.ctp_connected ? 'ctp' : 'manual');
+      if(ds === 'sandbox'){
+        dsEl.textContent = '✓ 模拟盘沙盒已连接 · 实时数据';
+        dsEl.style.color = 'var(--green)';
+      } else if(a.ctp_connected){
         dsEl.textContent = '✓ CTP已连接 · 实时真实数据';
         dsEl.style.color = 'var(--green)';
       } else {
@@ -7565,12 +7568,16 @@ async function refreshAccount(force){
         dsEl.style.color = 'var(--amber)';
       }
     }
-    // CTP真实余额对比
+    // CTP真实余额对比（沙盒模式显示模拟盘余额）
     const ctpEl = document.getElementById('a-ctp-balance');
     if(ctpEl){
+      const ds = a.datasource || (a.ctp_connected ? 'ctp' : 'manual');
       const ctpBal = a.ctp_balance;
       const sysEq = Number(a.equity || 0);
-      if(ctpBal && sysEq > 0){
+      if(ds === 'sandbox'){
+        ctpEl.textContent = ctpBal ? `模拟盘沙盒 ${fmt(ctpBal, 0)}` : '模拟盘沙盒 未同步';
+        ctpEl.style.color = 'var(--green)';
+      } else if(ctpBal && sysEq > 0){
         const diff = Number(ctpBal) - sysEq;
         const diffStr = (diff >= 0 ? '+' : '') + fmt(diff, 0);
         ctpEl.textContent = `CTP ${fmt(ctpBal, 0)} · 差异 ${diffStr}`;
