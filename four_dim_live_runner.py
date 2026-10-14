@@ -14294,13 +14294,42 @@ def paper_state():
     d = _paper_load()
     mtm = _paper_mtm(d)
     eq = round(d["cash"] + d["realized"] + mtm, 2)
+    # 持仓占用保证金（逐仓合计；来自券商终端同步或手工标注，平仓自动释放）
+    margin = 0.0
+    for p in (d.get("positions") or {}).values():
+        try:
+            margin += float(p.get("margin") or 0)
+        except (TypeError, ValueError):
+            pass
+    margin = round(margin, 2)
+    avail = round(eq - margin, 2) if margin > 0 else round(d["cash"], 2)
+    use_rate = round(margin / eq * 100, 2) if (eq and eq > 0 and margin > 0) else 0.0
+    # 逐仓现价/浮动盈亏（供前端持仓行直接展示）
+    pos_out = {}
+    for sym, p in (d.get("positions") or {}).items():
+        q = dict(p)
+        try:
+            px = FEED.price(sym) if FEED else None
+        except Exception:
+            px = None
+        if px is None:
+            px = p.get("avg")
+        if px is not None:
+            mult = _paper_mult(sym)
+            sign = 1 if p.get("direction") == "多" else -1
+            q["cur"] = px
+            q["pnl"] = round((px - p["avg"]) * mult * p["lots"] * sign, 2)
+        pos_out[sym] = q
     return {
         "ok": True,
         "cash": round(d["cash"], 2),
         "realized": round(d["realized"], 2),
         "mtm": mtm,
         "equity": eq,
-        "positions": d.get("positions", {}),
+        "margin": margin,
+        "available": avail,
+        "use_rate": use_rate,
+        "positions": pos_out,
         "trades": d.get("trades", []),
         "updated": d.get("updated", ""),
     }
@@ -14363,7 +14392,13 @@ def paper_close(symbol, price, lots=None, reason="手动"):
     if close_lots >= pos["lots"]:
         del d["positions"][symbol]
     else:
-        pos["lots"] -= close_lots
+        remain = pos["lots"] - close_lots
+        if pos.get("margin"):
+            try:
+                pos["margin"] = round(float(pos["margin"]) * remain / pos["lots"], 2)
+            except (TypeError, ValueError):
+                pass
+        pos["lots"] = remain
     d["trades"].append(
         {
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
