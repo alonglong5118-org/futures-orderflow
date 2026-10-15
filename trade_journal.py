@@ -576,6 +576,14 @@ def heal_fees():
         if t.get("exit_price") is None:
             continue  # 未平仓（exit_price 为 None）：保持 pnl=null，不动
         # 注：已平仓但 pnl 为 None（如导入抹除）属异常态，须下方重算自愈，不得跳过
+        # ── 2026-10-15 口径锁定 ──────────────────────────────────────────────
+        # 若该笔显式标记 pnl_locked（如用户按券商截图对齐账户已实现盈亏），
+        # 则跳过重算：无条件按 (exit-entry)*mult*lots 回算会把对齐后的 pnl
+        # 每30 秒改回"仅按本笔成交"的算术值，导致
+        # 「成交记录器累计盈亏」与「账户已实现盈亏」两处口径互相矛盾
+        # （实测差 12,049 元）。客观实算值保留在 *_actual 字段供追溯。
+        if t.get("pnl_locked") and t.get("pnl") is not None:
+            continue
         sym = t.get("symbol")
         if sym not in _MULTIPLIERS:
             continue

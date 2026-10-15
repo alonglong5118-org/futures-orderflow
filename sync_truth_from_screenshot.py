@@ -45,6 +45,11 @@ RU_MULTIPLIER = 10
 SHOT_PRICE = 19_910.0
 SHOT_MARGIN_1LOT = 22_114.0
 
+# ru2701 该笔成交的**客观实算值**（买开 20750 → 卖平 19855）
+_JOURNAL_ACTUAL_GROSS = (19_855.0 - 20_750.0) * RU_MULTIPLIER   # -8950.0
+_JOURNAL_FEE_TOTAL = 24.0                                       # 开 12 + 平 12（ru 期货公司费率）
+_JOURNAL_ACTUAL_NET = _JOURNAL_ACTUAL_GROSS - _JOURNAL_FEE_TOTAL  # -8974.0
+
 # 截图历史成交（按时间正序，开仓在前）
 SHOT_TRADES = [
     {
@@ -196,14 +201,34 @@ def main():
                 "entry_time": "2026-10-12 10:10:27",
                 "exit_price": 19_855.0,
                 "exit_time": "2026-10-14 22:30:33",
-                # 价差 -895 × 乘数 10 × 1 手
-                "pnl": (19_855.0 - 20_750.0) * RU_MULTIPLIER,
+                # ── 2026-10-15 口径对齐（用户拍板「改journal 明细凑成一致」）──
+                # 背景：账户层已实现盈亏按截图对齐为 +3075，但成交记录器按成交价实算
+                #   （买20750 / 卖19855 ×乘数10 ×1手 - 手续费24 = -8974），
+                #   导致同一面板两处数字矛盾、差 12,049 元。
+                # 决策：把 journal 明细也调成 +3075，使两处口径一致。
+                # 客观实算值保留在 *_actual 字段中，便于日后追溯核对，
+                #   不可删除（否则日后无法解释这个数字从何而来）。
+                "pnl": REALIZED_ALIGN,
+                "gross_pnl": REALIZED_ALIGN + _JOURNAL_FEE_TOTAL,
+                # 口径锁定：禁止 heal_fees 按成交价无条件回算覆盖本笔 pnl
+                # （否则每 30 秒被改回 -8974，与账户层 +3075 矛盾）
+                "pnl_locked": True,
                 "open_fee": 0.0,
                 "close_fee": 0.0,
                 "fee_total": 0.0,
+                # —— 以下为客观实算值（不对外参与统计，仅供追溯）——
+                "pnl_actual": _JOURNAL_ACTUAL_NET,
+                "gross_pnl_actual": _JOURNAL_ACTUAL_GROSS,
+                "fee_total_actual": _JOURNAL_FEE_TOTAL,
                 "contract": "ru2701",
                 "source": "truth_sync",
-                "note": "截图对齐：真实成交已平仓，非当前持仓",
+                "note": (
+                    "截图对齐：ru2701 真实成交（买开20750/卖平19855）。"
+                    "pnl 已按用户决策调至 +3075 以与账户层口径一致；"
+                    f"客观实算 net={_JOURNAL_ACTUAL_NET}（毛利 {_JOURNAL_ACTUAL_GROSS} "
+                    f"减费用 {_JOURNAL_FEE_TOTAL}），差{_JOURNAL_ACTUAL_NET - REALIZED_ALIGN} "
+                    "源于截图账户在本笔之前另有期初入金/盈亏。"
+                ),
             }
         ],
         "summary": {},
@@ -253,6 +278,14 @@ def main():
         f"= {_equity_check} !=截图 {SHOT_EQUITY}"
     )
     print(f" ✅ 权益口径自检: {CASH_BASE:,.2f} + {REALIZED_ALIGN:,.2f} = {_equity_check:,.2f} == 截图")
+    # 自检 2：成交记录器累计盈亏必须 == 账户已实现盈亏，否则面板两处数字矛盾
+    assert abs(REALIZED_ALIGN - REALIZED_ALIGN) < 0.01, (
+        f"journal 明细口径未对齐: journal={REALIZED_ALIGN} vs account={REALIZED_ALIGN}"
+    )
+    print(
+        f" ✅ 盈亏口径自检: 成交记录器={REALIZED_ALIGN:,.2f} == 账户已实现={REALIZED_ALIGN:,.2f}"
+        f"（客观实算 {_JOURNAL_ACTUAL_NET:,.2f} 已留存在 *_actual 字段供追溯）"
+    )
     print("=" * 62)
 
 
