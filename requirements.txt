@@ -10,8 +10,16 @@ plotly>=5.0
 tqdm==4.69.0
 
 # 可选数据源（按需安装，CI 不装）
-# akshare>=1.10
 # tqsdk>=2.0
+
+# akshare —— 不是可选：以下脚本顶层 `import akshare as ak`，缺包直接 ModuleNotFoundError
+#   refresh_main_contracts.py（主力合约刷新的唯一真相源，launchd 每 2 小时跑）
+#   collect_spread.py / collect_all_spread.py / build_continuous_spread.py
+#   probe_coverage.py / probe_far_month.py / reproduce_spread_edge.py（价差回测）
+# 2026-10-15 已装入项目 .venv（uv 创建，无 pip 模块，装包须用 uv）：
+#   VIRTUAL_ENV=<fourd_run>/.venv uv pip install akshare -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 官方源 pypi.org 在本机会长时间挂起（实测 14 分钟无进展），清华镜像 5 秒完成，务必带 -i。
+akshare==1.19.1
 
 # 遗传算法优化（可选）
 # deap>=1.3
