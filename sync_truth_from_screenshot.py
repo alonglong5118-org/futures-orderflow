@@ -288,7 +288,53 @@ def main():
     }
     _write("account_state.json", acct)
 
+    # ── 5. drawdown_state.json ──回撤基线一并重基线（2026-10-16 补）──
+    # 背景：本工具此前只重置 4 个账户类文件，漏了回撤基线。
+    # 后果：账户已被清成 1003075，而 drawdown_state.json 的生命周期峰值仍停留在
+    # 1016820（那是「引擎自动开 3 笔仓→浮盈→又清掉」留下的虚高值），
+    # 于是面板显示「回撤 1.35%」——一笔账户根本没亏过的幽灵回撤，
+    # 还会让降险档位比真实基线早 1.35% 触发。
+    # 决策（用户 2026-10-16 拍板）：回撤基线也纳入截图真相源。
+    _dd_path = os.path.join(HERE, "drawdown_state.json")
+    _dd = {}
+    if os.path.exists(_dd_path):
+        try:
+            with open(_dd_path, encoding="utf-8") as f:
+                _dd = json.load(f) or {}
+        except Exception:
+            _dd = {}
+    _dd.update({
+        "peak_equity": SHOT_EQUITY,
+        "dd_pct": 0.0,
+        "tier": 0,
+        "scale": 1.0,
+        "intraday_peak": SHOT_EQUITY,
+        "intraday_peak_date": time.strftime("%Y-%m-%d"),
+        "intraday_dd_pct": 0.0,
+        "opening_equity": SHOT_EQUITY,
+        "updated": now,
+        "_truth_source": "用户截图 2026-10-15 22:11 (账户_sell0Y2K)",
+    })
+    _write("drawdown_state.json", _dd)
+
+    # ── 6. risk_state.json ──峰值同步（只改峰值，其余风控字段原样保留）──
+    # 注意：本文件 mtime 停在 2026-09-11（疑似已成 legacy，运行时峰值走内存/别处），
+    # 因此这里只把陈旧的 peak_equity 拉齐，不动 state/halted/consec_losses 等字段，
+    # 避免误伤正在生效的风控状态。
+    _rs_path = os.path.join(HERE, "risk_state.json")
+    if os.path.exists(_rs_path):
+        try:
+            with open(_rs_path, encoding="utf-8") as f:
+                _rs = json.load(f) or {}
+        except Exception:
+            _rs = {}
+        if isinstance(_rs, dict):
+            _rs["peak_equity"] = SHOT_EQUITY
+            _rs["updated"] = now
+            _write("risk_state.json", _rs)
+
     print("=" * 62)
+    print(f" 回撤基线    = 峰值 {SHOT_EQUITY:,.2f} · 回撤 0.00% · tier0/1.0x (重基线)")
     print(f" 权益        = {SHOT_EQUITY:,.2f}   (截图一致)")
     print(f" 可用资金    = {SHOT_AVAILABLE:,.2f}   (截图一致)")
     print(f" 资金使用率  = 0.00%      (截图一致)")
