@@ -286,6 +286,16 @@ class RiskStateMachine:
         loss_factor = max(LOSS_FLOOR, LOSS_DECAY**self.consec_losses)
         return round(base * loss_factor, 3)
 
+    # 峰值权益重基线容差：|equity - peak| / peak 超过此比例，视为「账户被外部重置」
+    # （如人工按券商截图对齐账户、重新初始化模拟盘），此时旧峰值已失效，
+    # 必须重新基线，否则 peak_equity 会永久停留在旧值，
+    # 导致 effective_daily_loss_cap 一直按旧权益算日亏封顶（实测踩中：
+    # 账户被重置到 1,003,075，peak 仍是从risk_state.json 恢复的 1,018,785
+    # → 封顶显示 20,375.70 而非 20,061.50）。
+    # 取 1%：实测盘中权益波动远小于 1%，而人工重置/出入金通常在 0.5% 以上，
+    # 1% 既能捕获真实重置，又不会被正常波动误触发。
+    PEAK_REBASE_TOL = 0.01
+
     def update(self, rg, equity=None):
         with self._lock:
             now = time.time()
@@ -295,6 +305,19 @@ class RiskStateMachine:
             if equity:
                 if self.peak_equity is None or equity > self.peak_equity:
                     self.peak_equity = equity
+                else:
+                    # 权益显著低于峰值 → 疑似外部重置/ 出金，重新基线
+                    try:
+                        _pk = float(self.peak_equity or 0)
+                        _eq = float(equity or 0)
+                        if _pk > 0 and _eq > 0 and abs(_pk - _eq) / _pk > self.PEAK_REBASE_TOL:
+                            print(
+                                f"[risk_fsm] 峰值权益重基线: {_pk:.0f} → {_eq:.0f}"
+                                f"（偏离 {abs(_pk - _eq) / _pk:.1%} > {self.PEAK_REBASE_TOL:.0%}，判定账户被重置）"
+                            )
+                            self.peak_equity = _eq
+                    except Exception:
+                        pass
             if status == "LOCK":
                 if self.state != self.LOCKED:
                     self.state = self.LOCKED

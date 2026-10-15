@@ -17,6 +17,77 @@ T 评分合成 — 纯函数工具
 from typing import Dict, Tuple
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  2026-10-15 补齐：z-score 与 T 分数归一化（此前仅被测试引用、未实现）
+#  背景：tests/test_edge_cases_coverage.py 的 TestTScoreEdgeCases 长期失败，
+#  报 ImportError: cannot import name 'z_score_list' / 'normalize_to_t_score'。
+#  核实结论：这两个函数在整个代码库从未存在过（git log -S 无任何记录），
+#  是测试先写、函数漏实现。边界用例（单值/空列表/全等值）本身是有价值的防御，
+#  故补实现而非删测试。
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def z_score_list(values):
+    """把序列转成 z-score，并返回 (scores, mean, std)。
+
+    口径：**总体标准差**（除以 N，非 N-1），与 tests 期望一致
+    （[-2,-1,0,1,2] → std = sqrt(2)）。
+
+    边界处理（全部 fail-safe，绝不抛异常、绝不返回 NaN/inf）：
+      - 空序列      → ([], 0.0, 0.0)
+      - 单值        → ([0.0], 该值, 0.0)
+      - 全部相同    → scores 全 0.0，std = 0.0（除零保护）
+      - 含非数值    → 该位按 0 参与计算，不让脏数据污染整体
+    """
+    import math
+
+    vals = []
+    for v in list(values or []):
+        try:
+            fv = float(v)
+            if math.isnan(fv) or math.isinf(fv):
+                fv = 0.0
+        except (TypeError, ValueError):
+            fv = 0.0
+        vals.append(fv)
+
+    if not vals:
+        return [], 0.0, 0.0
+
+    n = len(vals)
+    mean = sum(vals) / n
+    var = sum((v - mean) ** 2 for v in vals) / n  # 总体方差
+    std = math.sqrt(var) if var > 0 else 0.0
+
+    if std == 0.0:
+        # 标准差为 0 → 全部记0，避免除零产生 NaN
+        return [0.0] * n, mean, 0.0
+    return [(v - mean) / std for v in vals], mean, std
+
+
+def normalize_to_t_score(z_score, clip=3.0):
+    """z-score → T 分数（50 ± 10）。
+
+    映射：z=0 → 50，z=1 → 60，z=-1 → 40（即 T = 50 + z*10）。
+    clip：z 的截断阈值（默认 ±3），超出按 ±3 计算，
+          故返回恒在 [20, 80] 区间内，绝不出现 NaN / 无穷大。
+    """
+    try:
+        z = float(z_score)
+        if z != z or z in (float("inf"), float("-inf")):  # NaN / inf
+            z = 0.0
+    except (TypeError, ValueError):
+        z = 0.0
+    try:
+        c = float(clip)
+        if c <= 0:
+            c = 3.0
+    except (TypeError, ValueError):
+        c = 3.0
+    z = max(-c, min(c, z))
+    return 50.0 + z * 10.0
+
+
 def cluster_vote_and_consensus(
     sig: Dict[str, float],
     clusters: Dict[str, list],

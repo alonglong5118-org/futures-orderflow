@@ -34,8 +34,18 @@ def find_swings(highs, lows, closes, opens=None, deviation=0.004, depth=3, gap_p
             if abs(opens[i] - closes[i - 1]) / closes[i - 1] > gap_pct:
                 last = None
         h, l = highs[i], lows[i]
-        is_high = all(h >= highs[j] for j in range(i - depth, i + depth + 1))
-        is_low = all(l <= lows[j] for j in range(i - depth, i + depth + 1))
+        # ── 2026-10-15 修：横盘/平价不再伪造摆动点 ────────────────────────
+        # 缺陷：原判定用 `>=` / `<=` 做「严格大于窗口内所有点」的比较，
+        #   当 highs/lows/closes 全部相等（完全横盘）时，每个 i 都满足 is_high，
+        #   而 last is None 分支无条件 append ⇒ 平盘被识别出一个假 swing high。
+        #   实测：find_swings([100]*20, [100]*20, [100]*20) 返回 [(2,'high',100.0)]，
+        #   该假摆动点会继续污染 latest_abc 的 a-b-c 形态判断（虚构成交结构）。
+        # 修法：要求窗口内**存在严格更小/更大的点**，即真极值才算摆动；
+        #   平价序列自然不产生任何摆动。
+        _win_h = highs[i - depth:i + depth + 1]
+        _win_l = lows[i - depth:i + depth + 1]
+        is_high = h >= max(_win_h) and _win_h.count(h) < len(_win_h)
+        is_low = l <= min(_win_l) and _win_l.count(l) < len(_win_l)
         if is_high:
             if last is None or (last[0] == "low" and h > last[1] * (1 + deviation)):
                 swings.append((i, "high", h))

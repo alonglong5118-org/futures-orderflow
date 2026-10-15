@@ -334,19 +334,35 @@ class TestRiskSMPeakEquity(unittest.TestCase):
             self.sm.update({"status": "OK", "usage": 0.20, "daily_loss_pct": 0}, equity=100000)
         self.assertEqual(self.sm.peak_equity, 100000)
 
-    def test_peak_equity_only_goes_up(self):
-        """peak_equity 只升不降（ratchet）"""
+    def test_peak_equity_ratchet_with_rebase(self):
+        """peak_equity 棘轮 + 陈旧峰值重基线（2026-10-15 语义变更，用户已拍板）。
+
+        历史语义是「只升不降的纯棘轮」，但实测暴露两个缺陷：
+          1. peak 从 risk_state.json 持久化恢复，跨月陈旧（实测 1,018,785）；
+          2. 账户被人工按券商截图重置后（1,016,820 → 1,003,075），
+             纯棘轮会让 peak 永久停在旧值，
+             effective_daily_loss_cap() 一直按旧权益算日亏封顶
+             （显示 20,336.40，正确值应为 20,061.50，差 274.9 元）。
+
+        新语义：盘中正常波动（偏离 ≤1%）保持棘轮；偏离 >1%（PEAK_REBASE_TOL）
+        判定为账户被外部重置，重新基线到当前权益。
+        """
         with patch("risk_state_machine.time.time", return_value=self._t):
             self.sm.update({"status": "OK", "usage": 0.20}, equity=100000)
         self._t += 1
         with patch("risk_state_machine.time.time", return_value=self._t):
             self.sm.update({"status": "OK", "usage": 0.20}, equity=110000)
         self.assertEqual(self.sm.peak_equity, 110000)
+        # 盘中正常回撤 -0.5%（在 1% 容差内）→ 仍是棘轮，不下降
+        self._t += 1
+        with patch("risk_state_machine.time.time", return_value=self._t):
+            self.sm.update({"status": "OK", "usage": 0.20}, equity=109400)
+        self.assertEqual(self.sm.peak_equity, 110000)
+        # 账户被重置（-18% >> 1%）→ 必须重新基线，否则封顶永远按旧权益算
         self._t += 1
         with patch("risk_state_machine.time.time", return_value=self._t):
             self.sm.update({"status": "OK", "usage": 0.20}, equity=90000)
-        # 还是 110000（不下降）
-        self.assertEqual(self.sm.peak_equity, 110000)
+        self.assertEqual(self.sm.peak_equity, 90000)
 
     def test_no_equity_no_change(self):
         """不传 equity → peak_equity 不变"""

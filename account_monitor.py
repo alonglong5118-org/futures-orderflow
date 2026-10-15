@@ -25,6 +25,25 @@ papertrack 评分与状态机**，否则优雅降级为手动记账（不影响�
 用法（runner 后台线程调用）：
   import account_monitor as am
   acc = am.get_account()          # None = 无接口（手动模式）
+
+【白名单过滤 — 防止 auto_sync 污染非交易品种】
+  CTP / TqSdk 可能返回账户里所有品种持仓（含已清仓的历史遗留），
+  auto_sync 只同步 trade_config.json 的 contract_specs 里声明过的品种。
+  这防止了 2026-09-11 遇到的问题：CTP 返回 al/p/ss 等非白名单品种，
+  被错误写入 account_state，导致面板"持仓数"虚高。
+
+【权益 Anchor 保护 — auto_sync 绝不覆盖用户手动值】
+  account_state.equity 是 anchor（用户手动设置或截图同步的"基准权益"）。
+  auto_sync 注释掉了 set_equity() 调用，只做持仓对账：
+    ✅ 开/平/加/减仓 → journal + state 都更新
+    ❌ set_equity()  → 只在用户手动点「同步权益」按钮时才调
+  原因：CTP 快照可能延迟 / 口径不一致（CTP 用盯市权益，account_state 用用户截图权益）。
+  2026-09-11 事故：auto_sync 用 TqSdk 模拟盘余额覆盖了 CTP 实盘 anchor。
+
+【账户隔离】
+  auto_sync(account, prices, account_id='live') 里的 account_id 参数
+  通过 at.set_account(account_id) 切换到目标账户的 state/journal 文件。
+
   if acc:
       am.auto_sync(acc, prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
@@ -236,7 +255,20 @@ def auto_sync(account, prices=None, account_id=None):
 
         # 2) 持仓镜像对账（完整重建：支持加仓/减仓/调仓/反手）
         current = {}  # (sym, direction) -> {lots, price}
+        # ★ 白名单过滤：只同步 contract_specs 里声明过的品种
+        #   防止 CTP/TqSdk 返回的非交易品种（如历史遗留空仓）污染 state
+        _allowed_syms = set()
+        try:
+            _cfg = json.load(open(os.path.join(os.path.dirname(__file__), "trade_config.json")))
+            _allowed_syms = set((_cfg.get("contract_specs") or {}).keys())
+        except Exception:
+            pass
+        if not _allowed_syms:
+            _allowed_syms = None  # 没配置白名单 → 不过滤
         for p in account.get("positions", []):
+            _psym = str(p.get("symbol", ""))
+            if _allowed_syms is not None and _psym.lower() not in {s.lower() for s in _allowed_syms}:
+                continue  # 跳过非白名单品种
             key = (p["symbol"], p["direction"])
             current[key] = {"lots": p["pos"], "price": p["open_price"]}
 
@@ -476,6 +508,51 @@ def _get_sandbox_account(cfg, prices=None):
                 )
             except Exception:
                 continue
+        # ── 2026-10-15：合并「引擎仓」进沙盒镜像 ──────────────────────────────
+        # 背景：paper_trading_engine 只写 paper_trading_state.json，而本函数只读
+        # paper_account.json，两者互不相通 ⇒ 引擎开的仓在面板完全不可见、使用率恒 0.00%
+        # （实测3 腿引擎仓被整体漏掉，铁律「使用率≤45%」形同虚设）。
+        # 在此就地合并（而非事后补写）的原因：_sync_sandbox_to_account_state 每轮都会
+        # 整份覆盖 snapshot，任何"事后补"的写法都会被下一轮冲掉，形成 0→3→0 抖动。
+        # 只补不删：paper_account.json 自己的腿优先，引擎腿仅在其缺席时补入。
+        try:
+            _eng_path = os.path.join(HERE, "paper_trading_state.json")
+            if os.path.exists(_eng_path):
+                with open(_eng_path, encoding="utf-8") as _f:
+                    _epos = (json.load(_f) or {}).get("positions") or {}
+                _have = {str(x.get("symbol")) for x in positions}
+                for _esym, _ep in _epos.items():
+                    if not isinstance(_ep, dict):
+                        continue
+                    _elots = int(_ep.get("lots") or 0)
+                    _eavg = float(_ep.get("entry_price") or _ep.get("price") or 0)
+                    if _elots <= 0 or _eavg <= 0 or str(_esym) in _have:
+                        continue
+                    _emult = mult_map.get(str(_esym).lower(), 10)
+                    _emargin = round(_eavg * _emult * _elots * 0.10, 2)
+                    _edir = _ep.get("direction") or "多"
+                    _eprice = (prices or {}).get(_esym) or _eavg
+                    _epl = (
+                        (_eavg - _eprice) * _elots * _emult
+                        if _edir == "空"
+                        else (_eprice - _eavg) * _elots * _emult
+                    )
+                    margin_total += _emargin
+                    mtm_total += _epl
+                    positions.append(
+                        {
+                            "symbol": _esym,
+                            "pos": _elots,
+                            "open_price": round(_eavg, 2),
+                            "direction": _edir,
+                            "margin": _emargin,
+                            "profit": round(_epl, 2),
+                            "stop": _ep.get("stop_price"),
+                            "source": "engine",
+                        }
+                    )
+        except Exception as e:
+            print(f"[沙盒镜像] 引擎仓合并跳过: {repr(e)[:80]}")
         equity = round(cash + realized + mtm_total, 2)
         avail = round(equity - margin_total, 2)
         snap = {
