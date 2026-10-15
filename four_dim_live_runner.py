@@ -235,6 +235,55 @@ for _blk in (
     _tc_blk = _tc_all.get(_blk)
     if isinstance(_tc_blk, dict):
         _STRAT_CFG[_blk] = {**DEFAULT_CONFIG.get(_blk, {}), **_tc_blk}
+
+# 仓位 sizing 跟随实时权益（2026-10-15 自检 #1）
+# 背景：_STRAT_CFG["account"]["equity"] 是 trade_config.json 里的**静态**快照（当时手填的
+#   100000.0），而账户面板的实时权益来自 account_monitor（沙盒后端读 paper_account.json）
+#   是 100 万级。risk_gate() 用 ac["equity"] 算 1%~2% 风险仓 → 手数预算长期按 10 万算，
+#   权益缩水时（如大幅回撤）也不会自动降杠杆，属于 sizing 与账户状态错配。
+# 修法：每轮 evaluate 前用实时权益刷新该字段；取不到就 fail-open 保留静态值（不因
+#   账户接口异常而降杠杆）。
+# 风险量化（实测，5 品种对比）：因 risk_gate 内 max_lots=2 是硬上限，权益 10 万→100 万时
+#   各品种 N_plan 仅 1→2 手（cu 由 0→2，受最小 1 手兜底影响），并非 10 倍放大，
+#   且仍受铁律「单合约≤2 / 总持仓≤4 / 使用率≤40%」三层硬闸约束。
+_SIZING_EQUITY_STATIC = float(_STRAT_CFG.get("account", {}).get("equity", 0) or 0)
+# 权益上限护栏：实时权益异常膨胀（误读成百万倍/数据源串了）时按此封顶，避免 sizing 失控。
+_SIZING_EQUITY_CAP = 5_000_000.0
+# 权益下限护栏：低于此值视为数据异常（爆仓/接口返回 0），不用于 sizing（保持静态值）。
+_SIZING_EQUITY_FLOOR = 10_000.0
+
+
+def _sync_live_equity(force=False):
+    """用账户监控的实时权益刷新 _STRAT_CFG["account"]["equity"]（sizing 口径）。
+    返回 (equity_used, source)。任何异常都 fail-open 回退静态值。
+    可用 trade_config.json 的 account.sizing_equity = "live"|"static" 关闭实时口径。"""
+    acct = _STRAT_CFG.get("account", {})
+    if str(acct.get("sizing_equity", "live")).lower() == "static":
+        return _SIZING_EQUITY_STATIC, "config_static"
+    eq = None
+    try:
+        _snap = am.get_account()  # account_monitor：沙盒/tqsdk/ctp 后端统一入口
+        if isinstance(_snap, dict):
+            for _k in ("equity", "balance"):
+                _v = _snap.get(_k)
+                if isinstance(_v, (int, float)) and float(_v) > 0:
+                    eq = float(_v)
+                    break
+    except Exception as _e:
+        print(f"[sizing] 实时权益读取异常(fail-open 用静态 {_SIZING_EQUITY_STATIC:.0f}): {repr(_e)[:70]}")
+    if eq is None:
+        return _SIZING_EQUITY_STATIC, "static_fallback"
+    if eq < _SIZING_EQUITY_FLOOR:
+        print(f"[sizing] 实时权益 {eq:.0f} < 下限 {_SIZING_EQUITY_FLOOR:.0f}，判为数据异常，忽略")
+        return _SIZING_EQUITY_STATIC, "below_floor"
+    eq = min(eq, _SIZING_EQUITY_CAP)
+    _prev = acct.get("equity")
+    acct["equity"] = eq
+    if force or _prev != eq:
+        print(f"[sizing] 权益口径 → 实时 {eq:.0f}（静态 {_SIZING_EQUITY_STATIC:.0f}）")
+    return eq, "live"
+
+
 import strategy_layer
 from strategy_layer import atr as strat_atr
 from strategy_layer import dual_range_vol as strat_dual_range
@@ -10008,6 +10057,13 @@ def evaluate(feed, today, last_fire, state, corr_histories):
     except Exception as _e:
         print(f"[P1-4 VaR闸] 计算异常(忽略): {repr(_e)[:60]}")
     round_exposures = []  # 组合层：本轮回已发信号（供后续品种比对叠加）
+    # sizing 跟随实时权益（2026-10-15 自检 #1）：risk_gate 读 _STRAT_CFG["account"]["equity"]，
+    # 该值原是 trade_config 静态快照，与账户面板实时权益脱钩。每轮同步一次，取不到则保持静态值。
+    try:
+        _eq_used, _eq_src = _sync_live_equity()
+        state["sizing_equity"] = {"equity": _eq_used, "source": _eq_src, "static": _SIZING_EQUITY_STATIC}
+    except Exception as _se:
+        print(f"[sizing] 同步异常(忽略): {repr(_se)[:70]}")
     load_dedup_state(last_fire)  # 载入磁盘去重记忆（重启/多进程共享，杜绝连环重发）
     load_pos_alert_dedup()  # 载入持仓触价告警去重记忆（跨重启保留 30min 窗口）
     state["cpos_trade_date"] = get_cpos_cache().get("_meta", {}).get("trade_date", "")
