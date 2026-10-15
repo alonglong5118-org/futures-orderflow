@@ -346,6 +346,8 @@ class RiskStateMachine:
             return self.summary()
 
     def summary(self):
+        # 封顶额与其来源一次算出，供下方多处使用（避免重复调用 + 保证同一快照口径一致）
+        _eff_cap = effective_daily_loss_cap(self.peak_equity or 0)
         with self._lock:
             d = {
                 "state": self.state,
@@ -356,8 +358,13 @@ class RiskStateMachine:
                 "daily_loss_pct": round(self.daily_loss_pct, 4),
                 "daily_loss_stop": DAILY_LOSS_STOP,
                 # 绝对额封顶（铁律 max_loss=2000 元）——面板可见，避免只看到比例线
-                "daily_loss_cap_amt": round(effective_daily_loss_cap(self.peak_equity or 0)[0], 2),
+                "daily_loss_cap_amt": round(_eff_cap[0], 2),
+                # 封顶来源标记（abs_scaled=等比缩放 / pct_cap=权益×比例 / abs_floor / abs_no_equity）
+                # 面板据此显示"封顶依据"，避免用户困惑「明明2万，为何写5%」
+                "daily_loss_cap_src": _eff_cap[1],
                 "daily_loss_abs_max": MAX_DAILY_LOSS_AMT,
+                # 基准权益（等比缩放锚点，面板用于说明"2000元 是哪个权益口径下的2000"）
+                "daily_loss_cap_ref_equity": MAX_DAILY_LOSS_AMT_REF_EQUITY,
                 "updated": time.strftime("%H:%M:%S"),
             }
             try:

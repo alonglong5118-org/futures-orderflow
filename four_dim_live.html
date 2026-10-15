@@ -3347,7 +3347,7 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <span id="risk-info" class="price"></span>
       </div>
       <div class="dd-bar-wrap">
-        <div class="dd-bar-head"><span>今日日亏</span><span id="dd-pct">0.0%</span><span class="dd-limit">/ 5% 停机线（达线全市场冻结）</span></div>
+        <div class="dd-bar-head"><span>今日日亏</span><span id="dd-pct">0.0%</span><span class="dd-limit" id="dd-limit">/ 5% 停机线（达线全市场冻结）</span></div>
         <div class="dd-bar"><div id="dd-fill" class="dd-fill"></div></div>
       </div>
       <div class="decision-card st-info" id="dd-water" style="margin-top:12px">
@@ -9114,14 +9114,51 @@ async function refreshRisk(force){
     else if(k.state==='NORMAL') info+=' · 正常';
     document.getElementById('risk-info').textContent=info;
     // 今日日亏进度条（P2 账户级日亏硬限额）
+    // 2026-10-15: 铁律是「5% 与 2000 元」双封顶，实际生效线取更严者。
+    //   旧文案硬编码「/ 5% 停机线」，只反映比例线，会让用户困惑
+    //   「封顶明明是 2 万，为何显示 5%？」—— 此处改为显示真实生效封顶 + 依据。
     const ddPct=(k.daily_loss_pct||0)*100;
     const ddStop=(k.daily_loss_stop||0.05)*100;
-    const ratio=ddStop>0?ddPct/ddStop:0;
+    const ddCapAmt=k.daily_loss_cap_amt;             // 绝对额封顶（元，null=未启用）
+    const ddCapSrc=k.daily_loss_cap_src||'';         // abs_scaled / pct_cap / ...
+    const ddAbsMax=k.daily_loss_abs_max;             // 基准绝对额（@基准权益）
+    const ddRatioReal=ddStop>0?ddPct/ddStop:0;
+    // 生效封顶 = min(比例线金额, 绝对额封顶)；两者都有时取更严
+    // ⚠️ 单位陷阱：ddStop 是「百分比数值」(5 表示 5%)，ddCapAmt 是「元」，
+    //   绝不能直接 Math.min(ddStop, ddCapAmt) —— 会算出「5 元封顶」这种荒谬值。
+    //   正确做法：先按 cap_src 关系反推权益，再把比例线换算成金额，最后比金额。
+    let effStopPct=ddStop, effAmtEff=null;
+    let effLabel='/ '+ddStop.toFixed(1)+'% 停机线（达线全市场冻结）';
+    if(ddCapAmt && ddCapAmt>0){
+      const refK = k.daily_loss_cap_ref_equity || 100000;
+      const absK = k.daily_loss_abs_max || 2000;
+      // abs_scaled 口径：cap_amt = abs_max × equity / ref  ⇒  equity = cap_amt × ref / abs_max
+      const eqEst = (ddCapSrc==='abs_scaled') ? (ddCapAmt * refK / absK) : null;
+      const pctAmtReal = (eqEst !== null) ? (eqEst * ddStop / 100) : ddCapAmt;
+      effAmtEff = Math.min(pctAmtReal, ddCapAmt);              // 单位统一为「元」，取更严
+      effStopPct = effAmtEff > 0 ? (ddPct / effAmtEff * 100)   // 生效封顶折回百分比供进度条用
+                                 : ddStop;
+      const srcTxt = ddCapSrc==='abs_scaled' ? `等比缩放（${(ddAbsMax||2000).toLocaleString('zh-CN')}元 @基准权益）`
+                  : ddCapSrc==='pct_cap' ? '权益×比例封顶' : (ddCapSrc||'—');
+      effLabel = `/ ${Math.round(effAmtEff).toLocaleString('zh-CN')} 元封顶`
+               + `（${srcTxt}；比例线 ${ddStop.toFixed(1)}%，取更严者）`;
+      if(eqEst) effLabel += ` · 当前权益约 ${(eqEst/10000).toFixed(1)} 万`;
+    }
+    const ratio=effStopPct>0?ddPct/effStopPct:0;
     const fill=document.getElementById('dd-fill');
     if(fill){fill.style.width=Math.min(100,ratio*100)+'%';
       fill.className='dd-fill'+(ratio>=1?' dd-lock':(ratio>=0.8?' dd-warn':''));}
     const ddPctEl=document.getElementById('dd-pct');
     if(ddPctEl) ddPctEl.textContent=ddPct.toFixed(1)+'%';
+    const ddLimitEl=document.getElementById('dd-limit');
+    if(ddLimitEl) ddLimitEl.textContent=effLabel;
+    const ddWaterEl=document.getElementById('dd-water');
+    if(ddWaterEl){
+      const sub=document.getElementById('ddw-sub');
+      if(sub) sub.textContent = effAmtEff
+        ? `双封顶口径 · 生效封顶 ${Math.round(effAmtEff).toLocaleString('zh-CN')} 元`
+        : `仅比例线 ${ddStop.toFixed(1)}%`;
+    }
   }catch(e){console.error(e);}
 }
 // ---- 组合级硬熔断横幅（#5）：触发即置顶红条 + 一键全平清单 ----

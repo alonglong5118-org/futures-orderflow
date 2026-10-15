@@ -92,7 +92,11 @@ def _alert_if_needed(cond_key, cond_detail):
             _save_alert_state(st)
         return
     # 紧急类用短冷却, 非紧急类用长冷却(状态不变则不刷屏)
-    cd = _NOTIFY_COOLDOWN_URGENT if cond_key.startswith("ABNOLD") else _NOTIFY_COOLDOWN
+    # 2026-10-15:CONSIST（运行期在用/真实不一致）纳入紧急类 ——
+    #   它意味着跟踪或取价可能跑在错误合约上，属实盘风险，不可长冷却。
+    cd = (_NOTIFY_COOLDOWN_URGENT
+          if (cond_key.startswith("ABNOLD") or cond_key.startswith("CONSIST"))
+          else _NOTIFY_COOLDOWN)
     if cond_key != last_key or (now - last_ts > cd):
         _notify("主力合约刷新异常", cond_detail)
         st["last_key"] = cond_key
@@ -464,10 +468,44 @@ def main():
         _log("WARN", f"override 落后于运行时真实主力(双源漂移, 将以真实主力为准修正): {_drift}")
     if _cur_month:
         _log("WARN", f"主力停在当月交割月(临界, 建议核对): {_cur_month}")
-    # 组装异常键(优先级: 异常旧合约 > 双源漂移 > 源失败 > 临界当月)
+
+    # 2026-10-15（用户决策：写入日志 + 消息推送）：运行期合约一致性自检。
+    # 背景：2026-10-15 抓到「反向假警」—— 面板说系统 SC2612、真主力 SC2611，
+    #   而override/hot/specs 三方一致认为 SC2612 就是主力；假警报会诱导用户执行
+    #   无效甚至破坏性的 --apply。此类问题只有把「在用合约 vs 各真相源」摊开
+    #   对比才能发现，故把该维度纳入常驻自检（与GET /api/contracts 同口径）。
+    # 判定：override（系统在用）与 minishare 真实主力不一致 → CONSIST。
+    #   注意方向性 —— 若真实主力月份更靠后，说明 override 落后（可自动收敛，不紧急）；
+    #   若 override 更靠后，则可能是真相源滞后，标记出来人工核对（可能是反向假警）。
+    _inconsistent = []
+    for v, code in override.items():
+        _live = _hot.get(v.lower(), "")
+        if not _live or not code:
+            continue
+        if str(_live).upper() == str(code).upper():
+            continue
+        _cym, _lym = ym_of(code), ym_of(_live)
+        if _cym is None or _lym is None:
+            _inconsistent.append(f"{v}: 在用{code} vs 真实{_live}")
+        elif _lym > _cym:
+            _inconsistent.append(f"{v}: 在用{code} 落后 真实{_live}")
+        else:
+            _inconsistent.append(f"{v}: 在用{code} 超前 真实{_live}(核对真相源, 可能是反向假警)")
+    if _inconsistent:
+        _log("WARN", f"运行期合约在用/真实不一致({len(_inconsistent)}个): {_inconsistent}")
+
+    # 组装异常键(优先级: 异常旧合约 > 运行期不一致 > 双源漂移 > 源失败 > 临界当月)
     if _abn:
         cond_key = "ABNOLD:" + ",".join(_abn)
         cond_detail = f"异常旧合约(停留过往月份): {', '.join(_abn)}。请核对 /api/state"
+    elif _inconsistent:
+        cond_key = "CONSIST:" + ",".join(_inconsistent)
+        cond_detail = (
+            f"运行期在用合约与真实主力不一致({len(_inconsistent)}个): "
+            f"{', '.join(_inconsistent[:5])}{' 等' if len(_inconsistent) > 5 else ''}。"
+            f"请先跑 GET /api/contracts 核对四方(在用/取价/真实/静态表)，"
+            f"确认哪边正确后再处理 —— 不要盲目跑 --apply"
+        )
     elif _drift:
         cond_key = "DRIFT:" + ",".join(_drift)
         cond_detail = (
