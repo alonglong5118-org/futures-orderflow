@@ -510,7 +510,9 @@ def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin,
         new_hash = (
             round(equity, 0),
             round(mtm, 0),
-            tuple(sorted((p["symbol"], p["pos"], round(p["open_price"], 0)) for p in positions)),
+            # 含每笔浮盈：浮盈变化即需写盘，否则持仓行浮盈会停在上一次的值
+            tuple(sorted((p["symbol"], p["pos"], round(p["open_price"], 0),
+                          round(p.get("profit") or 0.0, 0)) for p in positions)),
         )
         if st.get("_sandbox_hash") == new_hash:
             return
@@ -528,7 +530,17 @@ def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin,
             # 价格优先级：实时价 → 标记价（paper 持仓 mark 字段）→ 开仓均价
             _mark = (prices or {}).get(sym) or prev_positions.get(sym, {}).get("mark") or p.get("mark") or p["open_price"]
             price = round(_mark, 2)
-            float_pnl = round((price - p["open_price"]) * p["pos"] * mult, 2)
+            # 2026-10-15 修复浮盈口径不一致（实测：面板浮盈 +0.00 而账户总览 +12350）：
+            #   上游 _get_sandbox_account 已按同一价格优先级算好每笔 profit，此处却丢弃它、
+            #   用「价格→均价」重算 —— 价真空期（盘后/开盘前）价格回落到 open_price，
+            #   重算结果恒为 0，而 snapshot.float_total 用的是上游 mtm（仍为收盘值 12350），
+            #   于是同一份快照内部自相矛盾：总览 12350 / 持仓行 0。
+            # 修法：优先采用上游 profit（同源，保证 sum(float_pnl) == float_total）。
+            _p_profit = p.get("profit")
+            if isinstance(_p_profit, (int, float)):
+                float_pnl = round(float(_p_profit), 2)
+            else:
+                float_pnl = round((price - p["open_price"]) * p["pos"] * mult, 2)
             margin_pct = round(p["margin"] / equity * 100, 2) if equity else 0
             prev = prev_positions.get(sym, {})
             contract = prev.get("contract") or (sym.upper() + "2701")
@@ -556,19 +568,30 @@ def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin,
             )
         st["snapshot_mode"] = True
         st["snapshot_until"] = "2099-12-31 23:59:59"
+        # 2026-10-15 自洽性护栏：float_total 必须等于各持仓 float_pnl 之和。
+        # 两者一旦背离，账户总览与持仓行会显示互相矛盾的数字（历史真实发生过：
+        # 总览 +12350 / 持仓行 +0.00），排查极难。故在此强制对齐并留日志。
+        _sum_fp = round(sum(float(x.get("float_pnl") or 0) for x in snap_positions), 2)
+        _mtm_final = round(mtm, 2)
+        if _sum_fp and abs(_sum_fp - _mtm_final) > 0.01:
+            print(
+                f"[沙盒镜像] 浮盈口径背离，已以持仓行合计为准: "
+                f"float_total={_mtm_final} vs sum(float_pnl)={_sum_fp}"
+            )
+            _mtm_final = _sum_fp
         st["snapshot"] = {
             "equity": equity,
             "available": avail,
             "total_margin": round(margin, 2),
-            "float_total": round(mtm, 2),
-            "mtm_pnl": round(mtm, 2),
+            "float_total": _mtm_final,
+            "mtm_pnl": _mtm_final,
             "usage_rate": round(margin / equity * 100, 2) if equity else 0,
             "positions": snap_positions,
         }
         st["positions"] = new_positions
         st["realized_pnl"] = float(paper.get("realized", 0) or 0)
         st["realized_pnl_at_sync"] = st["realized_pnl"]
-        st["float_at_sync"] = round(mtm, 2)
+        st["float_at_sync"] = _mtm_final
         st["margin_occupied"] = round(margin, 2)
         st["available"] = avail
         st["equity"] = equity
