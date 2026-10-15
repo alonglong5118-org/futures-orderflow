@@ -105,9 +105,9 @@ def _map_symbol(tqsdk_sym):
     return None
 
 
-def get_account():
+def get_account(prices=None):
     """返回账户快照 dict 或 None（无接口）。
-    dict = {"balance","available","profit","positions":[{symbol,pos,open_price,direction,margin}],"updated"}"""
+    dict = {"balance","available","profit","positions":[{symbol,pos,open_price,direction,margin}],"updated","backend"}"""
     cfg = load_config()
     if not cfg.get("enabled", False):
         return None

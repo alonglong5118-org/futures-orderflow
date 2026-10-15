@@ -25,11 +25,26 @@ import json
 import os
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dir_utils import dir_sign
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _trade_time(t):
+    """成交记录时间戳的稳健读取（2026-10-15 P0 修复）。
+
+    背景：历史导入批次（2026-09）只有 entry_time/exit_time、没有 time 键，
+    而 current_loss_streak() 等热路径直接 t["time"] → KeyError 被外层 try 吞掉 →
+    整个风控状态机更新块（连亏计数/日亏线/熔断检测）每轮全跳过，铁律形同虚设。
+
+    读取优先级与既有语义一致：已平仓取 exit_time，其次 time，最后 entry_time；
+    全部缺失返回 ""（排序兜底，绝不再抛 KeyError）。"""
+    if not isinstance(t, dict):
+        return ""
+    return t.get("exit_time") or t.get("time") or t.get("entry_time") or ""
+
 
 # ===== 多账户支持（v3.9.1）=====
 # 与 account_tracker 同步切换账户，每个账户有独立的交易日志和日内权益曲线
@@ -1300,7 +1315,7 @@ def equity_curve(prices=None):
           peak_equity, current_dd_pct, dd_days, is_new_high}。"""
     data = _load()
     closed = sorted(
-        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t.get("exit_time") or t["time"]
+        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: _trade_time(t)
     )
     base = _base_equity()
     total_pnl = sum(t["pnl"] for t in closed)
@@ -1318,13 +1333,13 @@ def equity_curve(prices=None):
 
     for t in closed:
         eq += t["pnl"]
-        d = _date(t.get("exit_time") or t["time"])
+        d = _date(_trade_time(t))
         if eq > peak_equity:
             peak_equity = eq
             peak_date = d
         dd = (peak_equity - eq) / peak_equity * 100 if peak_equity > 0 else 0
         max_dd = max(max_dd, dd)
-        pts.append({"t": (t.get("exit_time") or t["time"]), "equity": round(eq, 2)})
+        pts.append({"t": _trade_time(t), "equity": round(eq, 2)})
     # 末点：当前动态权益（含未平仓浮动），让曲线收在今日真实权益
     live_eq = None
     try:
@@ -1476,7 +1491,7 @@ def performance_metrics(prices=None):
     """估算绩效指标（基于成交记录，非严格日频）。标注为估算。"""
     data = _load()
     closed = sorted(
-        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t.get("exit_time") or t["time"]
+        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: _trade_time(t)
     )
     s = summary()
     if not closed:
@@ -1777,12 +1792,29 @@ def today_pnl(sym=None):
     return sum(t["pnl"] for t in closed)
 
 
+def _streak_cutoff(now=None):
+    """连亏统计的「日内」边界（2026-10-15 修复永久冻结事故）。
+
+    铁律是「日内连续 2 次止损即冻结账户」，而 FSM 每天 reset_daily() 也会清零，
+    但连亏数来自 journal 累计：原实现只按上次熔断解除时间过滤，没有日内边界，
+    于是 2026-09-15 的两笔亏损把账户一直锁到今天（LOCKED 永不自动解除）。
+
+    口径：夜盘（≥20:00）归属**下一交易日**，日盘归属当日，故边界取当日 00:00，
+    夜盘时段取次日 00:00。返回 datetime 边界对象。"""
+    now = now or datetime.now()
+    d = now + timedelta(days=1) if now.hour >= 20 else now
+    return d.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def current_loss_streak():
     """当前连续亏损笔数（驱动状态机连续止损降档）。
 
     2026-08-27 整改：当存在历史熔断解除记录时，只统计解除后的交易，
     避免被熔断前的亏损'卡'住，导致系统永远无法恢复。
     熔断强平交易本身计入统计（视为正常交易结果）。
+
+    2026-10-15 整改：在熔断解除时间之外再加「日内」边界（_streak_cutoff）——
+    铁律为日内连亏 2 笔冻结，跨交易日的旧亏损不得把账户永久锁死。
     """
     import json as _json
     import os
@@ -1800,12 +1832,22 @@ def current_loss_streak():
             reset_time = _ks.get("reset_at")
     except Exception:
         pass
-    # 过滤：只统计 reset_at 之后的交易（如果存在）
-    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t["time"])
+    # 过滤：只统计 reset_at 之后的交易（如果存在），并强制日内边界
+    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: _trade_time(t))
     if reset_time:
-        closed = [t for t in closed if (t.get("time") or "") >= reset_time]
+        closed = [t for t in closed if _trade_time(t) >= reset_time]
+    _cut = _streak_cutoff()
+    _in_day = []
+    for t in closed:
+        _ts = _trade_time(t)
+        try:
+            _dt = datetime.strptime(_ts[:19], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            continue
+        if _dt >= _cut:
+            _in_day.append(t)
     streak = 0
-    for t in reversed(closed):
+    for t in reversed(_in_day):
         if t["pnl"] < 0:
             streak += 1
         else:

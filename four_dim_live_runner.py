@@ -2279,7 +2279,8 @@ _LAST_POSITION_SNAPSHOT = {}  # sym -> last known position state (防过期持�
 
 # 持仓饱和阈值：已有持仓占账户权益比例超此值时，新同向信号降级为"持仓管理"而非"交易信号"
 POSITION_SATURATION_VAPCT = 0.3  # 单个品种风险占权益上限
-POSITION_SATURATION_LOTS = 5  # 单个品种持仓手数上限（超此值新同向信号抑制）
+POSITION_SATURATION_LOTS = 2  # 单个品种持仓手数上限（铁律：单合约≤2；超此值新同向信号抑制）
+MAX_TOTAL_POSITIONS = 4  # 🔒 铁律：总持仓腿数上限（≥4 腿后禁止推送新开仓信号，只做持仓管理）
 
 # 🔒 新增：信号推送保护阈值
 WHIPSAW_WINDOW_SEC = 600  # 同一品种方向反转检测窗口（10分钟内反向=噪声）
@@ -4930,11 +4931,11 @@ DEFAULT_RISK_RULES = [
         "category": "仓位",
         "metric": "usage_rate",
         "op": ">",
-        "threshold": 60,
+        "threshold": 45,
         "unit": "pct",
         "severity": "warning",
         "notify": True,
-        "action": "组合资金使用率>60%，接近组合上限；控制新开仓规模。",
+        "action": "组合资金使用率>45%（铁律红线），接近组合上限；控制新开仓规模。",
     },
     {
         "id": "position_count",
@@ -4942,11 +4943,11 @@ DEFAULT_RISK_RULES = [
         "category": "暴露",
         "metric": "n_positions",
         "op": ">",
-        "threshold": 8,
+        "threshold": 4,
         "unit": "int",
         "severity": "notice",
         "notify": True,
-        "action": "持仓≥8 个品种，注意力分散、相关性难控；聚焦核心 3–5 个。",
+        "action": "持仓≥4 腿（铁律上限），超限新品种信号已硬闸抑制；聚焦核心 3–4 个。",
     },
     # ── v5 新增：7大量化策略研究结论 ──
     {
@@ -4963,15 +4964,15 @@ DEFAULT_RISK_RULES = [
     },
     {
         "id": "consec_loss_hard",
-        "name": "连亏5次硬冻结",
+        "name": "连亏2次硬冻结",
         "category": "纪律",
         "metric": "consec_losses",
         "op": ">=",
-        "threshold": 5,
+        "threshold": 2,
         "unit": "int",
         "severity": "danger",
         "notify": False,
-        "action": "连亏5次触发硬冻结：当日禁止所有新开仓，次日自动解除。",
+        "action": "连亏2次触发硬冻结：当日禁止所有新开仓（与仓位状态机 lock=2 同一道闸），次日自动解除。",
     },
     {
         "id": "per_trade_risk",
@@ -9534,6 +9535,32 @@ def _position_aware_advice(sig, open_positions, price):
         sig["push_suppressed"] = True
         sig["action_advice"] = f"{sym} 建议手数{sig_lots}低于最小下单单位{MIN_SUGGESTED_LOTS}，信号静默。"
         sig["reason"] += f"【手数过滤】建议手数{sig_lots} < 最小单位{MIN_SUGGESTED_LOTS}。"
+        return "blocked"
+
+    # 🔒 铁律：总持仓腿数上限（2026-10-15 自检补闸）——原实现只把 total_positions
+    # 写进提示文案，新品种信号永远放行，「总持仓 ≤4」没有任何硬执行。
+    # 已达上限 → 不推送为交易信号，转为持仓管理提示（平仓/止损建议不受影响）。
+    if total_positions >= MAX_TOTAL_POSITIONS:
+        sig["hold_context"] = {
+            "held": False,
+            "conflict": False,
+            "total_positions": total_positions,
+            "total_lots": total_lots,
+            "max_total_positions": MAX_TOTAL_POSITIONS,
+        }
+        sig["signal_type"] = "持仓提示·总仓位已满"
+        sig["push_suppressed"] = True
+        sig["advice_type"] = "portfolio_full"
+        sig["action_advice"] = (
+            f"🔒 铁律：总持仓已达 {total_positions} 腿（上限 {MAX_TOTAL_POSITIONS} 腿），"
+            f"禁止新开仓。请先平掉现有 {total_positions} 腿中最弱的一笔，再考虑 {sym}。"
+            f"（当前组合：{'、'.join(p.get('sym', '?') for p in open_positions)}）"
+        )
+        sig["reason"] += (
+            f"【铁律·总仓位已满】已有 {total_positions} 腿持仓 ≥ 上限 {MAX_TOTAL_POSITIONS}，"
+            f"{sym} 新开仓信号不推送为交易信号。"
+        )
+        print(f"[铁律] 总持仓 {total_positions}≥{MAX_TOTAL_POSITIONS} → {sym} 新信号抑制（只提示）")
         return "blocked"
 
     for s in list(_LAST_POSITION_SNAPSHOT.keys()):
