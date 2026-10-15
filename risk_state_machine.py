@@ -41,6 +41,58 @@ LOSS_FLOOR = 0.2  # 手数缩放封底
 CONSEC_WARN = 2  # 连续止损 ≥2 笔 → WARNING 软警告（手数降档）
 CONSEC_LOCK = 3  # 连续止损 ≥3 笔 → 当日冻结（LOCKED，禁新开，跨日解除）
 
+# ============ 日内亏损绝对额封顶（铁律「日内回撤 ≤5% / max_loss=2000 元」）============
+# 背景：原实现只有 5% 比例线，没有绝对额线 —— 铁律的「2000 元」那一半从未落地。
+# 设计（重要，避免两种误实现）：
+#   ✗ 固定 2000 元：权益上到百万级后，2000 元 = 0.2%，一笔正常浮亏就冻结 → 荒谬死线。
+#   ✗ max(绝对额, 权益×5%)：比例额恒 ≥ 绝对额，绝对额线永远不可能先触发 → 死代码。
+#   ✓ 等比缩放：2000 元是**10 万权益基准下**的口径（=2%），权益变化时按比例放大，
+#     于是 100 万权益 → 2 万元封顶，始终比 5% 比例线更严 → 绝对额线成为主封顶线，
+#     5% 退化为 equity 缺失时的后备保险。符合铁律「两条线都要在」的语义。
+# 比例线（5% 软闸/ 8% 硬熔断）本身完全不动，两条线任一触发即冻结。
+MAX_DAILY_LOSS_AMT = 2000.0  # 铁律：日内最大亏损绝对额（元，@基准权益）
+MAX_DAILY_LOSS_AMT_REF_EQUITY = 100000.0  # 基准权益（trade_config 的小资金验证模式 10 万）
+# 硬熔断侧倍数：绝对额硬线 = 有效封顶 × 此倍数（1.6 ≈ 2000元软线 / 3200元硬线，与 5%→8% 的比例间距同构）
+KILL_ABS_LOSS_MULT = 1.6
+
+
+def _load_abs_loss_cap():
+    """从 trade_config.json 读取日内绝对亏损封顶（risk_gate.daily_loss_abs_max）。"""
+    global MAX_DAILY_LOSS_AMT
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trade_config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, encoding="utf-8") as f:
+                gate = (json.load(f) or {}).get("risk_gate") or {}
+            v = gate.get("daily_loss_abs_max")
+            if isinstance(v, (int, float)) and float(v) > 0:
+                MAX_DAILY_LOSS_AMT = float(v)
+                print(f"[risk_fsm] 加载 daily_loss_abs_max: {MAX_DAILY_LOSS_AMT:.0f} 元")
+    except Exception:
+        pass
+
+
+_load_abs_loss_cap()
+
+
+def effective_daily_loss_cap(base_equity, pct_stop=DAILY_LOSS_STOP):
+    """返回本次生效的日内亏损封顶额（元）与来源标记。
+    口径：2000 元是**10 万基准权益**下的额度（=2%），随权益等比缩放，并被夹在
+    权益×pct_stop 之内 —— 既不因权益缩水而绝对额过大、也不因权益膨胀而变成 0.2%
+    的误杀线，且**保证不比比例线更宽松**（双封顶语义：绝对额线是主封顶线）。"""
+    amt = float(MAX_DAILY_LOSS_AMT or 0)
+    try:
+        _eq = float(base_equity or 0)
+    except Exception:
+        _eq = 0.0
+    if _eq <= 0 or amt <= 0:
+        return amt, "abs_no_equity"
+    scaled = amt * (_eq / float(MAX_DAILY_LOSS_AMT_REF_EQUITY or 1.0))
+    cap_pct = _eq * float(pct_stop or 0)
+    if scaled > cap_pct:
+        return cap_pct, "pct_cap"
+    return scaled, "abs_scaled"
+
 
 # 可配置化：从 trade_config.json 读取 consec_loss_gate，缺省回退上述常量
 def _load_consec_gate():
@@ -146,6 +198,17 @@ def risk_guard(
     if daily_loss_pct >= daily_loss_stop:
         status = "LOCK"
         reasons.append(f"当日亏损 {daily_loss_pct * 100:.1f}% 达 {daily_loss_stop * 100:.0f}% 停机线，强制冻结")
+    # 铁律「日内 ≤5% / max_loss=2000 元」双封顶：比例线之外再加绝对额线。
+    # 有效封顶取 max(绝对额, 权益×比例下限)，高权益下不误杀（见 effective_daily_loss_cap）。
+    daily_loss_abs = max(0.0, -daily_pnl)
+    cap_amt, cap_src = effective_daily_loss_cap(_base_eq, daily_loss_stop)
+    if cap_amt > 0 and daily_loss_abs >= cap_amt:
+        status = "LOCK"
+        reasons.append(
+            f"当日亏损 {daily_loss_abs:.0f} 元达封顶 {cap_amt:.0f} 元"
+            + f"（{cap_src}）"
+            + "，强制冻结"
+        )
     if status == "OK":
         if usage >= warn_line:
             status = "WARN"
@@ -162,6 +225,9 @@ def risk_guard(
         "status": status,
         "usage": round(usage, 3),
         "daily_loss_pct": round(daily_loss_pct, 3),
+        "daily_loss_abs": round(daily_loss_abs, 2),
+        "daily_loss_cap_amt": round(cap_amt, 2),
+        "daily_loss_cap_src": cap_src,
         "reasons": reasons,
         "symbol_override": ov,
     }
@@ -289,6 +355,9 @@ class RiskStateMachine:
                 "lock_reason": self.lock_reason,
                 "daily_loss_pct": round(self.daily_loss_pct, 4),
                 "daily_loss_stop": DAILY_LOSS_STOP,
+                # 绝对额封顶（铁律 max_loss=2000 元）——面板可见，避免只看到比例线
+                "daily_loss_cap_amt": round(effective_daily_loss_cap(self.peak_equity or 0)[0], 2),
+                "daily_loss_abs_max": MAX_DAILY_LOSS_AMT,
                 "updated": time.strftime("%H:%M:%S"),
             }
             try:
@@ -445,6 +514,15 @@ class KillSwitch:
                 trig.append(f"账户自峰值回撤 {dd * 100:.1f}% ≥ 硬线 {KILL_DRAWDOWN * 100:.0f}%")
             if dlp >= KILL_DAILY_LOSS:
                 trig.append(f"当日亏损 {dlp * 100:.1f}% ≥ 硬线 {KILL_DAILY_LOSS * 100:.0f}%")
+            # 绝对额硬线：铁律 max_loss=2000 元同样要覆盖熔断侧（否则只在软闸生效）。
+            # 口径与risk_guard 一致：有效封顶取 max(绝对额, 权益×比例下限)。
+            _abs_loss = max(0.0, -float(daily_pnl or 0))
+            _cap_amt, _cap_src = effective_daily_loss_cap(_base_eq, KILL_DAILY_LOSS)
+            if _cap_amt > 0 and _abs_loss >= _cap_amt * KILL_ABS_LOSS_MULT:
+                trig.append(
+                    f"当日亏损 {_abs_loss:.0f} 元 ≥ 绝对额硬线 {_cap_amt * KILL_ABS_LOSS_MULT:.0f} 元"
+                    + f"（{_cap_src}）"
+                )
             if cl >= KILL_CONSEC_LOSSES:
                 trig.append(f"连续止损 {cl} 笔 ≥ 硬线 {KILL_CONSEC_LOSSES} 笔")
             self.metrics = {

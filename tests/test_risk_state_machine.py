@@ -137,11 +137,25 @@ class TestRiskGuardDailyLoss(unittest.TestCase):
         self.assertTrue(any("日亏" in r or "亏损" in r for r in result["reasons"]))
 
     def test_daily_loss_below_stop(self):
-        """日亏 < 停机线 → 不锁定"""
+        """日亏 < 停机线 且 < 绝对额封顶 → 不锁定
+
+        口径说明（2026-10-15 起）：铁律是「日内 ≤5% **且** ≤max_loss 2000 元」双封顶。
+        @10 万基准权益，2000 元 = 2%，比 5% 比例线更严 → 绝对额线成为主封顶线。
+        因此「低于 5% 比例线」已不足以判定不锁，必须同时低于绝对额封顶。
+        本例用 1% = 1000 元，两条线都未破，才应放行。
+        """
         eq = 100000
-        loss = eq * (DAILY_LOSS_STOP * 0.5)  # 2.5%
+        loss = eq * 0.01  # 1% = 1000 元 < 2000 元绝对额封顶
         result = risk_guard(equity=eq, used_margin=10000, daily_pnl=-loss)
         self.assertNotEqual(result["status"], "LOCK")
+
+    def test_daily_loss_hits_abs_cap_below_pct_stop(self):
+        """日亏低于5%比例线但突破 2000 元绝对额封顶 → LOCK（铁律双封顶语义）"""
+        eq = 100000
+        loss = 2500  # 2.5% < 5%，但 > 2000 元绝对额封顶
+        result = risk_guard(equity=eq, used_margin=10000, daily_pnl=-loss)
+        self.assertEqual(result["status"], "LOCK")
+        self.assertTrue(any("元达封顶" in r for r in result["reasons"]), result["reasons"])
 
     def test_daily_profit_no_lock(self):
         """盈利 → 不触发日亏停机"""
