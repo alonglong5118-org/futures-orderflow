@@ -297,6 +297,9 @@ class MinishareLiveFeed:
         self.sym2code = {}  # sym → minishare ts_code（动态）
         self.code2sym = {}  # ts_code → sym（反向）
         self.last_snap = {}
+        # 2026-10-15: 报价新鲜度时钟 —— sym → 源行情时间戳字符串最近一次【变化】的单调时刻。
+        # 源 ts 不变 = 数据源仍在回放旧价（午休/时段切换残留），price_age() 据此判陈旧。
+        self.snap_upd_mono = {}
         self.bars = {}
         self.last_bar_minute = {}
         self.flow = {}
@@ -780,6 +783,14 @@ class MinishareLiveFeed:
                 _pc = float(_pc) if _pc is not None else 0.0
             except Exception:
                 _pc = 0.0
+            # 2026-10-15: 报价新鲜度追踪 —— 源 ts 字符串变化才认为行情真正更新。
+            # 若 ts 恒为空（源不提供时间戳），price_age() 会 fail-open 放行，不误杀。
+            _prev_ts = str((self.last_snap.get(sym) or {}).get("ts", ""))
+            if _prev_ts != ts or sym not in self.snap_upd_mono:
+                if sym not in self.snap_upd_mono:
+                    # 首次追踪：打印源时间戳原格式，供人工核对新鲜度判定是否可用
+                    print(f"[minishare_live] 报价新鲜度追踪启用: {sym} ts={ts!r}")
+                self.snap_upd_mono[sym] = time.time()
             self.last_snap[sym] = {
                 "close": close,
                 "open": float(r.get("open", close)),
@@ -818,6 +829,22 @@ class MinishareLiveFeed:
     def price(self, sym):
         s = self.last_snap.get(sym)
         return s["close"] if s else None
+
+    def price_age(self, sym):
+        """2026-10-15: 返回该品种快照的报价新鲜度（秒，自源行情时间戳最近一次变化起）。
+        以下情形返回 None，调用方应 fail-open 放行，避免把『无法判定』误判成『陈旧』
+        而停发所有信号：源 ts 为空 / ts 仅到日期粒度（无时分，一天才变一次）/ 从未追踪。"""
+        snap = self.last_snap.get(sym) or {}
+        ts = str(snap.get("ts", "")).strip()
+        if not ts:
+            return None
+        # 仅日期粒度（如 '2026-10-15'）或异常格式：变化时钟一天才走一格，不能用于分钟级判定
+        if ":" not in ts and not ts.replace(".", "", 1).isdigit():
+            return None
+        t = self.snap_upd_mono.get(sym)
+        if t is None:
+            return None
+        return max(0.0, time.time() - t)
 
     def get_5m(self, sym, n_bars=60):
         """返回近 n_bars 根 5m 合成 K 线（DatetimeIndex OHLCV DataFrame）。

@@ -374,6 +374,10 @@ last_recover = 0.0  # 上次恢复检查时间戳（=0 让启动即检一次） 
 GATE_CACHE = {"ts": 0.0, "gates": {}}
 
 FEED = None  # 全局实时行情实例，main 启动时赋值，供 Web 接口算浮动盈亏
+# 2026-10-15: 报价陈旧阈值（秒）。数据源行情时间戳超过该时长未变化（如午休 11:30 的
+# 残留价被 13:30 开盘第一轮循环拿去当现价），禁止用旧价生成交易信号。
+# 可用 trade_config.json 的 quote_stale_sec 覆盖。无法判定新鲜度时 fail-open 放行。
+QUOTE_STALE_SEC = 600
 FEED_LAST_UPDATE = 0.0  # 最近一次成功 poll 的时间戳（行情健康指示用）
 FEED_AVAILABLE = False  # 行情源是否可用（minishare 接口可达）
 
@@ -1473,6 +1477,32 @@ def append_chat(entry):
     e["time"] = e.get("time") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # 按 entry 时间所属日期归类（缺省归今天）
     date_str = (e.get("time") or "")[:10] or datetime.now().strftime("%Y-%m-%d")
+
+    # 2026-10-15: 去重闸 —— 同一条信号会经多条路径各 append 一次（实测 evaluate(10583)
+    # + 组合智能推荐(9964) 双写，同一条 RU 建仓在消息推送里出现两张一模一样的卡片）。
+    # 以 (time,kind,symbol,direction,signal_type,contract,price,stop) 为指纹，
+    # 今天已写过（文件尾部/内存流）即跳过。push_suppressed 不入指纹：组合路径对同一
+    # 信号补标抑制时指纹不变，仍会被去重。
+    def _ckey(m):
+        return "|".join(
+            str(m.get(k))
+            for k in ("time", "kind", "symbol", "direction", "signal_type", "contract", "price", "stop")
+        )
+
+    try:
+        _k = _ckey(e)
+        for _m in load_chat_feed(date_str)[-120:]:
+            if _ckey(_m) == _k:
+                print(f"[append_chat] 去重跳过: {e.get('symbol')} {e.get('signal_type')} {e.get('direction')} @ {e.get('time')}")
+                return False
+        if STATE_REF is not None:
+            for _m in list(STATE_REF.get("chat", []) or [])[:120]:
+                if _ckey(_m) == _k:
+                    print(f"[append_chat] 去重跳过(内存): {e.get('symbol')} @ {e.get('time')}")
+                    return False
+    except Exception as _de:
+        print(f"[append_chat] 去重检查异常(放行): {repr(_de)[:80]}")
+
     try:
         with open(chat_feed_path(date_str), "a") as f:
             f.write(json.dumps(e, ensure_ascii=False, default=_json_default) + "\n")
@@ -10117,6 +10147,21 @@ def evaluate(feed, today, last_fire, state, corr_histories):
             }
             continue
         if pipe["triggered"] and pipe["dir_T"] != 0 and price:
+            # 2026-10-15 陈旧报价闸：午休/时段切换瞬间快照仍是上一时段价格（实测 13:30:17
+            # 拿上午 11:30 的 20065 当现价生成 RU 信号，而真实现价 ~20025）。数据源带时间戳
+            # 且超时未更新 → 本轮禁止生成信号；无法判定新鲜度（源无 ts）→ fail-open 放行。
+            _qage = None
+            try:
+                _qage = feed.price_age(sym)
+            except Exception:
+                _qage = None
+            _stale_thr = _tc_num("quote_stale_sec", QUOTE_STALE_SEC)
+            pipe["quote_age_sec"] = round(_qage, 1) if _qage is not None else None
+            if _qage is not None and _qage > _stale_thr:
+                pipe["stale_quote_blocked"] = True
+                pipe["stale_quote_reason"] = f"报价陈旧({int(_qage)}s>{_stale_thr}s，疑上一时段缓存)，本轮不生成信号"
+                print(f"[evaluate] {sym} 报价陈旧({int(_qage)}s > {_stale_thr}s) → 跳过信号生成")
+                continue
             # P1-4：组合 VaR 已超上限→本轮回不再新增信号（卡片仍更新展示）
             if _var_hot:
                 pipe["var_blocked"] = True
