@@ -185,7 +185,10 @@ def _get_ak_prices_batch(symbols):
     valid_syms = []
     for s in symbols:
         s_lower = s.lower()
-        code = _al.ALL_CONTRACTS.get(s_lower, _al.ALL_CONTRACTS.get(s.upper()))
+        # 2026-10-15: 走动态主力解析（override → hot → 静态兜底）。
+        # 原先直读静态表，54 个品种中 28 个陈旧（如 zn=ZN2610 而真主力 ZN2612），
+        # 导致「持仓品种实时价」拉的是非主力合约 —— 持仓浮盈因此失真。
+        code = _al.contract_of(s_lower)
         if code:
             valid_syms.append(s_lower)
     if not valid_syms:

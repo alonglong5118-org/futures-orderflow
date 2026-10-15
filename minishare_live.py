@@ -200,11 +200,15 @@ def _authoritative_contracts():
         tcfg = {}
     for sym, spec in tcfg.get("contract_specs", {}).items():
         mode = str(spec.get("contract_mode", "auto_main")).lower()
-        hc = HOT_CACHE.get(sym)
+        hc = HOT_CACHE.get(sym) or HOT_CACHE.get(sym.lower()) or HOT_CACHE.get(sym.upper())
         if mode in ("auto_main", "auto_secondary") and hc:
             key = "main" if mode == "auto_main" else "secondary"
             # akshare 权威覆盖优先：绕开 OI 滞后/卡月（如农产品主力已滚至 2611/2701）
-            code = MAIN_OVERRIDE.get(sym.lower()) or MAIN_OVERRIDE.get(sym) or hc.get(key) or hc.get("main")
+            # 2026-10-15: 三段查找（小写/原样/大写）—— MAIN_OVERRIDE 与 HOT_CACHE
+            # 的键大小写不统一（override/hot 为大写，specs 混用大小写），
+            # 原先仅 lower + 原样两段，在 specs 用小写键的品种上会漏查。
+            code = (MAIN_OVERRIDE.get(sym.lower()) or MAIN_OVERRIDE.get(sym)
+                    or MAIN_OVERRIDE.get(sym.upper()) or hc.get(key) or hc.get("main"))
             if code:
                 out[sym] = str(code).upper()
                 continue

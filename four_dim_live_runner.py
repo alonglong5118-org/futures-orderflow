@@ -553,7 +553,8 @@ def get_realtime_price(sym):
 
             _f = _al_on_demand.feed()
             if _f.available():
-                _code = _al_on_demand.ALL_CONTRACTS.get(sym_lower, _al_on_demand.ALL_CONTRACTS.get(sym.upper()))
+                # 2026-10-15: 走动态主力解析，不再直读静态表（28/54 陈旧）
+                _code = _al_on_demand.contract_of(sym_lower)
                 if _code:
                     _snap = _f.poll([sym_lower])
                     if _snap and sym_lower in _snap:
@@ -1299,17 +1300,32 @@ def refresh_contract_map():
 
 
 def _get_main_contract(sym):
-    """获取指定品种的当前主力合约代码（优先使用 _authoritative_contracts）。"""
+    """获取指定品种的当前主力合约代码（优先使用 _authoritative_contracts）。
+
+    2026-10-15 修复大小写混用导致的解析退化：
+      trade_config.contract_specs 的键大小写不统一（17 个大写如 CF/JM/TA，
+      36 个小写），而 _authoritative_contracts() 原样沿用 specs 的键。
+      原实现只做 _auth.get(sym) 精确查找 —— 传入小写 sym 时 18/54（33%）
+      品种查不到，退化成返回品种代码本身（如 'ap' 而非 'AP2701'），
+      信号卡/持仓卡会显示错误合约（面板弹窗「原油系统 SC2612」同类根因）。
+    修法：三段查找（小写→大写→原样），两层数据源都做，缺任一层不影响另一层。
+    """
     if not sym:
         return None
-    try:
-        _auth = ml._authoritative_contracts()
-        _code = _auth.get(sym)
-        if _code:
-            return ml.normalize_contract_code(_code)
-    except Exception:
-        pass
-    return CONTRACT_MAP.get(sym, sym)
+    s = str(sym)
+    for key in (s.lower(), s.upper(), s):
+        try:
+            _auth = ml._authoritative_contracts()
+            _code = _auth.get(key)
+            if _code:
+                return ml.normalize_contract_code(_code)
+        except Exception:
+            pass
+    for key in (s.lower(), s.upper(), s):
+        _c = CONTRACT_MAP.get(key)
+        if _c:
+            return _c
+    return s
 
 
 # —— 可选通知（从 da龘 合并，默认关闭）——
@@ -11449,6 +11465,58 @@ def start_dashboard(state):
                     body = json.dumps(state.get("anomaly", {}), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/contracts":
+                # 2026-10-15: 主力合约一致性自检（跟踪/成交用最新主力的持续保障）
+                # 背景：曾有静态硬编码表 54 品种中 28 个陈旧，导致拉价落在非主力合约上。
+                # 本接口把「跟踪合约 / akshare取价合约 / 静态表」三方摊开对比，
+                # 任何漂移立即可见，而不是等 refresh 静默收敛后才被发现。
+                try:
+                    import akshare_live as _alc
+                    _map, _diffs = _alc.resolve_all(force=True)
+                    _hot = {}
+                    try:
+                        _hp = os.path.join(HERE, "minishare_hot_contracts.json")
+                        if os.path.exists(_hp):
+                            _raw = json.load(open(_hp, encoding="utf-8")) or {}
+                            for _k, _v in _raw.items():
+                                _hot[str(_k).lower()] = (_v.get("main", "")
+                                                         if isinstance(_v, dict) else str(_v))
+                    except Exception:
+                        _hot = {}
+                    rows = []
+                    for _s in sorted(_map):
+                        _code = _map[_s]
+                        _static = _alc.ALL_CONTRACTS.get(_s) or _alc.ALL_CONTRACTS.get(_s.upper()) or ""
+                        _live = _get_main_contract(_s) or ""
+                        _drift = bool(_live) and str(_live).upper() != str(_code).upper()
+                        rows.append({
+                            "symbol": _s,
+                            "tracking_contract": _live,      # runner 跟踪/盯市用
+                            "quote_contract": _code,          # akshare 取价用（动态解析）
+                            "hot_contract": _hot.get(_s, ""),  # minishare 真实主力
+                            "static_table": _static,          # 历史硬编码（仅兜底）
+                            "stale_static": bool(_static) and str(_static).upper() != str(_code).upper(),
+                            "drift": _drift,
+                        })
+                    _drift_rows = [r for r in rows if r["drift"]]
+                    _stale_rows = [r for r in rows if r["stale_static"]]
+                    body = json.dumps({
+                        "total": len(rows),
+                        "consistent": len(_drift_rows) == 0,
+                        "drift_count": len(_drift_rows),
+                        "stale_static_count": len(_stale_rows),
+                        "source_priority": "main_overrides.json → minishare_hot_contracts.json → 静态兜底表",
+                        "drift": _drift_rows,
+                        "stale_static": _stale_rows,
+                        "contracts": rows,
+                    }, ensure_ascii=False, default=str)
+                except Exception as _ce:
+                    body = json.dumps({"error": str(_ce)}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
