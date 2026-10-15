@@ -312,6 +312,30 @@ def main():
             override[v] = nm if (nm and (not cur_ym or ym_of(nm) >= cur_ym)) else cur_ov
         else:
             override[v] = cur_ov  # akshare 缺失/早于当前月→保留现有
+    # 2026-10-15：与运行时真实主力对齐（单调向前）。akshare 缺失/滞后时override 可能停在
+    #   交割月，而 minishare_live 已按成交量解析出更新的主力 → 造成双源漂移 + 假警。
+    #   此处以 minishare_hot_contracts 为补充真相源，且同样遵守「只向前、不回退」铁律。
+    try:
+        _hot_pre = os.path.join(HERE, "minishare_hot_contracts.json")
+        if os.path.exists(_hot_pre):
+            _hp = json.load(open(_hot_pre, encoding="utf-8")) or {}
+            _aligned = []
+            for _v, _rec in _hp.items():
+                if not isinstance(_rec, dict):
+                    continue
+                _live = _rec.get("main", "")
+                _lym = ym_of(_live) if _live else None
+                if not _live or not _lym or not (now_ym <= _lym <= _add_months(now_ym, 12)):
+                    continue
+                _cur = override.get(_v)
+                _cym = ym_of(_cur) if _cur else None
+                if _cym is None or _lym > _cym:  # 只向前，绝不回退
+                    override[_v] = _live
+                    _aligned.append(f"{_v}:{_cur}→{_live}")
+            if _aligned:
+                print(f"[refresh_main_contracts] 对齐运行时真实主力 {len(_aligned)} 项: {_aligned}")
+    except Exception as _e:
+        print(f"[refresh_main_contracts] 对齐真实主力失败(忽略): {_e}")
     try:
         json.dump(override, open(OVERRIDE_FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
         print(f"[refresh_main_contracts] 已写权威覆盖 {len(override)} 品种 -> {OVERRIDE_FILE}")
@@ -321,7 +345,17 @@ def main():
     # —— 防再犯（2026-08-18）：同步 trade_config.json 的 contract_specs.contract 到权威覆盖值 ——
     # 历史教训：contract_specs 是手工维护的兜底源，换月后大面积停在旧合约（曾 44 品种停在 2609），
     # 任何未优先 main_overrides 的读取路径都会拿到旧合约。此处 --apply 时一并同步，消除双源漂移。
-    _FIXED_KEYS = {"SA01", "sa01", "lc", "si"}
+    # 2026-10-15 修正：原先把 lc/si 列入 _FIXED_KEYS（与 SA01 指数一起排除），导致这两个
+    #   品种的 contract_specs 永远不跟随换月 —— 权威覆盖已是LC2611/SI2611，contract_specs
+    #   却卡在 LC2610/SI2610，形成双源漂移，且每2 小时刷一次 CURRMONTH 假警。
+    #   现在只保留真正的固定标的（SA01 指数无主力换月概念）；品种一律参与同步。
+    _FIXED_KEYS = {"SA01", "sa01"}
+    # 品种键大小写归一：contract_specs 用大写（SI/LC），override 用小写（si/lc）
+    def _spec_key(v):
+        if v in _specs:
+            return v
+        u = v.upper()
+        return u if u in _specs else None
     try:
         _tcfg_path = os.path.join(HERE, "trade_config.json")
         _tcfg = json.load(open(_tcfg_path, encoding="utf-8"))
@@ -330,7 +364,7 @@ def main():
         for _v, _code in override.items():
             if _v in _FIXED_KEYS:
                 continue
-            _key = _v if _v in _specs else (_v.upper() if _v.upper() in _specs else None)
+            _key = _spec_key(_v)
             if not _key:
                 continue
             _sp = _specs[_key]
@@ -344,24 +378,61 @@ def main():
         print(f"[refresh_main_contracts] 同步 contract_specs 失败: {_e}")
 
     # —— 异常监测：刷新失败交易所 + 卡在过往月份的旧合约 + 停在当月交割月(临界) ——
-    _abn = []  # 卡在过往月份(ym < now_ym)，确定性异常
-    _cur_month = []  # 停在当月交割月(ym == now_ym)，临界需核对
+    # 2026-10-15 修正：判定「是否真异常」必须对照**运行时真实主力**（minishare_hot_contracts.json，
+    # 那是minishare_live 实际用于取价的合约），而不是只看 override 文本。
+    # 原因：override 是刷新脚本的输出，minishare 有独立的动态主力解析（按成交量/OI 选主力），
+    # 两者本可不同步。若只按 override 判"停在当月交割月=临界"，就会在换月已正常完成
+    # （真实主力已是 2611）的情况下，每 2 小时刷一次 CURRMONTH 假警。
+    # 新口径：
+    #   真实主力也停在当月交割月 → 真临界（需要人核对）
+    #   真实主力已换月而 override 未跟上 → 归为「双源漂移」，一次性告警并自动修正
+    #   override 卡在过往月份 → 确定性异常（不变）
+    _abn = []          # 卡在过往月份(ym < now_ym)，确定性异常
+    _cur_month = []    # 真实主力也停在当月交割月 → 真临界
+    _drift = []        # override 落后于真实主力（双源漂移，可自动修正）
+    _hot = {}
+    try:
+        _hot_path = os.path.join(HERE, "minishare_hot_contracts.json")
+        if os.path.exists(_hot_path):
+            _h = json.load(open(_hot_path, encoding="utf-8")) or {}
+            for _v, _rec in _h.items():
+                if isinstance(_rec, dict):
+                    _hot[_v.lower()] = _rec.get("main", "")
+    except Exception as _e:
+        print(f"[refresh_main_contracts] 读 minishare_hot_contracts 失败(仅按 override 判定): {_e}")
+
     for v, code in override.items():
         ym = ym_of(code)
         if ym is not None and ym < now_ym:
             _abn.append(f"{v}={code}")
-        elif ym == now_ym:
+            continue
+        if ym != now_ym:
+            continue
+        # ym == now_ym：临界。核对运行时真实主力
+        _live = _hot.get(v.lower(), "")
+        _lym = ym_of(_live) if _live else None
+        if _live and _lym and _lym > now_ym:
+            _drift.append(f"{v}={code}→{_live}")  # 真实已换月，override 落后
+        else:
             _cur_month.append(f"{v}={code}")
     if failed_ex:
         _log("WARN", f"akshare 交易所源失败(相关品种未重新验证, 沿用上次值): {failed_ex}")
     if _abn:
         _log("ERROR", f"存在卡在过往月份的异常旧合约: {_abn}")
+    if _drift:
+        _log("WARN", f"override 落后于运行时真实主力(双源漂移, 将以真实主力为准修正): {_drift}")
     if _cur_month:
         _log("WARN", f"主力停在当月交割月(临界, 建议核对): {_cur_month}")
-    # 组装异常键(优先级: 异常旧合约 > 源失败 > 临界当月)
+    # 组装异常键(优先级: 异常旧合约 > 双源漂移 > 源失败 > 临界当月)
     if _abn:
         cond_key = "ABNOLD:" + ",".join(_abn)
         cond_detail = f"异常旧合约(停留过往月份): {', '.join(_abn)}。请核对 /api/state"
+    elif _drift:
+        cond_key = "DRIFT:" + ",".join(_drift)
+        cond_detail = (
+            f"override 落后于运行时真实主力: {', '.join(_drift)}。"
+            "运行中取价用的是真实主力(不受影响)，下次刷新会自动收敛"
+        )
     elif failed_ex:
         cond_key = "FETCHFAIL:" + ",".join(failed_ex)
         cond_detail = f"akshare 源失败: {', '.join(failed_ex)}。相关品种主力未重新验证, 沿用上次值"
