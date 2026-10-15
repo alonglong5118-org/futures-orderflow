@@ -133,6 +133,40 @@ def _next_month_code(old_code, now_ym):
     return f"{prefix}{yy:02d}{mm:02d}"
 
 
+# ine 独有品种白名单（module 级，供 INE 主力解析与过滤共用）
+# INE 目前仅 sc(原油) 一个独有品种；lu/nr/bc/ec 虽出现在 ine 结算数据中但实际归 SHFE。
+_INE_ONLY_SET = {"sc"}
+
+
+def _ine_main_from_hot():
+    """从 minishare_hot_contracts.json 取 INE 品种的真实主力（按实时持仓量 OI 排名选出）。
+
+    2026-10-15 新增：INE 结算价表（futures_settle_ine）**不含成交量/持仓量**
+    （实测 volume/OI 全为 0），因此 _get_ine_main 的「近月优先」口径在换月期
+    会选错：SC2611 尚未摘牌时它 YYMM 最小 → 被选成主力，而真实主力已是
+    SC2612（OI/成交均更大），导致面板持续弹「原油系统 SC2612 vs 真主力 SC2611」
+    的**反向假警**（把正确的当成错误）。
+    minishare_live 的 HOT_CACHE 是按实时 OI 排名的，其 main 字段才是真主力。
+    返回 {pfx_lower: code}；文件缺失/无 INE 品种时返回空 dict。
+    """
+    out = {}
+    try:
+        if not os.path.exists(CACHE):
+            return out
+        _cache = json.load(open(CACHE, encoding="utf-8")) or {}
+        for k, rec in _cache.items():
+            if not isinstance(rec, dict):
+                continue
+            if str(k).lower() not in _INE_ONLY_SET:
+                continue
+            _code = rec.get("main") or rec.get("secondary")
+            if _code:
+                out[str(k).lower()] = str(_code).upper()
+    except Exception as _e:
+        print(f"  [warn] 读 minishare_hot_contracts 取 INE 主力失败: {_e}", file=sys.stderr)
+    return out
+
+
 def _get_ine_main():
     """INE(上海国际能源交易中心) 主力合约获取。
 
@@ -197,8 +231,7 @@ def _get_ine_main():
             # ine 独有品种白名单: 只有 sc(原油) 是 ine 独有
             # lu/nr/bc/ec 等品种虽出现在 ine 结算数据中, 但实际归属 SHFE
             # 必须过滤掉, 避免覆盖 SHFE 的正确主力合约
-            _INE_ONLY = {"sc"}
-            out = {pfx: code for pfx, (_, code) in variety_map.items() if pfx in _INE_ONLY}
+            out = {pfx: code for pfx, (_, code) in variety_map.items() if pfx in _INE_ONLY_SET}
             if out:
                 break
         except Exception:
@@ -235,13 +268,21 @@ def ak_main_all():
             print(f"  [warn] akshare {ex} 连续失败，跳过", file=sys.stderr)
             failed.append(ex)
 
-    # ine: 使用独立函数 (新浪源不支持 ine)
+    # ine: 2026-10-15 起优先用 minishare 实时 OI 排名（真实主力），
+    # 结算价表无成交量只能「近月优先」，换月期会选错（SC2611 vs 真主力 SC2612）。
+    # OI 源缺失时才退回 _get_ine_main 的近月兜底。
     try:
-        ine_out = _get_ine_main()
-        out.update(ine_out)
+        _ine_hot = _ine_main_from_hot()
+        if _ine_hot:
+            out.update(_ine_hot)
+        else:
+            ine_out = _get_ine_main()
+            out.update(ine_out)
     except Exception:
-        print("  [warn] ine 主力获取失败，跳过", file=sys.stderr)
-        failed.append("ine")
+        try:
+            out.update(_get_ine_main())
+        except Exception:
+            failed.append("ine")
 
     return out, failed
 
