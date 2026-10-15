@@ -599,6 +599,10 @@ START_TIME = time.time()  # 进程启动时刻（/api/health 用）
 LAST_CYCLE_TS = 0.0  # 主循环最近一次完成的时间戳（卡死检测用）
 _LAST_HEAL_TS = 0.0  # 上次自动对账时间戳（确保数据实时同步）
 _HEAL_INTERVAL = 30  # 自动对账间隔（秒）
+# 2026-10-15 降噪：记录上一次对账差异的内容指纹与重复次数。
+# 口径冲突时同一组差异会每 30s 重复出现，刷屏且无信息量；只打印首次 + 汇总。
+_LAST_HEAL_SIG = ""
+_LAST_HEAL_SIG_N = 0
 
 
 def _poll_feed(feed):
@@ -13698,7 +13702,22 @@ def _update_aux(feed, state):
         try:
             _ok, _healed, _ = at.heal_from_journal()
             if _healed:
-                print(f"[自动对账] 修正 {len(_healed)} 项: {_healed[0][:80]}...")
+                # 2026-10-15 降噪：账户真相源口径与 journal 口径不一致时（如用户按券商截图
+                # 把 realized_pnl 对齐为 +3075，而 journal 按 2 笔成交实算为 -8974），
+                # 沙盒层每轮会把 account_state 覆盖回截图口径，于是对账每 30s 都"想改"
+                # 同一组数字，日志被刷屏（实测 11+ 次/10 分钟）。
+                # 注意：heal 的写盘逻辑不能动（它仍需靠 changes 修正真正该修的字段），
+                # 只在打印层按"内容指纹"抑制重复 —— 同指纹只首次打印，之后静默计数。
+                _sig = "|".join(str(x)[:120] for x in _healed)
+                global _LAST_HEAL_SIG, _LAST_HEAL_SIG_N
+                if _sig == _LAST_HEAL_SIG:
+                    _LAST_HEAL_SIG_N += 1
+                else:
+                    if _LAST_HEAL_SIG_N> 1:
+                        print(f"[自动对账] 同上差异已重复 {_LAST_HEAL_SIG_N} 次（口径冲突，已静默）")
+                    print(f"[自动对账] 修正 {len(_healed)} 项: {_healed[0][:80]}...")
+                    _LAST_HEAL_SIG = _sig
+                    _LAST_HEAL_SIG_N = 1
             else:
                 pass  # 无变化，静默
         except Exception as _e:
@@ -13738,6 +13757,19 @@ def _update_aux(feed, state):
             am.auto_sync(acc, prices)
     except Exception as e:
         print(f"[账户监控] 异常: {repr(e)[:80]}")
+    # 2.5) 2026-10-15 引擎仓 → 账户层同步（必须在沙盒镜像之后！）
+    #  背景：paper_trading_engine 只写自己的 paper_trading_state.json，
+    #  而沙盒镜像只读 paper_account.json，两者互不相通 ⇒ 引擎开的仓在面板上完全看不见
+    #  （实测：3 腿引擎仓，账户层 positions 为空、使用率恒 0.00%）。
+    #  顺序很关键：沙盒镜像每轮整份覆盖 snapshot，本同步必须在其之后执行才能保住结果；
+    #  实测一次性调用会被下一轮镜像冲掉（40s后 positions 归零），故必须挂在循环内。
+    try:
+        import sync_engine_to_account as _sea
+
+        # 同步模块内部已按「补入内容指纹」去重打印，这里只在真正补入时输出。
+        _n_add, _msg = _sea.sync_engine_positions()
+    except Exception as e:
+        print(f"[引擎同步] 异常: {repr(e)[:80]}")
     # 3) 更新仓位状态机（权益/保证金/当日盈亏/连亏 → NORMAL/WARNING/LOCKED）
     try:
         prices = {s: feed.price(s) for s in SYMBOLS}
