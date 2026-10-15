@@ -6865,9 +6865,18 @@ function switchTab(name){
     if(typeof refreshSensitivity==='function') refreshSensitivity();
   }
   // ===== group 模式下：同时刷新该组内所有 pane =====
+  // 2026-10-15 修（结构性缺陷）：原实现只在这里手写覆盖了 cockpit/adv/disc/perf/metrics
+  // 5 个 pane，其余 9 个 pane（signals/seat/anomaly/alerts/trade/paper/trade2/
+  // focus/features）在「点击书签」这条主路径上从未被刷新——因为书签传的是组名
+  // （如 switchTab('scan')），下面那些 if(pid==='signals') 永远进不去。
+  // 症状：点扫描书签，#sig-history 永远停在「加载中…」（实测 /api/signals 有 101 条、
+  // 今日 4 条，手动调 refreshSignalHistory() 立即渲染成功 ⇒ 数据与函数都没问题，
+  // 纯粹是触发路径缺失）。改为统一走 refreshPane()，覆盖全部分组。
   if(isGroup){
     for(const pid of GROUP_OF[name]){
-      // 调一次单 pane 的刷新逻辑
+      // 调一次单 pane 的刷新逻辑（统一入口，覆盖全部 pane）
+      refreshPane(pid);
+      // （以下为历史遗留的重复调用，幂等，保留以防个别 pane 有特殊时序依赖）
       if(pid==='cockpit') renderCockpit && renderCockpit();
       if(pid==='adv'){ refreshAdv && refreshAdv(); refreshMetrics && refreshMetrics(); }
       if(pid==='disc'){
@@ -6912,6 +6921,115 @@ function switchTab(name){
     startAnalyzeAutoRefresh();
   } else {
     stopAnalyzeAutoRefresh();
+  }
+}
+
+/* ==========================================================================
+ * 2026-10-15 新增：refreshPane(pid) —— 单个 pane 的刷新入口（统一真相源）
+ * 背景（结构性缺陷）：书签点击传的是「组名」，而原先只有 5 个 pane 在组循环里
+ * 被手写覆盖，其余 9 个 pane 在点书签这条主路径上永远不刷新。
+ * 现在 switchTab 的组循环对每个 pane 调一次本函数，保证「点到哪个书签，
+ * 该书签下所有卡片都会刷新」，不再出现卡片永远停在「加载中…」的情况。
+ * 所有调用都用 typeof 守卫 + 幂等（重复调用无副作用）。
+ * ========================================================================== */
+function refreshPane(pid){
+  if(pid==='cockpit'){
+    if(typeof renderCockpit==='function') renderCockpit();
+  }
+  else if(pid==='account'){
+    if(typeof refreshAccount==='function') refreshAccount();
+    if(typeof refreshAccountSync==='function') refreshAccountSync();
+    if(typeof refreshSentiment==='function') refreshSentiment();
+    // #feed-count（共 N 条信号）就挂在账户页，却只在 alerts 分支里刷新 ⇒ 补上
+    if(typeof refreshSignalFeed==='function') refreshSignalFeed();
+  }
+  else if(pid==='signals'){
+    if(typeof refresh==='function') refresh();
+    if(typeof refreshSignalHistory==='function') refreshSignalHistory();
+    if(typeof refreshSignalFeed==='function') refreshSignalFeed();
+  }
+  else if(pid==='seat'){
+    if(typeof refreshCposRank==='function') refreshCposRank();
+  }
+  else if(pid==='anomaly'){
+    if(typeof refreshAnomaly==='function') refreshAnomaly();
+  }
+  else if(pid==='alerts'){
+    if(typeof refreshAlerts==='function') refreshAlerts();
+    if(typeof refreshAlertHistory==='function') refreshAlertHistory();
+    if(typeof refreshRisk==='function') refreshRisk();
+    if(typeof refreshDrawdown==='function') refreshDrawdown();
+    if(typeof refreshKill==='function') refreshKill();
+    if(typeof refreshSentiment==='function') refreshSentiment();
+    if(typeof refreshSR==='function') refreshSR();
+    if(typeof refreshSectorHeatmap==='function') refreshSectorHeatmap();
+    if(typeof refreshScan==='function') refreshScan();
+    if(typeof refreshScreener==='function') refreshScreener();
+    if(typeof refreshSignalFeed==='function') refreshSignalFeed();
+  }
+  else if(pid==='adv'){
+    if(typeof refreshAdv==='function') refreshAdv();
+    if(typeof refreshMetrics==='function') refreshMetrics();
+  }
+  else if(pid==='trade'){
+    if(typeof refreshJournalList==='function') refreshJournalList(true);
+    if(typeof refreshJournalSession==='function') refreshJournalSession();
+    if(typeof refreshJournal==='function') refreshJournal();
+  }
+  else if(pid==='paper'){
+    if(typeof refreshPaper==='function') refreshPaper();
+    setTimeout(function(){ if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200);
+  }
+  else if(pid==='trade2'){
+    // 持仓下单页顶部那排账户 KPI（#a-equity / #a-usage / #a-margin …）
+    // 由 refreshAccount 填充，但该页此前没有任何刷新触发点 ⇒ 补上
+    if(typeof refreshAccount==='function') refreshAccount();
+    if(typeof refreshAccountSync==='function') refreshAccountSync();
+    if(typeof refreshJournalSymsQuiet==='function') refreshJournalSymsQuiet();
+  }
+  else if(pid==='chat'){
+    if(typeof loadChatDays==='function') loadChatDays();
+    if(typeof renderChatFeed==='function') renderChatFeed(LAST_CHAT);
+  }
+  else if(pid==='disc'){
+    if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
+    if(typeof refreshStrategy==='function') refreshStrategy();
+    if(typeof refreshPlayback==='function') refreshPlayback();
+    if(typeof refreshJournalSession==='function') refreshJournalSession();
+    if(typeof refreshJournal==='function') refreshJournal();
+  }
+  else if(pid==='perf'){
+    if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
+    if(typeof refreshPerformance==='function') refreshPerformance();
+    if(typeof refreshDiscipline==='function') refreshDiscipline();
+    if(typeof refreshRules==='function') refreshRules();
+    if(typeof refreshAttribution==='function') refreshAttribution();
+    if(typeof refreshCorrelation==='function') refreshCorrelation();
+    if(typeof refreshStress==='function') refreshStress();
+    if(typeof refreshVar==='function') refreshVar();
+    if(typeof refreshSpread==='function') refreshSpread();
+    if(typeof refreshCorrStress==='function') refreshCorrStress();
+    if(typeof refreshGbm==='function') refreshGbm();
+    if(typeof refreshPlayback==='function') refreshPlayback();
+    if(typeof refreshJournalSession==='function') refreshJournalSession();
+    if(typeof refreshCalibration==='function') refreshCalibration();
+    if(typeof refreshSector==='function') refreshSector();
+    if(typeof refreshVolTarget==='function') refreshVolTarget();
+    if(typeof refreshLiqRisk==='function') refreshLiqRisk();
+    if(typeof refreshGatedNotices==='function') refreshGatedNotices();
+    if(typeof refreshCGateSuppressions==='function') refreshCGateSuppressions();
+    if(typeof refreshSensitivity==='function') refreshSensitivity();
+  }
+  else if(pid==='metrics'){
+    if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
+    if(typeof refreshMetrics==='function') refreshMetrics();
+  }
+  else if(pid==='focus'){
+    if(typeof refreshFocus==='function') refreshFocus();
+  }
+  else if(pid==='features'){
+    // 特性开关总览：此前只有手动点「🔄 立即刷新」按钮才会渲染，进页面永远是「加载中…」
+    if(typeof refreshFeatures==='function') refreshFeatures();
   }
 }
 
@@ -9253,7 +9371,18 @@ setInterval(()=>{ if(!_userActionInProgress && !_refreshBusy) refreshRiskBar(); 
 async function refreshAnomaly(){
   try{
     const r=await _smartFetch('/api/anomaly');const a=await r.json();
-    if(!a.ok){return;}
+    // 2026-10-15 修：非交易时段 feed 无有效 OHLC 快照 ⇒ anomaly_scan.compute() 返回
+    // ok=false/total=0。原实现直接 return，副标题与两条榜单全部留空，
+    // 用户无法区分「休市没数据」和「模块坏了」。这里给出明确状态文案。
+    if(!a.ok){
+      const _sub=document.getElementById('anom-sub');
+      if(_sub) _sub.textContent = '休市/无有效快照 · 未扫描（0 品种）';
+      const _up=document.getElementById('anom-up');
+      const _dn=document.getElementById('anom-down');
+      if(_up) _up.innerHTML='<li class="stamp">非交易时段，暂无异动数据</li>';
+      if(_dn) _dn.innerHTML='<li class="stamp">非交易时段，暂无异动数据</li>';
+      return;
+    }
     document.getElementById('anom-sub').textContent=`扫描 ${a.total} 品种 @${a.updated}`;
     const up=document.getElementById('anom-up');up.innerHTML='';
     for(const x of (a.top_up||[])){

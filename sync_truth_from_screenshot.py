@@ -193,6 +193,12 @@ def main():
     tj = {
         "trades": [
             {
+                # 2026-10-16 补：原先缺 id / time 两个键。
+                # record_entry 落盘的每笔成交都有这两个键，而 update_trade() 按 id 定位、
+                # 多处热路径按 time 排序展示。缺失虽被 _trade_time 兜底不致命，
+                # 但会让「成交明细」列表出现空时间列，且无法被 update_trade 编辑。
+                "id": "20261014_truth_sync_ru2701",
+                "time": "2026-10-14 22:30:33",   # 已平仓 ⇒ 取 exit_time（与 _trade_time 语义一致）
                 "symbol": "ru",
                 "name": "橡胶",
                 "direction": "多",
@@ -231,10 +237,30 @@ def main():
                 ),
             }
         ],
-        "summary": {},
+        # 2026-10-16 修：原先写空 dict。trade_journal._save() 落盘时会自动重算 summary，
+        # 但本脚本是裸 json.dump 直接写文件、绕过了 _save()，于是 summary 永远是 {}。
+        # 后果：/api/self_check 的「账户↔交易记录持仓一致性」读到 summary.open_trades=None
+        # 而实际未平仓数=0 ⇒ 判 FAIL（6 项自检里唯一一项红）。
+        # 这里改用 trade_journal 自己的算法计算，保证与运行时口径完全一致。
+        "summary": {},  # ← 下一行立即用 _compute_summary 覆盖（此处仅占位）
         "updated": now,
         "_truth_source": "用户截图 2026-10-15 22:11 (账户_sell0Y2K)",
     }
+    # 用 trade_journal 官方算法重算（不自己另写一套，避免口径漂移）
+    try:
+        import trade_journal as _tjmod
+        tj["summary"] = _tjmod._compute_summary(tj)
+    except Exception as _e:
+        print(f"[警告] summary 重算失败: {_e!r}，回退为空 dict")
+        tj["summary"] = {}
+    # 硬断言：写入前必须自洽，否则宁可报错也不要再留下一个 FAIL 的自检项
+    _open_n = len([t for t in tj["trades"] if t.get("pnl") is None])
+    assert tj["summary"].get("open_trades") == _open_n, (
+        f"summary.open_trades={tj['summary'].get('open_trades')} != 实际未平仓 {_open_n}"
+    )
+    assert tj["summary"].get("total_pnl") == REALIZED_ALIGN, (
+        f"summary.total_pnl={tj['summary'].get('total_pnl')} != 对齐值 {REALIZED_ALIGN}"
+    )
     _write("trade_journal.json", tj)
 
     # ── 4. account_state.json ──空仓 + 权益对齐 ──
