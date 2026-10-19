@@ -463,6 +463,13 @@ class PaperTradingEngine:
                 }
             )
 
+            # ── 同步到成交记录（journal）：失败不影响主流程 ──
+            try:
+                import trade_journal as _tj
+                _tj.record_entry(symbol, position["direction"], lots, position["entry_price"], signal_id=sig_id, strategy="引擎自动")
+            except Exception as _e:
+                print(f"[PaperEngine] 同步开仓→成交记录失败 {symbol}: {_e}")
+
             self._save_state()
             print(f"[PaperEngine] 自动开仓: {symbol} {position['direction']} {lots}手 @ {fill_price}")
             return position
@@ -653,6 +660,13 @@ class PaperTradingEngine:
         }
         self.trades.append(trade_record)
 
+        # ── 同步到成交记录（journal）：失败不影响主流程 ──
+        try:
+            import trade_journal as _tj
+            _tj.record_exit(symbol, pos["direction"], lots, price, reason=reason)
+        except Exception as _e:
+            print(f"[PaperEngine] 同步平仓→成交记录失败 {symbol}: {_e}")
+
         pos["remaining_lots"] = 0
         return {
             "symbol": symbol,
@@ -697,6 +711,13 @@ class PaperTradingEngine:
             "partial": True,
         }
         self.trades.append(trade_record)
+
+        # ── 同步到成交记录（journal）：失败不影响主流程 ──
+        try:
+            import trade_journal as _tj
+            _tj.record_exit(symbol, pos["direction"], lots, price, reason=reason)
+        except Exception as _e:
+            print(f"[PaperEngine] 同步平仓→成交记录失败 {symbol}: {_e}")
 
         print(f"[PaperEngine] 部分平仓: {symbol} {lots}手 @ {price} 原因: {reason} PnL: {pnl:+.2f}")
         return {
@@ -790,6 +811,12 @@ class PaperTradingEngine:
                     "strategy": strategy,
                 }
             )
+            # ── 同步到成交记录（journal）：失败不影响主流程 ──
+            try:
+                import trade_journal as _tj
+                _tj.record_entry(symbol, position["direction"], lots, position["entry_price"], signal_id="", strategy=strategy or "手动")
+            except Exception as _e:
+                print(f"[PaperEngine] 同步开仓→成交记录失败 {symbol}: {_e}")
             self._save_state()
             return True, "开仓成功", position
 
