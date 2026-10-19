@@ -770,6 +770,12 @@ HIGHER_TF_MA_SLOW = 55  # 大周期慢线周期
 COUNTER_TREND_POS_SCALE = 0.5  # 逆大周期时的仓位缩放比例
 COUNTER_TREND_RR_BOOST = 1.3  # 逆大周期时盈亏比要求倍率
 
+# ── P0-2（2026-10-12）：VWAP 微观惯性同源对齐（分钟级，补 higher_tf 大周期之下的短周期层）──
+VWAP_TILT_N = 24                 # 计算 VWAP 倾斜用的近 N 根 5 分钟 K 线
+VWAP_TILT_SLOPE_TH = 0.15        # 半窗 VWAP 斜率阈值(%)：超过视为有微观趋势，否则震荡
+VWAP_COUNTER_POS_SCALE = 0.7     # 趋势类信号逆 VWAP 微观趋势时的仓位缩放
+VWAP_COUNTER_RR_BOOST = 1.3      # 趋势类信号逆 VWAP 微观趋势时的盈亏比要求倍率
+
 # ═══════════════════════════════════════════
 # v6.0 新增常量 — 市场状态引擎（阶段一）
 # ═══════════════════════════════════════════
@@ -4475,6 +4481,77 @@ def apply_multi_tf_filter(signal, higher_tf_trend):
         }
 
 
+def _vwap_tilt(df_5m, n=VWAP_TILT_N):
+    """P0-2：5 分钟级 VWAP 微观惯性状态（up/down/flat/unknown），对应文章「均价线倾斜」纪律。
+    纯展示+软过滤用，不宣称 edge；异常一律回退 unknown 不阻断信号。"""
+    try:
+        if df_5m is None or len(df_5m) < n:
+            return {"state": "unknown", "vwap": None, "slope_pct": None, "price_vs_vwap": None}
+        d = df_5m.iloc[-n:]
+        hp = d.get("high"); lp = d.get("low"); cp = d.get("close"); vp = d.get("volume")
+        if hp is None or lp is None or cp is None or vp is None:
+            return {"state": "unknown", "vwap": None, "slope_pct": None, "price_vs_vwap": None}
+        tp = (hp + lp + cp) / 3.0
+        vsum = float(vp.sum())
+        vwap = float((tp * vp).sum() / vsum) if vsum > 0 else float(cp.mean())
+        h = max(1, n // 2)
+        vf = float(((tp.iloc[:h] * vp.iloc[:h]).sum()) / vp.iloc[:h].sum()) if vp.iloc[:h].sum() > 0 else vwap
+        vs = float(((tp.iloc[h:] * vp.iloc[h:]).sum()) / vp.iloc[h:].sum()) if vp.iloc[h:].sum() > 0 else vwap
+        slope_pct = (vs - vf) / abs(vf) * 100 if vf != 0 else 0.0
+        price = float(cp.iloc[-1])
+        pvv = (price - vwap) / vwap * 100 if vwap else 0.0
+        if slope_pct > VWAP_TILT_SLOPE_TH and pvv > 0:
+            state = "up"
+        elif slope_pct < -VWAP_TILT_SLOPE_TH and pvv < 0:
+            state = "down"
+        else:
+            state = "flat"
+        return {"state": state, "vwap": round(vwap, 2), "slope_pct": round(slope_pct, 3),
+                "price_vs_vwap": round(pvv, 3)}
+    except Exception as _e:
+        return {"state": "unknown", "vwap": None, "slope_pct": None, "price_vs_vwap": None, "err": repr(_e)[:60]}
+
+
+_VWAP_TREND_STRATS = {"trend", "breakout", "trend_break", "resistance_break", "orb", "顺势", "突破"}
+_VWAP_MR_STRATS = {"mean_revert", "mr", "逆势", "均值回归", "reversion"}
+
+
+def apply_vwap_tilt_filter(sig, tilt, strategy):
+    """P0-2：VWAP 微观惯性软过滤（镜像 apply_multi_tf_filter 范式，但加策略感知以免误杀 MR）。
+    - 趋势/突破类：逆微观趋势->降仓+提 RR；震荡->降仓；顺势->满仓。
+    - 均值回归类：吃反向 tilt 本就是其建仓逻辑，不降仓。
+    - 未知策略：仅暴露 tilt，不动仓位。"""
+    s = (strategy or "").lower()
+    if s in _VWAP_TREND_STRATS:
+        cls = "trend"
+    elif s in _VWAP_MR_STRATS:
+        cls = "mr"
+    else:
+        cls = "unknown"
+    st = tilt.get("state", "unknown")
+    ds = 1 if sig.get("direction") in ("多", "long") else (-1 if sig.get("direction") in ("空", "short") else 0)
+    if cls == "trend":
+        if st == "up" and ds < 0:
+            return {"passed": True, "pos_scale": VWAP_COUNTER_POS_SCALE,
+                    "rr_required": MIN_RR_RATIO * VWAP_COUNTER_RR_BOOST,
+                    "reason": f"逆VWAP微观趋势(up)，仓位x{VWAP_COUNTER_POS_SCALE}"}
+        if st == "down" and ds > 0:
+            return {"passed": True, "pos_scale": VWAP_COUNTER_POS_SCALE,
+                    "rr_required": MIN_RR_RATIO * VWAP_COUNTER_RR_BOOST,
+                    "reason": f"逆VWAP微观趋势(down)，仓位x{VWAP_COUNTER_POS_SCALE}"}
+        if st == "flat":
+            return {"passed": True, "pos_scale": 0.8, "rr_required": MIN_RR_RATIO,
+                    "reason": "VWAP微观震荡，仓位x0.8"}
+        return {"passed": True, "pos_scale": 1.0, "rr_required": MIN_RR_RATIO,
+                "reason": f"顺VWAP微观趋势({st})"}
+    elif cls == "mr":
+        return {"passed": True, "pos_scale": 1.0, "rr_required": MIN_RR_RATIO,
+                "reason": f"均值回归·吃反向tilt({st})，不降仓"}
+    else:
+        return {"passed": True, "pos_scale": 1.0, "rr_required": MIN_RR_RATIO,
+                "reason": f"策略未知({strategy})·VWAP仅暴露不调仓"}
+
+
 def _compute_graded_stop_levels(entry, stop, t1, t2, atr, direction):
     """计算分级止损的各档位价格。
     返回: {initial, breakeven, trailing, hard}
@@ -4968,7 +5045,7 @@ DEFAULT_RISK_RULES = [
         "unit": "int",
         "severity": "warning",
         "notify": True,
-        "action": "连续止损≥2 笔，软警告；≥3 笔当日冻结（禁新开，跨日自动解除）。",
+        "action": "连续止损≥2 笔即当日冻结（禁新开，跨日自动解除）；1 笔起软警告降档。与 risk_gate.consec_loss_lock=2 一致。",
     },
     {
         "id": "drawdown",
@@ -10369,6 +10446,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     continue
                 # 止损基准 ATR：夜盘用 30 分钟 ATR（中间档），日盘维持日线波动估计（详见 _compute_stop_atr）
                 stop_atr, atr_src = _compute_stop_atr(sym, df_5m, atr_daily)
+                if not stop_atr:
+                    continue  # P0-3 事前止损铁律：止损基准算不出 -> 不发该信号
                 # P2b：该品种已有持仓手数（open_positions 为 evaluate 开头已加载的真实持仓）
                 _held = next((int(p.get("lots") or 0) for p in open_positions if p.get("sym") == sym), 0)
                 # P1/P2b（2026-08-19）：T 强度缩放仓位 + 净持仓扣减；手数按日线ATR（稳定）
@@ -10544,6 +10623,28 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                                     f"盈亏比要求≥{_req_rr:.1f}:1，当前{_cur_rr:.1f}:1不足，建议观望。"
                                 )
                                 sig["reason"] += f"【逆周期盈亏比不足】{_cur_rr:.1f}:1 < {_req_rr:.1f}:1。"
+
+                # ── P0-2（2026-10-12）：VWAP 微观惯性同向对齐（分钟级，补 higher_tf 大周期层之下短周期层）──
+                if not sig.get("push_suppressed"):
+                    _tilt = _vwap_tilt(df_5m, VWAP_TILT_N)
+                    sig["vwap_tilt"] = _tilt
+                    _vf = apply_vwap_tilt_filter(sig, _tilt, sig.get("strategy", "手动"))
+                    sig["vwap_tilt_filter"] = _vf
+                    if _vf.get("pos_scale", 1.0) != 1.0:
+                        _orig = sig.get("lots", 1)
+                        sig["lots"] = max(1, int(_orig * _vf["pos_scale"]))
+                        sig["reason"] += f"【VWAP微观对齐】{_vf['reason']}"
+                    _req_rr = _vf.get("rr_required", MIN_RR_RATIO)
+                    if _req_rr > MIN_RR_RATIO:
+                        _cur_rr = sig.get("rr_ratio", 0)
+                        if _cur_rr < _req_rr:
+                            sig["push_suppressed"] = True
+                            sig.setdefault("hold_context", {})["counter_vwap_tilt_rr"] = True
+                            sig["action_advice"] = (
+                                f"{sym} 逆VWAP微观趋势({_tilt.get('state')})，盈亏比要求≥{_req_rr:.1f}:1，"
+                                f"当前{_cur_rr:.1f}:1不足，建议观望。"
+                            )
+                            sig["reason"] += f"【逆VWAP微观盈亏比不足】{_cur_rr:.1f}:1 < {_req_rr:.1f}:1。"
 
                 # P2-B（2026-08-14 整改）：逐仓增量 VaR 预交易闸
                 # 当前组合 VaR 未超上限时，校验「加入本品种最终计划手数」后组合 VaR 是否越界；
@@ -11298,6 +11399,11 @@ def start_dashboard(state):
                         for _p in snap.get("positions", []):
                             if _p.get("lots"):
                                 _p["rollover"] = rollover_info(_p.get("symbol"), _p.get("contract"))
+                    except Exception:
+                        pass
+                    # ★ 标注每笔持仓来源（引擎自动 / 手动），供面板区分自动开仓
+                    try:
+                        _annotate_sources(snap.get("positions", []))
                     except Exception:
                         pass
                     self.send_response(200)
@@ -14522,6 +14628,63 @@ def _paper_mtm(d):
     return round(total, 2)
 
 
+# ── 持仓来源标注（引擎自动开仓 / 手动）─────────────────────────────
+# 统一真相源优先级：① 持仓自带 source 字段（引擎 auto_signal / 手动 manual）
+# ② 回退到成交记录(journal) 当前未平(open, pnl=None) 的开仓记录 strategy
+# ③ 默认 manual（手动）。供面板清晰区分「引擎自动开仓」与「手动开仓」。
+_OPEN_STRAT_CACHE = {"mtime": 0.0, "data": {}}
+
+
+def _journal_open_strategy(symbol, direction):
+    """返回该品种当前未平持仓的开仓策略标签（'引擎自动'/'手动'），无则 None。
+    按 journal 文件 mtime 做轻量缓存，避免每笔持仓重复读盘。"""
+    import os as _os
+    try:
+        _fp = os.path.join(HERE, "trade_journal.json")  # 与引擎默认账户成交记录同一文件
+        _mt = _os.path.getmtime(_fp)
+        if _OPEN_STRAT_CACHE["mtime"] != _mt or not _OPEN_STRAT_CACHE["data"]:
+            with open(_fp, encoding="utf-8") as f:
+                _jd = json.load(f)
+            _m = {}
+            for t in _jd.get("trades", []):
+                if t.get("pnl") is not None:
+                    continue  # 已平仓，跳过
+                _sym = t.get("symbol")
+                _d = str(t.get("direction"))
+                _td = "多" if _d in ("多", "long", "1", "buy") else ("空" if _d in ("空", "short", "-1", "sell") else None)
+                if _td is None:
+                    continue
+                _m.setdefault((_sym, _td), t.get("strategy") or "手动")
+            _OPEN_STRAT_CACHE["mtime"] = _mt
+            _OPEN_STRAT_CACHE["data"] = _m
+        _want = "多" if str(direction) in ("多", "long", "1", "buy") else ("空" if str(direction) in ("空", "short", "-1", "sell") else None)
+        if _want is None:
+            return None
+        return _OPEN_STRAT_CACHE["data"].get((symbol, _want))
+    except Exception:
+        return None
+
+
+def _annotate_sources(positions):
+    """positions: dict(sym->pos) 或 list[pos]。原地给每笔持仓补充 source / strategy_label。"""
+    items = list(positions.values()) if isinstance(positions, dict) else list(positions)
+    for p in items:
+        if not isinstance(p, dict):
+            continue
+        _src = p.get("source")
+        if _src == "auto_signal":
+            p["source"], p["strategy_label"] = "auto_signal", "引擎自动"
+        elif _src == "manual":
+            p["source"], p["strategy_label"] = "manual", "手动"
+        else:
+            _lab = _journal_open_strategy(p.get("symbol"), p.get("direction"))
+            if _lab == "引擎自动":
+                p["source"], p["strategy_label"] = "auto_signal", "引擎自动"
+            else:
+                p["source"], p["strategy_label"] = "manual", "手动"
+    return positions
+
+
 def paper_state():
     d = _paper_load()
     mtm = _paper_mtm(d)
@@ -14552,6 +14715,10 @@ def paper_state():
             q["cur"] = px
             q["pnl"] = round((px - p["avg"]) * mult * p["lots"] * sign, 2)
         pos_out[sym] = q
+    # ★ 标注每笔持仓来源（引擎自动 / 手动），供面板清晰区分自动开仓
+    _annotate_sources(pos_out)
+    _auto_n = sum(1 for _p in pos_out.values() if _p.get("source") == "auto_signal")
+    _man_n = len(pos_out) - _auto_n
     return {
         "ok": True,
         "cash": round(d["cash"], 2),
@@ -14563,6 +14730,8 @@ def paper_state():
         "use_rate": use_rate,
         "positions": pos_out,
         "trades": d.get("trades", []),
+        "auto_count": _auto_n,
+        "manual_count": _man_n,
         "updated": d.get("updated", ""),
     }
 

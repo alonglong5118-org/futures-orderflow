@@ -2973,6 +2973,20 @@ console.log("[API Adapter] 5 条防御性映射已就绪");
         <div id="pp-trades" style="max-height:220px;overflow:auto">加载中…</div>
         </div>
       </details>
+      <div class="group-head gh-red gh-flow"><span class="gh-num">③</span><span class="gh-title">🤖 自动交易引擎（信号驱动自主开平仓）</span><span class="gh-intro"><i class="gi-chip"><b>自动</b>按活信号自主开仓/平仓</i><i class="gi-chip"><b>独立核算</b>引擎虚拟账户 · 与手动沙盒隔离</i><i class="gi-chip"><b>真相源</b>paper_trading_state.json</i></span></div>
+      <div class="decision-card st-info" id="engine-card" style="margin-bottom:12px">
+        <h2>🤖 自动交易引擎 <span class="price" id="eng-status">—</span></h2>
+        <div class="pane-status">
+          <div class="kpi st-info"><b id="eng-eq" class="mv">—</b><i>引擎权益</i></div>
+          <div class="kpi st-info"><b id="eng-mtm" class="mv">—</b><i>浮动盈亏</i></div>
+          <div class="kpi st-info"><b id="eng-real" class="mv">—</b><i>已实现</i></div>
+          <div class="kpi st-info"><b id="eng-ret" class="mv">—</b><i>累计收益%</i></div>
+          <div class="kpi st-info"><b id="eng-posn" class="mv">—</b><i>持仓数</i></div>
+        </div>
+        <div id="eng-positions" style="max-height:260px;overflow:auto;margin:8px 0">加载中…</div>
+        <div class="group-head gh-amber" style="margin-top:6px"><span class="gh-title" style="font-size:13px">📜 自动开平仓流水（最近，🤖=引擎自动 · ✋=手动）</span></div>
+        <div id="eng-trades" style="max-height:200px;overflow:auto">加载中…</div>
+      </div>
     </section></div>
     
     <div class="pane-group" id="group-position">
@@ -6811,7 +6825,7 @@ function switchTab(name){
     if(typeof refreshDailyReviewSummary==='function') refreshDailyReviewSummary(true);
     if(typeof refreshMetrics==='function') refreshMetrics();
   }
-  if(name==='paper' || name==='execution'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); }
+  if(name==='paper' || name==='execution'){ setTimeout(() => { if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200); if(typeof refreshPaper==='function') refreshPaper(); if(typeof refreshEnginePanel==='function') refreshEnginePanel(); }
   if(name==='signals'){ if(typeof refresh==='function') refresh(); if(typeof refreshSignalHistory==='function') refreshSignalHistory(); }
   if(name==='focus'){ if(typeof refreshFocus==='function') refreshFocus(); }
   if(name==='trade'){
@@ -6978,6 +6992,7 @@ function refreshPane(pid){
   }
   else if(pid==='paper'){
     if(typeof refreshPaper==='function') refreshPaper();
+    if(typeof refreshEnginePanel==='function') refreshEnginePanel();
     setTimeout(function(){ if(typeof refreshPaperSyms==='function') refreshPaperSyms(); }, 1200);
   }
   else if(pid==='trade2'){
@@ -8948,8 +8963,8 @@ setInterval(() => { if(!_userActionInProgress && !_refreshBusy) refreshAccount()
 // 2026-10-14 修复：switchTab 的按需刷新钩子只认 pane 名 'paper'，但 UI 无独立
 // 「模拟盘」tab（pane 藏在 execution 组内），钩子永不触发 → 打开「账户交易」tab
 // 时沙盒永远显示占位符。此处补全局轮询兜底（_smartFetch 对 /api/paper 有 30s 缓存）。
-setTimeout(() => { if(!_userActionInProgress && typeof refreshPaper==='function') refreshPaper(); }, 900);
-setInterval(() => { if(!_userActionInProgress && !_refreshBusy && typeof refreshPaper==='function') refreshPaper(); }, _T.acct);
+setTimeout(() => { if(!_userActionInProgress && typeof refreshPaper==='function') refreshPaper(); if(!_userActionInProgress && typeof refreshEnginePanel==='function') refreshEnginePanel(); }, 900);
+setInterval(() => { if(!_userActionInProgress && !_refreshBusy && typeof refreshPaper==='function') refreshPaper(); if(!_userActionInProgress && !_refreshBusy && typeof refreshEnginePanel==='function') refreshEnginePanel(); }, _T.acct);
 
 // 2. 信号面板（10秒）
 setTimeout(() => { if(!_userActionInProgress) refresh(); }, 1000);
@@ -9728,6 +9743,72 @@ function refreshPaperSyms(){
   }
 }
 window.refreshPaperSyms = refreshPaperSyms;
+// 🤖 自动交易引擎面板：渲染 /api/state.paper_trading（引擎自主开平仓，来源真相源 paper_trading_state.json）
+async function refreshEnginePanel(){
+  const card=document.getElementById('engine-card'); if(!card) return;
+  try{
+    const s=(await (await _smartFetch('/api/state?_t='+Date.now())).json()).paper_trading;
+    if(!s){ const pb=document.getElementById('eng-positions'); if(pb) pb.textContent='引擎未初始化'; return; }
+    const st=document.getElementById('eng-status');
+    if(st){ st.textContent = s.enabled ? '● 运行中' : '○ 已暂停'; st.style.color = s.enabled ? 'var(--green)' : 'var(--mut)'; }
+    const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+    set('eng-eq', fmt(s.equity,0));
+    set('eng-mtm', (s.mtm>=0?'+':'')+fmt(s.mtm,0));
+    set('eng-real', (s.realized_pnl>=0?'+':'')+fmt(s.realized_pnl,0));
+    set('eng-ret', (s.total_return_pct>=0?'+':'')+(s.total_return_pct||0)+'%');
+    set('eng-posn', s.position_count||0);
+    // 当前持仓（含引擎自动/手动来源徽标）
+    const pos=s.positions||[];
+    const pb=document.getElementById('eng-positions');
+    if(!pos.length){ pb.innerHTML='<div class="stamp">当前无引擎持仓</div>'; }
+    else {
+      pb.innerHTML = pos.map(p=>{
+        const isAuto = (p.source==='auto_signal') || (p.strategy==='引擎自动');
+        const chip = isAuto
+          ? '<span style="display:inline-flex;align-items:center;gap:3px;color:#ffb454;font-size:11px;font-weight:700;padding:1px 6px;border:1px solid rgba(255,180,84,.6);border-radius:10px;background:rgba(255,150,40,.16)">🤖 引擎自动开仓</span>'
+          : '<span style="display:inline-flex;align-items:center;gap:3px;color:var(--mut);font-size:11px;padding:1px 6px;border:1px solid var(--border);border-radius:10px">✋ 手动</span>';
+        const col = (p.direction==='多')?'var(--red)':'var(--green)';
+        const mtm = (p.mtm!=null)?((p.mtm>=0?'+':'')+fmt(p.mtm,0)):'—';
+        const mtmCol = (p.mtm||0)>=0?'var(--red)':'var(--green)';
+        const rR = (p.mtm_R!=null)?(' · '+p.mtm_R+'R'):'';
+        return `<div style="border-bottom:.5px solid var(--border);padding:6px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <b>${p.name||p.symbol} <span class="ccode">${cc(p.symbol)}</span></b>
+            <span style="color:${col}">${p.direction} ${p.lots}手</span>
+            <span style="opacity:.8">开 ${p.entry_price}</span>
+            <span style="opacity:.8">现 ${p.current_price!=null?p.current_price:'—'}</span>
+            <span style="color:${mtmCol}">${mtm}${rR}</span>
+            ${chip}
+          </div>
+          <div class="stamp" style="margin-top:3px;font-size:11px">止损 ${p.stop_price} · 目标 ${p.target_price} · 持仓 ${p.hours_held!=null?p.hours_held+'h':'—'} · 开仓 ${p.open_time||'—'}</div>
+        </div>`;
+      }).join('');
+    }
+    // 自动开平仓流水
+    const tr=s.recent_trades||[];
+    const tb=document.getElementById('eng-trades');
+    if(!tr.length){ tb.innerHTML='<div class="stamp">暂无流水</div>'; }
+    else {
+      tb.innerHTML = tr.slice(0,40).map(t=>{
+        const isAuto = (t.source==='auto_signal') || (t.strategy==='引擎自动');
+        const tag = isAuto
+          ? '<span style="color:#ffb454;font-weight:700">🤖自动</span>'
+          : (t.strategy? `<span style="color:var(--mut)">${t.strategy}</span>` : '<span style="color:var(--mut)">✋手动</span>');
+        const act = t.type==='open' ? '开仓' : '平仓';
+        const px = t.type==='open' ? (t.price!=null?t.price:'—') : (t.exit_price!=null?t.exit_price:'—');
+        const pnl = (t.type==='close' && t.pnl!=null) ? ` <span style="${(t.pnl>=0?'color:var(--red)':'color:var(--green)')}">${(t.pnl>=0?'+':'')+fmt(t.pnl,0)}</span>` : '';
+        const reason = (t.reason && t.reason!=='手动' && t.reason!=='引擎自动') ? `（${t.reason}）` : '';
+        return `<div style="padding:3px 0;border-bottom:.5px solid var(--border);font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="stamp" style="min-width:118px">${t.time||'—'}</span>
+          <span style="min-width:32px">${act}</span>
+          <b>${t.symbol}</b> ${t.direction||''} ${t.lots}手 @${px} ${tag} ${pnl} ${reason}
+        </div>`;
+      }).join('');
+    }
+  }catch(e){ const pb=document.getElementById('eng-positions'); if(pb) pb.innerHTML='<div class="stamp">加载失败: '+e+'</div>'; }
+}
+window.refreshEnginePanel = refreshEnginePanel;
+
 async function refreshPaper(){
   const box=document.getElementById('pp-positions'); const tx=document.getElementById('pp-trades');
   if(!box) return;
