@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 
@@ -364,13 +364,25 @@ def _by_symbol(trades):
     return {s: aggregate(v, "R", "outcome") for s, v in out.items()}
 
 
-def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: float = 1 / 3):
+def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: float = 1 / 3,
+                         window_days: int = 30, max_gate_age_days: int = 30):
     """基于 papertrack_report.json 中已判定交易，算每个品种的「近期表现门槛」。
-    取每个品种最近 window_n 笔已判定交易：
-      · 笔数 < min_trades            → 样本不足，不门控（保守，允许发信号）
-      · 胜率 < 盈亏平衡线 或 累计R<0 → 门控（暂停发信号）
-      · 否则                         → 不门控
-    返回 {sym: {gated, n, win_rate, cum_R, last_time}}。
+
+    ⚠️ 2026-10-19 死锁修复：原逻辑取「最近 window_n 笔」交易，导致一旦某品种亏损被暂停、
+    便不再发信号 → 交易记录冻结在亏损态 → 永远不满足「转正解除」→ 自我锁死死锁
+    （实测 24/40 品种从 8~9 月起被永久静音，10 月零信号）。
+    改为：
+      1) recent 取「最近 window_days 天内」交易（滚动日历窗口），过期交易自然老化出窗；
+      2) 若品种最后交易距今 > max_gate_age_days 天 → 强制解除门控（自动过期，防永久静音）；
+      3) 日历窗口内样本不足(min_trades) → 不门控（保守放行，避免对无新数据品种误杀）；
+      4) 仅在「窗口内样本充足 且 胜率<平衡线 或 累计R<0」时才门控。
+
+    取每个品种窗口内交易：
+      · 最后交易过旧(>max_gate_age_days) → 自动解除门控
+      · 窗口内笔数 < min_trades        → 样本不足，不门控（保守，允许发信号）
+      · 胜率 < 盈亏平衡线 或 累计R<0   → 门控（暂停发信号）
+      · 否则                            → 不门控
+    返回 {sym: {gated, n, win_rate, cum_R, last_time, reason}}。
     门控是动态的：某品种近期转负自动暂停，恢复正数后下次调用自动解除。"""
     try:
         with open(REPORT_JSON, encoding="utf-8") as f:
@@ -381,24 +393,46 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: 
     by_sym = {}
     for t in trades:
         by_sym.setdefault(t["symbol"], []).append(t)
+    _now = datetime.now()
     gates = {}
     for sym, ts in by_sym.items():
         ts = sorted(ts, key=lambda x: x.get("time") or "")
-        recent = ts[-window_n:]
+        last_time = ts[-1].get("time")
+        # ② 自动过期：最后交易过旧 → 解除门控（防死锁永久静音）
+        if last_time:
+            try:
+                _lt = datetime.strptime(last_time, "%Y-%m-%d %H:%M:%S")
+                if (_now - _lt).days > max_gate_age_days:
+                    gates[sym] = {
+                        "gated": False,
+                        "n": len(ts),
+                        "win_rate": None,
+                        "cum_R": None,
+                        "reason": f"自动过期(最后交易{_lt.date()}距今>={max_gate_age_days}天)",
+                        "last_time": last_time,
+                    }
+                    continue
+            except Exception:
+                pass
+        # ① 滚动日历窗口：仅取最近 window_days 天内的交易
+        cut = (_now - timedelta(days=window_days)).strftime("%Y-%m-%d %H:%M:%S")
+        recent = [t for t in ts if (t.get("time") or "") >= cut]
         n = len(recent)
+        # ③ 窗口内样本不足 → 不门控（保守放行，不对无新数据品种误杀）
         if n < min_trades:
             gates[sym] = {
                 "gated": False,
                 "n": n,
                 "win_rate": None,
                 "cum_R": None,
-                "reason": "样本不足",
-                "last_time": ts[-1].get("time"),
+                "reason": "窗口内样本不足(放行)",
+                "last_time": last_time,
             }
             continue
         wins = sum(1 for t in recent if t.get("outcome") == "win")
         wr = wins / n
         cum_R = sum(t.get("R", 0.0) for t in recent)
+        # ④ 仅窗口内样本充足且转负时才门控
         gated = (wr < breakeven_wr) or (cum_R < 0)
         reason = []
         if wr < breakeven_wr:
@@ -411,7 +445,7 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: 
             "win_rate": round(wr, 3),
             "cum_R": round(cum_R, 3),
             "reason": "；".join(reason) if reason else "正常",
-            "last_time": ts[-1].get("time"),
+            "last_time": last_time,
         }
     return gates
 
