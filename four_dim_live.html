@@ -9016,6 +9016,59 @@ if(!_IS_MOBILE){
   }, 3000);
 }
 
+// ===== 铁律 2026-10-19：所有书签/模块永久实时刷新 =====
+// 现状缺口：原有 setInterval 只覆盖账户(3s)/信号(10s)/成交(5s)/驾驶舱(15s)/右侧面板(45s)/元数据(60s)
+// 等少数模块，其余书签（复盘/指标/持仓/策略/相关性/压力/VaR/日历/数据质量/预警/席位…）仅由
+// refreshPane() 在「用户切到该书签」时触发 → 停在其它书签时这些模块全是旧数据，违反实时铁律。
+// 修复：合并 refreshPane 各分支 + 散落 UI 模块的刷新函数，去重后做 round-robin 永久轮询，
+// 保证每个书签里的每个模块都持续实时更新（铁律：永远实时）。
+// 排除项：① 高频快轮询已覆盖的函数（refreshAccount/refresh/refreshJournalList/renderCockpit/
+//          refreshPaper/refreshEnginePanel/refreshSentiment/refreshSR/refreshSectorHeatmap/
+//          refreshScan/refreshScreener/loadSymMeta/refreshRiskBar）避免重复打后端；
+//       ② 用户按需触发的重计算模块（refreshMontecarlo/refreshBacktestViz）避免常驻轰炸后端。
+const _MASTER_SWEEP_FNS = [
+  // —— 书签映射的「长尾」模块（原仅切 tab 才刷新）——
+  'refreshSignalFeed','refreshSignalHistory','refreshCposRank','refreshAlerts',
+  'refreshAlertHistory','refreshAdv','refreshMetrics','refreshJournalSession',
+  'refreshJournal','refreshPaperSyms','refreshJournalSymsQuiet','refreshChatToday',
+  'loadChatDays','refreshDailyReviewSummary','refreshStrategy','refreshPlayback',
+  'refreshPerformance','refreshRules','refreshAttribution','refreshCorrelation',
+  'refreshStress','refreshVar','refreshSpread','refreshCorrStress','refreshGbm',
+  'refreshCalibration','refreshSector','refreshVolTarget','refreshLiqRisk',
+  'refreshGatedNotices','refreshCGateSuppressions','refreshSensitivity',
+  'refreshFocus','refreshFeatures',
+  // —— 散落但属于 UI 模块、原无自动刷新点的 ——
+  'refreshCrossCheck','refreshPremarket','refreshDataQuality','refreshCalendar',
+  'refreshBlunder','refreshPush','refreshTools'
+];
+let _masterSweepIdx = 0;
+const _MASTER_SWEEP_TICK_MS = _IS_MOBILE ? 8000 : 5000;   // 每轮间隔
+const _MASTER_SWEEP_BATCH   = 6;                            // 每轮刷新的模块数（round-robin 分批）
+const _MASTER_SWEEP_CYCLE_MS = _MASTER_SWEEP_TICK_MS * Math.ceil(_MASTER_SWEEP_FNS.length / _MASTER_SWEEP_BATCH);
+
+function tickMasterSweep(){
+  if(_userActionInProgress || _refreshBusy) return;   // 与现有保护一致：用户操作/刷新中不打断
+  if(document.hidden) return;                         // 页面不可见不消耗资源（浏览器本身也会降频）
+  const done = new Set();
+  for(let i=0;i<_MASTER_SWEEP_BATCH;i++){
+    const fn = _MASTER_SWEEP_FNS[_masterSweepIdx % _MASTER_SWEEP_FNS.length];
+    _masterSweepIdx++;
+    if(done.has(fn)) continue;
+    done.add(fn);
+    try {
+      if(typeof window[fn] === 'function'){
+        const p = window[fn]();
+        if(p && typeof p.catch === 'function') p.catch(e=>console.error('[masterSweep] '+fn+' rejected:', e));
+      }
+    } catch(e){ console.error('[masterSweep] '+fn+' failed:', e); }
+  }
+  window.__masterSweepTick = (window.__masterSweepTick||0)+1;
+  window.__masterSweepLast = Date.now();
+}
+setInterval(tickMasterSweep, _MASTER_SWEEP_TICK_MS);
+setTimeout(tickMasterSweep, 1500);   // 预热：打开面板即开始第一轮
+console.log('[masterSweep] 已启动：'+_MASTER_SWEEP_FNS.length+' 个模块，每 '+_MASTER_SWEEP_TICK_MS+'ms 轮询 '+_MASTER_SWEEP_BATCH+' 个，全量周期≈'+_MASTER_SWEEP_CYCLE_MS+'ms');
+
 // ===== 数据域事件总线（2026-09-13）=====
 // 数据域 → API 端点归类见交付报告。总线职责：域数据变化 → 三级级联刷新订阅者。
 // 放在同一 <script> 块内（_userActionInProgress/_refreshBusy 是顶层 let，跨 script 不可见）。
