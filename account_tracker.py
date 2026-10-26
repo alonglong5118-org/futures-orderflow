@@ -1,19 +1,48 @@
 """四维策略 · 账户状态追踪器（实时账户表）
 ========================================================
 读取 trade_config.json（用户填好的真实账户参数 + 品种合约参数），
-维护 account_state.json（权益 + 各品种持仓方向/手数/均价），
+维护 account_state*.json（权益 + 各品种持仓方向/手数/均价），
 用实时价算浮动盈亏 / 保证金占用 / 资金使用率 / 距风控线%。
 
-这是把规格草案 §2「账户参数表」从占位值变成**真实可实时更新**的系统：
-- 用户盘中开/平/加/减仓 → record_trade() → 表格实时变
-- 每日收盘后同步一次真实权益 → set_equity()
-- 浮动盈亏/资金占用用 minishare 实时价自动算，不手动填
+【账户映射表 — 2026-09-16 确认】
+  ┌──────────┬───────────────────────────┬───────────────┬───────────────────────────┐
+  │ account  │ 实际含义                  │ 当前权益       │ 持仓                       │
+  ├──────────┼───────────────────────────┼───────────────┼───────────────────────────┤
+  │ default  │ 模拟盘（Papertrack）      │ ~974,675       │ al(23870多2) + ru(18830多2) │
+  │ live     │ 实盘小账户（西南期货）    │ ~98,773        │ 空仓                       │
+  │ paper    │ 备用模拟盘                │ 1,000,000      │ 空仓                       │
+  └──────────┴───────────────────────────┴───────────────┴───────────────────────────┘
+  ⚠️ account=live 曾被错误塞入 default journal 的 7 个持仓（2026-09-11 调试事故），
+     已于 2026-09-16 按实盘截图重置为 98,773 空仓。
+
+【数据隔离 —— 账户切换机制】
+  本文件用 threading.local() 做账户隔离：
+    at.set_account('live')     → 后续 load_state()/save_state() 读写 account_state_live.json
+    at.set_account('default')  → 读写 account_state.json
+  同样隔离 trade_journal_live.json / trade_journal.json。
+  ★ key func: set_account() / get_account() / state_file_for(account_id)
+
+【heal_from_journal 加固 —— 防止 journal 污染】
+  journal 是"开仓/平仓成交记录的权威源"，但它是手动维护的，可能：
+    - 被误改（品种名大小写 / 多空方向）
+    - 跨账户污染（live journal 混入 default 账户的交易）
+    - 不完整（state 有持仓但 journal 只有 CLOSED 记录）
+  heal 做双重检查后才清除"僵尸持仓"：
+    条件 A: journal OPEN == 0 但 state 有持仓 → 跳过（journal 完全空）
+    条件 B: state 持仓品种 journal 只有 CLOSED 没有 OPEN → 跳过（journal 部分缺失）
+  2026-09-11 v2 加固：之前只检查条件 A，导致 live 账户被 default journal 的 CLOSED 记录误清。
+
+【品种名标准化 & 合约换月】
+  journal 里可能写 'al' 小写，contract_specs 里是 'AL' 大写。
+  _normalize_sym_for_heal() 统一处理：精确匹配 → 小写匹配 → 大写匹配。
+  合约代码由 main_overrides.json 提供主力映射（ZN2610 → ZN2611 换月时手动更新）。
 
 用法（被 runner 调用）：
   import account_tracker as at
-  at.record_trade("FG", "open", "空", 2, 901.0)   # 开仓
-  at.record_trade("FG", "close", "空", 2, 905.0)  # 平仓
-  at.set_equity(612140)                            # 同步权益
+  at.set_account('default')                        # 切换到模拟盘
+  at.record_trade("FG", "open", "空", 2, 901.0)    # 开仓
+  at.record_trade("FG", "close", "空", 2, 905.0)   # 平仓
+  at.set_equity(612140)                            # 手动同步权益 anchor（set_equity() 才改 anchor，auto_sync 绝不覆盖）
   snap = at.snapshot(prices={sym: feed.price(sym) for sym in SYMBOLS})
 """
 

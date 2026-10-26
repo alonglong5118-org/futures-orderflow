@@ -184,6 +184,7 @@ def handle_api(handler) -> None:
                 "max_positions",
                 "max_lots_per_trade",
                 "risk_per_trade_pct",
+                "max_usage_pct",
                 "default_lots",
                 "use_signal_lots",
                 "enable_trailing",

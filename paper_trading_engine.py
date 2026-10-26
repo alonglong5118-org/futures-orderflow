@@ -40,8 +40,9 @@ SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 DEFAULT_CONFIG = {
     "enabled": True,  # 是否启用自动模拟交易
     "init_cash": 1_000_000.0,  # 初始资金
-    "max_positions": 8,  # 最大同时持仓数
-    "max_lots_per_trade": 5,  # 单笔最大手数
+    "max_positions": 4,  # 最大同时持仓数（腿数）—— 沿实盘铁律：总持仓≤4
+    "max_lots_per_trade": 2,  # 单笔最大手数 —— 沿实盘铁律：单合约≤2
+    "max_usage_pct": 45.0,  # 总仓位上限：保证金占用 ≤ 本金的 45% —— 沿实盘铁律：账户使用率≤45%
     "risk_per_trade_pct": 1.0,  # 单笔风险占资金比例（%）
     "default_lots": 1,  # 默认开仓手数（当信号未指定或为0时）
     "use_signal_lots": True,  # 是否使用信号推荐的手数
@@ -127,6 +128,7 @@ class PaperTradingEngine:
         self._thread: threading.Thread | None = None
         self._last_signal_hash = ""
         self._processed_signals: set[str] = set()
+        self._run_start_ts = 0.0  # 运行起点：只处理此时间之后的信号（清旧重跑用）
         self.state_file = state_file or STATE_FILE
         self._load_state()
 
@@ -147,6 +149,7 @@ class PaperTradingEngine:
                 self.stats = state.get("stats", {})
                 self._processed_signals = set(state.get("processed_signals", []))
                 self._cooldowns = state.get("cooldowns", {})
+                self._run_start_ts = float(state.get("run_start_ts", 0.0))
                 self.config = {**self.config, **state.get("config", {})}
                 # 兼容修复：旧版本持仓可能 stop/target 为 None，自动补填默认值
                 self._fixup_positions()
@@ -166,6 +169,7 @@ class PaperTradingEngine:
         self.stats = {}
         self._processed_signals = set()
         self._cooldowns = {}  # symbol -> cooldown_end_timestamp
+        self._run_start_ts = 0.0  # 运行起点
 
     def _fixup_positions(self):
         """兼容修复：给旧版本持仓补填缺失的 stop/target/t1/t2/peak_price 等字段。
@@ -268,6 +272,7 @@ class PaperTradingEngine:
                 "stats": self.stats,
                 "processed_signals": list(self._processed_signals),
                 "cooldowns": self._cooldowns,
+                "run_start_ts": self._run_start_ts,
                 "config": self.config,
                 "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -300,6 +305,35 @@ class PaperTradingEngine:
         except Exception:
             return 10.0
 
+    def _get_margin_rate(self, symbol: str) -> float:
+        """获取合约保证金率（无则默认 10%）。"""
+        try:
+            return float(self.contract_specs.get(symbol, {}).get("margin_rate", 0.10))
+        except Exception:
+            return 0.10
+
+    def _total_margin(self) -> float:
+        """当前所有持仓占用的保证金合计（按开仓价计）。"""
+        tot = 0.0
+        for p in self.positions.values():
+            mult = self._get_multiplier(p["symbol"])
+            mr = self._get_margin_rate(p["symbol"])
+            tot += p["lots"] * p["entry_price"] * mult * mr
+        return tot
+
+    def _current_equity(self) -> float:
+        """当前权益 = 现金 + 已实现 + 浮动（按实时价估值）。"""
+        eq = self.cash + self.realized_pnl
+        for p in self.positions.values():
+            try:
+                px = self._get_price(p["symbol"]) or p.get("entry_price", 0)
+                mult = self._get_multiplier(p["symbol"])
+                sign = 1 if p.get("direction_en") == "long" else -1
+                eq += (px - p["entry_price"]) * mult * p["lots"] * sign
+            except Exception:
+                pass
+        return eq
+
     # ── 信号处理 ──────────────────────────────────────────────────────
 
     def check_new_signals(self) -> list[dict]:
@@ -319,6 +353,15 @@ class PaperTradingEngine:
 
             # 只处理最新的（前 10 条内的新信号）
             for sig in signals[:10]:
+                # 只处理运行起点之后的信号（reset 后避免回放历史）
+                _st = sig.get("time")
+                if self._run_start_ts > 0 and _st:
+                    try:
+                        _ts = datetime.strptime(_st, "%Y-%m-%d %H:%M:%S").timestamp()
+                        if _ts < self._run_start_ts:
+                            continue
+                    except Exception:
+                        pass
                 sig_id = sig_hash(sig)
                 if sig_id in self._processed_signals:
                     continue
@@ -382,15 +425,6 @@ class PaperTradingEngine:
             else:
                 fill_price = float(entry_price) - slip
 
-            # 确定手数
-            if self.config["use_signal_lots"] and signal.get("lots"):
-                lots = int(signal["lots"])
-            else:
-                lots = self.config["default_lots"]
-            lots = min(lots, self.config["max_lots_per_trade"])
-            if lots <= 0:
-                lots = 1
-
             # 获取止损止盈
             stop = signal.get("stop")
             target = signal.get("target")
@@ -414,6 +448,27 @@ class PaperTradingEngine:
 
             # 计算 R 倍数
             target_R = round(abs(target - fill_price) / stop_dist, 2)
+
+            # 确定手数（风险法：本金 × 单笔风险% ÷ 每手风险，封顶单合约上限，保底 1）
+            equity = self._current_equity()
+            risk_budget = equity * (self.config.get("risk_per_trade_pct", 1.0) / 100.0)
+            mult = self._get_multiplier(symbol)
+            per_lot_risk = stop_dist * mult
+            if per_lot_risk > 0:
+                lots_by_risk = int(risk_budget // per_lot_risk)
+            else:
+                lots_by_risk = self.config["default_lots"]
+            lots = min(lots_by_risk, self.config["max_lots_per_trade"])
+            if lots < 1:
+                lots = 1
+
+            # 总仓位闸：开仓后总保证金占用不得超过 本金 × max_usage_pct%
+            margin_rate = self._get_margin_rate(symbol)
+            new_margin = lots * fill_price * mult * margin_rate
+            usage_cap = equity * (self.config.get("max_usage_pct", 100.0) / 100.0)
+            if self._total_margin() + new_margin > usage_cap:
+                # 超出总仓位上限：本笔不开，留待后续腾出额度再试（不标记已处理）
+                return None
 
             # 构建持仓对象
             position = {
@@ -895,8 +950,11 @@ class PaperTradingEngine:
                 "total_trades": len([t for t in self.trades if t["type"] == "close"]),
                 "stats": self.stats,
                 "config": {
+                    "enabled": self.config["enabled"],
                     "max_positions": self.config["max_positions"],
                     "max_lots_per_trade": self.config["max_lots_per_trade"],
+                    "max_usage_pct": self.config.get("max_usage_pct", 100.0),
+                    "risk_per_trade_pct": self.config.get("risk_per_trade_pct", 1.0),
                     "default_lots": self.config["default_lots"],
                     "cooldown_minutes": self.config["cooldown_minutes"],
                     "enable_trailing": self.config.get("enable_trailing", True),
@@ -1042,8 +1100,9 @@ class PaperTradingEngine:
         """重置模拟账户。"""
         with self._lock:
             self._init_state()
+            self._run_start_ts = time.time()  # 标记本次运行起点，只处理此后信号
             self._save_state()
-            print("[PaperEngine] 模拟账户已重置")
+            print("[PaperEngine] 模拟账户已重置（运行起点=%s）" % datetime.fromtimestamp(self._run_start_ts).strftime("%Y-%m-%d %H:%M:%S"))
 
 
 # ── 单例 ────────────────────────────────────────────────────────────

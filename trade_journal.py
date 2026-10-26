@@ -712,7 +712,17 @@ def _compute_summary(data):
 
 
 def summary():
-    """成交统计：总笔数 / 胜率 / 总盈亏 / 期望值 / 最大连胜/连亏。"""
+    """成交统计：总笔数 / 胜率 / 总盈亏 / 期望值 / 最大连胜/连亏。
+
+    【fee 口径 —— 2026-09-11 修复】
+      每条平仓记录有三个 fee 字段：
+        open_fee   = 开仓手续费（按 entry_price × multiplier × fee_rate）
+        close_fee  = 平仓手续费（按 exit_price × multiplier × fee_rate）
+        fee_total  = open_fee + close_fee
+      统计用 total_fee = sum(fee_total)
+      已实现净盈亏 pnl = gross_pnl - fee_total
+      (record_exit 会自动补算缺失的 open_fee，见 trade_journal.py record_exit())
+    """
     data = _load()
     closed = [t for t in data["trades"] if t.get("pnl") is not None]
     open_trades = [t for t in data["trades"] if t["pnl"] is None]
