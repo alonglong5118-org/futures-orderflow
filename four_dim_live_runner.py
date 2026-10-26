@@ -13666,6 +13666,36 @@ def _refresh_main_contracts_external():
         print(f"[换月核对] 异常: {repr(e)[:120]}")
 
 
+def _vanta_main_bridge_external():
+    """Vanta 主力判定单向只读桥（C 方案，Ken 2026-10-26 拍板）。
+
+    vanta_main_bridge.py：拉 VM 上 Vanta 天勤侧落盘的 state/main_contracts.json
+    （17 品种 KQ.m@ 主力连续判定）→ 与本系统有效主力（main_overrides 优先、
+    minishare_hot_contracts 兜底）比对（CZCE 记号归一 SA701==SA2701）→
+    前进分歧双通道写入（main_overrides.json 进程内权威层 + hot cache forced 锁），
+    单调向前拒绝回退。单向只读 Vanta（零账号/席位/流量冲突，不经天勤 API）。
+    本进程(3.13)只读其写出的 json，复用 5.4 的「外部写/内部读」模式。
+    """
+    script = os.path.join(HERE, "vanta_main_bridge.py")
+    if not os.path.exists(script):
+        return
+    py = sys.executable   # 纯标准库，无需 akshare venv
+    try:
+        print(f"[Vanta桥] 调用 {py} {script} --apply (Vanta 主力判定同步)")
+        r = subprocess.run([py, script, "--apply"], cwd=HERE, timeout=120,
+                           capture_output=True, text=True)
+        for line in (r.stdout or "").strip().splitlines()[-4:]:
+            print(f"[Vanta桥] {line}")
+        if r.returncode == 3:
+            print("[Vanta桥] minishare_live 独立进程在运行——本次跳过 apply（下周期重试）")
+        elif r.returncode == 1:
+            print("[Vanta桥] Vanta 数据不可用（VM 睡眠/不新鲜）——不动系统缓存（降级安全）")
+        elif r.returncode != 0:
+            print(f"[Vanta桥] 非零退出 {r.returncode}: {(r.stderr or '').strip()[:200]}")
+    except Exception as e:
+        print(f"[Vanta桥] 异常: {repr(e)[:120]}")
+
+
 # ---------------------------------------------------------------------------
 # B2 换月主动提醒：运行时「系统在用主力 vs 交易所真实主力」比对
 # runner(3.13) 无 akshare，经 subprocess 调系统 python3.9+akshare 的
@@ -14135,6 +14165,20 @@ def _update_aux(feed, state):
             refresh_ak_main(force=True)
     except Exception:
         pass
+    # 5.6) Vanta 主力判定单向只读桥（C 方案，Ken 2026-10-26 拍板）：
+    #      vanta_main_bridge.py 拉 VM 上 Vanta 天勤侧落盘的 main_contracts.json
+    #      （17 品种 KQ.m@ 主力连续判定）→ 与本系统有效主力比对（CZCE 记号归一
+    #      SA701==SA2701）→ 前进分歧双通道写入（main_overrides.json 进程内权威层 +
+    #      hot cache forced 锁），单调向前拒绝回退。单向只读（零账号/席位/流量
+    #      冲突，不经天勤 API）。节流 10min；重启后首次 aux 立即跑一次（见 globals）。
+    global _VANTA_BRIDGE_TS, _VANTA_BRIDGE_DONE
+    try:
+        if (time.time() - _VANTA_BRIDGE_TS > 600) or (not _VANTA_BRIDGE_DONE):
+            _VANTA_BRIDGE_TS = time.time()
+            _VANTA_BRIDGE_DONE = True
+            _vanta_main_bridge_external()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -14146,6 +14190,8 @@ _CONTRACT_MAP_TS = 0.0  # 5.2 动态合约映射刷新节流
 _INFO_TS = 0.0  # 5.3 #1 信息维度缓存刷新节流（30min）
 _MAIN_REFRESH_TS = 0.0  # 5.4 换月核对节流（2h）
 _MAIN_REFRESH_DONE = False  # 5.4 重启后首次 aux 立即跑一次用于核对
+_VANTA_BRIDGE_TS = 0.0  # 5.6 Vanta 主力桥节流（10min）
+_VANTA_BRIDGE_DONE = False  # 5.6 重启后首次 aux 立即跑一次用于核对
 
 
 def _recalibrate_tick():
