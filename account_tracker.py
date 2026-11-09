@@ -324,6 +324,38 @@ def state_file_for(account_id=None):
     return os.path.join(HERE, f"account_state_{account_id}.json")
 
 
+# ── 模拟盘/实盘口径隔离（2026-11-02）──────────────────────────────────
+# 账户层 positions 里混有模拟盘引擎的「镜像腿」（account_monitor.reconcile_engine_positions
+# 每轮写入，仅为面板可见性）。这类腿的浮动/保证金**绝不能**计入实盘权益。
+# 判据双保险：
+#   ① source ∈ {engine, engine_sync, auto_signal} 或 book == "paper"（快速标识）
+#   ② 品种出现在 paper_trading_state.json 的当前持仓里（本质判据，防 source 被覆盖为空）
+_PAPER_SYMS_CACHE = {"ts": 0.0, "syms": set()}
+
+
+def paper_pos_symbols():
+    """模拟盘引擎当前持仓的品种集合（缓存 3s，避免前端高频轮询反复读盘）。"""
+    import time as _t
+
+    now = _t.time()
+    if now - _PAPER_SYMS_CACHE["ts"] < 3.0:
+        return _PAPER_SYMS_CACHE["syms"]
+    syms = set()
+    try:
+        with open(os.path.join(HERE, "paper_trading_state.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        pos = d.get("positions") or {}
+        if isinstance(pos, dict):
+            syms = {str(k).upper() for k in pos.keys()}
+        elif isinstance(pos, list):
+            syms = {str(p.get("symbol")).upper() for p in pos if isinstance(p, dict) and p.get("symbol")}
+    except Exception:
+        syms = set()
+    _PAPER_SYMS_CACHE["ts"] = now
+    _PAPER_SYMS_CACHE["syms"] = syms
+    return syms
+
+
 def list_accounts():
     """列出所有已知账户（通过扫描 state 文件发现）。"""
     accounts = ["default"]
@@ -923,6 +955,12 @@ def heal_from_journal():
     except Exception as e:
         fee_changes = [f"journal 手续费自愈失败：{e}"]
     jdata = tj._load()
+    # ★★ 2026-11-02 两账户物理隔离（关键护栏）★★
+    # 本函数会「从 journal 恢复缺失持仓」，若不区分账户，模拟盘引擎的未平仓记录
+    # 会被自愈回 account_state 的实盘持仓（模拟盘一开仓，实盘就长出腿）。
+    # 直接在源头把 account="paper" 的记录剔掉，下游所有统计（realized/均价/止损/
+    # 僵尸清理）自动只针对实盘口径，无需逐处改判据。
+    jdata["trades"] = [t for t in jdata.get("trades", []) if (t.get("account") or "") != "paper"]
     jrealized = round(sum((t.get("pnl") or 0) for t in jdata.get("trades", []) if t.get("pnl") is not None), 2)
     # P2-C fix: 按手数加权计算开仓均价（忽略加仓只取首笔会低估/高估均价，影响浮盈亏与止损位）
     javg_acc = {}  # (sym, direction) -> {"sum": 价格*手数, "qty": 手数}
@@ -1207,6 +1245,8 @@ def snapshot(prices=None):
     positions = []
     total_margin = 0.0
     float_total = 0.0
+    # 模拟盘当前持仓品种（本轮恒定，循环外取一次；用于排除镜像腿的浮动/保证金）
+    _paper_syms = paper_pos_symbols()
     # ★ 大小写不敏感查找表（state 里可能是 'SS' 大写，specs 里是 'ss' 小写）
     _state_pos_ci = {k.lower(): v for k, v in st["positions"].items()}
     for sym, sp in specs.items():
@@ -1263,11 +1303,23 @@ def snapshot(prices=None):
                 margin_used = float(_stored_margin)
             else:
                 margin_used = round(lots * avg * mult * mrate, 2)
-            total_margin += margin_used
+            # ★★ 2026-11-02 两账户独立（Ken 拍板）：模拟盘镜像腿只做面板展示，
+            #   其浮动与保证金一律不计入实盘权益 / 占用率。
+            #   血证：模拟盘 PK 空 2 手的 -240 浮动曾被算进实盘 dynamic_equity，
+            #   实盘清零后仍显示 -240，自检报「equity=0 != anchor+dR+dF=-240」。
+            #   判据双保险：source/book 快速标识 + 引擎当前持仓品种集合（本质判据）。
+            _is_paper_leg = (
+                str(pos.get("source") or "") in ("engine", "engine_sync", "auto_signal")
+                or str(pos.get("book") or "") == "paper"
+                or str(sym).upper() in _paper_syms
+            )
+            if not _is_paper_leg:
+                total_margin += margin_used
             float_pnl = None
             if px is not None:
                 float_pnl = round((px - avg) * mult * lots * ds, 2)
-                float_total += float_pnl
+                if not _is_paper_leg:
+                    float_total += float_pnl
             cap_value = equity_synced * margin_cap_pct / 100
             positions.append(
                 {
@@ -1277,6 +1329,9 @@ def snapshot(prices=None):
                     "direction": _dir_norm(pos["direction"]),
                     "lots": lots,
                     "avg": avg,
+                    # ★ 2026-11-02：显式标记账面归属。paper=模拟盘引擎镜像腿（仅供展示），
+                    #   live=真实/手动腿。前端据此把模拟盘腿排除在「实盘持仓数/浮动」之外。
+                    "book": "paper" if _is_paper_leg else "live",
                     "stop": pos.get("stop"),
                     "target": pos.get("target"),
                     "t1": pos.get("t1"),
@@ -1314,29 +1369,43 @@ def snapshot(prices=None):
     #   equity = st.equity + (journal已实现增量) + (当前浮动 - 上次浮动)
     #   既覆盖手动入金/出金，又跟随行情实时波动
     # 本金从账户状态文件读取（default=100600, 不同账户不同）
-    INIT_CAPITAL = float(st.get("initial_balance", 100600) or 100600)
+    INIT_CAPITAL = float(st.get("initial_balance", 100600))
     try:
         import trade_journal as _tj
 
-        realized_pnl = float(_tj.summary().get("total_pnl", 0) or 0)
+        # ★ 2026-11-02 多账户隔离：实盘口径必须排除模拟盘成交（account="paper"）。
+        #   此前用 summary() 全量统计 ⇒ 模拟盘 SR/l/cs 的亏损被当成实盘已实现盈亏，
+        #   经下面的 delta_realized 直接冲减实盘动态权益（-7706.72 全来自模拟盘）。
+        # ★ 2026-11-09 递归守卫：本线程已处于 snapshot 内（summary → _base_equity →
+        #   snapshot 环路）时跳过 journal summary，回退同步时刻值——防无限递归栈溢出。
+        if getattr(_tls, "_snap_reentry", False):
+            raise RuntimeError("snapshot reentry (guard)")
+        _tls._snap_reentry = True
+        try:
+            realized_pnl = float(_tj.summary(exclude=("paper",)).get("total_pnl", 0) or 0)
+        finally:
+            _tls._snap_reentry = False
     except Exception:
         realized_pnl = st.get("realized_pnl_at_sync", 0) or 0
     float_at_sync = st.get("float_at_sync", 0.0) or 0.0
     realized_at_sync = st.get("realized_pnl_at_sync", realized_pnl) or 0.0
-    equity_anchor = st.get("equity", INIT_CAPITAL) or INIT_CAPITAL
+    # ★ 2026-11-02：equity 允许为 0（实盘清零口径），不可用 `or` 兜底成 INIT_CAPITAL，
+    #   否则「本金归零」会被静默改写成 100600。
+    equity_anchor = st["equity"] if st.get("equity") is not None else INIT_CAPITAL
     # journal 已实现增量（从上次 snapshot 到现在）
     delta_realized = realized_pnl - realized_at_sync
     # 浮动盈亏变化（从上次 snapshot 到现在）
     delta_float = float_total - float_at_sync
     dynamic_equity = round(equity_anchor + delta_realized + delta_float, 2)
-    if dynamic_equity <= 0:
-        dynamic_equity = 1  # 防除零
+    # ★ 2026-11-02：允许 0（实盘本金清零后权益就是 0），仅在除法处做保护，不再伪造成 1
+    if dynamic_equity < 0:
+        dynamic_equity = 0.0
     # 基于动态权益重新计算占用率 / 距上限（使上下板块同步）
     for p in positions:
-        if p["lots"] > 0 and equity_synced > 0:
+        if p["lots"] > 0 and dynamic_equity > 0:
             p["margin_pct"] = round(p["margin_used"] / dynamic_equity * 100, 2)
             p["dist_to_cap"] = round(dynamic_equity * margin_cap_pct / 100 - p["margin_used"], 2)
-    usage_rate = round(total_margin / dynamic_equity * 100, 2)
+    usage_rate = round(total_margin / dynamic_equity * 100, 2) if dynamic_equity > 0 else 0.0
     portfolio_cap = round(dynamic_equity * portfolio_cap_pct / 100, 2)
 
     # ── 2026-09-09: 禁用自动刷新同步基准 ──
@@ -1348,6 +1417,14 @@ def snapshot(prices=None):
     # snapshot 每次请求刷新 updated 会反复触碰 live 文件，违反「程序不自动覆盖实盘」铁律。
     # default 等模拟账户保持原行为（仅写 updated 时间戳，不碰 anchor 三元组）。
     if get_account() != "live":
+        # ★ 2026-10-28 修复（磁盘 equity=0 落盘 bug）：
+        # 将实时权益落盘到独立字段 equity_live / equity_live_synced，
+        # 使 account_state.json 磁盘文件反映真实权益（不再误导为 0）。
+        # 注意：绝不触碰被冻结的 anchor 三元组（equity / realized_pnl_at_sync /
+        # float_at_sync）——那三个只在用户手动「同步权益」(set_equity) 时更新，
+        # 避免破坏动态权益的锚定数学与 2026-09-09 铁律。
+        st["equity_live"] = round(dynamic_equity, 2)
+        st["equity_live_synced"] = now_str
         with _LOCK:
             save_state(st)
 
@@ -1359,7 +1436,12 @@ def snapshot(prices=None):
     # 恒等式：dynamic_equity = anchor + delta_realized + delta_float
     self_check_ok = True
     self_check_msg = ""
-    self_check_ok = abs(dynamic_equity - (equity_anchor + delta_realized + delta_float)) < 0.5
+    # ★ 2026-11-02：自检必须与上面的「负值钳 0」口径一致，否则实盘本金归零、
+    #   持仓浮亏为负时（dynamic 被钳 0 而理论值 -240）会持续刷 [SELF_CHECK] 假告警。
+    _expected_eq = round(equity_anchor + delta_realized + delta_float, 2)
+    if _expected_eq < 0:
+        _expected_eq = 0.0
+    self_check_ok = abs(dynamic_equity - _expected_eq) < 0.5
     if not self_check_ok:
         self_check_msg = (
             f"[自检失败] equity={dynamic_equity} != anchor={equity_anchor}+dR={delta_realized}+dF={delta_float}"
@@ -1369,7 +1451,15 @@ def snapshot(prices=None):
     # float_at_sync 必须 = 同步时刻持仓累计浮盈 = Σ(存储price - avg) × mult × lots × 方向
     # 若被误存成盯市浮盈(mtm，基于结算价)，动态权益会被系统性抬/压 → 面板漂移
     _expected_fa = 0.0
+    _paper_syms_fa = paper_pos_symbols()
     for _sym, _pos in st["positions"].items():
+        # 2026-11-02：模拟盘镜像腿不计入实盘浮盈基准（与上面 float_total 口径一致）
+        if (
+            str(_pos.get("source") or "") in ("engine", "engine_sync", "auto_signal")
+            or str(_pos.get("book") or "") == "paper"
+            or str(_sym).upper() in _paper_syms_fa
+        ):
+            continue
         if _pos.get("lots") and _pos.get("avg") and _pos.get("price") is not None:
             _m = specs.get(_sym, {}).get("multiplier", 1)
             _expected_fa += (
@@ -1403,6 +1493,11 @@ def snapshot(prices=None):
         "realized_pnl": round(realized_pnl, 2),
         "realized_pnl_at_sync": round(realized_pnl, 2),
         "float_total": round(float_total, 2),
+        # ★ 2026-11-02：给前端补 float_pnl 别名。前端驾驶舱取的是
+        #   acct.float_pnl，取不到就回退「累加 positions 里的 float_pnl」——
+        #   而 positions 含模拟盘镜像腿（PK +40）⇒ 实盘浮动被显示成 +40。
+        #   这里显式给出口径正确的值（已排除模拟盘腿），前端即优先采用。
+        "float_pnl": round(float_total, 2),
         "mtm_pnl": round(float_total, 2),
         "total_margin": round(total_margin, 2),
         "usage_rate": usage_rate,

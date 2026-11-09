@@ -589,6 +589,12 @@ class MinishareLiveFeed:
     def _refresh_hot_contracts(self, df):
         """从 rt_fut_k 全量快照，按持仓量(OI)排名解析各品种当前主力/次主力可交割合约。
         结果写入模块级 HOT_CACHE（持久化），供 _authoritative_contracts / _apply_hot_contracts 使用。"""
+        # ★ 2026-11-09 B-1：30s 节流。poll 每 ~5s 调一次，全表 iterrows + 日志刷屏
+        # 是主循环 CPU/GIL 争用源之一；主力合约 30s 内不变，节流无副作用。
+        _t = time.time()
+        if _t - getattr(self, "_hot_refresh_ts", 0.0) < 30.0:
+            return
+        self._hot_refresh_ts = _t
         try:
             from four_dim_strategy import SYMBOLS
         except Exception:

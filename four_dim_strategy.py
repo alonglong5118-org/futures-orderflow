@@ -1351,6 +1351,27 @@ def load_daily(code):
 
 
 _DAILY_CACHE = {}  # symbol -> (df, timestamp) 进程内缓存
+# ── B-2 负缓存：抓取失败后的冷却，防止「每轮都重跑整条抓取链」────────────────
+# 背景（2026-11-06）：分支 2 原先只在抓取成功时写 _DAILY_CACHE，tqsdk 与免费源
+# 同时失败 ⇒ 缓存永不写入 ⇒ 每一轮都重试（tqsdk 单品种 45–70s 超时 × N 品种），
+# 主循环直接被顶到 180s 看门狗自杀线。11-04 23:39 与 11-06 10:52 两次自杀同源。
+_DAILY_FAIL_TS = {}  # symbol -> 最近一次抓取失败的时间戳
+_DAILY_FAIL_COOLDOWN = 300  # 失败冷却（秒），期间直接返回 None 不再重试
+# ── B-3 TTL 抖动：43 品种启动时集中加载 ⇒ 1800s 后同一轮集体过期、串行重拉 ──
+_DAILY_JITTER_SPAN = 450  # 抖动幅度（秒），把过期时刻摊到 ±7.5 分钟
+_DAILY_STAT = {"hit": 0, "fetch": 0}  # 埋点：命中/抓取计数（由 runner 每轮读取后清零）
+
+
+def _daily_ttl_jitter(symbol, span=None):
+    """按品种名生成**确定性** TTL 抖动（秒）。
+
+    用 zlib.crc32 而不是内置 hash()：后者受 PYTHONHASHSEED 随机化影响，
+    同一品种在不同进程里抖动值不同，实验不可复现。
+    """
+    import zlib
+
+    s = _DAILY_JITTER_SPAN if span is None else span
+    return int(zlib.crc32(str(symbol).encode("utf-8")) % (2 * s + 1)) - s
 
 
 def _norm_daily_cols(raw):
@@ -1586,8 +1607,13 @@ def load_daily_refreshed(symbol, ttl=1800):
     import time as _t
 
     cached = _DAILY_CACHE.get(symbol)
-    if cached and (_t.time() - cached[1]) < ttl:
+    if cached and (_t.time() - cached[1]) < (ttl + _daily_ttl_jitter(symbol)):
+        _DAILY_STAT["hit"] += 1
         return cached[0]
+    # B-2：失败冷却期内直接放行（返回 None），不再重跑整条抓取链
+    _fts = _DAILY_FAIL_TS.get(symbol)
+    if _fts and (_t.time() - _fts) < _DAILY_FAIL_COOLDOWN:
+        return None
 
     # 分支 1: 具体交割合约（如 SA01）—— tqsdk 具体合约优先，免费源兜底，fall-through 根治
     if symbol in _CONTRACT_AKSHARE:
@@ -1644,6 +1670,13 @@ def load_daily_refreshed(symbol, ttl=1800):
             _DAILY_CACHE[symbol] = (df, _t.time())
         except Exception as e:
             print(f"  [daily refresh] {symbol} akshare 兜底失败: {e}")
+    # B-2：无论抓到没抓到都要落「结果时间戳」。抓到 → 进正常缓存；
+    # 抓不到 → 进负缓存冷却 300s，否则下一轮立刻重跑整条链。
+    if df is not None and len(df) > 0:
+        _DAILY_CACHE[symbol] = (df, _t.time())
+        _DAILY_FAIL_TS.pop(symbol, None)
+    else:
+        _DAILY_FAIL_TS[symbol] = _t.time()
     return df
 
 
@@ -3811,7 +3844,14 @@ def risk_gate(symbol, price, atr_val, cfg=DEFAULT_CONFIG, t_strength=None, t_thr
     t_scale = None
     if t_strength is not None and t_thresh and float(t_thresh) > 0:
         t_scale = max(0.5, min(1.0, abs(float(t_strength)) / (float(t_thresh) * 1.5)))
-        N_plan = max(0, int(N_plan * t_scale))
+        # 2026-10-29 修复：缩放不得把「基准已 ≥1 手」的仓位截断成 0 手。
+        # 原逻辑 int(N_plan*t_scale)：N_plan=1 且 t_scale<1 → 0 → passed=False，
+        # 「弱过阈降仓」变成「弱过阈判死」，夜盘 1.5h 零信号即此因（zn/FG/OI 实测）。
+        # 口径与 runner 10542/10637 的 max(1, ...) 保持一致；基准本就为 0（保证金/上限不足）时仍为 0，不放行。
+        if N_plan >= 1:
+            N_plan = max(1, int(round(N_plan * t_scale)))
+        else:
+            N_plan = max(0, int(N_plan * t_scale))
     # P2b-扣减已有同品种持仓（2026-08-19）：单品种总持仓不超 per_symbol_lots/max_lots，加仓不超配
     if held_lots > 0:
         N_plan = max(0, min(N_plan, max_lots - held_lots))

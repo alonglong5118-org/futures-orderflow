@@ -253,35 +253,40 @@ _SIZING_EQUITY_CAP = 5_000_000.0
 _SIZING_EQUITY_FLOOR = 10_000.0
 
 
-def _sync_live_equity(force=False):
-    """用账户监控的实时权益刷新 _STRAT_CFG["account"]["equity"]（sizing 口径）。
-    返回 (equity_used, source)。任何异常都 fail-open 回退静态值。
-    可用 trade_config.json 的 account.sizing_equity = "live"|"static" 关闭实时口径。"""
+def _sync_live_equity(force=False, state=None):
+    """委托 account_ssot：账户权益唯一真源，无静态兜底。
+    2026-11-09 接线（升级落地包 A·P0）：取不到可信权益 → 返回 (0.0, "untrusted:<source>")，
+    调用方（evaluate）据此本轮回禁止新增开仓信号。宁不出信号，不用假权益算仓位。"""
     acct = _STRAT_CFG.get("account", {})
-    if str(acct.get("sizing_equity", "live")).lower() == "static":
-        return _SIZING_EQUITY_STATIC, "config_static"
-    eq = None
+    mode = str(acct.get("mode", "paper")).lower()
     try:
-        _snap = am.get_account()  # account_monitor：沙盒/tqsdk/ctp 后端统一入口
-        if isinstance(_snap, dict):
-            for _k in ("equity", "balance"):
-                _v = _snap.get(_k)
-                if isinstance(_v, (int, float)) and float(_v) > 0:
-                    eq = float(_v)
-                    break
+        r = account_ssot.resolve(
+            mode=mode,
+            price_fn=FEED.price if FEED else None,
+            base_dir=HERE,
+            cap=_SIZING_EQUITY_CAP,
+            floor=_SIZING_EQUITY_FLOOR,
+            live_reader=(lambda: am.get_account()) if mode == "live" else None,
+        )
     except Exception as _e:
-        print(f"[sizing] 实时权益读取异常(fail-open 用静态 {_SIZING_EQUITY_STATIC:.0f}): {repr(_e)[:70]}")
-    if eq is None:
-        return _SIZING_EQUITY_STATIC, "static_fallback"
-    if eq < _SIZING_EQUITY_FLOOR:
-        print(f"[sizing] 实时权益 {eq:.0f} < 下限 {_SIZING_EQUITY_FLOOR:.0f}，判为数据异常，忽略")
-        return _SIZING_EQUITY_STATIC, "below_floor"
-    eq = min(eq, _SIZING_EQUITY_CAP)
-    _prev = acct.get("equity")
+        r = account_ssot.Reading(None, "error", False, f"resolve 异常: {repr(_e)[:80]}")
+    if state is not None:
+        state["sizing_equity_detail"] = r.as_dict()
+    if not r.ok:
+        if state is not None:
+            state["sizing_blocked"] = {"reason": r.detail, "source": r.source}
+        print(f"[sizing] 权益源不可信（{r.source}: {r.detail}）→ 本轮禁止新增开仓信号")
+        return 0.0, "untrusted:" + r.source
+    if state is not None:
+        state.pop("sizing_blocked", None)
+    if r.equity is None:  # 防御：ok=True 时 equity 必非 None，此处仅为类型安全
+        return 0.0, "untrusted:none_equity"
+    eq = min(float(r.equity), _SIZING_EQUITY_CAP)
     acct["equity"] = eq
-    if force or _prev != eq:
-        print(f"[sizing] 权益口径 → 实时 {eq:.0f}（静态 {_SIZING_EQUITY_STATIC:.0f}）")
-    return eq, "live"
+    if force or acct.get("_prev_eq") != eq:
+        print(f"[sizing] 权益={eq:.0f} 源={r.source} {r.detail}")
+        acct["_prev_eq"] = eq
+    return eq, r.source
 
 
 import strategy_layer
@@ -312,6 +317,7 @@ try:
 except Exception:
     dsm = None
 import account_monitor as am  # 账户监控驱动 papertrack 自动化
+import account_ssot  # ★ 2026-11-09 A接线：账户权益单一真源（无静态兜底）
 import anomaly_scan as asc  # 异动扫描层（广度选品）
 import backtest_viz as bv  # #17 回测可视化(水下曲线/逐笔散点)
 import blunder_check as bc  # #12 纪律自动体检(blunder检测)
@@ -427,6 +433,12 @@ FEED = None  # 全局实时行情实例，main 启动时赋值，供 Web 接口�
 # 残留价被 13:30 开盘第一轮循环拿去当现价），禁止用旧价生成交易信号。
 # 可用 trade_config.json 的 quote_stale_sec 覆盖。无法判定新鲜度时 fail-open 放行。
 QUOTE_STALE_SEC = 600
+# 2026-10-29: akshare 单次 poll 硬超时（秒）。
+#   事故：akshare 底层 requests 无 timeout，10-29 01:12 网络抖动导致 poll() 永久阻塞，
+#   ak_poller 线程从此冻死（实测 20.6h 未更新 ak_price_ts），而 _AK_AVAILABLE 仍为 True
+#   （只在"连续报错"时翻 False，卡死不算报错）→ 陈旧报价闸把所有品种判 stale_quote
+#   → 10-29 全天 0 信号、0 成交。正常全市场 poll 实测约 31s，故取 120s 兜底。
+AK_POLL_TIMEOUT = 120
 FEED_LAST_UPDATE = 0.0  # 最近一次成功 poll 的时间戳（行情健康指示用）
 FEED_AVAILABLE = False  # 行情源是否可用（minishare 接口可达）
 
@@ -445,6 +457,33 @@ _TS_SYMBOLS = []  # 需要监控的品种列表
 _TS_LOCK = threading.Lock()
 
 
+def _ak_poll_guarded(feed, timeout):
+    """带硬超时的 akshare poll（2026-10-29 事故修复）。
+
+    akshare 底层 requests 完全没有 timeout：一次网络抖动就让 poll() 永久阻塞，
+    ak_poller 线程从此冻死，且 _AK_AVAILABLE 仍是 True（卡死不产生异常，所以
+    "连续报错 5 次才置 False" 的逻辑永远不触发）→ 陈旧报价闸把全市场判成
+    stale_quote → 全天 0 信号。这里用独立线程 + join(timeout) 兜住，
+    超时抛 TimeoutError，由调用方丢弃连接、重建实例自愈。
+    """
+    box = {}
+
+    def _run():
+        try:
+            box["snap"] = feed.poll()
+        except Exception as _e:  # noqa: BLE001
+            box["err"] = _e
+
+    _t = threading.Thread(target=_run, daemon=True, name="ak_poll_io")
+    _t.start()
+    _t.join(timeout)
+    if _t.is_alive():
+        raise TimeoutError(f"akshare poll 阻塞 >{timeout}s")
+    if "err" in box:
+        raise box["err"]
+    return box.get("snap")
+
+
 def _ak_poller():
     """后台线程：每 5 秒轮询 akshare 实时行情（分钟级，新浪数据源）。"""
     global _AK_PRICES, _AK_PRICE_TS, _AK_AVAILABLE, _AK_SYMBOLS
@@ -454,9 +493,14 @@ def _ak_poller():
     while True:
         try:
             if _AK_FEED is None:
-                _AK_FEED = al.feed()
+                # 2026-10-28：改用**独立实例**，不再用 al.feed() 全局单例。
+                #   原因：account_tracker.start_ak_poller 的 _poll_loop 每 5 秒会把单例
+                #   set_symbols() 成「持仓品种」，导致本线程 poll 到的只剩持仓那几腿
+                #   （实测 ak_prices_n 恒为 4，全市场价永远拉不全 ⇒ 陈旧报价闸挡掉所有信号）。
+                #   独立实例后两边互不干扰：本线程管全市场，at 管持仓。
+                _AK_FEED = al.AkshareFeed(poll_interval=10)
                 _AK_FEED.set_symbols(_AK_SYMBOLS or list(al.ALL_CONTRACTS.keys()))
-            snap = _AK_FEED.poll()
+            snap = _ak_poll_guarded(_AK_FEED, AK_POLL_TIMEOUT)
             if snap:
                 with _AK_LOCK:
                     _AK_PRICES = {s: d.get("close", 0) for s, d in snap.items() if d and d.get("close", 0) > 0}
@@ -465,10 +509,25 @@ def _ak_poller():
                 _ak_errors = 0
             else:
                 _ak_errors += 1
+                # 2026-10-28：静默失败是行情断流最难查的形态（面板价长期不动却无任何线索），
+                #   这里补节流日志：首次 + 第5/20/100次 + 每 200 次报一次，避免刷屏。
+                if _ak_errors in (1, 5, 20, 100) or _ak_errors % 200 == 0:
+                    print(f"[akshare_live] poll 返回空（连续 {_ak_errors} 次，syms={len(_AK_SYMBOLS or [])}）")
                 if _ak_errors >= 5:
                     _AK_AVAILABLE = False
-        except Exception:
+        except TimeoutError as _te:
+            # 卡死自愈：丢弃卡死连接（下一轮新建实例），并立刻降级可用标志，
+            # 防止陈旧报价闸继续用冻结时间戳把全市场判死。
             _ak_errors += 1
+            _AK_FEED = None
+            _AK_AVAILABLE = False
+            print(f"[akshare_live] {_te}（连续 {_ak_errors} 次）→ 丢弃连接、重建实例")
+            time.sleep(30)
+            continue
+        except Exception as _e:
+            _ak_errors += 1
+            if _ak_errors in (1, 5, 20, 100) or _ak_errors % 200 == 0:
+                print(f"[akshare_live] poll 异常（连续 {_ak_errors} 次）: {repr(_e)[:200]}")
             if _ak_errors >= 5:
                 _AK_AVAILABLE = False
         time.sleep(5)
@@ -1840,19 +1899,45 @@ def _trading_day_label(now=None):
     return d.isoformat()
 
 
+_F_REFRESHING = False  # 基本面后台刷新单飞标志（防重复起线程）
+
+
 def ensure_F(today):
-    """盘前刷新 F；失败则保持现状（pipeline 对缺失→中性）。"""
+    """盘前刷新 F；失败则保持现状（pipeline 对缺失→中性）。
+
+    ★ 2026-11-01 修复「每 20h 必自杀」死循环：
+      旧实现同步调用 `ff.refresh()` → 内部走 akshare 拉 2024-01-01 起的全量基本面，
+      requests 无 timeout，网络一抖就永久阻塞。而本函数被主循环调用（L15331/15364/15450），
+      主循环停摆 180s 后被 _stall_watchdog 判死 os._exit(3)，看门狗重启 → 缓存仍 stale
+      → 再刷新 → 再卡死。实测 2026-11-01 00:0x 连续两次自杀（exit 3）即此因。
+      改为后台 daemon 线程 + 单飞标志：主循环永不等待；卡住也不会重复起线程；
+      F 数据用旧缓存（pipeline 缺失→中性），比整个 runner 停摆安全得多。
+    """
+    global _F_REFRESHING
     try:
         stale = True
         if os.path.exists(FUNDAMENTALS):
             age = datetime.now().timestamp() - os.path.getmtime(FUNDAMENTALS)
             if age < 3600 * 20:  # 20h 内认为当日已刷
                 stale = False
-        if stale:
-            print(f"[F] 刷新基本面(akshare) {today} …")
-            ff.refresh(basis_start="20240101")
-        else:
-            print("[F] 已有当日缓存，跳过刷新")
+        if not stale:
+            return
+        if _F_REFRESHING:
+            return  # 已在后台刷新中，不重复起线程
+        _F_REFRESHING = True
+
+        def _job():
+            global _F_REFRESHING
+            try:
+                print(f"[F] 刷新基本面(akshare) {today} …（后台线程，主循环不等待）", flush=True)
+                ff.refresh(basis_start="20240101")
+                print("[F] 基本面刷新完成", flush=True)
+            except Exception as _e:
+                print(f"[F] 刷新失败，继续(中性): {_e}", flush=True)
+            finally:
+                _F_REFRESHING = False
+
+        threading.Thread(target=_job, daemon=True, name="fundamentals-refresh").start()
     except Exception as e:
         print(f"[F] 刷新失败，继续(中性): {e}")
 
@@ -7859,11 +7944,36 @@ def premarket_brief(force=False):
 
 
 def _account_equity():
-    """当前账户权益（同步权益，保守基准）。"""
+    """当前账户真实权益（供单笔 1% 风险预算等风控计算）。
+
+    2026-10-29 事故：原实现只读 account_state.json 的 "equity"，但该字段是
+    「用户手动同步锚」——只有 at.set_equity()（面板点「同步权益」）才更新，长期为 0；
+    真实动态权益落在 "equity_live"（每轮 snapshot 自动落盘，实测 100600）。
+    读到 0 后 per_trade_budget = 0 × 1% = 0，portfolio_risk_check 判
+    「单笔风险 802 超1%上限(0)」→ 全市场信号被拒 → auto 长期 0 成交。
+
+    改为三级真实数据源：equity_live（每轮动态权益）→ equity（手动锚）→ snapshot；
+    全取不到才返回 0（不编造数字）。
+    """
+    st = {}
     try:
-        return float(at.load_state().get("equity") or 0)
+        st = at.load_state() or {}
     except Exception:
-        return 0.0
+        st = {}
+    for _k in ("equity_live", "equity"):
+        try:
+            _v = float(st.get(_k) or 0)
+        except Exception:
+            _v = 0.0
+        if _v > 0:
+            return _v
+    try:
+        _snap = at.snapshot()
+        if isinstance(_snap, dict):
+            return float(_snap.get("equity") or 0)
+    except Exception:
+        pass
+    return 0.0
 
 
 _POS_CACHE = {"time": 0, "data": None}
@@ -10139,6 +10249,38 @@ def _apply_c_gate(sym, dir_T, today, cfg, now_ts=None):
     return (blocked, c_kline)
 
 
+def _eval_skip(state, sym, stage, reason=""):
+    """记录「本品种本轮为何没出信号」。
+
+    2026-10-29 加：evaluate 里有 8 处在 pipe 上不留痕的静默 continue
+    （去抖 / 同签名去重 / ATR 缺失 / 风控门…），导致「面板全绿但 auto 零成交」
+    无法定位（夜盘 1.5h 零信号即如此）。此处把跳过阶段与原因写进
+    state["eval_skips"]——不复用 pipe，因为 pipe 每轮 new 一个，上轮拦截原因会消失。
+    """
+    try:
+        d = state.setdefault("eval_skips", {})
+        prev = d.get(sym) or {}
+        d[sym] = {
+            "stage": stage,
+            "reason": str(reason)[:220],
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "count": (int(prev.get("count") or 0) + 1) if prev.get("stage") == stage else 1,
+        }
+        if len(d) > 80:  # 防膨胀
+            for _k in list(d.keys())[:-80]:
+                d.pop(_k, None)
+    except Exception:
+        pass
+
+
+def _eval_clear_skip(state, sym):
+    """该品种本轮真的产出信号 → 清掉历史拦截记录，避免面板残留旧原因。"""
+    try:
+        (state.get("eval_skips") or {}).pop(sym, None)
+    except Exception:
+        pass
+
+
 def evaluate(feed, today, last_fire, state, corr_histories):
     fired = []
     _round_signal_buffer = []  # 组合级智能推荐：收集本轮回所有可推送信号，延迟notify
@@ -10156,9 +10298,14 @@ def evaluate(feed, today, last_fire, state, corr_histories):
     round_exposures = []  # 组合层：本轮回已发信号（供后续品种比对叠加）
     # sizing 跟随实时权益（2026-10-15 自检 #1）：risk_gate 读 _STRAT_CFG["account"]["equity"]，
     # 该值原是 trade_config 静态快照，与账户面板实时权益脱钩。每轮同步一次，取不到则保持静态值。
+    _sizing_untrusted = False
+    _eq_src = ""
     try:
-        _eq_used, _eq_src = _sync_live_equity()
+        _eq_used, _eq_src = _sync_live_equity(state=state)
         state["sizing_equity"] = {"equity": _eq_used, "source": _eq_src, "static": _SIZING_EQUITY_STATIC}
+        _sizing_untrusted = str(_eq_src).startswith("untrusted:")
+        if _sizing_untrusted:
+            print(f"[sizing] 权益源不可信({_eq_src}) → 本轮回禁止新增开仓信号（仅允许平仓）")
     except Exception as _se:
         print(f"[sizing] 同步异常(忽略): {repr(_se)[:70]}")
     load_dedup_state(last_fire)  # 载入磁盘去重记忆（重启/多进程共享，杜绝连环重发）
@@ -10292,7 +10439,14 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     pipe["dsm"] = dsm.alert_level(sym, pipe.get("T_D", 0), pipe.get("T_5m", 0))
                 except Exception:
                     pass
-            price = feed.price(sym)
+            # 2026-10-28 修复：盘中必须用实时价。
+            #   feed.price() 走 minishare，而 minishare rt_fut_k 盘中返回的是**上一收盘价**
+            #   （stale，见 minishare_live 注释）⇒ evaluate 一直拿旧价评估、陈旧报价闸误挡信号。
+            #   get_realtime_price() 已实现「盘中优先 akshare 新浪实时 → 按需拉取 → 回退 minishare」，
+            #   这里改为优先用它，取不到再回退原链路。
+            price = get_realtime_price(sym)
+            if not price:
+                price = feed.price(sym)
             # 合约类品种的实时价：minishare 尚未映射/非交易时段无快照时，回退 akshare 该合约日线最新收盘
             if price is None and df_daily is not None and len(df_daily):
                 price = float(df_daily["close"].iloc[-1])
@@ -10326,13 +10480,22 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 "cpos": cpos_for(contract_cpos_key(sym)),
             }
             continue
+        if pipe["triggered"] and pipe["dir_T"] != 0 and not price:
+            _eval_skip(state, sym, "no_price", f"触发成立但实时价缺失(price={price})")
         if pipe["triggered"] and pipe["dir_T"] != 0 and price:
-            # 2026-10-15 陈旧报价闸：午休/时段切换瞬间快照仍是上一时段价格（实测 13:30:17
-            # 拿上午 11:30 的 20065 当现价生成 RU 信号，而真实现价 ~20025）。数据源带时间戳
-            # 且超时未更新 → 本轮禁止生成信号；无法判定新鲜度（源无 ts）→ fail-open 放行。
+            # 2026-10-28 修复陈旧报价闸：交易时段实时源是 akshare（新浪），而 feed(=minishare)
+            # 盘中回放上一收盘价（见 line 491-492/545-546 注释，minishare rt_fut_k 盘中返回
+            # 上一收盘价 stale）→ 其 price_age() 盘中恒为上一时段时间戳 → 恒 >600s → 所有品种
+            # 被挡、auto 一周 0 成交。改以 akshare 新鲜度为准（与 get_realtime_price line 556-558
+            # 同口径）：akshare 可用且 (_AK_PRICE_TS 距现在 < quote_stale_sec) → 新鲜放行；
+            # akshare 本身也陈旧(>阈值) → 仍挡（源真陈旧，安全阀保留）；akshare 不可用 →
+            # 回退 minishare price_age()（原降级路径）。无法判定新鲜度 → fail-open 放行（原意）。
             _qage = None
             try:
-                _qage = feed.price_age(sym)
+                if _AK_AVAILABLE and _AK_PRICE_TS > 0:
+                    _qage = time.time() - _AK_PRICE_TS  # akshare 新鲜度为准
+                else:
+                    _qage = feed.price_age(sym)  # 回退 minishare
             except Exception:
                 _qage = None
             _stale_thr = _tc_num("quote_stale_sec", QUOTE_STALE_SEC)
@@ -10341,11 +10504,13 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 pipe["stale_quote_blocked"] = True
                 pipe["stale_quote_reason"] = f"报价陈旧({int(_qage)}s>{_stale_thr}s，疑上一时段缓存)，本轮不生成信号"
                 print(f"[evaluate] {sym} 报价陈旧({int(_qage)}s > {_stale_thr}s) → 跳过信号生成")
+                _eval_skip(state, sym, "stale_quote", pipe["stale_quote_reason"])
                 continue
             # P1-4：组合 VaR 已超上限→本轮回不再新增信号（卡片仍更新展示）
             if _var_hot:
                 pipe["var_blocked"] = True
                 pipe["var_reason"] = "组合VaR超上限，暂停新增"
+                _eval_skip(state, sym, "var_hot", pipe["var_reason"])
                 continue
             try:
                 # 状态机锁死 / 组合级硬熔断：禁止新开仓（卡片标 🔒锁定 / 🛑熔断）
@@ -10354,6 +10519,10 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     if rsm.is_halted(at.get_account()):
                         pipe["kill_halted"] = True
                         pipe["kill_reason"] = rsm.get_kill(at.get_account()).reason
+                    _eval_skip(
+                        state, sym, "risk_locked",
+                        pipe.get("kill_reason") or "风控状态机锁定(非熔断)",
+                    )
                     continue
                 dir_T = int(pipe["dir_T"])
                 _cg_mode = (_STRAT_CFG.get("bias_synthesis", {}) or {}).get("c_gate")
@@ -10419,6 +10588,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             print(
                                 f"[C门] 拦截 {_C_GATE_STATS['blocked']} / 通过 {_C_GATE_STATS['passed']} ｜ 最近拦截: {_C_GATE_STATS['last_blocked'][-5:]}"
                             )
+                        _eval_skip(state, sym, "c_gate", _cg_reason)
                         continue
                     else:
                         _C_GATE_STATS["passed"] += 1
@@ -10427,6 +10597,10 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 prev_d = _SIG_PREV_DIR.get(sym)
                 _SIG_PREV_DIR[sym] = dir_T
                 if prev_d is None or prev_d != dir_T:
+                    _eval_skip(
+                        state, sym, "debounce",
+                        f"方向未连续2轮(prev={prev_d}, now={dir_T})",
+                    )
                     continue
                 # ② 签名去重：相同签名(同方向+同价位桶)在窗口内抑制；不同签名=真实新信号立即推
                 sig_hash = _sig_signature(sym, dir_T, price)
@@ -10435,18 +10609,28 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 if last and last.get("sig") == sig_hash:
                     # last["t"] 持久化为 Unix 时间戳(float)，避免重启后 datetime→str 比较报错
                     if (datetime.now().timestamp() - float(last["t"])) < DEDUPE_SAME_SIG_MIN * 60:
+                        _eval_skip(
+                            state, sym, "dedupe",
+                            f"同签名{DEDUPE_SAME_SIG_MIN}min内已推送过({sig_hash})",
+                        )
                         continue
                 # 不同签名(反向/新价位)或超出抑制窗口 → 放行（即时推送真实新信号）
-                # ★ 立即登记去重记忆（早于 notify/append/log），即使后续调用异常也不会丢失，
-                #   避免“写了聊天流却没记去重”导致下一轮又重发（用户最反感重复）。
-                last_fire[sym] = {"dir": dir_T, "t": datetime.now().timestamp(), "day": today_key, "sig": sig_hash}
+                # ★ 2026-10-29 修复：去重登记**不再**提前写在这里。
+                #   原逻辑在风控门（ATR/止损/risk_gate/事件闸/组合/VaR）之前就写 last_fire，
+                #   只要后面任一门拦下，该品种就会在 DEDUPE_SAME_SIG_MIN(60min) 内被
+                #   「自己的登记」挡住而无法重试 → 一次被拒 = 该品种一小时只有一次机会
+                #   （10-28 22:01/22:29 与 10-29 21:54→21:55 ni 实测均为此形态）。
+                #   现改为「真正发出信号时」才登记（见下方 log_signal 之前），
+                #   既能防重复推送，又不让被风控拒掉的尝试消耗抑制窗口。
                 # 算风控 + 出场 + 信号（止损通道波动估计：白名单品种 DR/√N，其余 ATR）
                 atr_daily = _stop_vol_daily(sym, df_daily)
                 if atr_daily is None or pd.isna(atr_daily) or atr_daily <= 0:
+                    _eval_skip(state, sym, "atr_daily", f"日线ATR无效(atr={atr_daily})")
                     continue
                 # 止损基准 ATR：夜盘用 30 分钟 ATR（中间档），日盘维持日线波动估计（详见 _compute_stop_atr）
                 stop_atr, atr_src = _compute_stop_atr(sym, df_5m, atr_daily)
                 if not stop_atr:
+                    _eval_skip(state, sym, "stop_atr", "止损基准ATR算不出(P0-3 不发该信号)")
                     continue  # P0-3 事前止损铁律：止损基准算不出 -> 不发该信号
                 # P2b：该品种已有持仓手数（open_positions 为 evaluate 开头已加载的真实持仓）
                 _held = next((int(p.get("lots") or 0) for p in open_positions if p.get("sym") == sym), 0)
@@ -10463,6 +10647,16 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 if not rg["passed"]:
                     # 仍记录触发但风控未过（温和提示）
                     pipe["risk_blocked"] = True
+                    _eval_skip(
+                        state, sym, "risk_gate",
+                        "N_plan=%s (N_risk=%s, N_margin=%s, t_scale=%s, max_lots→, stop_pts=%s, limit_pts=%s, gate3=%s, kelly=%s%s)"
+                        % (
+                            rg.get("N_plan"), rg.get("N_risk"), rg.get("N_margin"),
+                            rg.get("t_scale"), rg.get("stop_pts"), rg.get("limit_pts"),
+                            rg.get("gate3_ok"), rg.get("kelly_mult"),
+                            "，超风险预算已按1手" if rg.get("over_risk") else "",
+                        ),
+                    )
                     continue
                 ep = exit_plan(
                     sym,
@@ -10497,6 +10691,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 if ev_scale <= 0.0:
                     pipe["event_blocked"] = True
                     pipe["event_reason"] = ev_gate.get("msg", "临近重磅数据，禁止新开仓")
+                    _eval_skip(state, sym, "event_gate", pipe["event_reason"])
                     continue
                 scale = rsm.get_fsm(at.get_account()).scale()
                 dd_scale = ddg.scale_factor(account_id=at.get_account())
@@ -10521,19 +10716,24 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         sig["dp_reduced"] = True
                         sig["reason"] += f"（动态仓位:{dp_result['details']}）"
                 # 组合层约束：相关性同向降仓/否决 + 总风险预算（日亏含浮亏由 P0-1 主源=动态权益回撤负责，非此处）
+                # 2026-11-04 修复：风险预算 equity 改用 state["sizing_equity"]["equity"]
+                # （由 _sync_live_equity 同步：实盘时=实时权益，实验/沙箱时静态兜底 1M），
+                # 不再直接用 _account_equity()（本环境实盘 equity=0 → 预算=0 → 全市场拒单）。
+                _risk_equity = (state.get("sizing_equity") or {}).get("equity") or _SIZING_EQUITY_STATIC
                 pchk = portfolio_risk_check(
                     sym,
                     sig["direction"],
                     sig["lots"],
                     price,
                     sig.get("stop"),
-                    _account_equity(),
+                    _risk_equity,
                     open_positions,
                     round_exposures,
                 )
                 if not pchk["ok"] and not _sig_conflict:
                     pipe["portfolio_blocked"] = True
                     pipe["portfolio_reason"] = pchk["reason"]
+                    _eval_skip(state, sym, "portfolio", pchk["reason"])
                     continue
                 if pchk["lots"] != sig["lots"] and not _sig_conflict:
                     sig["lots"] = pchk["lots"]
@@ -10551,6 +10751,8 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         sig["rr_ratio"] = round(rr_ratio, 2)
                         if rr_ratio < MIN_RR_RATIO:
                             sig["push_suppressed"] = True
+                            # ★ 2026-11-01 Ken 拍板：盈亏比不足升为「硬阻断」（见下方入库前闸门）
+                            sig["_rr_blocked"] = f"{rr_ratio:.1f}:1 < {MIN_RR_RATIO:.0f}:1"
                             sig["hold_context"] = {"rr_too_low": True}
                             sig["action_advice"] = (
                                 f"{sym} 盈亏比 {rr_ratio:.1f}:1 低于要求 {MIN_RR_RATIO:.0f}:1，"
@@ -10616,6 +10818,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                             _cur_rr = sig.get("rr_ratio", 0)
                             if _cur_rr < _req_rr:
                                 sig["push_suppressed"] = True
+                                sig["_rr_blocked"] = f"逆周期 {_cur_rr:.1f}:1 < {_req_rr:.1f}:1"
                                 sig["hold_context"] = sig.get("hold_context", {})
                                 sig["hold_context"]["counter_trend_rr"] = True
                                 sig["action_advice"] = (
@@ -10639,6 +10842,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         _cur_rr = sig.get("rr_ratio", 0)
                         if _cur_rr < _req_rr:
                             sig["push_suppressed"] = True
+                            sig["_rr_blocked"] = f"逆VWAP {_cur_rr:.1f}:1 < {_req_rr:.1f}:1"
                             sig.setdefault("hold_context", {})["counter_vwap_tilt_rr"] = True
                             sig["action_advice"] = (
                                 f"{sym} 逆VWAP微观趋势({_tilt.get('state')})，盈亏比要求≥{_req_rr:.1f}:1，"
@@ -10654,6 +10858,7 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                     if _cvar is not None and _cvar > _var_cap:
                         pipe["var_blocked"] = True
                         pipe["var_reason"] = f"加仓后组合VaR≈{_cvar}%超上限{_var_cap}%，本品种暂停"
+                        _eval_skip(state, sym, "var_incremental", pipe["var_reason"])
                         continue
                 # 记录本轮回已发信号，供后续品种比对相关性/预算叠加
                 if not _sig_conflict:
@@ -10723,6 +10928,16 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                         "bullets": [sig.get("reason", "")],
                         "llm_prompt": "",
                     }
+                # ★ 2026-10-29：去重登记改到此处——所有风控门（ATR/止损/risk_gate/
+                #   事件闸/组合/VaR/C门）已全部通过、信号确定要发出，才写 last_fire。
+                #   原实现提前登记，导致「被风控拒掉的一次尝试」白烧 60min 抑制窗口。
+                #   放在 append_chat 之前：即使推送抛异常也已登记，不会重复刷屏。
+                last_fire[sym] = {
+                    "dir": dir_T,
+                    "t": datetime.now().timestamp(),
+                    "day": today_key,
+                    "sig": sig_hash,
+                }
                 sig["kind"] = "signal"
                 # ★★ 2026-09-03: 关键修复 — evaluate 必须调 append_chat 推送到聊天流!
                 # 之前只登记 dedup + 存 state["signals"]，但没调 append_chat
@@ -10758,11 +10973,27 @@ def evaluate(feed, today, last_fire, state, corr_histories):
                 except Exception as _e:
                     print(f"[金字塔影子] {sym} 评估异常(忽略): {repr(_e)[:60]}")
                 _hc = sig.get("hold_context") or {}
+                # ★ 2026-11-09 E接线：信号主键 id（= sig_hash，与 journal.signal_id 打通，可精确 JOIN）
+                sig["id"] = sig_hash
+                if _sizing_untrusted:
+                    # ★ 2026-11-09 A接线：权益源不可信 → 禁开新仓（sizing_blocked 已在 state 暴露给面板）
+                    _eval_skip(state, sym, "sizing_untrusted", f"权益源不可信({_eq_src})，本轮回禁止新增信号")
+                    continue
+                # ★★ 2026-11-01 Ken 拍板：盈亏比硬阻断（此前只 push_suppressed，信号仍
+                # log_signal 进 four_dim_signals.json ⇒ 引擎照样开仓，10-29 那笔 l 就是
+                # 1.5:1 开出来的）。现在不达标的信号：不入库、不推送、不展示、不计入 fired。
+                if sig.get("_rr_blocked"):
+                    _eval_skip(
+                        state, sym, "rr_gate",
+                        f"盈亏比 {sig.get('_rr_blocked')}，硬阻断（不入库不给引擎）",
+                    )
+                    continue
                 if not _hc.get("cross_dir_locked"):
                     _round_signal_buffer.append(sig)
                 else:
                     print(f"   📌 {sym} 方向锁定中({_hc.get('locked_dir')}向)，信号静默不展示")
                 log_signal(sig)
+                _eval_clear_skip(state, sym)  # 本轮真出信号 → 清历史拦截原因
                 state["signals"].insert(
                     0,
                     {
@@ -10835,6 +11066,144 @@ def evaluate(feed, today, last_fire, state, corr_histories):
 # ---------------------------------------------------------------------------
 # Web 面板
 # ---------------------------------------------------------------------------
+# ★ 2026-11-02 首屏性能：接口级微缓存（短 TTL）
+#   问题：/api/account 单次 ~2.1s、/api/journal ~3.4s（都是 54 品种行情遍历 + 台账重算，
+#   本质是 CPU/GIL 密集），而前端首屏会并发打多次 → GIL 下并发≈串行，首屏 30-40s。
+#   做法：同一接口在 TTL 内只算一次，多个客户端/多次刷新共享同一份结果。
+#   TTL 取 3s/6s：面板本身 10-60s 才刷一次，3 秒陈旧对风控展示无影响；
+#   任何写操作（同步权益/手动记录/配置）都调 _api_cache_clear()，保证「点完立刻看到新值」。
+_API_MINI_CACHE = {}
+
+
+def _api_cache_get(key, ttl):
+    it = _API_MINI_CACHE.get(key)
+    if it and (time.time() - it[0]) < ttl:
+        return it[1]
+    return None
+
+
+def _api_cache_put(key, body):
+    _API_MINI_CACHE[key] = (time.time(), body)
+    if len(_API_MINI_CACHE) > 200:  # 防无界增长
+        _now = time.time()
+        for _k in [k for k, v in _API_MINI_CACHE.items() if (_now - v[0]) > 600]:
+            _API_MINI_CACHE.pop(_k, None)
+
+
+def _api_cache_clear(prefix=""):
+    for _k in [k for k in _API_MINI_CACHE if k.startswith(prefix)]:
+        _API_MINI_CACHE.pop(_k, None)
+
+
+# ── 模拟盘账户快照（/api/account 在 account=default/paper 时返回）──────────────
+# 形状对齐实盘 /api/account 响应，使前端总览/账户视图无需改动即可复用。
+_PAPER_MULT = {
+    "PK": 10.0, "RM": 10.0, "JD": 10.0, "AP": 10.0, "CJ": 10.0, "FG": 20.0,
+    "RB": 10.0, "HC": 10.0, "I": 100.0, "J": 100.0, "JM": 60.0, "CS": 20.0,
+    "SF": 5.0, "SM": 5.0, "UR": 5.0, "ZN": 5.0, "CU": 5.0, "AL": 5.0,
+    "AU": 1000.0, "AG": 15.0, "TA": 5.0, "MA": 10.0, "PP": 5.0, "L": 5.0,
+    "V": 5.0, "BU": 10.0, "RU": 10.0, "NI": 1.0, "SN": 1.0, "PB": 5.0,
+    "CF": 5.0, "SR": 10.0, "OI": 10.0, "M": 10.0, "Y": 10.0, "P": 10.0,
+    "C": 10.0, "A": 10.0, "B": 10.0, "SP": 10.0, "PF": 5.0, "EB": 5.0,
+    "EG": 10.0, "PG": 20.0, "LU": 10.0, "SA": 20.0, "LC": 1.0, "SI": 5.0,
+    "PS": 5.0, "AO": 20.0, "EC": 10.0, "PX": 5.0, "BB": 5.0, "PG": 20.0,
+}
+_PAPER_MARGIN_RATE = 0.10
+
+
+def _paper_account_snapshot():
+    """构造模拟盘账户快照，字段形状对齐 /api/account（实盘）响应。
+
+    前端「策略模拟盘」(account=default) 总览只读 /api/account，而该接口原本恒返回实盘；
+    此函数让 account=default/paper 时返回模拟盘账户，使面板正确显示 100 万本金 + 持仓。
+    """
+    try:
+        st = pti.get_state() or {}
+    except Exception:
+        st = {}
+    acct = st.get("account") or {}
+    cash = float(st.get("cash") if st.get("cash") is not None else acct.get("cash") or 0)
+    mtm = float(st.get("mtm") or 0)
+    realized = float(st.get("realized_pnl") or 0)
+    _eq = st.get("equity")
+    equity = float(_eq) if _eq is not None else (cash + mtm)
+    init_cash = float(
+        st.get("init_cash") if st.get("init_cash") is not None
+        else acct.get("initial_balance") or cash or 0
+    )
+    positions = []
+    margin_total = 0.0
+    for p in (st.get("positions") or []):
+        sym = p.get("symbol")
+        direction = p.get("direction") or "多"
+        lots = float(p.get("remaining_lots") if p.get("remaining_lots") is not None else p.get("lots") or 0)
+        avg = float(p.get("entry_price") or p.get("avg_price") or 0)
+        fp = float(p.get("float_pnl") or 0)
+        mult = _PAPER_MULT.get(sym, 10.0)
+        margin = lots * avg * mult * _PAPER_MARGIN_RATE if avg else 0.0
+        margin_total += margin
+        positions.append({
+            "symbol": sym,
+            "direction": direction,
+            "lots": lots,
+            "avg": avg,
+            "float_pnl": fp,
+            "margin": round(margin, 2),
+            "contract": p.get("contract"),
+            "source": p.get("source") or "engine",
+            "book": "paper",
+            "stop": p.get("stop"),
+            "target": p.get("target"),
+        })
+    usage = round(margin_total / equity * 100, 2) if equity > 0 else 0.0
+    available = round(cash - margin_total, 2)
+    return {
+        "equity": round(equity, 2),
+        "available": available,
+        "cash": round(cash, 2),
+        "initial_balance": round(init_cash, 2),
+        "realized_pnl": round(realized, 2),
+        "total_pnl": round(realized + mtm, 2),
+        "mtm_pnl": round(mtm, 2),
+        "float_total": round(mtm, 2),
+        "total_margin": round(margin_total, 2),
+        "usage_rate": usage,
+        "dist_to_portfolio_cap": 0.0,
+        "positions": positions,
+        "total_fee": round(float(st.get("total_fee") or 0), 2),
+        "equity_synced": "模拟盘自动",
+        "equity_synced_raw": round(equity, 2),
+        "self_check": {"ok": True, "msg": "模拟盘快照"},
+        "feed_status": "正常" if FEED_AVAILABLE else "离线",
+        "datasource": "paper_engine",
+        "heat": 0.0,
+        "account_type": "paper",
+        "enabled": bool(st.get("enabled", True)),
+    }
+
+
+# ── 缓存击穿防护（single-flight）────────────────────────────────────────────
+# 场景实测：缓存刚好过期时，两个 /api/account 并发到达 → 两个都未命中 →
+#   两路同时重算，GIL 互相争抢，各自从 1.5s 变成 5.6s（比不缓存更糟）。
+# 做法：同一 key 只允许一个线程算，其余线程等它算完直接读缓存；等不到（超时）再自己算。
+_API_EVENTS = {}
+_API_EV_LOCK = threading.Lock()
+
+
+def _api_event(key):
+    """返回 (event, is_owner)。is_owner=True 表示由我负责计算并 set()。"""
+    with _API_EV_LOCK:
+        ev = _API_EVENTS.get(key)
+        if ev is None or ev.is_set():
+            ev = threading.Event()
+            _API_EVENTS[key] = ev
+            if len(_API_EVENTS) > 200:
+                for _k in [k for k, v in _API_EVENTS.items() if v.is_set()]:
+                    _API_EVENTS.pop(_k, None)
+            return ev, True
+        return ev, False
+
+
 def start_dashboard(state):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -11156,11 +11525,49 @@ def start_dashboard(state):
                             "uptime_sec": round(time.time() - START_TIME, 1),
                             "last_cycle_ago_sec": round(_last_age, 1) if _last_age is not None else None,
                             "feed_available": FEED_AVAILABLE,
+                            # 2026-10-29：把 akshare 新鲜度也暴露出来。此前 /api/health 只报
+                            # feed_available(=minishare 可达)，akshare 卡死 20.6h 仍显示一切正常，
+                            # 是本轮"面板全绿却 0 成交"难以察觉的原因之一。
+                            "ak_available": _AK_AVAILABLE,
+                            "ak_age_sec": round(time.time() - _AK_PRICE_TS, 1) if _AK_PRICE_TS else None,
+                            "ak_prices_n": len(_AK_PRICES or {}),
+                            "ts_age_sec": round(time.time() - _TS_PRICE_TS, 1) if _TS_PRICE_TS else None,
                         },
                         ensure_ascii=False,
                     )
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
+            elif self.path.split("?")[0] == "/api/feeddebug":
+                # 2026-10-28 诊断端点：stdout 块缓冲使行情日志成黑盒（少量 print 不落盘），
+                #   无法判断 _ak_poller 是否存活、是否取到数据。这里直接暴露内存态。
+                try:
+                    import threading as _th
+
+                    _threads = sorted(t.name for t in _th.enumerate())
+                    body = json.dumps(
+                        {
+                            "ok": True,
+                            "ak_available": _AK_AVAILABLE,
+                            "ak_price_ts": _AK_PRICE_TS,
+                            "ak_age_sec": round(time.time() - _AK_PRICE_TS, 1) if _AK_PRICE_TS else None,
+                            "ak_prices_n": len(_AK_PRICES or {}),
+                            "ak_sample": dict(list((_AK_PRICES or {}).items())[:5]),
+                            "ak_symbols_n": len(_AK_SYMBOLS or []),
+                            "ts_available": _TS_AVAILABLE,
+                            "ts_age_sec": round(time.time() - _TS_PRICE_TS, 1) if _TS_PRICE_TS else None,
+                            "feed_available": FEED_AVAILABLE,
+                            "threads": _threads,
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                except Exception as e:
+                    body = json.dumps({"ok": False, "error": repr(e)[:200]}, ensure_ascii=False)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -11328,7 +11735,53 @@ def start_dashboard(state):
                         pass
                 self.wfile.write(json.dumps(state, ensure_ascii=False, default=str).encode("utf-8"))
             elif self.path.split("?")[0] == "/api/account":
+                # ★ 微缓存（2026-11-02 首屏性能）：3s 内同一账户复用上次结果；
+                #   ?fresh=1 或任何写操作后的 _api_cache_clear() 都会强制重算。
+                _ck = "account:" + (
+                    self.path.split("account=")[-1].split("&")[0] if "account=" in self.path else "-"
+                )
+                _aevent = None
+                if "fresh=1" not in self.path:
+                    _cb = _api_cache_get(_ck, 3.0)
+                    if _cb is not None:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.send_header("X-Account-Cache", "hit")
+                        self.end_headers()
+                        self.wfile.write(_cb)
+                        return
+                    # 击穿防护：别人正在算就等他算完读缓存，不重复算（GIL 争抢会翻倍耗时）
+                    _aevent, _aowner = _api_event(_ck)
+                    if not _aowner:
+                        _aevent.wait(8.0)
+                        _cb = _api_cache_get(_ck, 3.0)
+                        if _cb is not None:
+                            self.send_response(200)
+                            self.send_header("Content-Type", "application/json; charset=utf-8")
+                            self.send_header("Access-Control-Allow-Origin", "*")
+                            self.send_header("X-Account-Cache", "wait")
+                            self.end_headers()
+                            self.wfile.write(_cb)
+                            return
                 try:
+                    # ★ 账户切换：account=default/paper 返回模拟盘账户快照（形状对齐实盘 /api/account 响应）
+                    _acc_param = self.path.split("account=")[-1].split("&")[0] if "account=" in self.path else ""
+                    if _acc_param in ("default", "paper"):
+                        snap = _paper_account_snapshot()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        _abody = json.dumps(snap, ensure_ascii=False, default=str).encode("utf-8")
+                        try:
+                            _api_cache_put(_ck, _abody)
+                        except Exception:
+                            pass
+                        if _aevent is not None:
+                            _aevent.set()
+                        self.wfile.write(_abody)
+                        return
                     # 每次刷新账户总览前，先把实际持仓品种钉死到其开仓合约，
                     # 防止 auto_main 动态换月导致盯市价错挂非持仓合约。
                     if FEED:
@@ -11391,7 +11844,7 @@ def start_dashboard(state):
                         snap["total_fee"] = _state_fee  # CTP 同步值优先
                     else:
                         try:
-                            snap["total_fee"] = tj.summary().get("total_fee", 0)  # 回退 journal 计算
+                            snap["total_fee"] = tj.summary(account_id="default").get("total_fee", 0)  # 回退 journal 计算
                         except Exception:
                             snap["total_fee"] = 0
                     # 换月预警（B2）：给每个持仓挂上距交割月天数与等级，持仓表内联显示
@@ -11410,12 +11863,21 @@ def start_dashboard(state):
                     self.send_header("Content-Type", "application/json; charset=utf-8")
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
-                    self.wfile.write(json.dumps(snap, ensure_ascii=False, default=str).encode("utf-8"))
+                    _abody = json.dumps(snap, ensure_ascii=False, default=str).encode("utf-8")
+                    try:
+                        _api_cache_put(_ck, _abody)  # 供 3s 内其它请求复用
+                    except Exception:
+                        pass
+                    if _aevent is not None:
+                        _aevent.set()  # 唤醒同一 key 的等待者
+                    self.wfile.write(_abody)
                 except Exception as _e:
                     import traceback
 
                     print(f"[/api/account] ERROR: {type(_e).__name__}: {_e}")
                     traceback.print_exc()
+                    if _aevent is not None:
+                        _aevent.set()  # 计算失败也要放行等待者，避免他们白等 8s
                     # 出错时返回空账户数据，而不是让框架吞掉响应
                     _empty = {"equity": 0, "positions": [], "error": str(_e)}
                     self.send_response(500)
@@ -11510,17 +11972,58 @@ def start_dashboard(state):
                 self.wfile.write(body.encode("utf-8"))
             elif self.path.split("?")[0] == "/api/journal":
                 # 成交记录器：返回 summary + compare_to_papertrack + 绩效(净值曲线/回撤/Sharpe) + R 倍数
+                # ★ 微缓存（2026-11-02 首屏性能）：6s 内复用；写操作会清空缓存。
+                # ★ 2026-11-09：缓存键加入 include_paper 维度——此前 include_paper=1 与默认口径
+                #   共享同一键 "journal:-"，导致实盘视图在 6s 内误显示含模拟盘的数据。
+                _ip_in_path = any(
+                    k in self.path
+                    for k in ("include_paper=1", "include_paper=true", "include_paper=yes")
+                )
+                _jc = "journal:" + (
+                    self.path.split("account=")[-1].split("&")[0] if "account=" in self.path else "-"
+                ) + ("_ip" if _ip_in_path else "")
+                _jb = _api_cache_get(_jc, 6.0)
+                if _jb is not None:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("X-Journal-Cache", "hit")
+                    self.end_headers()
+                    self.wfile.write(_jb)
+                    return
+                _jevent, _jowner = _api_event(_jc)
+                if not _jowner:
+                    _jevent.wait(10.0)
+                    _jb = _api_cache_get(_jc, 6.0)
+                    if _jb is not None:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.send_header("X-Journal-Cache", "wait")
+                        self.end_headers()
+                        self.wfile.write(_jb)
+                        return
                 try:
-                    s = tj.summary()
-                    c = tj.compare_to_papertrack()
-                    all_trades = tj.get_all_trades()
+                    from urllib.parse import parse_qs as _pq, urlparse as _up
+                    _qj = _pq(_up(self.path).query)
+                    _acct_j = _qj.get("account", [None])[0]
+                    _ip_j = _qj.get("include_paper", ["0"])[0] in ("1", "true", "yes")
+                    # ★ 2026-11-09 E接线：account=/include_paper= 真正透传给 summary（此前只做缓存键）
+                    if _acct_j:
+                        s = tj.summary(account=_acct_j, exclude=None, account_id="default")
+                    elif _ip_j:
+                        s = tj.summary(exclude=None, account_id="default")
+                    else:
+                        s = tj.summary(account_id="default")
+                    c = tj.compare_to_papertrack(account_id="default")
+                    all_trades = tj._live_rows(tj._load(account_id="default"))
                     prices = {}
                     if FEED:
                         for sym in SYMBOLS:
                             prices[sym] = FEED.price(sym)
-                    perf = tj.performance_metrics(prices)
-                    curve = tj.equity_curve(prices)
-                    intraday = tj.intraday_equity()
+                    perf = tj.performance_metrics(prices, account_id="default")
+                    curve = tj.equity_curve(prices, account_id="default")
+                    intraday = tj.intraday_equity(account_id="default")
                     body = json.dumps(
                         {
                             "summary": s,
@@ -11539,7 +12042,7 @@ def start_dashboard(state):
                     traceback.print_exc()
                     body = json.dumps(
                         {
-                            "summary": tj.summary(),
+                            "summary": tj.summary(account_id="default"),
                             "compare": {"error": str(_e)},
                             "performance": {},
                             "equity_curve": [],
@@ -11553,7 +12056,13 @@ def start_dashboard(state):
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(body.encode("utf-8"))
+                _jbody = body.encode("utf-8")
+                try:
+                    _api_cache_put(_jc, _jbody)  # 6s 内复用
+                except Exception:
+                    pass
+                _jevent.set()
+                self.wfile.write(_jbody)
             elif self.path.split("?")[0] == "/api/journal_strategy":
                 # F1 多策略 / 多账户视图：按 strategy 或 account 聚合盈亏
                 try:
@@ -11561,7 +12070,8 @@ def start_dashboard(state):
 
                     _q = parse_qs(urlparse(self.path).query)
                     _gb = _q.get("group_by", ["strategy"])[0]
-                    body = json.dumps(tj.by_strategy(group_by=_gb), ensure_ascii=False, default=str)
+                    _ip = _q.get("include_paper", ["0"])[0] in ("1", "true", "yes")  # ★ 2026-11-09 E接线
+                    body = json.dumps(tj.by_strategy(group_by=_gb, include_paper=_ip, account_id="default"), ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
                 self.send_response(200)
@@ -12066,7 +12576,7 @@ def start_dashboard(state):
                     buf = io.StringIO()
                     w = csv.writer(buf)
                     if _type == "journal":
-                        trades = tj._load()["trades"]
+                        trades = tj._load(account_id="default")["trades"]
                         w.writerow(
                             [
                                 "id",
@@ -12108,8 +12618,8 @@ def start_dashboard(state):
                             )
                         fname = "trade_journal.csv"
                     elif _type == "performance":
-                        s = tj.summary()
-                        p = tj.performance_metrics()
+                        s = tj.summary(account_id="default")
+                        p = tj.performance_metrics(account_id="default")
                         w.writerow(["指标", "数值"])
                         for k, v in p.items():
                             if isinstance(v, dict):
@@ -12666,10 +13176,20 @@ def start_dashboard(state):
                 self.wfile.write(body.encode("utf-8"))
             elif self.path.split("?")[0] == "/api/focus":
                 # G2/G4 关注品种盯盘板（评分 + 关键字段）
-                try:
-                    body = json.dumps(focus_board(force=("force=1" in self.path)), ensure_ascii=False, default=str)
-                except Exception as e:
-                    body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                # ★ 微缓存 30s（实测单次 ~1.0s，属首屏重接口；force=1 可穿透）
+                _fk = "focus"
+                _fb = _api_cache_get(_fk, 30.0) if "force=1" not in self.path else None
+                if _fb is not None:
+                    body = _fb
+                else:
+                    try:
+                        body = json.dumps(focus_board(force=("force=1" in self.path)), ensure_ascii=False, default=str)
+                    except Exception as e:
+                        body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+                    try:
+                        _api_cache_put(_fk, body)
+                    except Exception:
+                        pass
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
@@ -12689,7 +13209,7 @@ def start_dashboard(state):
             elif self.path.split("?")[0] == "/api/journal_list":
                 # G2 成交明细列表（含 id / note，供前端备注编辑）
                 try:
-                    _tj = tj._load()
+                    _tj = tj._load(account_id="default")
                     body = json.dumps({"ok": True, "trades": _tj.get("trades", [])}, ensure_ascii=False, default=str)
                 except Exception as e:
                     body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
@@ -12959,6 +13479,9 @@ def start_dashboard(state):
         def do_POST(self):
             # F2/F8 POST 路由修复：原误置于 do_GET，前端 POST 不可达；此处补齐分发，
             # 逻辑复用 _handle_journal_import / _handle_paper（与 GET 同源，避免漂移）
+            # ★ 任何写操作都让 GET 微缓存失效，保证「点完立刻看到新值」
+            #   （同步权益 / 手动记录 / 模拟盘开平 / 配置变更都走 POST）。
+            _api_cache_clear()
             if self.path.split("?")[0] == "/api/recalibrate":
                 try:
                     _q = self.path.split("?", 1)[1] if "?" in self.path else ""
@@ -13828,6 +14351,47 @@ def rollover_mismatch_check():
     }
 
 
+_AUX_BG = {}  # 后台重度 aux 任务：name -> {"t": 启动时间戳, "alive": bool}
+
+
+def _aux_bg(name, fn, *a, **kw):
+    """把「重活 / 外部调用」踢到后台 daemon 线程执行，主循环永不等待。
+
+    为什么必须有（2026-11-01 runner 自杀事故的同类根治）：
+      `_update_aux` 里挂着几个重任务——G3 重校准（全市场 walk-forward 扫描，分钟级）、
+      换月核对（subprocess，timeout=300s）、Vanta 主力桥（跨机读盘）。它们都在
+      **主循环线程内同步执行**，一旦超过 180s，runner 的停摆自检 `os._exit(3)`
+      就会主动自尽（实测 2026-11-01 连续两次 exit 3：ensure_F 的 akshare 无超时首先中招）。
+      这些任务全是「缓存刷新」性质，返回值无人消费 ⇒ 完全可以异步，不需要阻塞决策。
+
+    单飞语义：同名任务未结束时不再重复起线程（防 akshare 卡住时线程堆积成灾）。
+    超长运行只告警、不强杀（强杀会让 akshare 内部状态更脏），主循环照常跑。
+    """
+    try:
+        _rec = _AUX_BG.get(name)
+        if _rec and _rec.get("alive"):
+            _el = time.time() - float(_rec.get("t") or 0)
+            if _el > 600:
+                print(f"[aux-bg] {name} 已后台运行 {int(_el)}s 仍未结束（不阻塞主循环，暂不重复起）")
+            return False
+        _t0 = time.time()
+        _AUX_BG[name] = {"t": _t0, "alive": True}
+
+        def _run():
+            try:
+                fn(*a, **kw)
+            except Exception as _e:
+                print(f"[aux-bg] {name} 异常(忽略): {repr(_e)[:110]}")
+            finally:
+                _AUX_BG[name] = {"t": _t0, "alive": False}
+
+        threading.Thread(target=_run, name=f"aux-{name}", daemon=True).start()
+        return True
+    except Exception as _e:
+        print(f"[aux-bg] 调度失败(降级为同步不执行): {name} {repr(_e)[:80]}")
+        return False
+
+
 def _update_aux(feed, state):
     """每轮更新：异动扫描 + 账户监控自动 papertrack + 仓位状态机。"""
     global DAY_OPEN_EQUITY, DAY_OPEN_LABEL, _LAST_HEAL_TS  # 修 UnboundLocalError：函数内赋值会令 Python 视为局部
@@ -13893,19 +14457,11 @@ def _update_aux(feed, state):
             am.auto_sync(acc, prices)
     except Exception as e:
         print(f"[账户监控] 异常: {repr(e)[:80]}")
-    # 2.5) 2026-10-15 引擎仓 → 账户层同步（必须在沙盒镜像之后！）
-    #  背景：paper_trading_engine 只写自己的 paper_trading_state.json，
-    #  而沙盒镜像只读 paper_account.json，两者互不相通 ⇒ 引擎开的仓在面板上完全看不见
-    #  （实测：3 腿引擎仓，账户层 positions 为空、使用率恒 0.00%）。
-    #  顺序很关键：沙盒镜像每轮整份覆盖 snapshot，本同步必须在其之后执行才能保住结果；
-    #  实测一次性调用会被下一轮镜像冲掉（40s后 positions 归零），故必须挂在循环内。
-    try:
-        import sync_engine_to_account as _sea
-
-        # 同步模块内部已按「补入内容指纹」去重打印，这里只在真正补入时输出。
-        _n_add, _msg = _sea.sync_engine_positions()
-    except Exception as e:
-        print(f"[引擎同步] 异常: {repr(e)[:80]}")
+    # 2.5) 引擎仓 → 账户层同步：已由 account_monitor 统一负责（_get_sandbox_account 每轮
+    #  从 paper_trading_state.json 重新合并引擎腿并携带全量实时字段，_sync_sandbox_to_account_state
+    #  重建时写入；引擎平仓由 account_monitor.remove_engine_position 即时清理）。旧 sync_engine_to_account
+    #  桥已退役（双写冲突根因），此处不再调用，避免两路各写 account_state.json 互相冲掉。
+    pass
     # 3) 更新仓位状态机（权益/保证金/当日盈亏/连亏 → NORMAL/WARNING/LOCKED）
     try:
         prices = {s: feed.price(s) for s in SYMBOLS}
@@ -13963,7 +14519,11 @@ def _update_aux(feed, state):
                 # （否则 DAY_OPEN_EQUITY 直接用当前权益，account_daily_pnl 浮亏归零 → 日亏熔断延迟）。
                 _saved_oe = getattr(_kill, "_opening_equity", None)
                 _saved_date = getattr(_kill, "_opening_equity_date", None)
-                if _saved_oe and _saved_date == _td:
+                if eq is None or eq <= 0:
+                    # ★ 2026-11-02：本金未设定（实盘清零/待同步真实权益）时，
+                    #   绝不继承清零前的旧日初锚点，否则同步权益当刻就会算出巨额日亏。
+                    DAY_OPEN_EQUITY = 0.0
+                elif _saved_oe and _saved_date == _td:
                     DAY_OPEN_EQUITY = float(_saved_oe)
                 else:
                     DAY_OPEN_EQUITY = eq
@@ -13980,8 +14540,38 @@ def _update_aux(feed, state):
                     _kill.set_opening_equity(DAY_OPEN_EQUITY, date_str=_td)
             except Exception as e:
                 print(f"[跨日风控重置] KillSwitch 异常: {repr(e)[:80]}")
-        account_daily_pnl = (eq - DAY_OPEN_EQUITY) if DAY_OPEN_EQUITY > 0 else 0.0  # 亏为负
-        journal_daily = tj.today_pnl()  # 自然日已实现盈亏（交叉验证/展示）
+        # ★★ 2026-11-02 本金未设定保护（实盘清零后必须的护栏）：
+        #   实盘账户本金归 0（待手动同步真实权益）时，若沿用旧日初锚点 100480，
+        #   account_daily_pnl = 0 - 100480 = -100480 → 日亏 100% → 误触发账户硬熔断
+        #   （实测 killswitch 在 10:38 报「当日亏损 100.0% / 100480 元」并 HALTED）。
+        #   没有本金就没有日亏概念：eq<=0 或日初锚点<=0 时一律记 0，不产生假熔断。
+        if eq is None or eq <= 0 or DAY_OPEN_EQUITY is None or DAY_OPEN_EQUITY <= 0:
+            account_daily_pnl = 0.0
+        else:
+            account_daily_pnl = eq - DAY_OPEN_EQUITY  # 亏为负
+        # 日亏口径修正(2026-10-28)：journal 侧必须按【交易日】过滤，不能用自然日。
+        # 原 tj.today_pnl() 用自然日 → 15:00-24:00 会把刚结束交易日的亏损重复计入新交易日，
+        # 导致熔断人工解除后被旧日亏立刻复燃（2026-10-28 实测：解后 1 周期即复燃）。
+        # 改按 _trading_day_label(exit_time) == 当前交易日 _td 过滤；失败回退自然日旧行为。
+        try:
+            _jd = tj._load()
+            journal_daily = 0.0
+            for _t in _jd.get("trades", []):
+                if _t.get("pnl") is None:
+                    continue
+                _et = _t.get("exit_time") or ""
+                if not _et:
+                    continue
+                try:
+                    _et_dt = datetime.strptime(_et[:19], "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    continue
+                if _trading_day_label(_et_dt) == _td:
+                    journal_daily += (_t.get("pnl") or 0)
+            journal_daily = round(journal_daily, 2)
+        except Exception as _e:
+            journal_daily = tj.today_pnl()  # 回退自然日（保持旧行为）
+            print(f"[日亏口径] 交易日过滤失败，回退自然日: {repr(_e)[:80]}")
         daily_pnl = min(account_daily_pnl, journal_daily)  # 取更亏者（更保守）
         # P2 涨跌停锁死头寸尾部应力加计（可配置，默认 OFF；见 STRESS_LIMIT_LOCKED）
         _ll_stress, _ll_details = 0.0, []
@@ -14026,7 +14616,9 @@ def _update_aux(feed, state):
         _current_dd = float(_dd_state.get("dd_pct", 0) or 0)
         _acc = at.get_account()
         _kill = rsm.get_kill(_acc)
-        if _current_dd >= DRAWDOWN_FULL_STOP_PCT and not _kill.halted:
+        # ★ 2026-11-02 双保险：本金未设定（eq<=0）时，回撤百分比无意义，禁止据此硬熔断。
+        #   与 drawdown_guard.MIN_VALID_EQUITY 同口径（该模块已在源头不产生极小峰值）。
+        if eq and eq > 0 and _current_dd >= DRAWDOWN_FULL_STOP_PCT and not _kill.halted:
             _kill.force_halt(
                 f"账户回撤{_current_dd:.1f}%≥{DRAWDOWN_FULL_STOP_PCT}%，强制全平+休息24小时",
                 positions=snap.get("positions") or [],
@@ -14118,7 +14710,8 @@ def _update_aux(feed, state):
         _iv = float(_cfg.get("recalibrate_interval_h", 6)) * 3600
         if _auto and (time.time() - _RECAL_LAST_TS) > _iv:
             _RECAL_LAST_TS = time.time()
-            _recalibrate_tick()
+            # 2026-11-01：全市场 walk-forward 扫描是分钟级重活，踢后台线程，主循环不等
+            _aux_bg("recalibrate", _recalibrate_tick)
     except Exception as _e:
         print(f"[重校准] 自动调度异常(忽略): {repr(_e)[:120]}")
     # 5.2) 2026-08-14：动态主力合约映射刷新（每 5 分钟），保证 CONTRACT_MAP/展示/换月预警
@@ -14149,7 +14742,8 @@ def _update_aux(feed, state):
         if (time.time() - _MAIN_REFRESH_TS > 7200) or (not _MAIN_REFRESH_DONE):
             _MAIN_REFRESH_TS = time.time()
             _MAIN_REFRESH_DONE = True
-            _refresh_main_contracts_external()
+            # 2026-11-01：subprocess timeout=300s > runner 停摆阈值 180s，主循环内同步跑会自杀
+            _aux_bg("main_contracts", _refresh_main_contracts_external)
     except Exception:
         pass
     # 5.5) B2 换月主动提醒：刷新 akshare 交易所真主力缓存（每 30min；启动后首次立即跑）。
@@ -14176,7 +14770,8 @@ def _update_aux(feed, state):
         if (time.time() - _VANTA_BRIDGE_TS > 600) or (not _VANTA_BRIDGE_DONE):
             _VANTA_BRIDGE_TS = time.time()
             _VANTA_BRIDGE_DONE = True
-            _vanta_main_bridge_external()
+            # 2026-11-01：跨机读盘（VM 共享盘）可能长时间阻塞，踢后台线程
+            _aux_bg("vanta_bridge", _vanta_main_bridge_external)
     except Exception:
         pass
 
@@ -14527,9 +15122,9 @@ def generate_report(kind="daily"):
     """合成 Markdown 复盘报告。kind: daily|weekly。返回 {ok, kind, title, markdown}。"""
     now = datetime.now()
     is_weekly = kind == "weekly"
-    s = tj.summary()
-    pm = tj.performance_metrics()
-    ss = tj.session_split()
+    s = tj.summary(account_id="default")
+    pm = tj.performance_metrics(account_id="default")
+    ss = tj.session_split(account_id="default")
     rr = evaluate_risk_rules(force=True)
     fb = focus_board(force=False)
     if is_weekly:
@@ -15116,21 +15711,47 @@ def main():
         return
 
     refresh_gates()  # 启动即刷新动态门控（预热评估前，让卡片即刻反映门控状态）
+    # ★ 2026-10-28 修复：行情轮询线程必须**先于**预热启动。
+    #   背景（实测事故）：预热(ensure_F/_poll_feed/evaluate)一旦卡在网络拉取，
+    #   其后所有线程启动代码永远执行不到 ⇒ ak_poller/ts_poller 不启动、主循环不跑、
+    #   价格永远停在启动快照、陈旧报价闸挡掉全部信号(signals=0)、推送全停；
+    #   更严重的是连 _stall_watchdog 都没启动 ⇒ 进程既不工作也不自杀重启，永久僵死。
+    #   故把行情线程提到预热之前，保证行情先活起来。
+    global _TS_SYMBOLS, _AK_SYMBOLS
+    _TS_SYMBOLS = list(tl._TUSHARE_CONTRACTS.keys())  # 保留用于品种集合
+    _AK_SYMBOLS = _TS_SYMBOLS  # 同步兼容（akshare 新浪实时监控品种）
+    print(f"[行情] 监控品种数: _TS={len(_TS_SYMBOLS)}, _AK={len(_AK_SYMBOLS)}", flush=True)
+    threading.Thread(target=_ak_poller, daemon=True, name="ak_poller").start()
+    threading.Thread(target=_ts_poller, daemon=True, name="ts_poller").start()
+    try:
+        at.start_ak_poller(interval=5)
+    except Exception as _e:
+        print(f"[account_tracker] ak_poller 启动失败: {_e}", flush=True)
+
     # 启动预热：先评估一次填 symbols，避免刚启动恰逢休市时信号卡全空
     if feed_ok:
-        try:
-            _today = datetime.now().strftime("%Y%m%d")
-            ensure_F(_today)
-            _poll_feed(feed)
-            evaluate(feed, _today, last_fire, state, corr_histories)
-            _update_aux(feed, state)
-            state["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            state["session"] = session_label()
-            print("[预热] 启动评估完成")
-        except Exception as e:
-            print(f"[预热] 评估异常(忽略): {repr(e)[:160]}")
+        def _warmup():
+            try:
+                _today = datetime.now().strftime("%Y%m%d")
+                ensure_F(_today)
+                _poll_feed(feed)
+                evaluate(feed, _today, last_fire, state, corr_histories)
+                _update_aux(feed, state)
+                state["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                state["session"] = session_label()
+                print("[预热] 启动评估完成", flush=True)
+            except Exception as e:
+                print(f"[预热] 评估异常(忽略): {repr(e)[:160]}", flush=True)
+
+        # 预热必须在限时内让位给主循环：它卡死时不能拖垮整个 runner
+        # （行情线程已先启动，主循环跑起来后首屏会自行补齐）
+        _wt = threading.Thread(target=_warmup, daemon=True, name="warmup")
+        _wt.start()
+        _wt.join(timeout=180)
+        if _wt.is_alive():
+            print("[预热] 超时未完成(>180s) → 先进入主循环，预热线程继续后台跑", flush=True)
     else:
-        print("[预热] 跳过（feed 不可用）")
+        print("[预热] 跳过（feed 不可用）", flush=True)
     print(f"[runner] 启动 · 轮询 {POLL_SEC}s · 去抖(同号连续2轮)+签名去重 · 时段内评估")
 
     # —— #16 卡死自检线程：主循环停摆超过阈值则自杀，交由看门狗重启 ——
@@ -15147,21 +15768,8 @@ def main():
     _restored = restore_market_states()
     if _restored:
         print(f"[市场状态] 已恢复 {_restored} 个品种的 Layer0 快照")
-    # ★ 启动 minishare rt_fut_k 主数据源轮询线程（5秒/次，不限次快照）
-    # rt_fut_k 返回全市场 948 个期货品种实时行情，系统自动筛选持仓品种
-    global _TS_SYMBOLS, _AK_SYMBOLS
-    _TS_SYMBOLS = list(tl._TUSHARE_CONTRACTS.keys())  # 保留用于品种集合
-    _AK_SYMBOLS = _TS_SYMBOLS  # 同步兼容（akshare 新浪实时监控品种）
-    print(f"[行情] 监控品种数: _TS={len(_TS_SYMBOLS)}, _AK={len(_AK_SYMBOLS)}")
-    # ★ 启动 akshare 新浪实时行情轮询线程（盘中实时数据源）
-    # minishare rt_fut_k 仅在收盘更新，盘中需依赖新浪财经实时数据
-    threading.Thread(target=_ak_poller, daemon=True).start()
-    threading.Thread(target=_ts_poller, daemon=True).start()
-    # ★ 2026-08-28: 启动 account_tracker 的 akshare 批量轮询（持仓品种实时价缓存）
-    try:
-        at.start_ak_poller(interval=5)
-    except Exception as _e:
-        print(f"[account_tracker] ak_poller 启动失败: {_e}")
+    # （2026-10-28：minishare/akshare 轮询线程 + _TS/_AK 品种集合 + at.start_ak_poller
+    #   已统一上移至「预热之前」，见上方修复说明，此处不再重复启动）
     # ★ 启动自动模拟交易引擎
     try:
         pti.init(
@@ -15207,6 +15815,8 @@ def main():
     global LAST_CYCLE_TS  # #16 心跳：main 内给模块全局赋值必须声明 global，否则只更新局部、看门狗读到永远 0.0
     global last_recover  # 修复 UnboundLocalError：函数内赋值会让 Python 视为局部
     while True:
+        _t_cycle0 = time.perf_counter()  # 埋点：本轮起点
+        _t_eval_done = None  # 埋点：evaluate 结束时刻（休市轮次为空）
         now = datetime.now()
         today = now.strftime("%Y%m%d")
         # 跨日刷新 F
@@ -15216,6 +15826,7 @@ def main():
         if feed_ok and is_trading_now(now):
             _poll_feed(feed)
             evaluate(feed, today, last_fire, state, corr_histories)
+            _t_eval_done = time.perf_counter()  # 埋点：poll+evaluate 合计到此
             # ── v6.0 新增：市场状态引擎更新（阶段一） ──
             if MARKET_STATE_ENGINE_ENABLED:
                 try:
@@ -15239,7 +15850,21 @@ def main():
         _update_aux(feed, state)
         # ★ 自动模拟交易：检查新信号 + 检查持仓 TP/SL
         try:
-            pti.tick(state)
+            # 熔断/状态机锁死时：pti 只允许平仓(check_positions)，跳过开新仓(check_new_signals)。
+            # 2026-10-28 Ken 拍板：全链路 auto 必须受熔断约束，真实账户锁死时模拟盘 auto 不得再开新仓。
+            _allow_open = True
+            try:
+                _ks_pt = state.get("killswitch") or {}
+                _rs_pt = state.get("risk_state") or {}
+                if _ks_pt.get("halted") or _rs_pt.get("state") in ("LOCKED", "HALTED"):
+                    _allow_open = False
+                else:
+                    # 兜底：直接问风控对象（state 可能尚未刷新）
+                    if rsm.get_kill(at.get_account()).halted:
+                        _allow_open = False
+            except Exception:
+                pass
+            pti.tick(state, allow_open=_allow_open)
         except Exception as _pte:
             print(f"[PaperTrading] tick 异常: {repr(_pte)[:80]}")
         # ★ 实盘跟踪盘：只检查持仓 TP/SL（不跟信号）
@@ -15247,6 +15872,28 @@ def main():
             tri.tick(state)
         except Exception as _pre:
             print(f"[TriSense] tick 异常: {repr(_pre)[:80]}")
+        # ★★ 引擎 → 账户层「每轮实时对齐」（2026-11-01 治本项）
+        # 背景：账户层原先只靠 journal 自愈 + 引擎平仓回调两条腿维护，
+        #   而 _get_sandbox_account（本该每轮重建并对引擎腿打 source）因
+        #   account_monitor.json 不存在(enabled=False) + paper_account.json 不存在，
+        #   **整段从未执行** ⇒ ① 引擎已止损平仓的面板还挂着腿（幽灵腿，假浮亏 -4420）；
+        #   ② 账户层止损被 account_tracker 的 2% 兜底值冒充（9585.96 vs 引擎 9510.56）。
+        # 现在每轮以引擎 state 为唯一真相源做幂等对账：手数(t1平半)/止损/移动止损/
+        # 分级止盈/开仓时间全部实时联动；引擎已平的腿自动清除；手动/真实腿一律不碰。
+        try:
+            _epp = {}
+            if feed_ok:
+                for _s in SYMBOLS:
+                    _px = feed.price(_s)
+                    if _px:
+                        _epp[_s] = _px
+            _rc = am.reconcile_engine_positions(_epp)
+            if _rc.get("added") or _rc.get("removed") or _rc.get("updated"):
+                print(f"[引擎对齐] 新增={_rc['added']} 更新={_rc['updated']} 清除={_rc['removed']}")
+            elif _rc.get("mode") == "purge-only":
+                pass  # 两账户物理隔离：模拟盘腿不写实盘账户，无残留时静默
+        except Exception as _rce:
+            print(f"[引擎对齐] 异常(忽略): {repr(_rce)[:90]}")
         # 日内权益采样（每轮都跑，内部按分钟去重）
         try:
             prices = {}
@@ -15269,6 +15916,29 @@ def main():
                 pass
         except Exception:
             pass
+        # ── B 埋点：本轮耗时分解（只读观测，不参与任何决策）──────────────
+        # 没有这个字段，任何「调度优化」都无法证明有效；warn 阈值：
+        # total>95s 说明循环体已经吃掉 35s 以上，距 180s 自杀线余量不足一半。
+        try:
+            _t_end = time.perf_counter()
+            _bd = {
+                "ts": now.strftime("%H:%M:%S"),
+                "total_ms": int((_t_end - _t_cycle0) * 1000),
+                "eval_ms": int((_t_eval_done - _t_cycle0) * 1000) if _t_eval_done else 0,
+                "other_ms": 0,
+                "sleep_sec": POLL_SEC,
+                "daily_fetch_n": int(fd._DAILY_STAT.get("fetch", 0)),
+                "daily_cache_hit": int(fd._DAILY_STAT.get("hit", 0)),
+            }
+            _bd["other_ms"] = max(0, _bd["total_ms"] - _bd["eval_ms"])
+            fd._DAILY_STAT["fetch"] = 0
+            fd._DAILY_STAT["hit"] = 0
+            state["cycle_breakdown"] = _bd
+            _hist = list(state.get("cycle_history") or [])
+            _hist.append(_bd)
+            state["cycle_history"] = _hist[-30:]
+        except Exception as _be:
+            state["cycle_breakdown_error"] = repr(_be)[:80]
         state["updated"] = now.strftime("%Y-%m-%d %H:%M:%S")
         state["session"] = session_label(now)
         json.dump(state, open(STATE_FILE, "w"), ensure_ascii=False, default=str)
