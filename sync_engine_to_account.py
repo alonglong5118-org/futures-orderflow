@@ -68,7 +68,23 @@ def _mult(sym):
 
 
 def sync_engine_positions(verbose=False):
-    """把引擎持仓合并进账户层快照。只补不删，返回 (补入数, 日志文本)。"""
+    """把引擎持仓与账户层对齐。
+
+    2026-10-28 升级（Ken 铁律：「auto 就是你自行判断自行决定的所有单子……
+    全部都是要联动实时更新的」）：
+      对 **auto 来源（source == "engine_sync"）的腿做双向实时对齐**：
+        ① 引擎新开            → 补入账户层；
+        ② 引擎状态推进        → 实时刷新手数/止损/移动止损/浮盈（本次新增，核心）；
+        ③ 引擎已平            → 账户层删除该腿（补齐「只补不删」的另一端）。
+      对 **非 auto 来源的真实/手动腿，依旧严格不碰**（守住护栏本意：
+        不污染账户资金真相源；无 source 标记的孤儿腿同样不删）。
+
+    第二条解决的实际病灶：旧逻辑 L97 `if sym in a_syms: continue` 使补入过的腿被**永久冻结**，
+      ⇒ 引擎每轮推进的移动止损线(trailing_stop)、t1 平半后的剩余手数、trailing_active 一律传不到面板，
+      ⇒ 面板「移动止损」列长期不更新、止损位停在开仓瞬间。
+
+    Returns: (变动腿数, 日志文本)
+    """
     if not (os.path.exists(ENGINE_STATE) and os.path.exists(ACCOUNT_STATE)):
         return 0, ""
     try:
@@ -86,15 +102,27 @@ def sync_engine_positions(verbose=False):
     snap = acct.get("snapshot") or {}
     a_positions = list(snap.get("positions") or [])
     a_syms = {str(p.get("symbol")) for p in a_positions}
+    leg_of = {str(p.get("symbol")): p for p in a_positions}
 
     added = []
+    updated = []
+    # 引擎的有效手数：优先 remaining_lots（t1 平半后 lots 不变、remaining_lots 才减）
+    def _alive_lots(p):
+        try:
+            rl = int(p.get("remaining_lots") or 0)
+        except (TypeError, ValueError):
+            rl = 0
+        try:
+            lo = int(p.get("lots") or 0)
+        except (TypeError, ValueError):
+            lo = 0
+        return rl if rl > 0 else lo
+
     for sym, p in epos.items():
         if not isinstance(p, dict):
             continue
-        lots = int(p.get("lots") or 0)
+        lots = _alive_lots(p)
         if lots <= 0:
-            continue
-        if str(sym) in a_syms:      # 账户层已有 → 绝不覆盖
             continue
         entry = float(p.get("entry_price") or p.get("price") or 0)
         if entry <= 0:
@@ -104,28 +132,88 @@ def sync_engine_positions(verbose=False):
             if verbose:
                 print(f"[引擎同步] 跳过 {sym}：缺乘数，无法估算保证金")
             continue
-        stop = p.get("stop_price")
+
+        direction = p.get("direction") or "多"
+        tstop = p.get("trailing_stop")
+        initial_stop = p.get("stop_price")
+        # 有效止损：移动止损激活后以 tracking stop 为准（面板「止损」列 + 触价红标都读 stop）
+        eff_stop = tstop if (p.get("trailing_active") and tstop) else initial_stop
+        last_price = p.get("last_price")
         margin = round(entry * mult * lots * _DEFAULT_MARGIN_RATE, 2)
+        trail_state = "跟踪" if p.get("trailing_active") else None
+
+        if str(sym) in a_syms:
+            # ── 已存在：仅当是本桥补入的 auto 腿才对齐更新，其余一律不碰 ──
+            if str(leg_of.get(str(sym), {}).get("source") or "") != "engine_sync":
+                continue
+            leg = leg_of[str(sym)]
+            before = (
+                leg.get("lots"), leg.get("stop"), leg.get("trailing_stop"),
+                leg.get("trail_state"), leg.get("price"), leg.get("float_pnl"),
+            )
+            leg["lots"] = lots
+            leg["position"] = lots
+            leg["stop"] = eff_stop
+            leg["stop_price"] = eff_stop
+            leg["trailing_stop"] = tstop
+            leg["trail_state"] = trail_state
+            leg["t1_filled"] = bool(p.get("t1_filled"))
+            leg["peak_price"] = p.get("peak_price")
+            leg["t1"] = p.get("t1_price")
+            leg["t2"] = p.get("t2_price")
+            leg["margin"] = margin
+            if last_price:
+                leg["price"] = float(last_price)
+                sign = 1 if str(direction) == "多" else -1
+                leg["float_pnl"] = round((float(last_price) - entry) * mult * lots * sign, 2)
+            after = (
+                leg.get("lots"), leg.get("stop"), leg.get("trailing_stop"),
+                leg.get("trail_state"), leg.get("price"), leg.get("float_pnl"),
+            )
+            if before != after:
+                updated.append(f"{sym} 移动止损{'@' + str(tstop) if tstop else '未启用'}/{lots}手")
+            continue
+
         a_positions.append({
             "symbol": sym,
             "name": p.get("name") or sym,
-            "direction": p.get("direction") or "多",
+            "direction": direction,
             "position": lots,
             "lots": lots,
             "open_price": entry,
-            "price": entry,
+            "price": float(last_price) if last_price else entry,
             "margin": margin,
-            "stop": stop,
-            "stop_price": stop,
+            "stop": eff_stop,
+            "stop_price": eff_stop,
             "t1": p.get("t1_price"),
             "t2": p.get("t2_price"),
+            "trailing_stop": tstop,
+            "trail_state": trail_state,
+            "t1_filled": bool(p.get("t1_filled")),
+            "peak_price": p.get("peak_price"),
             "open_time": p.get("open_time") or "",
             "source": "engine_sync",
-            "float_pnl": 0.0,
+            "float_pnl": round((float(last_price) - entry) * mult * lots
+                               * (1 if str(direction) == "多" else -1), 2) if last_price else 0.0,
         })
-        added.append(f"{sym}{p.get('direction') or '多'}{lots}手@{entry}(保证金{margin:.0f})")
+        added.append(f"{sym}{direction}{lots}手@{entry}(保证金{margin:.0f})")
 
-    if not added:
+    # ── 反向对齐兜底：引擎已无该腿（已自动平仓），账户层仍残留 auto 腿 → 删除 ──
+    #   引擎平仓时已通过 remove_account_position 回调清理；此处覆盖回调未生效的
+    #   （如引擎状态被打回･重启･跨进程）场景，确保 auto 腿不会在面板上「僵尸留存」。
+    removed = []
+    if a_positions:
+        keep = []
+        for x in a_positions:
+            sy = str(x.get("symbol") or "")
+            is_auto = str(x.get("source") or "") == "engine_sync"
+            if is_auto and sy not in {str(k) for k in epos.keys()}:
+                removed.append(f"{sy}{x.get('direction') or ''}{x.get('lots') or 0}手")
+                continue
+            keep.append(x)
+        a_positions = keep
+
+    if not (added or updated or removed):
         return 0, ""
 
     # 重算保证金与使用率（使用率铁律 ≤45%，这里只做呈现，不做拦截）
@@ -148,8 +236,14 @@ def sync_engine_positions(verbose=False):
             "avg": x.get("open_price"),
             "margin": x.get("margin"),
             "stop": x.get("stop"),
+            "stop_price": x.get("stop_price"),
             "t1": x.get("t1"),
             "t2": x.get("t2"),
+            # auto 腿的实时状态（面板「移动止损」列 / 触价红标依据）
+            "trailing_stop": x.get("trailing_stop"),
+            "trail_state": x.get("trail_state"),
+            "t1_filled": x.get("t1_filled"),
+            "peak_price": x.get("peak_price"),
             "source": x.get("source"),
         }
         for x in a_positions
@@ -163,12 +257,116 @@ def sync_engine_positions(verbose=False):
     except Exception as e:
         return 0, f"写盘失败: {repr(e)[:60]}"
 
+    _parts = []
+    if added:
+        _parts.append(f"补入{len(added)}腿[{', '.join(added)}]")
+    if updated:
+        _parts.append(f"更新{len(updated)}腿[{', '.join(updated)}]")
+    if removed:
+        _parts.append(f"清理{len(removed)}腿[{', '.join(removed)}]")
     msg = (
-        f"[引擎同步] 已补入账户层 {len(added)} 腿: {', '.join(added)} "
+        f"[引擎同步] {' | '.join(_parts)} "
         f"| 保证金合计={total_margin:.2f} 使用率={usage:.2f}%"
     )
-    _log_once(msg, "|".join(added))
-    return len(added), msg
+    _log_once(msg, "|".join(added + updated + removed))
+    return len(added) + len(updated) + len(removed), msg
+
+
+def remove_account_position(symbol: str, direction: str, lots: int, fully_closed: bool = True,
+                           require_engine_source: bool = True) -> str:
+    """引擎平仓 → 同步清理账户层对应腿（补齐「只补不删」桥的另一端）。
+
+    背景：
+      sync_engine_positions() 是单向补齐，且明确保留账户层已有腿（护栏1「只补不删」），
+      本意是不污染账户资金真相源。副作用是：引擎触发止损/T2 自动平仓后，
+      账户层仍保留旧腿 ⇒ 面板一直显示「带红止损标却不平仓」。
+      本函数由引擎在**真正成交平仓**时回调，补齐链路的另一端。
+
+    安全约束（保住护栏本意，避免污染账户层真相）：
+      1. 默认仅处理 source == "engine_sync" 的腿（即本桥曾经补入的腿）；
+         非本桥来源的真实/手动腿一律不动，宁可不删也不误删；
+      2. 方向必须一致，防止反向真实腿被误删；
+      3. 全平 → 删除该腿；部分平 → 按手数扣减，扣完即删除；
+      4. 幂等：腿不存在或手数已为 0 时直接处理，不制造抖动；
+      5. 原子写盘（tmp + os.replace），失败只返回文本、不上抛异常。
+
+    Args:
+        symbol: 品种代码
+        direction: 方向（多/空），与引擎 pos["direction"] 同源
+        lots: 本次平仓手数
+        fully_closed: True=全部平仓（删除腿）；False=部分平仓（扣减手数）
+        require_engine_source: 是否要求来源必须是本桥补入（默认 True，安全优先）
+
+    Returns: 日志文本（空串表示账户层本无该腿、无需清理）
+    """
+    sym = str(symbol).strip()
+    try:
+        lots = int(lots or 0)
+    except (TypeError, ValueError):
+        return f"参数异常 lots={lots!r}"
+    if lots < 0:
+        return f"参数异常 lots={lots}"
+
+    if not os.path.exists(ACCOUNT_STATE):
+        return f"账户状态文件不存在: {ACCOUNT_STATE}"
+
+    try:
+        with open(ACCOUNT_STATE, encoding="utf-8") as f:
+            acct = json.load(f) or {}
+    except Exception as e:
+        return f"读取失败: {repr(e)[:60]}"
+
+    pos_map = acct.get("positions")
+    if not isinstance(pos_map, dict) or sym not in pos_map:
+        return ""  # 账户层本就没有该腿 → 无需处理（幂等）
+
+    leg = pos_map.get(sym)
+    if not isinstance(leg, dict):
+        return f"跳过 {sym}：账户层腿结构异常"
+
+    # 护栏①：仅处理本桥来源的腿（默认开启）
+    src = str(leg.get("source") or "")
+    if require_engine_source and src != "engine_sync":
+        return f"跳过 {sym}：来源非本桥(source={src or '空'})，保住账户层真相未改动"
+
+    # 护栏②：方向必须一致
+    leg_dir = str(leg.get("direction") or "")
+    if leg_dir and str(direction) and leg_dir != str(direction):
+        return f"跳过 {sym}：方向不符(账户层{leg_dir} vs 引擎{direction})，未改动"
+
+    cur_lots = int(leg.get("lots") or 0)
+    left = 0 if fully_closed else max(cur_lots - lots, 0)
+
+    if cur_lots <= 0 or left <= 0:
+        del pos_map[sym]
+        action = f"全平清理 {sym}（原 {cur_lots} 手）"
+    else:
+        leg["lots"] = left
+        pos_map[sym] = leg
+        action = f"部分平 {sym} {lots} 手，账户层余 {left} 手"
+
+    # 账户层 positions 与 snapshot 保持同源（与本桥补入逻辑一致）
+    snap = acct.get("snapshot")
+    if isinstance(snap, dict) and isinstance(snap.get("positions"), list):
+        if left <= 0:
+            snap["positions"] = [x for x in snap["positions"] if str(x.get("symbol")) != sym]
+        else:
+            for x in snap["positions"]:
+                if str(x.get("symbol")) == sym:
+                    x["lots"] = left
+                    x["position"] = left
+        acct["snapshot"] = snap
+
+    acct["positions"] = pos_map
+    try:
+        tmp = ACCOUNT_STATE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(acct, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, ACCOUNT_STATE)
+    except Exception as e:
+        return f"写盘失败: {repr(e)[:60]}"
+
+    return action
 
 
 if __name__ == "__main__":

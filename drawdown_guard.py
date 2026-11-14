@@ -38,6 +38,11 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "drawdown_state.json")
+
+# ★ 2026-11-02：有效本金下限。低于此值的权益视为「本金未设定」（如实盘清零待同步），
+#   不参与峰值/回撤计算 —— 否则分母极小，120→100 这类微小浮动会被放大成 16.67% 回撤，
+#   直接触发 10% 硬熔断（实测事故）。
+MIN_VALID_EQUITY = 1000.0
 # 默认三档：[阈值(小数), 新开仓缩放系数]
 _CONFIG = {"waterlines": [(0.05, 0.70), (0.10, 0.50), (0.15, 0.00)]}
 _CONFIG_LOCK = threading.RLock()  # 保护全局水位线配置
@@ -100,9 +105,22 @@ class DrawdownGuard:
                 eq = float(equity)
             except Exception:
                 eq = None
-            if eq is None or eq <= 0:
+            # ★★ 2026-11-02 本金未设定保护：
+            #   实盘账户清零后（equity/本金=0，待手动同步真实权益），分母极小，
+            #   任何小额浮动都会被放大成巨大回撤。实测：peak 被写成 120，
+            #   equity 回落到 100 → dd=16.67% → 触发 10% 硬熔断「强制全平+休息24h」。
+            #   低于 MIN_VALID_EQUITY 一律视为「无有效本金基准」，不更新峰值/回撤。
+            if eq is None or eq < MIN_VALID_EQUITY:
                 st["thresholds"] = waterlines()
                 return st
+            # 历史遗留的极小峰值（异常基准）一并作废，避免继续污染回撤计算
+            if peak is not None:
+                try:
+                    if float(peak) < MIN_VALID_EQUITY:
+                        peak = None
+                        st["peak_equity"] = None
+                except Exception:
+                    peak = None
             # 新的一天 → 初始化日内峰值
             if intraday_date != today:
                 intraday_peak = eq

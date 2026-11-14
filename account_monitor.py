@@ -63,6 +63,15 @@ _synced_open = {}  # (sym, direction) -> {"lots","price"} 已镜像到成交记�
 _last_account = None  # 最近一次账户快照（供状态机/面板读取）
 _last_fetch = 0
 
+# ★★★ 2026-11-02 两账户物理隔离（Ken 拍板：彻底停写）★★★
+# False = 模拟盘引擎持仓【不再】写进实盘账户文件 account_state.json 的 positions。
+#   模拟盘持仓只在 /api/paper-trading + 面板 F8「模拟盘沙盒」tab 展示，实盘账户文件里
+#   一条模拟盘腿都不留。原「镜像腿」机制（2026-11-01 治幽灵腿引入）仅软隔离：
+#   靠 source/book 标记把浮动与保证金排除在权益之外，一旦哪天代码回退或被覆盖，
+#   模拟盘腿就会被当实盘腿计入 —— 属结构性隐患，故按 Ken 决定改为物理隔离。
+# True = 恢复旧行为（仅应急回滚用，正常不要打开）。
+MIRROR_PAPER_LEGS_TO_ACCOUNT = False
+
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -524,7 +533,10 @@ def _get_sandbox_account(cfg, prices=None):
                 for _esym, _ep in _epos.items():
                     if not isinstance(_ep, dict):
                         continue
-                    _elots = int(_ep.get("lots") or 0)
+                    # 实时手数：t1 平半后 remaining_lots 才减，lots 不变
+                    _elots = int(_ep.get("remaining_lots") or 0)
+                    if _elots <= 0:
+                        _elots = int(_ep.get("lots") or 0)
                     _eavg = float(_ep.get("entry_price") or _ep.get("price") or 0)
                     if _elots <= 0 or _eavg <= 0 or str(_esym) in _have:
                         continue
@@ -537,6 +549,10 @@ def _get_sandbox_account(cfg, prices=None):
                         if _edir == "空"
                         else (_eprice - _eavg) * _elots * _emult
                     )
+                    # 实时止损：移动止损激活后以 tracking stop 为准（面板「止损」列 + 触价红标同读 stop）
+                    _etrail = _ep.get("trailing_stop")
+                    _etrail_act = bool(_ep.get("trailing_active"))
+                    _eff_stop = _etrail if (_etrail_act and _etrail) else _ep.get("stop_price")
                     margin_total += _emargin
                     mtm_total += _epl
                     positions.append(
@@ -547,7 +563,16 @@ def _get_sandbox_account(cfg, prices=None):
                             "direction": _edir,
                             "margin": _emargin,
                             "profit": round(_epl, 2),
-                            "stop": _ep.get("stop_price"),
+                            # 全量引擎腿 schema（与面板持仓表 four_dim_live.html:7754 字段对齐）
+                            "stop": _eff_stop,
+                            "t1": _ep.get("t1_price"),
+                            "t2": _ep.get("t2_price"),
+                            "trailing_stop": _etrail,
+                            "trail_state": ("跟踪" if _etrail_act else None),
+                            "peak_price": _ep.get("peak_price"),
+                            "t1_filled": bool(_ep.get("t1_filled")),
+                            "tp_targets": _ep.get("tp_targets"),
+                            "open_time": _ep.get("open_time"),
                             "source": "engine",
                         }
                     )
@@ -621,30 +646,33 @@ def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin,
             margin_pct = round(p["margin"] / equity * 100, 2) if equity else 0
             prev = prev_positions.get(sym, {})
             contract = prev.get("contract") or (sym.upper() + "2701")
-            snap_positions.append(
-                {
-                    "symbol": sym,
-                    "name": sym.upper(),
-                    "contract": contract,
-                    "direction": p["direction"],
-                    "lots": p["pos"],
-                    "avg": p["open_price"],
-                    "price": price,
-                    "float_pnl": float_pnl,
-                    "margin_used": p["margin"],
-                    "margin_pct": margin_pct,
-                }
-            )
-            # 保留既有风控字段
-            new_positions[sym] = dict(
-                prev,
-                direction=p["direction"],
-                lots=p["pos"],
-                avg=p["open_price"],
-                contract=contract,
-            )
-        st["snapshot_mode"] = True
-        st["snapshot_until"] = "2099-12-31 23:59:59"
+            leg = {
+                "symbol": sym,
+                "name": sym.upper(),
+                "contract": contract,
+                "direction": p["direction"],
+                "lots": p["pos"],
+                "avg": p["open_price"],
+                "price": price,
+                "float_pnl": float_pnl,
+                "margin_used": p["margin"],
+                "margin_pct": margin_pct,
+            }
+            snap_leg = dict(leg)
+            # 引擎腿：携带全量实时字段（止损/移动止损/分级止盈），与面板持仓表对齐；
+            # 每轮从 paper_trading_state.json 重新合并（line 524-553），故移动止损/t1 平半
+            # 等推进天然实时刷新，引擎平仓后 paper 池不再含该腿 → 本轮不补入 → 自动清除（无孤儿）。
+            if p.get("source") == "engine":
+                for _k in ("stop", "t1", "t2", "trailing_stop", "trail_state",
+                          "peak_price", "t1_filled", "tp_targets", "open_time"):
+                    if p.get(_k) is not None:
+                        leg[_k] = p.get(_k)
+                        snap_leg[_k] = p.get(_k)
+                leg["source"] = "engine"
+                snap_leg["source"] = "engine"
+            snap_positions.append(snap_leg)
+            # 保留既有风控字段 + 写入引擎实时字段
+            new_positions[sym] = dict(prev, **leg)
         # 2026-10-15 自洽性护栏：float_total 必须等于各持仓 float_pnl 之和。
         # 两者一旦背离，账户总览与持仓行会显示互相矛盾的数字（历史真实发生过：
         # 总览 +12350 / 持仓行 +0.00），排查极难。故在此强制对齐并留日志。
@@ -656,6 +684,16 @@ def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin,
                 f"float_total={_mtm_final} vs sum(float_pnl)={_sum_fp}"
             )
             _mtm_final = _sum_fp
+        # ── 2026-11-01 拆雷（三处破坏性写入已移除）──────────────────────────────
+        # 原实现会写 st["snapshot_mode"]=True + snapshot_until="2099-12-31"，
+        # 而 account_tracker.snapshot() 一见 snapshot_mode 就**直接返回存盘快照、
+        # 永不重算**（account_tracker.py L1117）⇒ 一旦本函数被激活，面板权益/浮盈
+        # 会永久冻结在那一刻，且极难排查。同时原实现把 st["equity"] 覆盖成沙盒
+        # 权益（引擎口径 100 万级，与真实账户 10 万级差 10 倍），会污染
+        # 「equity / realized_pnl_at_sync / float_at_sync」这条被冻结的锚点三元组，
+        # 直接影响 sizing 的 1% 风险预算。
+        # 现在改为：只镜像持仓明细 + 浮动盈亏，**绝不改锚点、绝不开 snapshot_mode**；
+        # 权益真值统一由 equity_live（每轮动态权益落盘）承载。
         st["snapshot"] = {
             "equity": equity,
             "available": avail,
@@ -666,17 +704,411 @@ def _sync_sandbox_to_account_state(paper, positions, equity, avail, mtm, margin,
             "positions": snap_positions,
         }
         st["positions"] = new_positions
-        st["realized_pnl"] = float(paper.get("realized", 0) or 0)
-        st["realized_pnl_at_sync"] = st["realized_pnl"]
-        st["float_at_sync"] = _mtm_final
         st["margin_occupied"] = round(margin, 2)
         st["available"] = avail
-        st["equity"] = equity
         st["_sandbox_hash"] = new_hash
         st["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
         at.save_state(st)
     except Exception as e:
         print(f"[账户监控] 沙盒→账户态同步跳过: {repr(e)[:120]}")
+
+
+def _engine_opened_leg(sym, leg, direction=None):
+    """判定账户层某腿是否「由交易引擎开过」——用成交流水做证据，而不是只信 source 字段。
+
+    背景（2026-10-31 幽灵腿事故）：
+      remove_engine_position 旧护栏只认 `source == "engine"`，但账户层的引擎腿常常
+      source 为空（account_tracker.heal_from_journal 从 journal 恢复持仓时不写 source），
+      于是引擎平仓后被判为「手动腿」永久保留 ⇒ 面板挂着一条早已止损平掉的腿，
+      现价继续盯市、浮亏无限放大（实测 l 于 10-30 09:00:46 已止损平仓，
+      面板却挂到 10-31 10:16，浮亏 -4420，并把账户权益压低了 4420）。
+
+    判据（双源，任一命中即认定引擎腿）：
+      ① paper_trading_state.json 的 trades 里有同品种/同方向/同开仓价的 open 记录；
+      ② trade_journal.json 里有同品种/同方向/同开仓价、strategy 含「引擎」的未平记录。
+    查无记录（手动腿/真实腿/券商同步腿）→ False，一律不动，护栏本意不破。
+    """
+    try:
+        _sym = str(sym).strip().lower()
+        _dir = str(direction or leg.get("direction") or "").strip()
+        try:
+            _avg = float(leg.get("avg") or leg.get("open_price") or 0)
+        except (TypeError, ValueError):
+            _avg = 0.0
+        _tol = 0.51  # 价格容差：允许 1 个最小变动价位内的浮点/取整偏差
+
+        # ① 引擎自己的成交流水
+        _p = os.path.join(HERE, "paper_trading_state.json")
+        if os.path.exists(_p):
+            with open(_p, encoding="utf-8") as _f:
+                _eng = json.load(_f) or {}
+            for _t in (_eng.get("trades") or []):
+                if not isinstance(_t, dict) or _t.get("type") != "open":
+                    continue
+                if str(_t.get("symbol") or "").strip().lower() != _sym:
+                    continue
+                if _dir and str(_t.get("direction") or "").strip() != _dir:
+                    continue
+                try:
+                    _px = float(_t.get("price") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if _avg <= 0 or abs(_px - _avg) <= _tol:
+                    return True
+
+        # ② journal 的引擎开仓记录（兜底，防 trades 被裁剪）
+        _jp = os.path.join(HERE, "trade_journal.json")
+        if os.path.exists(_jp):
+            with open(_jp, encoding="utf-8") as _f:
+                _j = json.load(_f) or {}
+            for _t in (_j.get("trades") or []):
+                if not isinstance(_t, dict):
+                    continue
+                if str(_t.get("symbol") or "").strip().lower() != _sym:
+                    continue
+                if _dir and str(_t.get("direction") or "").strip() != _dir:
+                    continue
+                if "引擎" not in str(_t.get("strategy") or ""):
+                    continue
+                try:
+                    _px = float(_t.get("entry_price") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if _avg <= 0 or abs(_px - _avg) <= _tol:
+                    return True
+        return False
+    except Exception:
+        return False
+
+
+def remove_engine_position(symbol, direction=None, lots=0, fully_closed=True):
+    """引擎平仓 → 立即清理账户层对应引擎腿（与 _sync_sandbox_to_account_state 的
+    每轮重建互补：重建负责常规清除，本函数负责「平仓当轮」内即时清除，避免面板残留红标）。
+
+    护栏（保住账户层真相源，绝不误删手动/实盘腿）：
+      1. source=="engine" 直接放行；source 为空/其它时，必须能在引擎成交流水里
+         查到同品种/同方向/同开仓价的 open 记录才放行（见 _engine_opened_leg）；
+      2. 方向不一致跳过；
+      3. 全平 → 删除；部分平 → 按手数扣减，扣完即删；
+      4. 原子写盘（account_tracker.save_state），异常只返回文本。
+    """
+    sym = str(symbol).strip()
+    try:
+        import account_tracker as _at
+        st = _at.load_state()
+        pos_map = st.get("positions")
+        if not isinstance(pos_map, dict) or sym not in pos_map:
+            return ""  # 账户层本无该腿 → 无需清理（幂等）
+        leg = pos_map[sym]
+        if not isinstance(leg, dict):
+            return f"跳过 {sym}：账户层腿结构异常"
+        _src = str(leg.get("source") or "")
+        if _src not in ("engine", "engine_sync", "auto_signal") and not _engine_opened_leg(sym, leg, direction):
+            return f"跳过 {sym}：非引擎腿(source={_src or '空'}，成交流水无对应开仓记录)，保住账户层真相未改动"
+        if direction and str(leg.get("direction") or "") and str(leg.get("direction")) != str(direction):
+            return f"跳过 {sym}：方向不符(账户层{leg.get('direction')} vs 引擎{direction})，未改动"
+        cur = int(leg.get("lots") or 0)
+        left = 0 if fully_closed else max(cur - int(lots or 0), 0)
+        if cur <= 0 or left <= 0:
+            del pos_map[sym]
+            action = f"全平清理 {sym}（原 {cur} 手）"
+        else:
+            leg["lots"] = left
+            pos_map[sym] = leg
+            action = f"部分平 {sym} {lots} 手，账户层余 {left} 手"
+        st["positions"] = pos_map
+        snap = st.get("snapshot")
+        if isinstance(snap, dict) and isinstance(snap.get("positions"), list):
+            if left <= 0:
+                snap["positions"] = [x for x in snap["positions"] if str(x.get("symbol")) != sym]
+            else:
+                for x in snap["positions"]:
+                    if str(x.get("symbol")) == sym:
+                        x["lots"] = left
+        st["snapshot"] = snap
+        _at.save_state(st)
+        return action
+    except Exception as e:
+        return f"清理异常: {repr(e)[:80]}"
+
+
+# 引擎 close 回调复用同一签名（paper_trading_engine 内 `import account_monitor as _sea; _sea.remove_account_position(...)`）
+def remove_account_position(symbol, direction=None, lots=0, fully_closed=True):
+    return remove_engine_position(symbol, direction=direction, lots=lots, fully_closed=fully_closed)
+
+
+# 引擎腿实时字段（移动止损/t1 平半推进时必须跟着变，见 2026-10-28 铁律「auto 全部状态联动实时更新」）
+_ENGINE_LIVE_FIELDS = (
+    "lots", "direction", "avg", "stop", "t1", "t2",
+    "trailing_stop", "trail_state", "peak_price", "t1_filled", "open_time", "source",
+)
+
+
+def _engine_positions_now():
+    """读引擎当前持仓 → {sym: leg}（仅 lots>0）。文件不存在/损坏返回 {}。"""
+    out = {}
+    try:
+        _p = os.path.join(HERE, "paper_trading_state.json")
+        if not os.path.exists(_p):
+            return out
+        with open(_p, encoding="utf-8") as _f:
+            _eng = json.load(_f) or {}
+        for _sym, _ep in ((_eng.get("positions") or {}) if isinstance(_eng.get("positions"), dict) else {}).items():
+            if not isinstance(_ep, dict):
+                continue
+            _lots = int(_ep.get("remaining_lots") or 0) or int(_ep.get("lots") or 0)
+            _avg = float(_ep.get("entry_price") or _ep.get("price") or 0)
+            if _lots <= 0 or _avg <= 0:
+                continue
+            _trail = _ep.get("trailing_stop")
+            _trail_act = bool(_ep.get("trailing_active"))
+            out[str(_sym)] = {
+                "symbol": str(_sym),
+                "direction": _ep.get("direction") or "多",
+                "lots": _lots,
+                "avg": round(_avg, 4),
+                # 移动止损激活后以跟踪止损为准（面板「止损」列 + 触价红标同读这一个值）
+                "stop": _trail if (_trail_act and _trail) else _ep.get("stop_price"),
+                "t1": _ep.get("t1_price"),
+                "t2": _ep.get("t2_price"),
+                "trailing_stop": _trail,
+                "trail_state": ("跟踪" if _trail_act else None),
+                "peak_price": _ep.get("peak_price"),
+                "t1_filled": bool(_ep.get("t1_filled")),
+                "open_time": _ep.get("open_time"),
+                "source": "engine",
+                "last_price": _ep.get("last_price"),
+            }
+    except Exception as _e:
+        print(f"[引擎对齐] 读取引擎持仓失败: {repr(_e)[:80]}")
+    return out
+
+
+def _journal_engine_open_leg(sym, avg, direction=None):
+    """journal 里是否还有这条「未平仓的引擎记录」（pnl is None 且 strategy 含「引擎」）。
+
+    用途：reconcile 删除账户层腿之前的最后一道护栏。
+      account_tracker.heal_from_journal() 每 30s 会从 journal 未平记录**重建**账户层腿，
+      所以如果 journal 说这笔还开着，这里硬删就是在跟自愈打乒乓（删→加→删→加，
+      每 30s 一次写盘、面板来回跳）。这种情况不该删腿，而该把 journal 的陈旧记录
+      暴露出来（打印 WARNING），交给人工/引擎结清。
+    返回命中的 journal 记录 dict 或 None。
+    """
+    try:
+        _sym = str(sym).strip().lower()
+        _dir = str(direction or "").strip()
+        try:
+            _avg = float(avg or 0)
+        except (TypeError, ValueError):
+            _avg = 0.0
+        _jp = os.path.join(HERE, "trade_journal.json")
+        if not os.path.exists(_jp):
+            return None
+        with open(_jp, encoding="utf-8") as _f:
+            _j = json.load(_f) or {}
+        for _t in (_j.get("trades") or []):
+            if not isinstance(_t, dict):
+                continue
+            if _t.get("pnl") is not None:
+                continue  # 已平仓
+            if str(_t.get("symbol") or "").strip().lower() != _sym:
+                continue
+            if _dir and str(_t.get("direction") or "").strip() != _dir:
+                continue
+            if "引擎" not in str(_t.get("strategy") or ""):
+                continue
+            try:
+                _px = float(_t.get("entry_price") or 0)
+            except (TypeError, ValueError):
+                continue
+            if _avg <= 0 or abs(_px - _avg) <= 0.51:
+                return _t
+        return None
+    except Exception:
+        return None
+
+
+def _purge_paper_mirror_legs():
+    """清掉 account_state.positions 里所有模拟盘引擎腿（物理隔离的清理侧）。
+
+    判据（任一成立即视为模拟盘腿）：
+      ① book == "paper"（镜像时代打的标记）
+      ② source ∈ {engine, engine_sync, auto_signal}（镜像时代写的来源）
+      ③ 该品种此刻在 paper_trading_state.json 里仍有持仓，**且手数+开仓均价与引擎腿一致**
+         （本质判据，防标记被覆盖丢失；加指纹比对是为了不误伤「同名品种的真实腿」——
+          镜像腿是引擎腿的逐字段复制，手数与均价必然相同；真实开仓几乎不可能两者同时相同）
+    手动腿 / 真实腿 / 无来源的无主腿一律不碰，权益锚点三元组绝不改写。
+
+    幂等：没东西可清就不写盘（避免每轮空写抖动）。
+    """
+    res = {"added": [], "updated": [], "removed": [], "skipped": [], "mode": "purge-only"}
+    try:
+        import account_tracker as _at
+
+        _eng = _engine_positions_now()  # 模拟盘引擎当前持仓（含手数/均价指纹）
+        _atlock = getattr(_at, "_LOCK", _lock)
+        with _atlock:
+            st = _at.load_state() or {}
+            pos_map = st.get("positions")
+            if not isinstance(pos_map, dict) or not pos_map:
+                return res
+            _drop = []
+            for _sym, _leg in list(pos_map.items()):
+                if not isinstance(_leg, dict):
+                    continue
+                _src = str(_leg.get("source") or "")
+                _is_paper = (
+                    str(_leg.get("book") or "") == "paper"
+                    or _src in ("engine", "engine_sync", "auto_signal")
+                )
+                if not _is_paper:
+                    # ③ 指纹判据：品种在引擎里 + 手数相同 + 均价相差 < 0.02
+                    _pe = _eng.get(str(_sym))
+                    if isinstance(_pe, dict):
+                        try:
+                            _l1 = float(_leg.get("lots") or 0)
+                            _l2 = float(_pe.get("lots") or 0)
+                            _a1 = float(_leg.get("avg") or _leg.get("price") or 0)
+                            _a2 = float(_pe.get("avg") or 0)
+                            _is_paper = (
+                                _l1 > 0 and abs(_l1 - _l2) < 1e-9
+                                and _a1 > 0 and abs(_a1 - _a2) < 0.02
+                            )
+                        except (TypeError, ValueError):
+                            _is_paper = False
+                if _is_paper:
+                    _drop.append(_sym)
+                else:
+                    res["skipped"].append(f"{_sym}({_leg.get('book') or 'live'})")
+            if not _drop:
+                return res
+            for _sym in _drop:
+                pos_map.pop(_sym, None)
+                res["removed"].append(_sym)
+            st["positions"] = pos_map
+            _sn = st.get("snapshot")
+            if isinstance(_sn, dict) and isinstance(_sn.get("positions"), list):
+                _sn["positions"] = [x for x in _sn["positions"] if str(x.get("symbol")) not in _drop]
+            _at.save_state(st)
+        return res
+    except Exception as e:
+        print(f"[引擎对齐] 清理模拟盘镜像腿异常(跳过本轮): {repr(e)[:120]}")
+        return res
+
+
+def reconcile_engine_positions(prices=None):
+    """把引擎持仓每轮幂等地对齐进 account_state.positions —— 引擎是 auto 腿的唯一真相源。
+
+    为什么必须有这个函数（2026-10-31 幽灵腿事故的治本项）：
+      · `_get_sandbox_account` 需要 paper_account.json（不存在）+ account_monitor.json
+        （不存在 → enabled=False），整条「每轮重建账户层」的链路**从未执行**；
+      · 账户层实际只靠 `heal_from_journal` 自愈 + 引擎平仓回调两条腿走路，
+        于是出现「引擎已止损平仓、面板还挂着腿」「止损被 2% 兜底值冒充」两类事故。
+    本函数直接以引擎 state 为源做全量对账，不依赖任何沙盒/账户后端。
+
+    ★ 2026-11-02 改造：`MIRROR_PAPER_LEGS_TO_ACCOUNT = False` 时本函数退化为
+      「只清不写」——不再把模拟盘引擎腿写进实盘账户，只负责把历史上已写进去的
+      模拟盘腿清干净（幂等）。模拟盘持仓改由 /api/paper-trading + F8 沙盒 tab 独立展示。
+      理由：模拟盘与实盘必须两套账、两套文件，不能靠标记做软隔离。
+
+    护栏（绝不污染非引擎腿）：
+      1. 只写/改/删「引擎腿」：source∈{engine,engine_sync} 或成交流水可证（_engine_opened_leg）；
+      2. 手动腿/真实腿/无来源无流水的孤儿腿一律不碰；
+      3. 绝不触碰权益锚点三元组（equity / realized_pnl_at_sync / float_at_sync）——
+         账户权益永远来自真实账户口径，不因引擎持仓变化而改写；
+      4. 无变化不写盘（防每轮空写抖动）。
+
+    返回 {"added":[...], "updated":[...], "removed":[...], "skipped":[...]}
+    """
+    if not MIRROR_PAPER_LEGS_TO_ACCOUNT:
+        return _purge_paper_mirror_legs()
+    res = {"added": [], "updated": [], "removed": [], "skipped": []}
+    try:
+        import account_tracker as _at
+
+        eng = _engine_positions_now()
+        # 与 account_tracker.snapshot() 的写盘共用同一把锁，避免「读-改-写」被 API 线程
+        # 的 equity_live 落盘覆盖（丢更新 → 面板权益短暂停在旧值）。
+        _atlock = getattr(_at, "_LOCK", _lock)
+        with _atlock:
+            st = _at.load_state() or {}
+            pos_map = st.get("positions")
+            if not isinstance(pos_map, dict):
+                pos_map = {}
+            changed = False
+
+            # ① 引擎有腿 → 账户层必须有一致的镜像腿
+            for _sym, _want in eng.items():
+                _cur = pos_map.get(_sym)
+                if _cur is None:
+                    _leg = dict(_want)
+                    # ★ 2026-11-02 两账户独立：镜像腿打 book="paper" 标记，
+                    #   供前端/后续计算区分「模拟盘腿」与「实盘腿」。
+                    #   account_tracker.snapshot() 已按 source 排除其浮动与保证金，
+                    #   此处标记是给展示层与审计用的第二道标识。
+                    _leg["book"] = "paper"
+                    if prices and isinstance(prices, dict):
+                        _px = prices.get(_sym) or prices.get(str(_sym).upper())
+                        if isinstance(_px, (int, float)) and _px > 0:
+                            _leg["price"] = round(float(_px), 2)
+                    pos_map[_sym] = _leg
+                    res["added"].append(_sym)
+                    changed = True
+                    continue
+                _src = str(_cur.get("source") or "")
+                if _src not in ("engine", "engine_sync", "auto_signal") and not _engine_opened_leg(_sym, _cur, _cur.get("direction")):
+                    res["skipped"].append(f"{_sym}(非引擎腿,source={_src or '空'})")
+                    continue
+                _diff = {k: (_cur.get(k), _want.get(k)) for k in _ENGINE_LIVE_FIELDS if _cur.get(k) != _want.get(k)}
+                if _diff:
+                    for k in _ENGINE_LIVE_FIELDS:
+                        if _want.get(k) is not None or k in ("trailing_stop", "trail_state", "peak_price", "t1_filled"):
+                            _cur[k] = _want.get(k)
+                    _cur["source"] = "engine"
+                    _cur["book"] = "paper"  # 2026-11-02：与新增分支一致，供展示/审计区分
+                    _cur["levels_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    pos_map[_sym] = _cur
+                    res["updated"].append(f"{_sym}:{','.join(sorted(_diff))}")
+                    changed = True
+
+            # ② 账户层有腿但引擎已无 → 只删可证实的引擎腿（引擎已平仓）
+            for _sym in list(pos_map.keys()):
+                if _sym in eng:
+                    continue
+                _leg = pos_map.get(_sym)
+                if not isinstance(_leg, dict):
+                    continue
+                _src = str(_leg.get("source") or "")
+                if _src in ("engine", "engine_sync", "auto_signal") or _engine_opened_leg(_sym, _leg, _leg.get("direction")):
+                    # 最后一道护栏：journal 仍认为未平 → 不删（否则与 heal_from_journal 打乒乓）
+                    _jo = _journal_engine_open_leg(_sym, _leg.get("avg"), _leg.get("direction"))
+                    if _jo:
+                        res["skipped"].append(f"{_sym}(journal 仍为未平仓记录,疑陈旧)")
+                        print(
+                            f"[引擎对齐] ⚠ {_sym} 引擎已无此腿，但 journal 仍有未平仓记录"
+                            f"(entry={_jo.get('entry_price')} pnl=None) → 保留账户层腿，"
+                            f"请核对是否历史残留（否则每 30s 会与自愈互相覆盖）"
+                        )
+                        continue
+                    pos_map.pop(_sym, None)
+                    res["removed"].append(_sym)
+                    changed = True
+                else:
+                    res["skipped"].append(f"{_sym}(无流水证据,保留)")
+
+            if not changed:
+                return res
+
+            st["positions"] = pos_map
+            # snapshot 内的持仓列表同步裁剪（stale 腿不留在快照里）
+            _sn = st.get("snapshot")
+            if isinstance(_sn, dict) and isinstance(_sn.get("positions"), list):
+                _sn["positions"] = [x for x in _sn["positions"] if str(x.get("symbol")) in pos_map]
+            _at.save_state(st)
+        return res
+    except Exception as e:
+        print(f"[引擎对齐] 异常(跳过本轮): {repr(e)[:120]}")
+        return res
 
 
 def get_last():

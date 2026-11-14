@@ -36,6 +36,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "paper_trading_state.json")
 SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 
+# ★ 2026-11-09 E接线：F1 策略标签枚举化（自由文本 → 固定枚举，供 by_strategy 分账）
+_STRATEGY_ENUM_MAP = {
+    "趋势": "four_dim_trend",
+    "波段": "four_dim_trend",
+    "日内": "four_dim_trend",
+    "手动": "manual",
+}
+
+
+def _strategy_enum(label) -> str:
+    """策略标签归一到固定枚举：four_dim_trend / mr_ensemble / calendar_spread / manual。"""
+    v = str(label or "").strip()
+    if v in _STRATEGY_ENUM_MAP:
+        return _STRATEGY_ENUM_MAP[v]
+    if v in ("four_dim_trend", "mr_ensemble", "calendar_spread", "manual"):
+        return v
+    return "four_dim_trend" if v else "manual"
+
+
 # 默认配置
 DEFAULT_CONFIG = {
     "enabled": True,  # 是否启用自动模拟交易
@@ -322,8 +341,14 @@ class PaperTradingEngine:
         return tot
 
     def _current_equity(self) -> float:
-        """当前权益 = 现金 + 已实现 + 浮动（按实时价估值）。"""
-        eq = self.cash + self.realized_pnl
+        """当前权益 = 现金 + 浮动（按实时价估值）。
+
+        注意：现金在平仓时已经 `self.cash += pnl`（见 _close_position / _partial_close），
+        即已含全部已实现盈亏；realized_pnl 只是同一笔的累计镜像，不能再加一次，
+        否则每笔盈亏都被重复计入（2026-11-02 修正：原式 cash + realized_pnl 导致
+        亏损/盈利双双被放大一倍，实测 -3,340 被算成 -6,680）。
+        """
+        eq = self.cash
         for p in self.positions.values():
             try:
                 px = self._get_price(p["symbol"]) or p.get("entry_price", 0)
@@ -519,9 +544,21 @@ class PaperTradingEngine:
             )
 
             # ── 同步到成交记录（journal）：失败不影响主流程 ──
+            #  2026-10-29 修：必须把引擎真实止损/止损距离/分级止盈一起写入 journal。
+            #  此前只传价格 ⇒ journal.stop=null ⇒ account_tracker 重建持仓时走
+            #  _auto_stop_levels 的 avg*2% 兜底 ⇒ 面板显示的止损/止盈与引擎不一致
+            #  （实测 l：面板 9585.96/8834.12/8458.2 vs 引擎 9510.56/9285.44/9229.15）。
             try:
                 import trade_journal as _tj
-                _tj.record_entry(symbol, position["direction"], lots, position["entry_price"], signal_id=sig_id, strategy="引擎自动")
+                _tj.record_entry(
+                    symbol, position["direction"], lots, position["entry_price"],
+                    signal_id=sig_id, strategy=_strategy_enum(signal.get("strategy")),
+                    stop=position.get("stop_price"),
+                    stop_dist=position.get("stop_dist"),
+                    t1=position.get("t1_price"),
+                    t2=position.get("t2_price"),
+                    account="paper",
+                )
             except Exception as _e:
                 print(f"[PaperEngine] 同步开仓→成交记录失败 {symbol}: {_e}")
 
@@ -544,6 +581,27 @@ class PaperTradingEngine:
         with self._lock:
             symbols_to_check = list(self.positions.keys())
 
+            # 2026-10-28 联动实时更新：记录本轮开始前的「持仓状态指纹」。
+            #  背景：_check_position 每轮会更新 peak_price / trailing_stop / trailing_active /
+            #  t1_filled / remaining_lots，但旧逻辑只在**真平仓**时才 _save_state()，
+            #  导致这些 auto 决策只存在于内存；而 sync_engine_to_account 读的是磁盘文件
+            #  ⇒ 面板看到的永远是开仓那一刻的旧止损线（"移动止损"列长期不更新）。
+            #  故此处补脏检测：只要 auto 状态有任何推进就落盘。
+            def _leg_fingerprint(positions):
+                fp = {}
+                for s, p in positions.items():
+                    if isinstance(p, dict):
+                        fp[s] = (
+                            p.get("remaining_lots"),
+                            p.get("trailing_stop"),
+                            bool(p.get("trailing_active")),
+                            bool(p.get("t1_filled")),
+                            p.get("peak_price"),
+                        )
+                return fp
+
+            _fp_before = _leg_fingerprint(self.positions)
+
             for symbol in symbols_to_check:
                 pos = self.positions.get(symbol)
                 if not pos:
@@ -558,6 +616,9 @@ class PaperTradingEngine:
                 if cur_price is None or cur_price <= 0:
                     continue
 
+                # 记录最新价（供账户层同步「现价/浮盈亏」，auto 单子需实时联动）
+                pos["last_price"] = cur_price
+
                 result = self._check_position(pos, cur_price)
                 if result:
                     closed.append(result)
@@ -567,7 +628,10 @@ class PaperTradingEngine:
                         # 设置冷却期
                         self._cooldowns[symbol] = time.time() + self.config["cooldown_minutes"] * 60
 
-            if closed:
+            _changed = bool(closed) or (
+                _leg_fingerprint(self.positions) != _fp_before
+            )
+            if _changed:
                 self._update_stats()
                 self._save_state()
 
@@ -718,9 +782,22 @@ class PaperTradingEngine:
         # ── 同步到成交记录（journal）：失败不影响主流程 ──
         try:
             import trade_journal as _tj
-            _tj.record_exit(symbol, pos["direction"], lots, price, reason=reason)
+            _tj.record_exit(symbol, pos["direction"], lots, price, reason=reason, account="paper")
         except Exception as _e:
             print(f"[PaperEngine] 同步平仓→成交记录失败 {symbol}: {_e}")
+
+        # ── 同步到账户层持仓（面板可见性）：失败不影响主流程 ──
+        #  背景：引擎仓同步到账户层由 account_monitor 统一负责（每轮重建 + 本回调即时清理），
+        #  若不在真成交平仓时清理，账户层会永久保留旧腿 ⇒ 面板显示「止损了却不平仓」。
+        #  此处补齐链路另一端；account_monitor.remove_account_position 内部有多道护栏，
+        #  非引擎来源的账户层腿一律不删。
+        try:
+            import account_monitor as _sea
+            _am = _sea.remove_account_position(symbol, pos["direction"], lots, fully_closed=True)
+            if _am:
+                print(f"[PaperEngine] 同步平仓→账户层 {symbol}: {_am}")
+        except Exception as _e:
+            print(f"[PaperEngine] 同步平仓→账户层失败 {symbol}: {_e}")
 
         pos["remaining_lots"] = 0
         return {
@@ -770,9 +847,18 @@ class PaperTradingEngine:
         # ── 同步到成交记录（journal）：失败不影响主流程 ──
         try:
             import trade_journal as _tj
-            _tj.record_exit(symbol, pos["direction"], lots, price, reason=reason)
+            _tj.record_exit(symbol, pos["direction"], lots, price, reason=reason, account="paper")
         except Exception as _e:
             print(f"[PaperEngine] 同步平仓→成交记录失败 {symbol}: {_e}")
+
+        # ── 同步到账户层持仓（部分平 → 按手数扣减，不删腿）：失败不影响主流程 ──
+        try:
+            import account_monitor as _sea
+            _am = _sea.remove_account_position(symbol, pos["direction"], lots, fully_closed=False)
+            if _am:
+                print(f"[PaperEngine] 同步平仓→账户层 {symbol}: {_am}")
+        except Exception as _e:
+            print(f"[PaperEngine] 同步平仓→账户层失败 {symbol}: {_e}")
 
         print(f"[PaperEngine] 部分平仓: {symbol} {lots}手 @ {price} 原因: {reason} PnL: {pnl:+.2f}")
         return {
@@ -869,7 +955,7 @@ class PaperTradingEngine:
             # ── 同步到成交记录（journal）：失败不影响主流程 ──
             try:
                 import trade_journal as _tj
-                _tj.record_entry(symbol, position["direction"], lots, position["entry_price"], signal_id="", strategy=strategy or "手动")
+                _tj.record_entry(symbol, position["direction"], lots, position["entry_price"], signal_id="", strategy=_strategy_enum(strategy or "手动"), account="paper")
             except Exception as _e:
                 print(f"[PaperEngine] 同步开仓→成交记录失败 {symbol}: {_e}")
             self._save_state()
@@ -934,7 +1020,8 @@ class PaperTradingEngine:
                     pos_copy["trailing_mode"] = "inactive"
                 positions_list.append(pos_copy)
 
-            equity = round(self.cash + self.realized_pnl + total_mtm, 2)
+            # 现金已含已实现盈亏（平仓时 cash += pnl），此处只能加浮动，不能再加 realized_pnl
+            equity = round(self.cash + total_mtm, 2)
 
             return {
                 "enabled": self.config["enabled"],

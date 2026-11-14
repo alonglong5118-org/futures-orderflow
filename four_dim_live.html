@@ -10,11 +10,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="三感参谋">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icons/icon-180x180.png">
-<link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
-<link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-180x180.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="167x167" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <title>三感参谋 · 期货策略决策系统</title>
 <style>
   :root{
@@ -1974,6 +1975,42 @@
   }
 }
 
+/* 窄屏(≤640px)精修：修复卡片标题被挤压竖排断字 / 顶栏品牌名断行 */
+@media (max-width: 640px) {
+  /* 顶栏：保住品牌名，牺牲情绪 chip（总览页有卡片承载） */
+  .brand { flex: 0 0 auto; }
+  .brand .name { white-space: nowrap; letter-spacing: .3px; }
+  .sent-chip { display: none !important; }
+  #account-switch .acc-btn { padding: 4px 8px; font-size: 10px; }
+  .risk-chip, .nb { white-space: nowrap; flex: 0 0 auto; font-size: 10px; padding: 0 7px; height: 24px; }
+  /* 通知按钮窄屏只留铃铛图标（点击行为不变） */
+  .nb { font-size: 0 !important; padding: 0 8px; min-width: 28px; }
+  .nb::before { content: "🔔"; font-size: 14px; }
+  /* 卡片头：标题单行省略，按钮永不被裁 */
+  .ckc-head { gap: 8px; }
+  .ckc-head .gh-num { min-width: 22px; padding: 2px 6px; font-size: 10px; flex: 0 0 auto; }
+  .ckc-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden;
+               text-overflow: ellipsis; font-size: 13px; letter-spacing: .2px; }
+  .ckc-go { flex: 0 0 auto; white-space: nowrap; padding: 3px 8px; font-size: 11px; }
+  .ckc-body { gap: 8px; }
+  .ckc-kpi { padding: 8px 6px; min-width: 0; overflow: hidden; }
+  .ckc-kpi b { font-size: 14px; white-space: nowrap; }
+  .ckc-kpi i { font-size: 10px; white-space: nowrap; }
+  /* 底部 Tab：6 个按钮必须全部装进屏宽（min-width:0 打破 flex 最小内容宽） */
+  .sidenav .tab, .sidenav .tab.tab-more { flex: 1 1 0; min-width: 0; overflow: hidden; padding: 6px 2px !important; }
+  .tab .lbl { font-size: 9.5px; white-space: nowrap; }
+  .tab .ic { font-size: 18px; }
+  .tab .badge { transform: translateX(10px); }
+}
+
+/* 手机竖屏(≤480px)：驾驶舱卡片改单列，标题与按钮不再互相挤压 */
+@media (max-width: 480px) {
+  .cockpit-grid { grid-template-columns: 1fr !important; }
+  .ckc-title { font-size: 13.5px; }
+  .ckc-kpi b { font-size: 16px; }
+  .ckc-kpi i { font-size: 11px; }
+}
+
 /* 超小屏（iPhone SE 等）优化版 */
 @media (max-width: 375px) {
   .ck-grid,
@@ -2175,6 +2212,10 @@
   const _INFLIGHT = new Map();
   
   const _CACHE_TTL = {
+    // ★ 2026-11-04: 必须显式给 /api/paper-trading 单独配短 TTL。
+    //   否则 _getTTL 的前缀匹配会命中 '/api/paper': 30000，持仓表盯市价 30 秒不更新。
+    //   与 /api/account 对齐用 1500ms（含 2 倍宽限，最多 3s 陈旧）。
+    '/api/paper-trading': 1500,
     '/api/account': 1500, '/api/account_sync': 1500, '/api/risk': 2000,
     '/api/drawdown': 2000, '/api/killswitch': 2000, '/api/anomaly': 2000,
     '/api/state': 5000, '/api/signals': 5000, '/api/journal': 5000,
@@ -2235,6 +2276,177 @@
     return window._currentAccount || window._pendingAccount;
   }
 
+  // ===== 2026-11-04 单一真值源（模拟盘账户域）====================================
+  // Ken 要求：所有数据、各模块之间实时统计、联动。
+  // 旧症状：顶部卡片 / 持仓表 / 驾驶舱 / 账户信息 / 对账各自读不同口径，
+  //   /api/account 投影用默认乘数10 + 10% 保证金率 => 76060 / 7.63%，
+  //   而引擎风控闸用 trade_config 真实规格 => 54351.6 / 5.46%（同一页两套账）；
+  //   acc-sub 四个参数缺失 => undefined%；dist / heat 写死 0 => —；
+  //   驾驶舱从每腿 float_pnl(恒0) 重算浮盈亏 => +0.00，与顶部 -3670 打架。
+  // 做法：仅在 account=default（策略模拟盘）视图，把账户域端点统一投影自
+  //   /api/paper-trading 的引擎真值；所有模块在同一 1.2s 快照窗口内取数，
+  //   真值指纹变化经 _DATABUS 级联刷新。实盘视图 / 实盘风控层 / 实盘台账零影响。
+  // 口径全部照搬既有实现，不新设数字：
+  //   保证金    = lots × entry_price × multiplier × margin_rate
+  //              （paper_trading_engine._total_margin L315-322；
+  //               规格逐项照搬 trade_config.json.contract_specs，含大写 PK）
+  //   margin_pct / dist_to_cap（account_tracker.snapshot L1347-1348）
+  //   heat        （four_dim_live_runner.compute_heat L4912-4983）
+  //   caps        = pti.config（组合占用 / 单笔风险 / 单笔手数 / 总持仓腿数）
+  // 紧急回滚：控制台执行 window._TRUTH_OFF = true 即恢复旧的后端投影口径。
+  const _PAPER_SPECS = {"cu":[5,0.12],"al":[5,0.12],"zn":[5,0.12],"ni":[1,0.14],"sn":[1,0.14],"ao":[20,0.12],"au":[1000,0.19],"ag":[15,0.22],"rb":[10,0.07],"hc":[10,0.07],"ss":[5,0.07],"bu":[10,0.16],"fu":[10,0.16],"ru":[10,0.1],"sp":[10,0.07],"sc":[1000,0.16],"ec":[100,0.22],"i":[100,0.11],"J":[100,0.2],"JM":[60,0.12],"eb":[5,0.11],"eg":[10,0.07],"l":[5,0.07],"pp":[5,0.07],"v":[5,0.07],"pg":[20,0.09],"m":[10,0.07],"y":[10,0.07],"a":[10,0.07],"b":[10,0.07],"p":[10,0.08],"c":[10,0.07],"cs":[10,0.06],"jd":[10,0.07],"lh":[16,0.08],"rr":[10,0.06],"FG":[20,0.15],"SA":[20,0.1],"MA":[10,0.1],"TA":[5,0.1],"PF":[5,0.1],"PX":[5,0.1],"SH":[30,0.1],"UR":[20,0.1],"PR":[10,0.1],"SR":[10,0.1],"CF":[5,0.09],"RM":[10,0.09],"OI":[10,0.09],"PK":[5,0.1],"AP":[10,0.09],"si":[5,0.15],"lc":[1,0.19],"SA01":[20,0.0918]};
+  const _TRUTH_PATHS = { '/api/account':1, '/api/account_sync':1, '/api/heat':1 };
+  const _TRUTH_TTL = 1200;
+  window._TRUTH = { ts:0, pti:null, d:null, fp:'', inflight:null, lastEmit:0, hits:0 };
+
+  function _specOf(sym){
+    const s = String(sym||'');
+    const v = _PAPER_SPECS[s] || _PAPER_SPECS[s.toLowerCase()] || _PAPER_SPECS[s.toUpperCase()];
+    return { mult: Number(v && v[0]) || 10, mr: Number(v && v[1]) || 0.10 };
+  }
+  function _r2(x){ return Math.round((Number(x)||0)*100)/100; }
+
+  function _computeTruth(pti){
+    const cfg = pti.config || {};
+    const eq = Number(pti.equity)||0, cash = Number(pti.cash)||0;
+    const mtm = Number(pti.mtm)||0, realized = Number(pti.realized_pnl)||0;
+    const maxUsage = Number(cfg.max_usage_pct)||45;
+    const capAmt = eq * maxUsage / 100;
+    const marginCapPct = 25;        // trade_config.account.margin_cap_pct
+    const portfolioRiskPct = 4.5;   // trade_config.portfolio_risk_pct（compute_heat 口径）
+    const legs = (pti.positions||[]).map(function(q){
+      const sp = _specOf(q.symbol);
+      const lots = Number(q.remaining_lots!=null ? q.remaining_lots : q.lots)||0;
+      const avg = Number(q.entry_price)||0;
+      const px = (q.current_price!=null) ? Number(q.current_price) : null;
+      const m = q.mtm!=null ? Number(q.mtm) : 0;
+      const margin = lots * avg * sp.mult * sp.mr;
+      return Object.assign({}, q, {
+        _mult: sp.mult, _mr: sp.mr, _lots: lots, _margin: margin,
+        margin_pct: eq>0 ? _r2(margin/eq*100) : 0,
+        dist_to_cap: _r2(capAmt - margin),
+        _px: px, _mtm: m
+      });
+    });
+    const marginTotal = legs.reduce(function(s,q){ return s+q._margin; },0);
+    const usage = eq>0 ? _r2(marginTotal/eq*100) : 0;
+    // 组合风险热度：照搬 compute_heat（L4912-4983）
+    const budget = eq * portfolioRiskPct / 100;
+    let planned = 0, unrealR = 0, singleOver = false;
+    const heatRows = legs.map(function(q){
+      const sd = (q.stop_price!=null && q.entry_price!=null)
+        ? Math.abs(Number(q.stop_price)-Number(q.entry_price)) * q._mult * q._lots : 0;
+      const pl = sd>0 ? sd : null;
+      const ur = (pl && q._mtm!=null) ? q._mtm/pl : null;
+      if(pl) planned += pl;
+      if(ur!=null) unrealR += ur;
+      if(q.margin_pct > marginCapPct) singleOver = true;
+      return { symbol:q.symbol, name:q.name||q.symbol, lots:q._lots, direction:q.direction,
+               planned_r: pl?_r2(pl):null, unreal_r: ur!=null?Math.round(ur*1000)/1000:null,
+               margin_pct:q.margin_pct };
+    });
+    const heatPct = budget>0 ? Math.round(planned/budget*1000)/10 : 0;
+    const over = (heatPct>100) || singleOver;
+    const heat = { budget:_r2(budget), equity:_r2(eq), risk_pct:portfolioRiskPct,
+      portfolio_risk_pct:portfolioRiskPct, total_planned_r:_r2(planned),
+      total_unreal_r:_r2(unrealR), heat_pct:heatPct,
+      status: over?'超标':(heatPct>80?'警戒':'正常'), over:!!over,
+      margin_cap_pct:marginCapPct, rows:heatRows };
+    const positions = legs.map(function(q){
+      return {
+        symbol:q.symbol, name:q.name||q.symbol, direction:q.direction,
+        lots:q._lots, remaining_lots:q._lots, avg:Number(q.entry_price)||0,
+        price:q._px, current_price:q._px, float_pnl:q._mtm, mtm:q._mtm,
+        margin:_r2(q._margin), margin_pct:q.margin_pct, dist_to_cap:q.dist_to_cap,
+        contract:q.contract||null, source:q.source||'engine', book:'paper',
+        stop:q.stop_price, stop_price:q.stop_price,
+        t1:q.t1_price, t2:q.t2_price,
+        tp_targets:{ t1_price:q.t1_price, t2_price:q.t2_price },
+        tp_level:q.t1_filled?'tp_t1':'tp_none', t1_filled:!!q.t1_filled,
+        trailing_stop:q.trailing_stop, trail_state:q.trailing_active?'跟踪':'',
+        trailing_active:!!q.trailing_active
+      };
+    });
+    const d = {
+      eq:eq, cash:cash, mtm:mtm, realized:realized, marginTotal:marginTotal,
+      usage:usage, capAmt:capAmt, maxUsage:maxUsage, heat:heat,
+      positions:positions, legs:legs, cfg:cfg, pti:pti,
+      feedLast: String(pti.last_updated||'').slice(11,19)
+    };
+    d.fp = [eq, mtm, realized, marginTotal, pti.last_updated,
+      legs.map(function(q){ return [q.symbol,q._lots,q._px,q._mtm,q.stop_price,
+        q.trailing_stop,q.t1_filled,q.trailing_active].join(':'); }).join('|')].join('~');
+    return d;
+  }
+
+  function _truthAccount(d){
+    return {
+      equity:_r2(d.eq), available:_r2(d.cash-d.marginTotal), cash:_r2(d.cash),
+      initial_balance:Number(d.pti.init_cash)||1000000,
+      realized_pnl:_r2(d.realized), total_pnl:_r2(d.realized+d.mtm),
+      mtm_pnl:_r2(d.mtm), float_total:_r2(d.mtm), float_pnl:_r2(d.mtm),
+      total_margin:_r2(d.marginTotal), usage_rate:d.usage,
+      dist_to_portfolio_cap:_r2(d.capAmt-d.marginTotal),
+      positions:d.positions, total_fee:Number(d.pti.total_fee)||0,
+      equity_synced:'模拟盘引擎 · 单一真值源', equity_synced_raw:_r2(d.eq),
+      self_check:{ ok:true, msg:'单一真值源自洽', equity_verified:_r2(d.eq),
+                   realized_computed:_r2(d.realized), float_computed:_r2(d.mtm) },
+      feed_status:'正常', data_age_min:0, feed_last:d.feedLast,
+      datasource:'sandbox', heat:d.heat, account_type:'paper',
+      enabled:!!d.pti.enabled,
+      margin_cap_pct:25, portfolio_margin_cap_pct:40,
+      max_lots:Number(d.cfg.max_lots_per_trade)||2, risk_pct:0.5,
+      _paper_cfg:d.cfg, truth_ts:d.pti.last_updated, truth_source:'pti'
+    };
+  }
+  function _truthSync(d){
+    return {
+      read_only:true, source:'模拟盘引擎 · 单一真值源',
+      feed_status:'正常', feed_last:d.feedLast, data_age_min:0,
+      equity_dynamic:_r2(d.eq), float_total:_r2(d.mtm),
+      margin_used:_r2(d.marginTotal), usage_pct:d.usage,
+      held_count:d.positions.length,
+      priced_count:d.positions.filter(function(p){ return p.price!=null; }).length,
+      positions:d.positions.map(function(p){
+        return { symbol:p.symbol, direction:p.direction, lots:p.lots,
+                 price:p.price, avg:p.avg, float_pnl:p.float_pnl,
+                 mtm_ok:p.price!=null, mtm_reason:p.price==null?'未盯市':'' };
+      }),
+      drift:[], consistency:{ match:true, journal_open:d.positions.length,
+                              account_open:d.positions.length, issues:[] },
+      healed:false, generated_at:d.pti.last_updated, truth_source:'pti'
+    };
+  }
+  function _truthProject(path, d){
+    if(path === '/api/account') return _truthAccount(d);
+    if(path === '/api/account_sync') return _truthSync(d);
+    if(path === '/api/heat') return d.heat;
+    return null;
+  }
+  function _ensureTruth(force){
+    const T = window._TRUTH;
+    const now = Date.now();
+    if(!force && T.d && (now - T.ts) < _TRUTH_TTL) return Promise.resolve(T.d);
+    if(T.inflight) return T.inflight;
+    T.inflight = _originalFetch('/api/paper-trading').then(function(r){ return r.json(); })
+      .then(function(pti){
+        if(!pti || typeof pti !== 'object') throw new Error('pti empty');
+        const d = _computeTruth(pti);
+        const changed = T.fp && T.fp !== d.fp;
+        T.pti = pti; T.d = d; T.fp = d.fp; T.ts = Date.now();
+        if(changed && window._DATABUS && (Date.now() - T.lastEmit) > 3000){
+          T.lastEmit = Date.now();
+          window._DATABUS.emit('account');
+        }
+        return d;
+      }).catch(function(e){
+        console.warn('[truth] pti 拉取失败，退回原接口:', e);
+        return T.d || null;
+      }).finally(function(){ T.inflight = null; });
+    return T.inflight;
+  }
+  // ==========================================================================
+
   window.fetch = function(input, init){
     // v3.9.1: 注入 account 参数
     const acc = _getAccount();
@@ -2261,7 +2473,22 @@
     if(method !== 'GET'){
       return _enqueue(() => _originalFetch(input, init), true);
     }
-    
+
+    // ★ 2026-11-04 单一真值源：模拟盘视图下账户域端点统一投影（口径见上方注释）。
+    //   必须放在 force/fresh、缓存、队列闸门之前：所有刷新路径都拿同一份引擎真值，
+    //   不同模块不会各自命中不同年龄的缓存快照。实盘视图完全不走这里。
+    const _tPath = (function(){ try { return new URL(url, window.location.origin).pathname; } catch(e){ return ''; } })();
+    if(!window._TRUTH_OFF && _TRUTH_PATHS[_tPath] && _getAccount() === 'default'){
+      const _force = url.includes('force=1') || url.includes('fresh=1');
+      window._TRUTH.hits++;
+      return _ensureTruth(_force).then(function(d){
+        if(!d) return _originalFetch(input, init);
+        const obj = _truthProject(_tPath, d);
+        return _makeResponse(JSON.stringify(obj), 200,
+          {'Content-Type':'application/json; charset=utf-8'}, 'TRUTH');
+      });
+    }
+
     // 队列过深时跳过非关键 GET 请求，返回缓存
     const _qDepth = _getQueueDepth();
     if(_qDepth > MAX_QUEUE_DEPTH){
@@ -7261,12 +7488,17 @@ async function renderCockpit(){
     // 账户
     const eq = acct && (acct.equity!=null? Number(acct.equity):null);
     const positions = (acct && Array.isArray(acct.positions))? acct.positions : [];
-    const floatTotal = positions.reduce((s,p)=> s + (Number(p.float_pnl)||0), 0);
+    // ★ 2026-11-02 两账户独立 + 2011 接线修复：book==='paper' 是模拟盘引擎持仓。
+    //   实盘视图(live)要排除 paper 镜像腿，否则清零后仍显示 PK 浮盈与「持仓 1」；
+    //   但模拟盘视图(paper, account_type==='paper')里 paper 腿就是真实持仓，必须显示全部。
+    const isPaperView = acct && acct.account_type === 'paper';
+    const livePositions = isPaperView ? positions : positions.filter(p => p.book !== 'paper');
+    const floatTotal = livePositions.reduce((s,p)=> s + (Number(p.float_pnl)||0), 0);
     const fl = (acct && acct.float_pnl!=null)? Number(acct.float_pnl) : floatTotal;
     ckSet('ck-eq', eq!=null? fmt(eq,0):'—'); ckSet('ckc-eq', eq!=null? fmt(eq,0):'—');
     const flStr = (fl>=0?'+':'')+fmt(fl);
     ckSet('ck-float', flStr, fl>=0?'var(--red)':'var(--green)'); ckSet('ckc-float', flStr, fl>=0?'var(--red)':'var(--green)');
-    const openPosCount = positions.filter(p => (Number(p.lots) || 0) > 0).length;
+    const openPosCount = livePositions.filter(p => (Number(p.lots) || 0) > 0).length;
     ckSet('ck-pos', openPosCount); ckSet('ckc-pos', openPosCount);
     // 风控规则
     const grade = (rules && rules.grade)||'—';
@@ -7631,8 +7863,35 @@ async function refreshAccount(force){
   try{
     // v3.9.0: 策略参谋并行拉取（服务端 60s 缓存，开销小）
     const _psPromise = _smartFetch('/api/pos_strategy?_t=' + Date.now()).then(r=>r.json()).catch(()=>({rows:{}}));
-    const fetchUrl = '/api/account?_t=' + Date.now();
+    // ★ 2026-11-02 首屏性能：普通刷新用不带时间戳的 URL，让请求层缓存+去重生效
+    //   （原来每轮都拼 _t=Date.now()，等于永久绕过缓存，每次都实打实等 2.1s 的后端计算）；
+    //   只有 force（用户手动操作后）才用 fresh=1 强制穿透后端缓存拿最新值。
+    const fetchUrl = force ? '/api/account?fresh=1' : '/api/account';
     const r=await _smartFetch(fetchUrl);const a=await r.json();
+    // ★ 2026-11-04 模拟盘视图持仓表补齐（纯前端，不改后端、不重启 runner）：
+    //   account=default 时 /api/account 返回 _paper_account_snapshot() 的投影快照，
+    //   它读 float_pnl / stop / price，而引擎字段是 mtm / stop_price / current_price，
+    //   导致表格浮盈恒 +0.00、现价/止损/T1/T2 恒「—」、品种名带 undefined_ 前缀。
+    //   这里仅当 account_type==='paper' 时逐腿用 /api/paper-trading 的真值补齐；
+    //   实盘视图完全不走此分支。所有数值均来自引擎，不在前端编造。
+    if(a.account_type === 'paper'){
+      try{
+        const _pt = await (await _smartFetch('/api/paper-trading')).json();
+        const _pm = {};
+        for(const q of (_pt.positions||[])){ _pm[q.symbol] = q; }
+        for(const p of (a.positions||[])){
+          const q = _pm[p.symbol]; if(!q) continue;
+          p.name = q.name || p.symbol;
+          p.price = q.current_price;
+          p.float_pnl = q.mtm;
+          p.stop = q.stop_price;
+          p.tp_targets = { t1_price: q.t1_price, t2_price: q.t2_price };
+          p.tp_level = q.t1_filled ? 'tp_t1' : 'tp_none';
+          p.trailing_stop = q.trailing_stop;
+          p.trail_state = q.trailing_active ? '跟踪' : '';
+        }
+      }catch(e){ console.warn('[paper-view] pti 持仓补齐失败，保留原快照:', e); }
+    }
     _PS_DATA = await _psPromise;
     // ★ 2026-09-13: account 域变化检测（数据域事件总线）
     // 权益 / 可用资金 / 持仓指纹(品种×方向×手数×均价) / 总盈亏 diff → 命中即 _DATABUS.emit('account')
@@ -7746,8 +8005,12 @@ async function refreshAccount(force){
     } else {
       heatEl.textContent='—';
     }
+    // ★ 2026-11-04 单一真值源：模拟盘视图显示引擎自己的风控规则（pti.config 真实字段），
+    //   不再套用实盘 account.margin_cap_pct 口径，也不再出现 undefined%。
     document.getElementById('acc-sub').textContent=
-      `单品≤${a.margin_cap_pct}% · 组合≤${a.portfolio_margin_cap_pct}% · 单品种≤${a.max_lots}手 · 风险${a.risk_pct}%`;
+      (a.account_type==='paper' && a._paper_cfg)
+        ? `组合占用≤${a._paper_cfg.max_usage_pct}% · 单笔风险≤${a._paper_cfg.risk_per_trade_pct}% · 单笔≤${a._paper_cfg.max_lots_per_trade}手 · 总持仓≤${a._paper_cfg.max_positions}腿`
+        : `单品≤${a.margin_cap_pct}% · 组合≤${a.portfolio_margin_cap_pct}% · 单品种≤${a.max_lots}手 · 风险${a.risk_pct}%`;
     const tb=document.getElementById('postab');tb.innerHTML='';
     let shown=0;
     let _tLots=0, _tPnl=0, _tPnlHas=false, _tMarginPct=0;
@@ -7815,7 +8078,12 @@ async function refreshAccount(force){
         _pnlTd.className = _tPnl>=0 ? 'pos' : 'neg';
       }else{ _pnlTd.textContent='—'; _pnlTd.className=''; }
       _tRow.querySelector('#total-lots').textContent = _tLots;
-      _tRow.querySelector('#total-pct').textContent = fmt(_tMarginPct) + '%';
+      // ★ 2026-11-04 单一真值源：模拟盘视图合计占用% 直接取账户口径 usage_rate，
+      //   不再累加各腿已四舍五入的 margin_pct（0.78+0.64+1.25+2.78=5.45，
+      //   与顶部 5.46% 差 0.01，属同一页两套数）。实盘视图保持原逻辑。
+      _tRow.querySelector('#total-pct').textContent =
+        (a.account_type==='paper' && a.usage_rate!=null)
+          ? fmt(a.usage_rate)+'%' : fmt(_tMarginPct)+'%';
       // 距上限取最紧的那个（min dist_to_cap）
       let _minDist = Infinity;
       for(const p of a.positions){ if(Number(p.lots)>0 && p.dist_to_cap!=null) _minDist = Math.min(_minDist, Number(p.dist_to_cap)); }
@@ -8983,6 +9251,10 @@ setTimeout(() => { if(!_userActionInProgress) loadSymMeta(); }, 3000);
 setInterval(() => { if(!_userActionInProgress) loadSymMeta(); }, _T.meta);
 
 // 初始化（只执行一次）
+// ★ 2026-11-02 首屏性能：这一批是「右侧次级面板」（情绪/支撑阻力/板块热度/扫描/筛选/指标），
+//   全部是重接口且不参与首屏关键数字（权益、持仓、盈亏、风控条）。
+//   原来 2 秒就打，和账户/台账抢 GIL，导致首屏 30-40 秒。
+//   改为先让关键数字出来，再渐进加载这批（桌面 5s / 移动 8s）。
 setTimeout(() => {
   if(typeof refreshChatToday==='function') refreshChatToday();
   if(typeof refreshAdv==='function') refreshAdv();
@@ -8998,7 +9270,7 @@ setTimeout(() => {
     if(typeof refreshScan==='function') refreshScan();
     if(typeof refreshScreener==='function') refreshScreener();
   }
-}, _IS_MOBILE ? 4000 : 2000);
+}, _IS_MOBILE ? 8000 : 5000);
 
 // 6. 右侧面板轮询（45秒：情绪/SR/热力图/扫描/筛选）
 if(!_IS_MOBILE){

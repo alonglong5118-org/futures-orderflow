@@ -66,11 +66,13 @@ def get_engine() -> PaperTradingEngine | None:
     return _engine
 
 
-def tick(state: dict | None = None) -> dict:
+def tick(state: dict | None = None, allow_open: bool = True) -> dict:
     """每轮调用：检查新信号 + 检查持仓 TP/SL。
 
     Args:
         state: live runner 的 state 字典，用于注入 paper_trading 状态
+        allow_open: 是否允许开新仓。熔断/状态机锁死时传 False —— 只平不开
+                    （check_positions 仍执行以止损止盈，check_new_signals 跳过）。
 
     Returns:
         dict: {new_trades: [], closed: []}
@@ -81,8 +83,8 @@ def tick(state: dict | None = None) -> dict:
     result = {"new_trades": [], "closed": []}
 
     try:
-        # 1. 检查新信号（自动开仓）
-        if _engine.config["enabled"]:
+        # 1. 检查新信号（自动开仓）——熔断锁死时跳过（只平不开）
+        if _engine.config["enabled"] and allow_open:
             new_trades = _engine.check_new_signals()
             result["new_trades"] = new_trades
     except Exception as e:
