@@ -161,6 +161,7 @@ nav:
     - architecture/overview.md
     - 四维策略: architecture/four-dim-strategy.md
     - 风控体系: architecture/risk-management.md
+    - 分层与冲突裁决: architecture/orderflow-layering-and-arbitration.md
     - 方向源监控: architecture/direction-monitor.md
   - 核心模块:
     - modules/signal-trigger.md
