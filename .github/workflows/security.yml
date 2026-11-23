@@ -135,7 +135,7 @@ jobs:
           fetch-depth: 1
 
       - name: Dependency review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec  # v5
         with:
           # 高危漏洞阻塞，中低危只警告
           fail-on-severity: high
