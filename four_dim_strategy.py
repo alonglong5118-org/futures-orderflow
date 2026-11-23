@@ -323,7 +323,7 @@ DEFAULT_CONFIG = {
         "max_lots": 5,
         "per_symbol_lots": {},
         "portfolio_margin_cap_pct": 60,
-        "max_total_lots": 15,
+        "max_total_lots": 40,
         "use_realtime_margin": True,
     },
     # 组合管理（P4，2026-08-29）：按权重分配风险预算 + 板块/相关性约束
@@ -1604,6 +1604,115 @@ def _fetch_daily_tqsdk(symbol):
         print(f"  [tqsdk] {symbol}({tq_code}) 线程执行失败: {e}")
         return None
 
+# ─────────────────────── tushare proxy 日线源（2026-11-20 接入，token 180 天有效） ───────────────────────
+# 背景（2026-11-20）：tqsdk 天勤账号到期、sina/东财 IP 限流，data_daily 停更 3.5 个月、面板静止。
+# Ken 提供 tushare 代理（https://t.xiaodefa.top/，fut_daily 约最近 6 天），覆盖全部 53 品种
+# （走品种级主连 XX.EXCH，等价当前主力合约，如 AO.SHF ≡ AO2701）。作为**第一数据源**
+# （优先于 tqsdk/免费源），近期日线追加到本地主连 CSV。
+def _load_tushare_proxy_token() -> str:
+    """proxy token 不入库：环境变量 TUSHARE_PROXY_TOKEN → 同目录 tushare_proxy_token.txt 首行。"""
+    import os as _os
+    tok = (_os.environ.get("TUSHARE_PROXY_TOKEN") or "").strip()
+    if tok:
+        return tok
+    try:
+        p = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "tushare_proxy_token.txt")
+        if _os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                return (f.readline() or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+_TUSHARE_CONFIG = {
+    "token": _load_tushare_proxy_token(),
+    "url": "https://t.xiaodefa.top/",
+}
+_TUSHARE_CACHE = {"data": None, "ts": 0.0}  # data = {ts_code: [row,...]}，一次 API 调用拉全部合约，缓存 1h
+
+
+def _tushare_fetch_all():
+    """一次性拉取 proxy 全部合约的近期日线（fut_daily，约最近 6 天），进程内缓存 1h。
+    返回 {ts_code: [row, ...]}；失败返回 None。"""
+    if not _TUSHARE_CONFIG["token"]:
+        print("  [tushare] 未配置 token（env TUSHARE_PROXY_TOKEN 或 tushare_proxy_token.txt），跳过 proxy 源")
+        return None
+    import json as _json
+    import time as _t
+    import urllib.request as _ur
+
+    now = _t.time()
+    if _TUSHARE_CACHE["data"] is not None and (now - _TUSHARE_CACHE["ts"]) < 3600:
+        return _TUSHARE_CACHE["data"]
+    body = _json.dumps({"api_name": "fut_daily", "token": _TUSHARE_CONFIG["token"]}).encode()
+    req = _ur.Request(_TUSHARE_CONFIG["url"], data=body, headers={"Content-Type": "application/json"})
+    for attempt in range(3):
+        try:
+            with _ur.urlopen(req, timeout=30) as r:
+                payload = _json.loads(r.read().decode("utf-8"))
+            items = (payload.get("data") or {}).get("items") or []
+            if not items:
+                raise RuntimeError("tushare proxy 返回空 items")
+            by_code = {}
+            for row in items:
+                by_code.setdefault(row[0], []).append(row)
+            _TUSHARE_CACHE["data"] = by_code
+            _TUSHARE_CACHE["ts"] = now
+            return by_code
+        except Exception as e:
+            if attempt == 2:
+                print(f"  [tushare] proxy 拉取失败: {e}")
+                return None
+            _t.sleep(2)
+    return None
+
+
+def _tushare_ts_code_for(symbol, by_code):
+    """symbol → tushare ts_code。具体交割合约（SA01→SA2701→SA2701.ZCE）优先，
+    否则品种级主连（ao→AO.SHF、si→SI.GFE）。无则返回 None。"""
+    sym_up = symbol.upper()
+    if symbol in _CONTRACT_AKSHARE:
+        code = _CONTRACT_AKSHARE[symbol]  # 如 SA2701
+        candidates = [c for c in by_code if c.split(".")[0] == code]
+        if candidates:
+            return candidates[0]
+    candidates = [c for c in by_code if c.split(".")[0] == sym_up]
+    return candidates[0] if candidates else None
+
+
+def _fetch_daily_tushare(symbol):
+    """tushare proxy 日线源（第一数据源）。返回 date 索引标准化 df(open/high/low/close/volume/oi)。
+    失败/无数据返回 None（上层降级到 tqsdk/免费源/本地，不阻断主流程）。
+    fut_daily 行格式（15 列）:
+      [ts_code, trade_date, pre_close, pre_settle, open, high, low, close,
+       settle, change1, change2, vol, amount, oi, oi_chg]"""
+    by_code = _tushare_fetch_all()
+    if not by_code:
+        return None
+    ts_code = _tushare_ts_code_for(symbol, by_code)
+    if not ts_code:
+        print(f"  [tushare] {symbol} 无匹配合约")
+        return None
+    rows = by_code.get(ts_code, [])
+    if not rows:
+        return None
+    recs = []
+    for r in rows:
+        try:
+            recs.append({
+                "date": pd.Timestamp(str(r[1])),
+                "open": float(r[4]), "high": float(r[5]), "low": float(r[6]), "close": float(r[7]),
+                "volume": float(r[11]), "oi": float(r[13]),
+            })
+        except (ValueError, TypeError, IndexError):
+            continue
+    if not recs:
+        return None
+    df = pd.DataFrame(recs).set_index("date")
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    return df[["open", "high", "low", "close", "volume", "oi"]]
+
 
 def load_daily_refreshed(symbol, ttl=1800):
     """P1-5 重构：load_daily + akshare 近期日线追加（minishare 无 fut_daily 权限，按分工走免费源兜底）。
@@ -1626,10 +1735,18 @@ def load_daily_refreshed(symbol, ttl=1800):
     if _fts and (_t.time() - _fts) < _DAILY_FAIL_COOLDOWN:
         return None
 
-    # 分支 1: 具体交割合约（如 SA01）—— tqsdk 具体合约优先，免费源兜底，fall-through 根治
+    # 分支 1: 具体交割合约（如 SA01）—— tushare 具体合约优先，tqsdk 兜底，免费源兜底
     if symbol in _CONTRACT_AKSHARE:
         code = _CONTRACT_AKSHARE[symbol]
-        # ① tqsdk 天勤具体合约（SA01→CZCE.SA701，认证稳定；免费源已 IP 限流）
+        # ① tushare proxy 具体合约（SA01→SA2701.ZCE，2026-11-20 接入；tqsdk 到期、免费源 IP 限流）
+        try:
+            raw_ts = _fetch_daily_tushare(symbol)
+            if raw_ts is not None and len(raw_ts) > 0:
+                _DAILY_CACHE[symbol] = (raw_ts, _t.time())
+                return raw_ts
+        except Exception as e:
+            print(f"  [daily refresh] {symbol}({code}) tushare 具体合约失败: {e}")
+        # ② tqsdk 天勤具体合约（SA01→CZCE.SA701，认证稳定）
         try:
             raw_tq = _fetch_daily_tqsdk(symbol)
             if raw_tq is not None and len(raw_tq) > 0:
@@ -1637,7 +1754,7 @@ def load_daily_refreshed(symbol, ttl=1800):
                 return raw_tq
         except Exception as e:
             print(f"  [daily refresh] {symbol}({code}) tqsdk 具体合约失败: {e}")
-        # ② 免费源兜底（sina/sina-main/东财；IP 被限流时全挂）
+        # ③ 免费源兜底（sina/sina-main/东财；IP 被限流时全挂）
         try:
             raw = _fetch_daily_robust(code)
             if len(raw) >= 60:
@@ -1651,9 +1768,22 @@ def load_daily_refreshed(symbol, ttl=1800):
             print(f"  [daily refresh] {symbol}({code}) 全部源失败: {e}")
             return None
 
-    # 分支 2: 常规品种 —— load_daily 本地主连 + tqsdk 主连追加（可靠）+ 免费源兜底
+    # 分支 2: 常规品种 —— load_daily 本地主连 + tushare proxy 近期日线追加（第一源）+ tqsdk 兜底 + 免费源
     df = load_daily(symbol)
-    # ① tqsdk 天勤主连优先（sina/东财 免费源已 IP 限流，tqsdk 认证稳定且全品种覆盖）
+    # ① tushare proxy 主连优先（2026-11-20 接入；tqsdk 到期、免费源 IP 限流，tushare 全品种覆盖且稳定）
+    try:
+        raw_ts = _fetch_daily_tushare(symbol)
+        if raw_ts is not None and len(raw_ts) >= 1:
+            if df is not None and len(df) >= 1:
+                new = raw_ts[raw_ts.index > df.index[-1]]
+                if len(new):
+                    df = pd.concat([df, new])
+            else:
+                df = raw_ts
+            _DAILY_CACHE[symbol] = (df, _t.time())
+    except Exception as e:
+        print(f"  [daily refresh] {symbol} tushare 失败: {e}")
+    # ② tqsdk 天勤主连兜底（tushare 失败/无数据时）
     try:
         raw_tq = _fetch_daily_tqsdk(symbol)
         if raw_tq is not None and len(raw_tq) >= 1:
@@ -1666,7 +1796,7 @@ def load_daily_refreshed(symbol, ttl=1800):
             _DAILY_CACHE[symbol] = (df, _t.time())
     except Exception as e:
         print(f"  [daily refresh] {symbol} tqsdk 兜底失败: {e}")
-    # ② 免费源兜底：仅当本地+tqsdk 都无足够数据时才尝试（避免刷屏 + 二次触发 IP 封禁）
+    # ③ 免费源兜底：仅当本地+tushare+tqsdk 都无足够数据时才尝试（避免刷屏 + 二次触发 IP 封禁）
     if df is None or len(df) < 60:
         try:
             code = _AKSHARE_MAP.get(symbol, symbol.upper() + "0")
