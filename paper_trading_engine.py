@@ -59,8 +59,8 @@ def _strategy_enum(label) -> str:
 DEFAULT_CONFIG = {
     "enabled": True,  # 是否启用自动模拟交易
     "init_cash": 1_000_000.0,  # 初始资金
-    "max_positions": 4,  # 最大同时持仓数（腿数）—— 沿实盘铁律：总持仓≤4
-    "max_lots_per_trade": 2,  # 单笔最大手数 —— 沿实盘铁律：单合约≤2
+    "max_positions": 8,  # 最大同时持仓数（腿数）—— 2026-11-23 Ken 定：4→8，分散优先，原「总持仓≤4」铁律同步放开
+    "max_lots_per_trade": 5,  # 单笔最大手数 —— 2026-11-23 Ken 定：2→5，与策略侧 N_plan 建议值上限对齐；原「单合约≤2」铁律同步放开
     "max_usage_pct": 45.0,  # 总仓位上限：保证金占用 ≤ 本金的 45% —— 沿实盘铁律：账户使用率≤45%
     "risk_per_trade_pct": 1.0,  # 单笔风险占资金比例（%）
     "default_lots": 1,  # 默认开仓手数（当信号未指定或为0时）
@@ -483,9 +483,23 @@ class PaperTradingEngine:
                 lots_by_risk = int(risk_budget // per_lot_risk)
             else:
                 lots_by_risk = self.config["default_lots"]
-            lots = min(lots_by_risk, self.config["max_lots_per_trade"])
+            cap = int(self.config["max_lots_per_trade"])
+            lots = min(lots_by_risk, cap)
+            # 信号推荐手数：策略侧 N_plan（four_dim_strategy.py L4137 "lots"），
+            # 仅当 use_signal_lots=True 时采用，且仍受 max_lots_per_trade 封顶。
+            sig_lots = 0
+            if self.config.get("use_signal_lots", True):
+                try:
+                    sig_lots = int(signal.get("lots") or 0)
+                except (TypeError, ValueError):
+                    sig_lots = 0
+                if sig_lots > 0:
+                    lots = min(sig_lots, cap)
             if lots < 1:
                 lots = 1
+            if lots < lots_by_risk:
+                print(f"[PaperEngine] {symbol} 手数封顶：风险法 {lots_by_risk} 手 → 实开 {lots} 手"
+                      f"（max_lots_per_trade={cap}, 信号建议={sig_lots or '无'}）")
 
             # 总仓位闸：开仓后总保证金占用不得超过 本金 × max_usage_pct%
             margin_rate = self._get_margin_rate(symbol)
@@ -1040,6 +1054,7 @@ class PaperTradingEngine:
                     "enabled": self.config["enabled"],
                     "max_positions": self.config["max_positions"],
                     "max_lots_per_trade": self.config["max_lots_per_trade"],
+                    "use_signal_lots": self.config.get("use_signal_lots", True),
                     "max_usage_pct": self.config.get("max_usage_pct", 100.0),
                     "risk_per_trade_pct": self.config.get("risk_per_trade_pct", 1.0),
                     "default_lots": self.config["default_lots"],
