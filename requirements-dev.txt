@@ -6,7 +6,7 @@ coverage>=7.0
 hypothesis>=6.0  # property-based testing
 
 # 遗传算法（测试依赖）
-deap>=1.3
+deap>=1.4.4
 
 # 代码质量
 ruff>=0.6
