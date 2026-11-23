@@ -291,6 +291,90 @@ def ak_main_all():
     return out, failed
 
 
+# —— tushare OI 交叉校验（2026-11-20）——
+# 背景：akshare match_main_contract 对 INE 原油(sc)判定滞后 —— main_overrides 长期停在
+#   SC2612（OI 1013 / 成交 32 手），而 tushare fut_daily 实测真实主力为 SC2701
+#   （OI 30659 / 成交 38998 手）。minishare_live._authoritative_contracts() 的优先级是
+#   MAIN_OVERRIDE > HOT_CACHE，即 akshare 给什么就用什么，所以必须有一个独立的 OI 真相源
+#   来兜底这类误判（sc 在缓存里 forced=False，属纯误判，与持仓品种刻意的 forced=True 不同）。
+_OI_RANK_LAST_DATE = ""  # 诊断用：最近一次成功拉取的 trade_date
+_TUSHARE_URL_DEFAULT = "https://t.xiaodefa.top/"
+
+
+def _tushare_cred():
+    """从 four_dim_strategy.py 读取 tushare proxy 的 token/url（与其 _fetch_daily_tushare 同源），
+    避免在本脚本里硬编码第二份 token。返回 (token, url)；无 token 时 token 为 None。"""
+    try:
+        src = open(os.path.join(HERE, "four_dim_strategy.py"), encoding="utf-8").read()
+        m = re.search(r"_TUSHARE_CONFIG\s*=\s*\{(.*?)\}", src, re.S)
+        if not m:
+            return None, _TUSHARE_URL_DEFAULT
+        blk = m.group(1)
+        tok = re.search(r'["\']token["\']\s*:\s*["\']([^"\']+)["\']', blk)
+        url = re.search(r'["\']url["\']\s*:\s*["\']([^"\']+)["\']', blk)
+        return (tok.group(1) if tok else None), (url.group(1) if url else _TUSHARE_URL_DEFAULT)
+    except Exception:
+        return None, _TUSHARE_URL_DEFAULT
+
+
+def _tushare_oi_rank() -> dict:
+    """按最新交易日给出全市场持仓量(OI)排名：{品种前缀大写: [(oi, 合约代码, vol), ...]}。
+
+    合约代码已去掉交易所后缀（AO2701.SHF -> AO2701），组内按 oi 降序。
+    只取最新一个 trade_date 的切片 —— proxy 每次返回 6000 行≈6 个交易日，全量计算会被
+    历史合约污染；连续/指数合约（SC.INE、SCTAS.INE、L_F.DCE 等无月份后缀）一律跳过。
+    任何异常只打印一行并返回 {}，绝不抛出：校验失败时上层保持 akshare 判定不变。
+    """
+    global _OI_RANK_LAST_DATE
+    try:
+        import gzip
+        import urllib.request as _ur
+
+        token, url = _tushare_cred()
+        if not token:
+            raise RuntimeError("four_dim_strategy.py 中未读到 tushare token")
+        body = json.dumps({"api_name": "fut_daily", "token": token}).encode()
+        # 必须显式带 Accept-Encoding: gzip —— 该 proxy 不带此头会 429「请开启gzip」
+        req = _ur.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json", "Accept-Encoding": "gzip"},
+        )
+        with _ur.urlopen(req, timeout=60) as r:
+            raw = r.read()
+            enc = (r.headers.get("Content-Encoding") or "").lower()
+        if enc == "gzip" or raw[:2] == b"\x1f\x8b":
+            raw = gzip.decompress(raw)
+        items = ((json.loads(raw.decode("utf-8")).get("data") or {}).get("items")) or []
+        if not items:
+            raise RuntimeError("proxy 返回空 items")
+
+        latest = max(str(r[1]) for r in items if len(r) > 13)
+        out = {}
+        seen = set()
+        for row in items:
+            if str(row[1]) != latest:
+                continue
+            code = str(row[0]).upper().split(".")[0]
+            m = re.match(r"^([A-Z_]+?)(\d{3,4})$", code)
+            if not m or code in seen:  # 无月份后缀的连续/指数合约跳过；同码去重
+                continue
+            seen.add(code)
+            try:
+                oi = float(row[13] or 0)
+                vol = float(row[11] or 0)
+            except (TypeError, ValueError, IndexError):
+                continue
+            out.setdefault(m.group(1), []).append((oi, code, vol))
+        for _lst in out.values():
+            _lst.sort(key=lambda x: -x[0])
+        _OI_RANK_LAST_DATE = latest
+        return out
+    except Exception as _e:
+        print(f"[oi_rank] tushare 获取失败: {_e}")
+        return {}
+
+
 def main():
     ap = argparse.ArgumentParser(description="换月期全市场主力合约核对/强制更新")
     ap.add_argument("--apply", action="store_true", help="用 akshare 近月主力强制锁定(写 forced=True)")
@@ -319,6 +403,36 @@ def main():
         sys.exit(1)
     cache = json.load(open(CACHE, encoding="utf-8"))
     ak_main, failed_ex = ak_main_all()
+
+    # —— tushare OI 交叉校验：修正 akshare 的滞后判定（实测 sc: SC2612 -> SC2701）——
+    # 判定口径：akshare 给的合约 != tushare OI 第一名，且其 OI < 真主力 OI 的 30% → 视为滞后。
+    # 阈值 0.3 的理由：换月期间新旧主力的 OI 会交替甚至短期反超，只有「旧合约持仓不到真主力
+    #   的三成」才算明显失血；30% 是保守门槛，避免把 akshare 在过渡期的合理判断误覆盖掉。
+    # 持仓品种（forced=True）刻意不换月（避免盯市体系跳变），这里一律跳过，绝不碰 si/lc。
+    # 品种不在 tushare 排名里 → 跳过，保持 akshare 原值。
+    _oi_rank = _tushare_oi_rank()
+    if _oi_rank:
+        _n_fix = 0
+        for _v in list(ak_main.keys()):
+            if (cache.get(_v) or {}).get("forced"):
+                continue
+            _lst = _oi_rank.get(str(_v).upper())
+            if not _lst or not ak_main.get(_v):
+                continue
+            _real_oi, _real_code = _lst[0][0], _lst[0][1]
+            _ak_code = str(ak_main[_v]).upper()
+            _ak_oi = next((_o for _o, _c, _ in _lst if _c == _ak_code), 0.0)  # 查不到按 0
+            if _ak_code != _real_code and _ak_oi < _real_oi * 0.3:
+                print(
+                    f"[fix] {_v}: akshare={_ak_code}(oi={_ak_oi:.0f}) 滞后 "
+                    f"→ 采用 tushare={_real_code}(oi={_real_oi:.0f})"
+                )
+                ak_main[_v] = _real_code
+                _n_fix += 1
+        print(
+            f"[oi_rank] tushare 最新交易日={_OI_RANK_LAST_DATE} 品种={len(_oi_rank)} "
+            f"交叉校验修正={_n_fix}"
+        )
 
     # 自愈：换月锁定成功后(主力已出交割月)，清除旧 forced 恢复正常 OI 自动换月
     if args.apply:

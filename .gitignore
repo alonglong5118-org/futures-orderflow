@@ -24,6 +24,7 @@ venv/
 *.log
 # 临时备份目录
 _risk_backup*/
+_backup_clear_*/
 # 临时 json 产物
 _*.json
 

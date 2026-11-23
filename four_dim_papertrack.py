@@ -43,12 +43,27 @@ DIRECTION_MAP = {"多": "long", "long": "long", "buy": "long", "空": "short", "
 ROLL_GAP_PCT = 0.010
 ROLL_GAP_MULT = 1.0
 
+# ── live5m 首根时间距离守卫（P0-3）────────────────────────────────────────
+# live_bars.json 只有 runner 最近几小时~约两天的 5m 聚合，而信号可能是几个月前
+# 发出的。若「信号时刻」到「live_bars 里第一根可用 bar」之间隔着巨大空档，二者
+# 之间根本没有连续行情，用它们判定等于拿「几个月后的走势」冒充「信号后走势」。
+# 30 分钟 = 6 根 5m bar：一个周期内允许的正常缺口（如午休/短时断流）最多这个量级，
+# 再长就不再是「信号之后的连续走势」，必须降级到本地 5m 缓存 / 日线。
+_LIVE5M_MAX_GAP_MIN = 30
+
 # ── 回测确定性（可复现）────────────────────────────────────────────────────
 # 问题：backtest_signal 每次都实时重拉行情(live_bars/本地5m/akshare日线)，
 # 数据随时变化 → 同一信号在不同时间重算会得到不同 outcome，门控指标不可信。
 # 修复：信号首次可判定时，把"实际用于判定的 K 线"快照固化进报告
 # (backtest_bars + backtest_gran)；之后任何重算都从快照重放，结果 100% 可复现。
 BARS_SNAPSHOT_MAX = 600  # 单笔快照最多保留的根数(覆盖绝大多数持仓周期)
+
+# ── pending 池上限告警（2026-11-20）──────────────────────────────────────
+# pending 池只增不减：每轮把「未判定」的信号重新计入，信号持续产生则池子单调增长。
+# 池子过大意味着判定链路被卡住（数据不足/精度降级），胜率样本无法积累 → 需人工介入。
+# 这里只告警、不清理，保持证据链完整。
+PENDING_ALERT_THRESHOLD = 200
+PENDING_WARN_RATIO = 0.8  # 达到阈值的 80% 提前预警
 
 
 def bars_to_records(df: pd.DataFrame) -> list:
@@ -201,8 +216,18 @@ def _load_backtest_bars(symbol, signal_dt):
         lb = _load_live_bars(symbol)
         if lb is not None and len(lb):
             after = lb[lb.index > signal_dt]
+            # 2026-11-20: live_bars 只覆盖最近几小时~约两天。若信号时刻与 live_bars 里
+            # 第一根可用 bar 相距过远，说明两者之间根本没有连续行情，用它们判定等于拿
+            # 「几个月后的走势」冒充「信号后走势」（曾导致 172 笔 R=-1、胜率 9%、
+            # 19/54 品种被误门控）。距离超过 _LIVE5M_MAX_GAP_MIN 分钟即拒用，降级到
+            # 5m 缓存 / 日线。
             if len(after) >= 3:
-                return after, "live5m"
+                try:
+                    _gap_min = (after.index[0] - pd.to_datetime(signal_dt)).total_seconds() / 60.0
+                except Exception:
+                    _gap_min = None  # 类型/时区不一致 → 无法确认距离，保守拒用 live5m
+                if _gap_min is not None and _gap_min <= _LIVE5M_MAX_GAP_MIN:
+                    return after, "live5m"
     except Exception:
         pass
     import four_dim_strategy as fd
@@ -251,6 +276,22 @@ def backtest_signal(p: dict, bars=None, gran=None) -> dict:
             "gran": gran if gran is not None else None,
             "status": "pending",
         }
+    # 2026-11-20: 日线粒度对日内信号无判别能力，整层拒判。
+    # 原因：日线单根覆盖整个交易日，high/low 跨度几百 tick，止盈止损必然都被跨越；
+    # 代码从信号次日那根开始判（iloc[1:]），既无法确定日内先后顺序，也无法区分
+    # 「真先打止损」和「先到止盈后回落」。实测 56 条 daily 判定里 55 条落成 R=-1，
+    # 胜率被压到个位数，进而把好品种误判 broken 静音。故一律 pending，等有分钟级
+    # 行情（live_bars 实时 5m / 本地 5m 缓存）再判。上层 compute_symbol_gates 已同步
+    # 改为只认 GATE_TRUSTED_GRAN=("live5m","5m")。
+    if gran == "daily":
+        return {
+            "outcome": None,
+            "R": 0.0,
+            "holding_bars": 0,
+            "gran": "daily",
+            "status": "pending",
+            "pending_reason": "daily_granularity_unreliable",
+        }
     direction = p["direction"]
     target, stop = p["target"], p["stop"]
     stop_dist = abs(stop - p["entry"]) or 1e-9
@@ -278,7 +319,24 @@ def backtest_signal(p: dict, bars=None, gran=None) -> dict:
         else:  # short
             hit_t, hit_s = lo <= target, hi >= stop
         if hit_t and hit_s:
-            # 同根双触：保守判止损（止损更近者先触发）
+            # 同根双触：分钟级(5m/live5m)仍保守判止损（一根内跨度小，止损更近者先触发）。
+            # 2026-11-20: 日线粒度必须例外。日线「一根」覆盖整个交易日，high/low 跨度
+            # 几百 tick，止盈止损几乎必然同根双触；此时无法确定谁先触及，判 loss 等于
+            # 凭空假设「总是先打止损」，会把胜率系统性压到个位数（实测 42 笔门控依据交易
+            # 中 32 笔 daily，其中 30 笔被这么判成 R=-1，胜率 6%），进而用测量噪声误门控
+            # 静音好品种。故 daily 双触改为 pending（不计入统计），等有分钟数据再判。
+            # 注：本分支现已被 backtest_signal 顶部的 `gran == "daily"` 整层守卫完全覆盖，
+            # 正常执行流下不可达；保留作为防御，防止守卫被移除后日线又落回「双触判 loss」。
+            if gran == "daily":
+                return {
+                    "outcome": None,
+                    "R": 0.0,
+                    "holding_bars": i + 1,
+                    "gran": gran,
+                    "status": "pending",
+                    "pending_reason": "daily_double_touch",
+                    "roll_skipped": roll_skipped,
+                }
             return {
                 "outcome": "loss",
                 "R": -1.0,
@@ -364,6 +422,12 @@ def _by_symbol(trades):
     return {s: aggregate(v, "R", "outcome") for s, v in out.items()}
 
 
+# 2026-11-20: 门控只能基于分钟级判定。日线判定的双触/顺序歧义会把胜率
+# 系统性压到个位数（实测 32 笔 daily 里 30 笔判 R=-1），用它门控等于用
+# 测量噪声静音好品种。与 consistency_watchdog 排除 evidence=model 同源。
+GATE_TRUSTED_GRAN = ("live5m", "5m")
+
+
 def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: float = 1 / 3,
                          window_days: int = 30, max_gate_age_days: int = 30):
     """基于 papertrack_report.json 中已判定交易，算每个品种的「近期表现门槛」。
@@ -417,21 +481,29 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: 
         # ① 滚动日历窗口：仅取最近 window_days 天内的交易
         cut = (_now - timedelta(days=window_days)).strftime("%Y-%m-%d %H:%M:%S")
         recent = [t for t in ts if (t.get("time") or "") >= cut]
-        n = len(recent)
+        # 2026-11-20: 只有分钟级判定可信（见 GATE_TRUSTED_GRAN）。日线双触已改为 pending
+        # 不再落库，但历史 report 里仍有旧的 daily done 记录，必须在投票前剔除。
+        voted = [t for t in recent if str(t.get("gran")) in GATE_TRUSTED_GRAN]
+        n_daily = len([t for t in recent if str(t.get("gran")) not in GATE_TRUSTED_GRAN])
+        n = len(voted)
         # ③ 窗口内样本不足 → 不门控（保守放行，不对无新数据品种误杀）
         if n < min_trades:
+            _reason = "窗口内样本不足(放行)"
+            if not voted and recent:
+                _reason = f"仅{n_daily}笔日线判定(不可信)，无分钟级样本(放行)"
             gates[sym] = {
                 "gated": False,
                 "n": n,
+                "n_daily": n_daily,
                 "win_rate": None,
                 "cum_R": None,
-                "reason": "窗口内样本不足(放行)",
+                "reason": _reason,
                 "last_time": last_time,
             }
             continue
-        wins = sum(1 for t in recent if t.get("outcome") == "win")
+        wins = sum(1 for t in voted if t.get("outcome") == "win")
         wr = wins / n
-        cum_R = sum(t.get("R", 0.0) for t in recent)
+        cum_R = sum(t.get("R", 0.0) for t in voted)
         # ④ 仅窗口内样本充足且转负时才门控
         gated = (wr < breakeven_wr) or (cum_R < 0)
         reason = []
@@ -442,6 +514,7 @@ def compute_symbol_gates(window_n: int = 10, min_trades: int = 5, breakeven_wr: 
         gates[sym] = {
             "gated": gated,
             "n": n,
+            "n_daily": n_daily,
             "win_rate": round(wr, 3),
             "cum_R": round(cum_R, 3),
             "reason": "；".join(reason) if reason else "正常",
@@ -656,6 +729,30 @@ def attach_dim_votes(trades: list):
         t["dim_votes"] = dv
 
 
+def _pending_alert(pending_count: int) -> dict:
+    """pending 池规模告警（只提示，不清理）。"""
+    warn_at = int(PENDING_ALERT_THRESHOLD * PENDING_WARN_RATIO)
+    if pending_count >= PENDING_ALERT_THRESHOLD:
+        level = "alert"
+        msg = (
+            f"pending 池 {pending_count} 条 ≥ 阈值 {PENDING_ALERT_THRESHOLD}："
+            "判定链路可能卡住（数据不足/精度降级），胜率样本无法积累，需人工介入排查"
+        )
+    elif pending_count >= warn_at:
+        level = "warn"
+        msg = f"pending 池 {pending_count} 条 已达阈值 {PENDING_ALERT_THRESHOLD} 的 {PENDING_WARN_RATIO:.0%}，注意增长趋势"
+    else:
+        level = "ok"
+        msg = f"pending 池 {pending_count} 条，正常（阈值 {PENDING_ALERT_THRESHOLD}）"
+    return {
+        "threshold": PENDING_ALERT_THRESHOLD,
+        "warn_at": warn_at,
+        "triggered": level != "ok",
+        "level": level,
+        "msg": msg,
+    }
+
+
 def main():
     if os.path.exists(REPORT_JSON):
         with open(REPORT_JSON, encoding="utf-8") as f:
@@ -765,6 +862,7 @@ def main():
             "new_scored": len(new_trades),
             "skipped_invalid": skipped,
             "pending_count": pending_count,
+            "pending_alert": _pending_alert(pending_count),
             "backfilled_snapshots": n_backfill,
             "roll_skipped_total": roll_skipped_total,
             "cumulative_done": agg["total"],
@@ -797,6 +895,9 @@ def main():
     print(f"本次新增已判定 : {s['new_scored']}")
     print(f"跳过(无效)     : {s['skipped_invalid']}")
     print(f"仍 pending      : {s['pending_count']} (下次自动重评)")
+    _pa = s.get("pending_alert") or {}
+    if _pa.get("triggered"):
+        print(f"  ⚠ {_pa.get('level', '').upper()}: {_pa.get('msg')}")
     print(f"补拍K线快照   : {s['backfilled_snapshots']} 笔历史交易 (确定性固化, 不改outcome)")
     print(f"换月跳空跳过   : {s['roll_skipped_total']} 根 (P0-2 修复后剔除的展期伪触发)")
     print(f"累计已判定     : {s['cumulative_done']}")

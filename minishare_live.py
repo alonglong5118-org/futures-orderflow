@@ -35,6 +35,30 @@ import time
 from datetime import datetime
 
 import pandas as pd
+import requests
+
+# 2026-11-20: 新浪期货快照（替代已停推的 minishare rt_fut_k）
+SINA_URL = "http://hq.sinajs.cn/list="
+SINA_HEADERS = {
+    "Referer": "https://finance.sina.com.cn",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+}
+# 源新鲜度守卫阈值：快照 ts 落后 _last_ts_seen 超过该秒数视为源停推
+STALE_SECONDS = 300
+
+
+def _parse_dt(s):
+    """解析行情时间戳字符串（秒/微秒两种常见格式）；失败返回 None。"""
+    s = str(s or "").strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -220,6 +244,10 @@ def _authoritative_contracts():
 
 _poll_interval = 60
 BARS_CACHE = os.path.join(HERE, "live_bars.json")
+# 2026-11-20: live_bars.json 在此之前的历史 bar 全部由「停推死价 + 本机时钟切桶」产生，
+# 实测 99.1% 不可信（OHLC 四值全等、volume=0、close 是三日前死价）。加载时一律丢弃，
+# 让指标从真实数据重新积累。清空只影响 T 面指标（会短暂数据不足），不影响盯市与风控。
+BARS_VALID_SINCE = "2026-11-20 22:00:00"
 
 
 def _load_token():
@@ -307,8 +335,15 @@ class MinishareLiveFeed:
         self.bars = {}
         self.last_bar_minute = {}
         self.flow = {}
+        # 2026-11-20: 新浪成交量是「分交易日累计量」（vol 字段），5m bar 需要增量。
+        # sym -> 上一轮累计量(float)。注意：只服务 bar 的 volume，C_flow 仍传累计量。
+        self._cum_vol = {}
         self._mapped = False  # 是否已从 rt_fut_k 自动发现映射
         self._prefix_top2 = {}  # prefix -> [主力, 次主力] 合约代码（防抖用）
+        # 2026-11-20: 数据源新鲜度状态 —— 源停推时置 True 并拒绝覆盖 last_snap，
+        # 避免旧价被当成新价继续铺平盘假 K 线（minishare 停推曾潜伏两天）。
+        self.source_stale = False
+        self._last_ts_seen = None  # 上一轮被接受的最新快照时间戳（datetime）
         self._init_from_cache()
         self._auth = _authoritative_contracts()  # 生效交割合约映射（动态：主力/次主力/固定），供 poll 安全阀使用
         # 若已有持久化的主力合约缓存，启动时即应用（避免首轮 poll 前的空窗）
@@ -542,16 +577,35 @@ class MinishareLiveFeed:
         try:
             if os.path.exists(BARS_CACHE):
                 d = json.load(open(BARS_CACHE))
+                _dropped = 0
+                _kept = 0
                 for s in self.sym2code:
                     if s in d and d[s]:
-                        self.bars[s] = d[s]
-                        for b in self.bars[s]:
+                        raw = d[s]
+                        # 2026-11-20: 消毒。BARS_VALID_SINCE 之前的历史 bar 全部由
+                        # 「停推死价 + 本机时钟切桶」产生（OHLC 四值全等、volume=0），
+                        # 混在序列里会被 T 面指标当成真实平盘趋势。这里一律丢弃，
+                        # 只保留源推正常后产出的真实 bar。date 统一为
+                        # "YYYY-MM-DD HH:MM:SS"，用字符串比较即可（str 包裹防 Timestamp）。
+                        bars = [b for b in raw if str(b.get("date")) >= BARS_VALID_SINCE]
+                        _dropped += len(raw) - len(bars)
+                        _kept += len(bars)
+                        if not bars:
+                            # 全是脏数据：保持 self.bars[s] 为空列表、last_bar_minute 为 None，
+                            # 不塞任何占位 bar（否则桶判定会拿假末根分钟数误判）。
+                            continue
+                        for b in bars:
                             try:
                                 b["date"] = pd.to_datetime(b["date"])
                             except Exception:
                                 pass
-                        if self.bars[s]:
-                            self.last_bar_minute[s] = pd.to_datetime(d[s][-1]["date"])
+                        self.bars[s] = bars
+                        self.last_bar_minute[s] = pd.to_datetime(bars[-1]["date"])
+                if _dropped or _kept:
+                    print(
+                        f"[minishare_live] 缓存消毒：丢弃 {_dropped} 根 22:00 前的死价 bar，"
+                        f"保留 {_kept} 根真实 bar"
+                    )
         except Exception:
             pass
 
@@ -560,7 +614,11 @@ class MinishareLiveFeed:
             d = {}
             for s in self.sym2code:
                 if s in self.bars:
-                    d[s] = self.bars[s]
+                    # 2026-11-20: 落盘前按 bar 时间升序重排并截断 200 根。旧死价时代的
+                    # 残余 bar（如 si/lc 的 15:00）会混在今日夜盘 bar 之后，写出的序列
+                    # 变成 21:40 → 21:45 → 15:00，时间轴非单调。只排序副本，不改
+                    # self.bars（内存里保持 append 顺序，不影响实时桶判定）。
+                    d[s] = sorted(self.bars[s], key=lambda b: str(b.get("date")))[-200:]
             json.dump(d, open(BARS_CACHE, "w"), default=str)
         except Exception:
             pass
@@ -748,8 +806,195 @@ class MinishareLiveFeed:
         """返回该品种当前生效的可交割合约代码（如 'RB2610'），供前端展示合约名。"""
         return normalize_contract_code(self.sym2code.get(sym) or "")
 
+    # ── 新浪期货快照（2026-11-20 接入，替代停推的 minishare rt_fut_k）──
+    def _poll_sina(self):
+        """一次拉全部已映射品种的新浪期货快照，返回 {sym: snap}（与 last_snap 完全同构）。
+        接口：GET http://hq.sinajs.cn/list=nf_<合约>,...  响应为 GBK，必须带 Referer。
+        任一字段解析失败 / 该行为空 `="";` → 跳过该品种，绝不塞 0（0 会把死价伪装成跌停）。"""
+        codes = [c for c in dict.fromkeys(self.sym2code.values()) if c]
+        if not codes:
+            return {}
+        # 一个合约可能对应多个品种别名（如 SA / SA01 都钉 SA2701），code2sym 只留最后一个，
+        # 这里按合约反查全部 sym，避免别名品种永远拿不到快照被判「冻结」。
+        code2syms = {}
+        for _sym, _code in self.sym2code.items():
+            code2syms.setdefault(normalize_contract_code(_code), []).append(_sym)
+        url = SINA_URL + ",".join("nf_" + str(c) for c in codes)
+        try:
+            resp = requests.get(url, headers=SINA_HEADERS, timeout=10)
+            text = resp.content.decode("gbk", errors="ignore")
+        except Exception as e:
+            print(f"[sina_live] 拉取失败: {e}")
+            return {}
+
+        snaps = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if not line.startswith("var hq_str_nf_"):
+                continue
+            try:
+                head, payload = line.split("=", 1)
+                raw_code = head[len("var hq_str_nf_"):].strip()
+                payload = payload.strip().rstrip(";").strip().strip('"')
+                if not payload:
+                    continue  # 该合约无数据（="";）
+                f = payload.split(",")
+                if len(f) < 18:
+                    continue
+                syms = code2syms.get(normalize_contract_code(raw_code)) or []
+                if not syms:
+                    continue
+                close = float(f[8])       # 最新价（盘中 close[5] 恒为 0，不可用）
+                open_ = float(f[2])
+                high = float(f[3])
+                low = float(f[4])
+                vol = float(f[14])        # 成交量
+                oi = float(f[13])         # 持仓量
+                pre_close = float(f[10])  # 昨结算
+                date_s, time_s = f[17].strip(), f[1].strip()
+                # 新浪 date 形如 2026-11-20（个别市场可能给 20261120），统一成 YYYY-MM-DD
+                if re.fullmatch(r"\d{8}", date_s):
+                    date_s = f"{date_s[:4]}-{date_s[4:6]}-{date_s[6:]}"
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_s):
+                    continue
+                if not (len(time_s) == 6 and time_s.isdigit()):
+                    continue
+                ts = f"{date_s} {time_s[:2]}:{time_s[2:4]}:{time_s[4:]}"
+            except (ValueError, IndexError):
+                continue
+            for sym in syms:
+                snaps[sym] = {
+                    "close": close,
+                    "open": open_,
+                    "high": high,
+                    "low": low,
+                    "vol": vol,
+                    "oi": oi,
+                    "ts": ts,
+                    "pre_close": pre_close,
+                    "name": f[16] or f[0] or sym,
+                }
+        return snaps
+
+    def _delta_vol(self, sym, cum):
+        """把新浪快照的「分交易日累计成交量」换算成本轮增量（手）。
+        新浪 vol 字段是累计量：夜盘 21:00 开盘归零重新累计，但 ts 的日期字段仍为当天，
+        所以日切**不能用 ts 日期判定**，只能用「累计量是否变小」。规则：
+          - cum 为空/非数值      → 0，且不推进状态（下一轮重新对齐）
+          - 本轮首次见到该品种   → 0，并记下 cum（进程若在日盘收盘后启动，首轮 cum 已是
+                                   全天累计，直接返回会把 24 万手灌进一根 5m bar）
+          - cum < prev（归零）   → 返回 cum（新交易时段的真实成交）
+          - cum >= prev          → cum - prev
+        任何异常一律返回 0，绝不抛出（成交量坏了不能拖垮行情主循环）。"""
+        try:
+            if cum is None:
+                return 0.0
+            c = float(cum)
+            prev = self._cum_vol.get(sym)
+            if prev is None:
+                self._cum_vol[sym] = c
+                return 0.0
+            self._cum_vol[sym] = c
+            if c < prev:
+                return c
+            return c - prev
+        except Exception:
+            return 0.0
+
+    def _apply_snaps(self, snaps):
+        """把一轮快照聚合进 last_snap / 5m 桶 / C_flow，并做源新鲜度守卫。
+        返回 True = 本轮已接收；False = 源陈旧（已告警，last_snap 保持上一轮不被覆盖）。"""
+        if not snaps:
+            return False
+        parsed = {}
+        for sym, s in snaps.items():
+            try:
+                parsed[sym] = datetime.strptime(s["ts"], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                parsed[sym] = None  # ts 不可解析：只更新快照，不参与桶聚合/新鲜度判定
+        ts_list = [d for d in parsed.values() if d is not None]
+        if not ts_list:
+            print("[minishare_live] ⚠️ 源陈旧：本轮快照无有效时间戳，本轮回绝收")
+            self.source_stale = True
+            return False
+        max_ts = max(ts_list)
+        # 源新鲜度守卫：ts 落后上一轮 >300s，或 ts 长时间原地不动（停推）→ 拒收
+        _seen = self._last_ts_seen
+        if _seen is not None:
+            lag = (_seen - max_ts).total_seconds()
+            still = time.time() - getattr(self, "_ts_adv_mono", time.time())
+            if lag > STALE_SECONDS or (max_ts <= _seen and still > STALE_SECONDS):
+                print(
+                    f"[minishare_live] ⚠️ 源陈旧：最新 ts={max_ts:%Y-%m-%d %H:%M:%S}，"
+                    f"已 {int(max(lag, still))}s 未前进，本轮回绝收"
+                )
+                self.source_stale = True
+                return False
+        if _seen is None or max_ts > _seen:
+            self._last_ts_seen = max_ts
+            self._ts_adv_mono = time.time()
+        self.source_stale = False
+
+        for sym, s in snaps.items():
+            close, oi, vol, ts = s["close"], s["oi"], s["vol"], s["ts"]
+            # 2026-10-15 报价新鲜度追踪：源 ts 变化才认为行情真正更新
+            _prev_ts = str((self.last_snap.get(sym) or {}).get("ts", ""))
+            if _prev_ts != ts or sym not in self.snap_upd_mono:
+                if sym not in self.snap_upd_mono:
+                    print(f"[minishare_live] 报价新鲜度追踪启用: {sym} ts={ts!r}")
+                self.snap_upd_mono[sym] = time.time()
+            self.last_snap[sym] = dict(s)
+            # 5m 桶：按【源时间戳】切分（旧实现用 datetime.now()，源停推时会把同一死价
+            # 铺成一串 OHLC 全等的平盘假 K 线，故障因此潜伏两天）
+            snap_dt = parsed.get(sym)
+            if snap_dt is not None:
+                # 每轮每品种只算一次增量，新桶/同桶都复用同一个 delta（重复调用会把
+                # 状态推进两次，导致增量翻倍或丢量）
+                delta = self._delta_vol(sym, vol)
+                bucket = snap_dt.replace(
+                    minute=snap_dt.minute - snap_dt.minute % 5, second=0, microsecond=0
+                )
+                lbm = self.last_bar_minute.get(sym)
+                if lbm != bucket:
+                    _last = (self.bars.get(sym) or [{}])[-1].get("date")
+                    if _last is not None and str(bucket) < str(_last):
+                        # 防复发守卫：源时间戳倒退（如午休前 11:25 快照混进夜盘序列）时，
+                        # 不允许把更早的 bar 追加到序列尾部 —— 会打断时间轴单调性，指标
+                        # 按末根取值就会读到旧价。跳过本品种本轮桶聚合，只更新快照。
+                        pass  # 不动 last_bar_minute，不 append
+                    else:
+                        self.last_bar_minute[sym] = bucket
+                        self.bars.setdefault(sym, [])
+                        self.bars[sym].append(
+                            {"date": bucket, "open": close, "high": close, "low": close,
+                             "close": close, "volume": delta, "oi": oi}
+                        )
+                elif sym in self.bars and self.bars[sym]:
+                    b = self.bars[sym][-1]
+                    b["high"] = max(b["high"], close)
+                    b["low"] = min(b["low"], close)
+                    b["close"] = close
+                    b["oi"] = oi
+                    b["volume"] = (b.get("volume") or 0) + delta
+            # C_flow 差分
+            if sym in self.flow:
+                self.flow[sym].push_minishare(close, oi, vol, time.time())
+            # 只保留近 200 根 5m
+            if sym in self.bars and len(self.bars[sym]) > 200:
+                self.bars[sym].pop(0)
+        return True
+
     def poll(self):
-        """拉一次 rt_fut_k，更新快照/5m 桶/C_flow。返回 {sym: snap}。"""
+        """拉一次行情，更新快照/5m 桶/C_flow。返回 {sym: snap}。
+        2026-11-20: minishare rt_fut_k 停推（停在 2026-11-18 11:30），改走新浪快照。
+        顺序：先试新浪；新浪无数据再退回 minishare（两条分支都有源新鲜度守卫）。源陈旧则置
+        source_stale 且不覆盖 last_snap。"""
+        _snaps = self._poll_sina()
+        if _snaps:
+            if self._apply_snaps(_snaps):
+                self._save_bars()
+            return self.last_snap
+        # ── 以下为 minishare rt_fut_k 兜底分支（同样带新鲜度守卫 + 源 ts 切桶）──
         if self.pro is None:
             return {}
         try:
@@ -760,6 +1005,22 @@ class MinishareLiveFeed:
         if df is None or getattr(df, "empty", True):
             return {}
 
+        # 2026-11-20: 兜底分支同样要过新鲜度守卫。新浪被限流时 _poll_sina 返回 {}，
+        # 若此处不校验，停在 2026-11-18 11:30 的死数据会被原样写回 last_snap，
+        # 故障当场复发且无告警（守卫只挡新路、不挡坏路 = 设计反了）。
+        _tss = [d for d in (_parse_dt(v) for v in df.get("date", [])) if d is not None]
+        if _tss:
+            _mx = max(_tss)
+            _lag = (datetime.now() - _mx).total_seconds()
+            if _lag > STALE_SECONDS:
+                print(
+                    f"[minishare_live] ⚠️ rt_fut_k 源陈旧：最新 ts={_mx:%Y-%m-%d %H:%M:%S}，"
+                    f"已 {int(_lag)}s 未前进，拒收整批"
+                )
+                self.source_stale = True
+                return self.last_snap  # 不写快照、不动桶、不落盘
+        self.source_stale = False
+
         # 首次拉取：自动发现所有品种映射
         if not self._mapped:
             self._discover(df)
@@ -768,9 +1029,6 @@ class MinishareLiveFeed:
         self._refresh_hot_contracts(df)
         self._apply_hot_contracts()
 
-        now = datetime.now()
-        bucket = now.replace(second=0, microsecond=0)
-        bucket = bucket - pd.Timedelta(minutes=bucket.minute % 5)
         for _, r in df.iterrows():
             # P3（2026-08-14）：数据源常返回 3 位缩略合约（FG609），而映射表/权威合约
             # 已规范为 4 位（FG2609）。必须先归一化再查映射与安全阀，否则玻璃/纯碱/苹果
@@ -812,21 +1070,36 @@ class MinishareLiveFeed:
                 "pre_close": _pc,
                 "name": str(r.get("name", sym)),
             }
-            # 5m 桶聚合
-            lbm = self.last_bar_minute.get(sym)
-            if lbm != bucket:
-                self.last_bar_minute[sym] = bucket
-                self.bars.setdefault(sym, [])
-                self.bars[sym].append(
-                    {"date": bucket, "open": close, "high": close, "low": close, "close": close, "volume": 0, "oi": oi}
+            # 5m 桶聚合：按【该行源 ts】切分（旧实现用 datetime.now()，源停推时会把
+            # 同一死价铺成一串 OHLC 全等的平盘假 K 线）；ts 不可解析则只更新快照，不造假 bar
+            snap_dt = _parse_dt(ts)
+            if snap_dt is not None:
+                # 每轮每品种只算一次增量，供新桶/同桶复用（同 _apply_snaps）
+                delta = self._delta_vol(sym, vol)
+                bucket = snap_dt.replace(
+                    minute=snap_dt.minute - snap_dt.minute % 5, second=0, microsecond=0
                 )
-            else:
-                if sym in self.bars and self.bars[sym]:
-                    b = self.bars[sym][-1]
-                    b["high"] = max(b["high"], close)
-                    b["low"] = min(b["low"], close)
-                    b["close"] = close
-                    b["oi"] = oi
+                lbm = self.last_bar_minute.get(sym)
+                if lbm != bucket:
+                    _last = (self.bars.get(sym) or [{}])[-1].get("date")
+                    if _last is not None and str(bucket) < str(_last):
+                        # 防复发守卫（兜底分支同上）：源时间戳倒退时跳过本轮桶聚合，
+                        # 不动 last_bar_minute、不 append 更早的 bar。
+                        pass
+                    else:
+                        self.last_bar_minute[sym] = bucket
+                        self.bars.setdefault(sym, [])
+                        self.bars[sym].append(
+                            {"date": bucket, "open": close, "high": close, "low": close, "close": close, "volume": delta, "oi": oi}
+                        )
+                else:
+                    if sym in self.bars and self.bars[sym]:
+                        b = self.bars[sym][-1]
+                        b["high"] = max(b["high"], close)
+                        b["low"] = min(b["low"], close)
+                        b["close"] = close
+                        b["oi"] = oi
+                        b["volume"] = (b.get("volume") or 0) + delta
             # C_flow 差分
             if sym in self.flow:
                 self.flow[sym].push_minishare(close, oi, vol, time.time())
