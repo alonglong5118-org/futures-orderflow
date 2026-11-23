@@ -2,7 +2,7 @@
 -r requirements.txt
 
 # 测试
-coverage>=7.0
+coverage>=7.16.2
 hypothesis>=6.0  # property-based testing
 
 # 遗传算法（测试依赖）
