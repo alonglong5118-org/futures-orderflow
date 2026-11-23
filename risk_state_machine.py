@@ -25,6 +25,8 @@ import os
 import threading
 import time
 
+from dir_utils import dir_sign
+
 # ============ 风控闸参数（da哥 原值） ============
 RED_LINE = 0.45  # 保证金使用率红线（禁新开）
 DAILY_LOSS_STOP = 0.05  # 当日亏损停机线（强制冻结）
@@ -38,6 +40,58 @@ LOSS_DECAY = 0.8  # 连续止损手数缩放
 LOSS_FLOOR = 0.2  # 手数缩放封底
 CONSEC_WARN = 2  # 连续止损 ≥2 笔 → WARNING 软警告（手数降档）
 CONSEC_LOCK = 3  # 连续止损 ≥3 笔 → 当日冻结（LOCKED，禁新开，跨日解除）
+
+# ============ 日内亏损绝对额封顶（铁律「日内回撤 ≤5% / max_loss=2000 元」）============
+# 背景：原实现只有 5% 比例线，没有绝对额线 —— 铁律的「2000 元」那一半从未落地。
+# 设计（重要，避免两种误实现）：
+#   ✗ 固定 2000 元：权益上到百万级后，2000 元 = 0.2%，一笔正常浮亏就冻结 → 荒谬死线。
+#   ✗ max(绝对额, 权益×5%)：比例额恒 ≥ 绝对额，绝对额线永远不可能先触发 → 死代码。
+#   ✓ 等比缩放：2000 元是**10 万权益基准下**的口径（=2%），权益变化时按比例放大，
+#     于是 100 万权益 → 2 万元封顶，始终比 5% 比例线更严 → 绝对额线成为主封顶线，
+#     5% 退化为 equity 缺失时的后备保险。符合铁律「两条线都要在」的语义。
+# 比例线（5% 软闸/ 8% 硬熔断）本身完全不动，两条线任一触发即冻结。
+MAX_DAILY_LOSS_AMT = 2000.0  # 铁律：日内最大亏损绝对额（元，@基准权益）
+MAX_DAILY_LOSS_AMT_REF_EQUITY = 100000.0  # 基准权益（trade_config 的小资金验证模式 10 万）
+# 硬熔断侧倍数：绝对额硬线 = 有效封顶 × 此倍数（1.6 ≈ 2000元软线 / 3200元硬线，与 5%→8% 的比例间距同构）
+KILL_ABS_LOSS_MULT = 1.6
+
+
+def _load_abs_loss_cap():
+    """从 trade_config.json 读取日内绝对亏损封顶（risk_gate.daily_loss_abs_max）。"""
+    global MAX_DAILY_LOSS_AMT
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trade_config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, encoding="utf-8") as f:
+                gate = (json.load(f) or {}).get("risk_gate") or {}
+            v = gate.get("daily_loss_abs_max")
+            if isinstance(v, (int, float)) and float(v) > 0:
+                MAX_DAILY_LOSS_AMT = float(v)
+                print(f"[risk_fsm] 加载 daily_loss_abs_max: {MAX_DAILY_LOSS_AMT:.0f} 元")
+    except Exception:
+        pass
+
+
+_load_abs_loss_cap()
+
+
+def effective_daily_loss_cap(base_equity, pct_stop=DAILY_LOSS_STOP):
+    """返回本次生效的日内亏损封顶额（元）与来源标记。
+    口径：2000 元是**10 万基准权益**下的额度（=2%），随权益等比缩放，并被夹在
+    权益×pct_stop 之内 —— 既不因权益缩水而绝对额过大、也不因权益膨胀而变成 0.2%
+    的误杀线，且**保证不比比例线更宽松**（双封顶语义：绝对额线是主封顶线）。"""
+    amt = float(MAX_DAILY_LOSS_AMT or 0)
+    try:
+        _eq = float(base_equity or 0)
+    except Exception:
+        _eq = 0.0
+    if _eq <= 0 or amt <= 0:
+        return amt, "abs_no_equity"
+    scaled = amt * (_eq / float(MAX_DAILY_LOSS_AMT_REF_EQUITY or 1.0))
+    cap_pct = _eq * float(pct_stop or 0)
+    if scaled > cap_pct:
+        return cap_pct, "pct_cap"
+    return scaled, "abs_scaled"
 
 
 # 可配置化：从 trade_config.json 读取 consec_loss_gate，缺省回退上述常量
@@ -61,6 +115,29 @@ def _load_consec_gate():
 
 
 _load_consec_gate()
+
+# ============ 熔断自动恢复开关（P1-1） ============
+# 默认 False：硬熔断（15%回撤/8%日亏/6连亏，或 10%回撤休息熔断）一律需人工在面板解除，
+# 符合「永不自动恢复」的安全语义。仅当 trade_config.json 显式设 kill_switch.auto_recover=true
+# 时才启用 _maybe_recover 自动恢复（冷却满 + 权益/连亏收敛）。
+KILL_AUTO_RECOVER = False
+
+
+def _load_kill_switch_config():
+    """从 trade_config.json 读取 kill_switch 配置（自动恢复开关）。"""
+    global KILL_AUTO_RECOVER
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trade_config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, encoding="utf-8") as f:
+                cfg = json.load(f) or {}
+            ks = cfg.get("kill_switch") or {}
+            KILL_AUTO_RECOVER = bool(ks.get("auto_recover", False))
+    except Exception:
+        pass
+
+
+_load_kill_switch_config()
 
 # ============ 分品种专项风控（回测结论 2026-08-16） ============
 # 回测(全市场5m出场 + 红线①探针)显示：
@@ -121,6 +198,17 @@ def risk_guard(
     if daily_loss_pct >= daily_loss_stop:
         status = "LOCK"
         reasons.append(f"当日亏损 {daily_loss_pct * 100:.1f}% 达 {daily_loss_stop * 100:.0f}% 停机线，强制冻结")
+    # 铁律「日内 ≤5% / max_loss=2000 元」双封顶：比例线之外再加绝对额线。
+    # 有效封顶取 max(绝对额, 权益×比例下限)，高权益下不误杀（见 effective_daily_loss_cap）。
+    daily_loss_abs = max(0.0, -daily_pnl)
+    cap_amt, cap_src = effective_daily_loss_cap(_base_eq, daily_loss_stop)
+    if cap_amt > 0 and daily_loss_abs >= cap_amt:
+        status = "LOCK"
+        reasons.append(
+            f"当日亏损 {daily_loss_abs:.0f} 元达封顶 {cap_amt:.0f} 元"
+            + f"（{cap_src}）"
+            + "，强制冻结"
+        )
     if status == "OK":
         if usage >= warn_line:
             status = "WARN"
@@ -137,6 +225,9 @@ def risk_guard(
         "status": status,
         "usage": round(usage, 3),
         "daily_loss_pct": round(daily_loss_pct, 3),
+        "daily_loss_abs": round(daily_loss_abs, 2),
+        "daily_loss_cap_amt": round(cap_amt, 2),
+        "daily_loss_cap_src": cap_src,
         "reasons": reasons,
         "symbol_override": ov,
     }
@@ -167,6 +258,16 @@ class RiskStateMachine:
         self.daily_loss_locked = False
         self.consec_lock = False  # 当日连续止损冻结标记（跨日解除，类似 daily_loss_locked）
         self._lock = threading.RLock()  # 可重入：update() 内调用 summary() 不会死锁
+        # 多账户隔离：本状态机关联的 KillSwitch 实例。None 表示回退全局 KILL（default 账户）。
+        self._kill = None
+
+    def _get_kill(self):
+        """返回本状态机关联的 KillSwitch；未关联则回退全局 KILL（default 账户）。
+
+        修复实盘/模拟盘交叉：summary() 与 scale() 原硬编码 KILL（default 账户），
+        导致 /api/risk?account=live 泄漏 default 账户的熔断指标。
+        """
+        return getattr(self, "_kill", None) or KILL
 
     def mark_loss(self):
         with self._lock:
@@ -179,11 +280,21 @@ class RiskStateMachine:
             self.consec_lock = False  # 跨日解除当日连续止损冻结
 
     def scale(self):
-        if _kill_halted() or self.state == self.LOCKED:
+        if self._get_kill().halted or self.state == self.LOCKED:
             return 0.0
         base = 0.5 if self.state == self.WARNING else 1.0
         loss_factor = max(LOSS_FLOOR, LOSS_DECAY**self.consec_losses)
         return round(base * loss_factor, 3)
+
+    # 峰值权益重基线容差：|equity - peak| / peak 超过此比例，视为「账户被外部重置」
+    # （如人工按券商截图对齐账户、重新初始化模拟盘），此时旧峰值已失效，
+    # 必须重新基线，否则 peak_equity 会永久停留在旧值，
+    # 导致 effective_daily_loss_cap 一直按旧权益算日亏封顶（实测踩中：
+    # 账户被重置到 1,003,075，peak 仍是从risk_state.json 恢复的 1,018,785
+    # → 封顶显示 20,375.70 而非 20,061.50）。
+    # 取 1%：实测盘中权益波动远小于 1%，而人工重置/出入金通常在 0.5% 以上，
+    # 1% 既能捕获真实重置，又不会被正常波动误触发。
+    PEAK_REBASE_TOL = 0.01
 
     def update(self, rg, equity=None):
         with self._lock:
@@ -194,6 +305,19 @@ class RiskStateMachine:
             if equity:
                 if self.peak_equity is None or equity > self.peak_equity:
                     self.peak_equity = equity
+                else:
+                    # 权益显著低于峰值 → 疑似外部重置/ 出金，重新基线
+                    try:
+                        _pk = float(self.peak_equity or 0)
+                        _eq = float(equity or 0)
+                        if _pk > 0 and _eq > 0 and abs(_pk - _eq) / _pk > self.PEAK_REBASE_TOL:
+                            print(
+                                f"[risk_fsm] 峰值权益重基线: {_pk:.0f} → {_eq:.0f}"
+                                f"（偏离 {abs(_pk - _eq) / _pk:.1%} > {self.PEAK_REBASE_TOL:.0%}，判定账户被重置）"
+                            )
+                            self.peak_equity = _eq
+                    except Exception:
+                        pass
             if status == "LOCK":
                 if self.state != self.LOCKED:
                     self.state = self.LOCKED
@@ -245,6 +369,8 @@ class RiskStateMachine:
             return self.summary()
 
     def summary(self):
+        # 封顶额与其来源一次算出，供下方多处使用（避免重复调用 + 保证同一快照口径一致）
+        _eff_cap = effective_daily_loss_cap(self.peak_equity or 0)
         with self._lock:
             d = {
                 "state": self.state,
@@ -254,10 +380,18 @@ class RiskStateMachine:
                 "lock_reason": self.lock_reason,
                 "daily_loss_pct": round(self.daily_loss_pct, 4),
                 "daily_loss_stop": DAILY_LOSS_STOP,
+                # 绝对额封顶（铁律 max_loss=2000 元）——面板可见，避免只看到比例线
+                "daily_loss_cap_amt": round(_eff_cap[0], 2),
+                # 封顶来源标记（abs_scaled=等比缩放 / pct_cap=权益×比例 / abs_floor / abs_no_equity）
+                # 面板据此显示"封顶依据"，避免用户困惑「明明2万，为何写5%」
+                "daily_loss_cap_src": _eff_cap[1],
+                "daily_loss_abs_max": MAX_DAILY_LOSS_AMT,
+                # 基准权益（等比缩放锚点，面板用于说明"2000元 是哪个权益口径下的2000"）
+                "daily_loss_cap_ref_equity": MAX_DAILY_LOSS_AMT_REF_EQUITY,
                 "updated": time.strftime("%H:%M:%S"),
             }
             try:
-                d["killswitch"] = KILL.summary()
+                d["killswitch"] = self._get_kill().summary()
                 if d["killswitch"].get("halted"):
                     d["state"] = "HALTED"  # 面板显示最高优先级状态
             except Exception:
@@ -280,18 +414,19 @@ def _pos_lots(p):
 
 
 def _pos_dir(p):
-    """返回 +1 多 / -1 空 / 0 未知。"""
+    """返回 +1 多 / -1 空 / 0 未知。
+
+    方向判定统一委托 dir_utils.dir_sign（全仓库唯一真源）；本函数只负责
+    「按 direction/dir/side/方向 多 key 回退查找」这一层，未知值继续找下一个
+    key 的语义不变。
+    """
     for k in ("direction", "dir", "side", "方向"):
         v = p.get(k)
         if v in (None, ""):
             continue
-        if isinstance(v, (int, float)):
-            return 1 if v > 0 else (-1 if v < 0 else 0)
-        s = str(v).strip().lower()
-        if s in ("long", "buy", "多", "做多", "多头", "1", "+1"):
-            return 1
-        if s in ("short", "sell", "空", "做空", "空头", "-1"):
-            return -1
+        s = dir_sign(v)
+        if s != 0:
+            return s
     return 0
 
 
@@ -328,7 +463,8 @@ class KillSwitch:
     状态落盘 killswitch_state.json，进程重启后仍然是熔断态（防「重启洗白」）。
     """
 
-    def __init__(self, path=KILL_STATE_FILE):
+    def __init__(self, path=KILL_STATE_FILE, account_id=None):
+        self.account_id = account_id or "default"
         self.path = path
         self.halted = False
         self.reason = ""
@@ -339,7 +475,9 @@ class KillSwitch:
         self.history = []  # 历次熔断/解除记录
         self.ack = False  # 用户是否已确认（已按清单全平）
         self._opening_equity = None  # P0-7 fix: 日初权益(固定值)，稳定风控阈值
+        self._opening_equity_date = None  # 日初锚点所属交易日(YYYY-MM-DD)，重启恢复用
         self.reset_at = None  # 最近一次人工解除熔断的时间戳
+        self.force_rest_until = None  # P0-1: 10%回撤休息熔断的强制休息截止时间戳（None=永久熔断）
         self._lock = threading.RLock()
         self._load()
 
@@ -358,7 +496,9 @@ class KillSwitch:
                 self.history = d.get("history", []) or []
                 self.ack = bool(d.get("ack"))
                 self._opening_equity = d.get("_opening_equity")
+                self._opening_equity_date = d.get("_opening_equity_date")
                 self.reset_at = d.get("reset_at")
+                self.force_rest_until = d.get("force_rest_until")
         except Exception as e:
             print(f"[熔断] 状态载入失败(忽略): {repr(e)[:80]}")
 
@@ -377,7 +517,9 @@ class KillSwitch:
                         "history": self.history[-50:],
                         "ack": self.ack,
                         "_opening_equity": self._opening_equity,
+                        "_opening_equity_date": self._opening_equity_date,
                         "reset_at": self.reset_at,
+                        "force_rest_until": self.force_rest_until,
                     },
                     f,
                     ensure_ascii=False,
@@ -402,6 +544,15 @@ class KillSwitch:
                 trig.append(f"账户自峰值回撤 {dd * 100:.1f}% ≥ 硬线 {KILL_DRAWDOWN * 100:.0f}%")
             if dlp >= KILL_DAILY_LOSS:
                 trig.append(f"当日亏损 {dlp * 100:.1f}% ≥ 硬线 {KILL_DAILY_LOSS * 100:.0f}%")
+            # 绝对额硬线：铁律 max_loss=2000 元同样要覆盖熔断侧（否则只在软闸生效）。
+            # 口径与risk_guard 一致：有效封顶取 max(绝对额, 权益×比例下限)。
+            _abs_loss = max(0.0, -float(daily_pnl or 0))
+            _cap_amt, _cap_src = effective_daily_loss_cap(_base_eq, KILL_DAILY_LOSS)
+            if _cap_amt > 0 and _abs_loss >= _cap_amt * KILL_ABS_LOSS_MULT:
+                trig.append(
+                    f"当日亏损 {_abs_loss:.0f} 元 ≥ 绝对额硬线 {_cap_amt * KILL_ABS_LOSS_MULT:.0f} 元"
+                    + f"（{_cap_src}）"
+                )
             if cl >= KILL_CONSEC_LOSSES:
                 trig.append(f"连续止损 {cl} 笔 ≥ 硬线 {KILL_CONSEC_LOSSES} 笔")
             self.metrics = {
@@ -418,6 +569,10 @@ class KillSwitch:
                 self.triggers = trig
                 self.reason = "；".join(trig)
                 self.triggered_at = time.time()
+                # P1-2 fix: 记录熔断瞬间的原始盈亏/权益/回撤，供 _maybe_recover 判断是否收敛
+                self.metrics["orig_daily_pnl_at_kill"] = float(daily_pnl or 0)
+                self.metrics["orig_equity_at_kill"] = float(equity or 0)
+                self.metrics["orig_drawdown_at_kill"] = round(dd, 4)
                 self.flatten_plan = build_flatten_plan(positions)
                 self.history.append(
                     {
@@ -433,7 +588,8 @@ class KillSwitch:
                 # 持续熔断中：刷新全平清单（可能又被动成交/部分平仓）
                 self.flatten_plan = build_flatten_plan(positions) or self.flatten_plan
             # P1-12 fix: 尝试自动恢复（熔断条件已解除 + 冷却足够）
-            if not trig and self.halted and self.ack:
+            # P1-1 fix: 仅当 kill_switch.auto_recover=true 才允许自动恢复（默认人工解除）
+            if not trig and self.halted and self.ack and KILL_AUTO_RECOVER:
                 self._maybe_recover(equity, peak_equity, daily_pnl, consec_losses)
             return {
                 "halted": self.halted,
@@ -462,6 +618,11 @@ class KillSwitch:
         if not (self.halted and self.ack):
             return
         now = time.time()
+        if not KILL_AUTO_RECOVER:
+            return
+        # P0-1: 10%回撤休息熔断需满 24h 强制休息期后才允许恢复
+        if self.force_rest_until and now < self.force_rest_until:
+            return
         if self.triggered_at and (now - self.triggered_at) < RECOVER_COOLDOWN_SEC:
             return
         # 条件 3: 权益未继续恶化
@@ -476,17 +637,20 @@ class KillSwitch:
         if consec_losses is not None and consec_losses > RECOVER_CONSEC_MAX:
             return
         # 所有条件满足 → 自动恢复
+        # P1-3 fix: 先缓存冷却秒数再重置 triggered_at，避免日志算成 now-0 的荒谬值
+        _cooled = int(now - self.triggered_at) if self.triggered_at else 0
         self.halted = False
         self.ack = False
         self.reason = ""
         self.triggers = []
         self.triggered_at = 0.0
         self.flatten_plan = []
+        self.force_rest_until = None
         self.history.append(
             {
                 "t": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "AUTO_RECOVER",
-                "note": f"熔断自动恢复（冷却{int(now - self.triggered_at)}s + 权益{equity:.0f} + 连亏{consec_losses}）",
+                "note": f"熔断自动恢复（冷却{_cooled}s + 权益{equity:.0f} + 连亏{consec_losses}）",
             }
         )
         self._save()
@@ -500,6 +664,52 @@ class KillSwitch:
                 self._save()
             return self.summary()
 
+    def force_halt(self, reason, positions=None, force_rest_until=None):
+        """P0-1: 外部强制熔断（10% 回撤硬熔断）。真正置 halted=True 并落盘，
+        使 get_combined_risk_scale / is_locked 立即拦截新开仓（修复原仅改内存 dict 的空转）。
+
+        force_rest_until: 时间戳；设置后代表「休息式」熔断，若开启自动恢复，
+        需等越过该时间点（休息期）才能解除。
+        """
+        with self._lock:
+            self.halted = True
+            self.ack = False
+            self.reason = reason
+            self.triggers = [reason]
+            self.triggered_at = time.time()
+            self.flatten_plan = build_flatten_plan(positions)
+            self.force_rest_until = float(force_rest_until) if force_rest_until else None
+            self.history.append(
+                {
+                    "t": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "event": "FORCE_HALT",
+                    "reason": reason,
+                }
+            )
+            self._save()
+            return self.summary()
+
+    def set_opening_equity(self, equity, date_str=None):
+        """P0-2/P1-4: 设置日初权益锚点（线程安全 + 落盘）。跨日重置时更新，稳定日亏阈值。
+
+        date_str: 日初锚点所属交易日标签(YYYY-MM-DD)。用于重启时判断持久化锚点是否仍属
+                  当前交易日，避免把「昨天的日初权益」错误恢复到「今天」。
+        """
+        with self._lock:
+            try:
+                eq = float(equity)
+            except Exception:
+                return
+            if eq > 0:
+                self._opening_equity = eq
+                if date_str is not None:
+                    self._opening_equity_date = date_str
+                self._save()
+
+    def opening_equity(self):
+        """返回日初权益锚点（供软层 risk_guard 统一日亏分母口径）。"""
+        return self._opening_equity
+
     def reset(self, note="人工解除", reset_peak_to=None):
         """人工解除熔断（唯一出口）。可顺便把峰值权益重置到当前，避免刚解除又被旧峰值秒杀。"""
         with self._lock:
@@ -510,6 +720,7 @@ class KillSwitch:
             self.reason = ""
             self.triggers = []
             self.flatten_plan = []
+            self.force_rest_until = None  # P0-1: 人工解除时清休息截止时间戳
             # 清除旧 metrics 快照：防止非熔断态检查误报"数据不新鲜"
             self.metrics = {"equity": 0, "peak_equity": 0, "drawdown": 0.0, "daily_loss_pct": 0.0, "consec_losses": 0}
             if was:
@@ -517,7 +728,7 @@ class KillSwitch:
             self._save()
             if reset_peak_to:
                 try:
-                    RISK_FSM.peak_equity = float(reset_peak_to)
+                    get_fsm(self.account_id).peak_equity = float(reset_peak_to)
                 except Exception:
                     pass
             return self.summary()
@@ -538,20 +749,90 @@ class KillSwitch:
                 },
                 "history": self.history[-10:],
             }
+            if self.force_rest_until:
+                d["force_rest_until"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.force_rest_until))
             if self.triggered_at:
                 d["triggered_at"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.triggered_at))
                 d["halted_min"] = round((time.time() - self.triggered_at) / 60, 1)
             return d
 
 
-# 全局单例（runner 全程共享）
+# 全局单例（default 账户，向后兼容）
 RISK_FSM = RiskStateMachine()
 KILL = KillSwitch()
 
+# ============ 多账户支持（2026-09-07） ============
+# 设计原则：
+#   · default 账户 → 沿用原全局单例 RISK_FSM / KILL，状态文件不变
+#   · 其他账户  → 按需创建实例，状态文件为 killswitch_state_{account_id}.json
+#   · 工厂函数 get_fsm / get_kill 负责按 account_id 缓存实例
+#   · 线程安全：用 _REGISTRY_LOCK 保护实例字典（实例内部自带 _lock）
 
-def _kill_halted():
+_REGISTRY_LOCK = threading.RLock()
+_FSM_REGISTRY = {}
+_KILL_REGISTRY = {}
+
+
+def _kill_state_file_for(account_id):
+    """按账户返回 killswitch 状态文件路径，default 沿用旧文件名。"""
+    if account_id == "default":
+        return KILL_STATE_FILE
+    return os.path.join(_HERE, f"killswitch_{account_id}.json")
+
+
+def get_fsm(account_id=None):
+    """获取指定账户的 RiskStateMachine 实例，不传则用 default。
+
+    default 账户直接返回全局单例 RISK_FSM（确保向后兼容）；
+    其他账户按需创建并缓存。"""
+    if account_id is None or account_id == "default":
+        return RISK_FSM
+    with _REGISTRY_LOCK:
+        fsm = _FSM_REGISTRY.get(account_id)
+        if fsm is None:
+            fsm = RiskStateMachine()
+            # 账户隔离：关联同账户的 KillSwitch（复用 get_kill 单例，避免同文件双实例写冲突）
+            fsm._kill = get_kill(account_id)
+            _FSM_REGISTRY[account_id] = fsm
+        return fsm
+
+
+def get_kill(account_id=None):
+    """获取指定账户的 KillSwitch 实例，不传则用 default。
+
+    default 账户直接返回全局单例 KILL（确保向后兼容）；
+    其他账户按需创建并缓存，状态文件按账户隔离。"""
+    if account_id is None or account_id == "default":
+        return KILL
+    with _REGISTRY_LOCK:
+        ks = _KILL_REGISTRY.get(account_id)
+        if ks is None:
+            ks = KillSwitch(path=_kill_state_file_for(account_id), account_id=account_id)
+            _KILL_REGISTRY[account_id] = ks
+        return ks
+
+
+def list_risk_accounts():
+    """列出所有已知风控账户（default + 有状态文件的账户）。"""
+    accounts = {"default"}
     try:
-        return bool(KILL.halted)
+        for fn in os.listdir(_HERE):
+            # 只匹配 killswitch_*.json（跳过默认 killswitch_state.json）
+            if fn.startswith("killswitch_") and fn.endswith(".json"):
+                aid = fn[len("killswitch_") : -len(".json")]
+                # 排除状态文件本身（killswitch_state.json → "state" 是误匹配）
+                if aid == "state":
+                    continue
+                if aid and not aid.endswith(".tmp") and not aid.endswith(".bak"):
+                    accounts.add(aid)
+    except Exception:
+        pass
+    return sorted(accounts)
+
+
+def _kill_halted(account_id=None):
+    try:
+        return bool(get_kill(account_id).halted)
     except Exception:
         return False
 
@@ -565,6 +846,7 @@ def update_risk_state(
     positions=None,
     peak_equity=None,
     symbol=None,
+    account_id=None,
 ):
     """runner 每轮调用：用账户快照推进状态机 + 组合级硬熔断判定。
     - equity: 当前权益（来自 account_tracker 或账户监控）
@@ -575,23 +857,29 @@ def update_risk_state(
     - peak_equity: 跨重启持久化的峰值权益（由 drawdown_guard 维护）；
                   传入可让硬熔断基于稳定峰值而非本进程内存峰值
     - symbol: 拟开仓品种（分品种专项风控 JM/J 收紧单笔上限 + 强制止损）
+    - account_id: 账户 ID（None 则用 default）
     - 返回 summary dict（含 killswitch 字段；新触发时带 kill_newly=True）
     """
+    fsm = get_fsm(account_id)
+    kill = get_kill(account_id)
     if consec_losses is not None:
-        with RISK_FSM._lock:
-            RISK_FSM.consec_losses = max(0, int(consec_losses))
+        with fsm._lock:
+            fsm.consec_losses = max(0, int(consec_losses))
     if peak_equity is not None:
         try:
             pe = float(peak_equity)
-            with RISK_FSM._lock:
-                if RISK_FSM.peak_equity is None or pe > RISK_FSM.peak_equity:
-                    RISK_FSM.peak_equity = pe
+            with fsm._lock:
+                if fsm.peak_equity is None or pe > fsm.peak_equity:
+                    fsm.peak_equity = pe
         except Exception:
             pass
-    rg = risk_guard(equity, used_margin, daily_pnl, proposed_margin, symbol=symbol)
-    RISK_FSM.update(rg, equity=equity)
-    ks = KILL.check(equity, RISK_FSM.peak_equity, daily_pnl, RISK_FSM.consec_losses, positions)
-    out = RISK_FSM.summary()
+    rg = risk_guard(
+        equity, used_margin, daily_pnl, proposed_margin, symbol=symbol,
+        opening_equity=kill.opening_equity(),
+    )
+    fsm.update(rg, equity=equity)
+    ks = kill.check(equity, fsm.peak_equity, daily_pnl, fsm.consec_losses, positions)
+    out = fsm.summary()
     out["kill_newly"] = ks.get("newly", False)
     if rg.get("symbol_override"):
         out["symbol_override"] = rg["symbol_override"]
@@ -639,8 +927,11 @@ def init_dual_track():
         print(f"[双轨风控] drawdown_guard 初始化失败: {repr(e)[:80]}")
 
 
-def get_combined_risk_scale():
+def get_combined_risk_scale(account_id=None):
     """P1-15: 获取双轨风控合并后的手数缩放系数。
+
+    参数:
+      - account_id: 账户 ID（None 则用 default）
 
     返回 dict:
       - combined: 合并后的缩放系数（= min(rsm_scale, ddg_scale)，取较严者）
@@ -655,21 +946,23 @@ def get_combined_risk_scale():
     """
     global _DUAL_TRACK_INIT
     reasons = []
+    fsm = get_fsm(account_id)
+    kill = get_kill(account_id)
 
     # 1. risk_state_machine 侧
-    rsm_scale = RISK_FSM.scale()
-    rsm_state = RISK_FSM.state
+    rsm_scale = fsm.scale()
+    rsm_state = fsm.state
     rsm_locked = rsm_state == RiskStateMachine.LOCKED
-    if _kill_halted():
+    if _kill_halted(account_id):
         rsm_locked = True
         rsm_scale = 0.0
-        reasons.append(f"硬熔断(HALTED): {KILL.reason}")
+        reasons.append(f"硬熔断(HALTED): {kill.reason}")
     elif rsm_state == RiskStateMachine.LOCKED:
-        reasons.append(f"状态机锁定(LOCKED): {RISK_FSM.lock_reason}")
+        reasons.append(f"状态机锁定(LOCKED): {fsm.lock_reason}")
     elif rsm_state == RiskStateMachine.WARNING:
         reasons.append("状态机预警(WARNING): 手数按 0.5x 缩放")
 
-    # 2. drawdown_guard 侧
+    # 2. drawdown_guard 侧（多账户版：通过 get_guard 取对应账户）
     ddg_scale = 1.0
     dd_tier = 0
     dd_pct = 0.0
@@ -677,7 +970,7 @@ def get_combined_risk_scale():
         try:
             import drawdown_guard as _ddg
 
-            _st = _ddg.current()
+            _st = _ddg.current(account_id)
             ddg_scale = float(_st.get("scale", 1.0))
             dd_tier = int(_st.get("tier", 0))
             dd_pct = float(_st.get("dd_pct", 0))
@@ -686,7 +979,7 @@ def get_combined_risk_scale():
         except Exception:
             pass
 
-    # 3. 市场情绪侧（#8）：极端情绪→缩仓
+    # 3. 市场情绪侧（#8）：极端情绪→缩仓（全局共享，不按账户隔离）
     sent_scale = 1.0
     sent_label = "中性"
     sent_score = 50.0
@@ -717,35 +1010,41 @@ def get_combined_risk_scale():
         "rsm_state": rsm_state,
         "dd_tier": dd_tier,
         "dd_pct": dd_pct,
-        "halted": _kill_halted(),
+        "halted": _kill_halted(account_id),
         "reasons": reasons,
     }
 
 
-def is_locked():
+def is_locked(account_id=None):
     """禁止新开仓（软锁 LOCKED 或 硬熔断 HALTED 任一成立）。"""
-    return _kill_halted() or RISK_FSM.state == RiskStateMachine.LOCKED
+    return _kill_halted(account_id) or get_fsm(account_id).state == RiskStateMachine.LOCKED
 
 
-def is_halted():
-    return _kill_halted()
+def is_halted(account_id=None):
+    return _kill_halted(account_id)
 
 
-def reset_daily_if_new_day(last_day_str):
+def reset_daily_if_new_day(last_day_str, account_id=None):
     """跨日重置连续止损计数（可选，配合 runner 跨日逻辑调用）。
-    仅当 last_day_str 与今日日期不同时才重置。"""
+    仅当 last_day_str 与今日日期不同时才重置。
+
+    P1-4 fix: 原实现直接操作全局 KILL（default 账户）且 at.load_state() 未按账户加载，
+    导致多账户下重置错账户。现改用 get_kill(account_id) + account_context 精确隔离。
+    """
+    account_id = account_id or "default"
     today_str = time.strftime("%Y-%m-%d")
     if last_day_str != today_str:
-        RISK_FSM.reset_daily()
-        # P0-7 fix: 同时记录日初权益
+        get_fsm(account_id).reset_daily()
+        kill = get_kill(account_id)
+        # P0-7 fix: 同时记录日初权益（按账户隔离读取）
         try:
             import account_tracker as at
 
-            st = at.load_state()
+            with at.account_context(account_id):
+                st = at.load_state()
             eq = st.get("equity", 0) if st else 0
             if eq > 0:
-                KILL._opening_equity = eq
-                KILL._save()
+                kill.set_opening_equity(eq)
         except Exception:
             pass
         return today_str
@@ -778,7 +1077,9 @@ if __name__ == "__main__":
     print("回升后仍熔断?", s3["killswitch"]["halted"], "state=", s3["state"])
     print("人工解除:", KILL.reset("自测解除", reset_peak_to=990000)["halted"], "| 恢复 scale=", RISK_FSM.scale())
 
-    # —— P-连损自测（2026-08-19 模板H）：consec=2→WARNING / consec=3→LOCKED+consec_lock / reset_daily 解锁 ——
+    # —— P-连损自测（配置感知）：consec=CONSEC_WARN→WARNING / consec=CONSEC_LOCK→LOCKED+consec_lock / reset_daily 解锁 ——
+    # P2-1 修复：原硬编码 consec=2→WARNING/3→LOCKED，与 trade_config.json 的 consec_loss_gate
+    # (warn=1/lock=2) 不符，导致自测恒 FAIL。现改用模块级 CONSEC_WARN/CONSEC_LOCK 动态判定。
     _consec_ok = True
     # 清场：模拟新进程/新交易日干净状态（reset_daily 只清 consec 计数，不清 state；此处显式重置避免被前序硬熔断测试污染）
     RISK_FSM.state = RiskStateMachine.NORMAL
@@ -786,17 +1087,18 @@ if __name__ == "__main__":
     RISK_FSM.consec_losses = 0
     RISK_FSM.consec_lock = False
     RISK_FSM.daily_loss_locked = False
-    _w = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=2)
-    if _w["state"] != "WARNING":
-        _consec_ok = False
-        print(f"[FAIL] consec=2 应 WARNING，实际 {_w['state']}")
-    _l = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=3)
+    if CONSEC_WARN < CONSEC_LOCK:
+        _w = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=CONSEC_WARN)
+        if _w["state"] != "WARNING":
+            _consec_ok = False
+            print(f"[FAIL] consec={CONSEC_WARN} 应 WARNING，实际 {_w['state']}")
+    _l = update_risk_state(1000000, used_margin=0, daily_pnl=0, consec_losses=CONSEC_LOCK)
     if _l["state"] != "LOCKED":
         _consec_ok = False
-        print(f"[FAIL] consec=3 应 LOCKED，实际 {_l['state']}")
+        print(f"[FAIL] consec={CONSEC_LOCK} 应 LOCKED，实际 {_l['state']}")
     if not RISK_FSM.consec_lock:
         _consec_ok = False
-        print("[FAIL] consec=3 应置 consec_lock=True")
+        print(f"[FAIL] consec={CONSEC_LOCK} 应置 consec_lock=True")
     RISK_FSM.reset_daily()
     if RISK_FSM.consec_lock or RISK_FSM.consec_losses != 0:
         _consec_ok = False

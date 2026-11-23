@@ -1,0 +1,458 @@
+<!DOCTYPE html><html lang="zh-CN" data-page-node-id="FYhYOOwgsJNjcCRNSKtSRe"><head data-page-node-id="HokjoC16IAJTYbcF0dVrlF"><meta charset="utf-8" data-page-node-id="Enh67ZBBwcJ5iZF35pR6Dl">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="t5pDOeerSohMAUOYEaovR3">
+<title>C 感知方向门 · 补全品种 OOS</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2129;--ink:#e6edf3;--mut:#8b98a5;--line:#2a323c;--red:#ff5c5c;--grn:#3fb950;--amber:#d29922;--blue:#58a6ff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;padding:24px}
+h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:28px 0 10px;color:var(--blue);border-left:3px solid var(--blue);padding-left:8px}
+.sub{color:var(--mut);font-size:11px}
+.kpis{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;min-width:150px}
+.kpi .v{font-size:24px;font-weight:700} .kpi .l{color:var(--mut);font-size:12px;margin-top:4px}
+.pos{color:var(--red)} .neg{color:var(--grn)}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+th,td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;position:sticky;top:0;background:var(--bg)}
+td.sym{font-weight:700;text-align:left}
+.gain{color:var(--red);font-weight:700} .loss{color:var(--grn);font-weight:700} .flat{color:var(--mut)}
+.note{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;color:var(--mut);margin:10px 0}
+.note b{color:var(--ink)} .wrap{max-width:1200px;margin:0 auto}
+.tag{display:inline-block;padding:1px 6px;border-radius:5px;font-size:10px;margin-left:4px;vertical-align:middle}
+.tag.new{background:#1f3a1f;color:var(--grn)} .tag.inert{background:#3a2f1f;color:var(--amber)} .tag.skip{background:#3a1f1f;color:var(--red)}
+</style></head><body data-page-node-id="DFzD3lOXG4BEko2KLlxB2X"><div class="wrap" data-page-node-id="SanG5v4j6aZN9xiFLtn12g">
+<h1 data-page-node-id="zMKwIGsqLoRTmDJQxm6aUQ">C 感知方向门（threshold 增强）· 补全品种 OOS</h1>
+<div class="sub" data-page-node-id="0MHB8FaFDfRGOWsdNHvMXt">三感参谋 · 四维信号系统 ｜ 完整活跃池 43 只全覆盖（prior 41 + 补全 sc/SA01）｜ 生成于 2026-09-07 10:10</div>
+<div class="kpis" data-page-node-id="9dokAHDATETYouxHVOr2Td">
+<div class="kpi" data-page-node-id="3obBU1AdqdIMTizaKS6ylp"><div class="v" data-page-node-id="SMmucDBJq08Pf6p3o3BwJR">43</div><div class="l" data-page-node-id="Ojpd1DKDtkXVyAwloqIPqa">完整活跃池(只)</div></div>
+<div class="kpi" data-page-node-id="adMBy2B70EjaKeItFQ9anQ"><div class="v" data-page-node-id="PCCU1rjCfOdDA6XRkcDc02">42</div><div class="l" data-page-node-id="J9jAC3TqaolCb2ScyXSoEG">门可用总体(有kline C)</div></div>
+<div class="kpi" data-page-node-id="zPkOZGChS4tN4NoLf7ZPI1"><div class="v" data-page-node-id="bMCLMhALOclr9hjY18HGtf">41</div><div class="l" data-page-node-id="DHTrH2wH8g1FU4ZR2pLMOJ">OOS 已验证(只)</div></div>
+<div class="kpi" data-page-node-id="1ciO8biB3bwsI2xGrltxdX"><div class="v" data-page-node-id="5CHikLNmo3XUbfTH5l1F7U">1</div><div class="l" data-page-node-id="oa157BjAeWaydmSjgOprUg">门惰性(无kline C)</div></div>
+<div class="kpi" data-page-node-id="X3cy713B0u2UsSHUqbBayF"><div class="v" data-page-node-id="0QiqeqBgGrQo6qkL0YxVV5">+0.729</div><div class="l" data-page-node-id="19pEzY4ABAuBUvRQ0dEj9w">基线 OOS 期望R</div></div>
+<div class="kpi" data-page-node-id="yHawMth4na831Smnz5KsZ9"><div class="v" data-page-node-id="gDeFPBtonDfLJWAHJk4T2k">+0.796</div><div class="l" data-page-node-id="kYukYCHeZzbxi9dO3BOgeY">oppose OOS 期望R</div></div>
+<div class="kpi" data-page-node-id="FGUPNI6DJFlpA0GVTR7vOa"><div class="v" data-page-node-id="MfKgWi1HrCMCReoBCLxYco">+0.066</div><div class="l" data-page-node-id="UR1xboFvEzmk15wI6UieLR">Δoppose−基线</div></div>
+</div>
+<div class="note" data-page-node-id="nLXm5G0gGFD5wTqW7pokJD">
+<b data-page-node-id="4ntbG4IB9YYuNHkSKi2VCy">补全说明</b>：prior 大样本验证覆盖 <b data-page-node-id="wUZCllxCdEvCYBeywLmtwx">41 只「基线有成交且门可用」品种</b>——这是真实可验证总体，并非漏算。
+完整生产活跃池为 <b data-page-node-id="jmPHDNeaccH06CQPWniHrl">43 只</b>（SYMBOLS − DISABLED）。本次把缺口 2 只补全核验：
+<span class="tag new" data-page-node-id="32MfPd4vqzsQZam713bDdg">补全·新跑</span><b data-page-node-id="RtN0aoCbCY2jKGYlGgOQW7">sc</b>：有 kline C，但回测 2018–2026 全窗口<strong data-page-node-id="KmDrxCbKw7VKl0RfppbEbK">「无触发信号」零成交</strong> → 门可触发但无 OOS 样本、无法验证（live 若偶发信号，门仍按 kline C 拦，影响可忽略，建议盘中监控）；
+<span class="tag inert" data-page-node-id="jPg1GWJa4jQLCyYKsaiw21">补全·门惰性</span><b data-page-node-id="DFZdrUXp2GOdR0z3v7j3HS">SA01</b>：无 kline C → 门永不拦截，且同样零成交。
+结论：门可用总体（有 kline C）共 <b data-page-node-id="d3GKmIkTyP1k7e8kLdLuuA">42 只</b>，其中 <b data-page-node-id="xDwEb0D3pbe8gPA3uuMgsh">41 只</b>有回测成交、OOS 已验证；另 2 只（sc/SA01）零成交、不可验证。全市场部署的每只活跃品种现均有明确 OOS 结论（含「不可验证」标注）。
+</div>
+
+<h2 data-page-node-id="YvLPzx7tgcXqG0luRAHHo6">一、组合层面结论（门可用总体 42 只）</h2>
+<table data-page-node-id="eF3moBJv4CpVlnDGBmO9wE"><tr data-page-node-id="RGB30hFPYPG7mXS8zxV4vf"><th data-page-node-id="f7GZhDtzhUDC4ovyBSgGTB">指标</th><th data-page-node-id="smHWmbBIdJZ42363Z5vlDG">基线(threshold)</th><th data-page-node-id="PHLORzNlshBtoEwErVBlIG">oppose(30.0)</th><th data-page-node-id="adiRcmoBeDmdF0Un0WmS4y">Δot−基</th></tr>
+<tr data-page-node-id="6gBycEYSzZBIqy8MeTQ8BX"><td data-page-node-id="4bTMhK8RMDo1pRVFG9sCqA">OOS 期望R 均值(逐品种)</td><td data-page-node-id="aGAApiPfogi2J7vFEDoDjD">+0.729</td><td data-page-node-id="ZBg5FWz2lYBpGMquFZbwyP">+0.796</td>
+<td class="pos" data-page-node-id="BmTsFE0QXxjXsRzzcfGgi1">+0.066</td></tr></table>
+<div class="note" data-page-node-id="o55YYC6y0oiyqsZlpuFGBj">oppose OOS：<b class="pos" data-page-node-id="JZL5Do8ZxTHTJkStK2CQk8">增益 23</b> / <b class="neg" data-page-node-id="Z6t58cBJgi93SthOKUEDC5">有损 10</b> / 持平 9。</div>
+
+<h2 data-page-node-id="80Y0EKyffUKCbLjPlIPJvN">二、统计显著性（门可用总体，二项双尾）</h2>
+<table data-page-node-id="DBRbFfcD2GB9ai2UTfJiTf"><tr data-page-node-id="wwSIPhz5vSU4rv57Y0G7pm"><th data-page-node-id="zJWUQFLfsNoFFnsGWxATKo">门模式</th><th data-page-node-id="nCNuq5fRUmU6paQPQc80TH">样本n</th><th data-page-node-id="15hgLpqUB4fFLoeB3mORNN">增益</th><th data-page-node-id="11aOhaJmesuYDRgY5cOVSy">有损</th><th data-page-node-id="HbOvhF9YdTOggyrW9jJSBp">持平</th><th data-page-node-id="Du6yFPU8teu2GM0eSeB2ZP">中位数Δ</th><th data-page-node-id="2NcJrNhX9hWDHp5Ea1JjwS">均值Δ</th><th data-page-node-id="6TjwAKmCmOxei8DC01QBwG">增益占比</th><th data-page-node-id="34nK39HDLndG0I7OdekXkT">二项p</th><th data-page-node-id="c8NQxShLxoXJMlblRZ73FT">显著?</th></tr>
+<tr data-page-node-id="PL0AGrOOytXovEQAMWfSf9"><td data-page-node-id="07WrA6dm0N6t9j9LHzaoV0">oppose(30.0)</td><td data-page-node-id="cBPHVn7jzmjhxR49yRz3zu">41</td><td class='gain' data-page-node-id="5l951sFz2fPB1p5Lz4TmX1">23</td>
+<td class='loss' data-page-node-id="UgZv2zohlsV7k6GqtPNIzM">10</td><td data-page-node-id="wNn1Wv2d0rvIAaTEcZb2mZ">8</td>
+<td data-page-node-id="VOegLH6CR9EwySvVomSHwF">+0.065</td><td data-page-node-id="dnH3tEEXrJjAN4us8CfAK5">+0.066</td>
+<td data-page-node-id="FW0OEtANcWCOBBl2j0Tobw">0.561</td><td class='gain' data-page-node-id="jrrxmXphpDTzwPMtHXk7HS">0.0351</td><td class='gain' data-page-node-id="b839z8MS0oQAUjGByDDU3R">显著✓</td></tr>
+</table>
+<div class="sub" data-page-node-id="5HFLkA3lbBVeWriQK9Yx5F">「二项p」= 对（增益 vs 有损）精确二项双尾检验（H0: 增益占比=50%）。p&lt;0.05 视为显著稳定增益。</div>
+
+<h2 data-page-node-id="ynwOJZPM6uKT4hYcwZWLqw">三、逐品种明细（按 oppose OOS Δ 排序，含补全 2 只）</h2>
+<table data-page-node-id="b2JkCAaK0iqPPMrmcyUH4A"><thead data-page-node-id="AcsfYrIp9NA1TJCg5KiVyI"><tr data-page-node-id="ZLI0ZW9zCNzzoLBuAQqAMC"><th data-page-node-id="CY1G82pCtcOkvmYHTDAOBX">品种</th><th data-page-node-id="YtqCRKcRU3EKx09er2C00S">名称</th><th data-page-node-id="ZNvGP6FXVTRqfYmX6RS0pW">板块</th><th data-page-node-id="A0mCKIO4NAZRnaUqZSTb6z">IS edge</th><th data-page-node-id="jka4gnfHtH6ZYNmUyhnCye">IS决策</th>
+<th data-page-node-id="F6v3Y0msZTHpngDYPND2ur">OOS_base</th><th data-page-node-id="S4D2DaOszRqV97cErRxHiG">OOS_ot</th><th data-page-node-id="XPoD4fsb4ypWu0Dkmknb22">Δot</th><th data-page-node-id="uGerVxLd8pMe3kiTMPVAKl">ot拦单数</th><th data-page-node-id="JmKLb78Fgj4nIceWCExiML">状态</th></tr></thead>
+<tbody data-page-node-id="gSgJop5Er00w0Cz5N97IBB"><tr data-page-node-id="8pmkWrDCQKAjltYfPpjsXq">
+<td class="sym" data-page-node-id="aSMtwYnko65qaGhWgtVlcK">jd</td><td data-page-node-id="SQRC98MSpclDSEEluZxuDH">鸡蛋</td><td data-page-node-id="LIGDEB73sh9tjOYbL6vDzK">农产品</td>
+<td data-page-node-id="wVcVxrvDJPg5KYEDxtwPFD">+0.016</td>
+<td data-page-node-id="OVf8czG7QxJ0YSuEohOF2k">保持threshold</td>
+<td data-page-node-id="0yM6VH2djkZo797dnoLcL6">+1.661<br data-page-node-id="JfZvo17rbHZM1ChZNOQIX9"><span class="sub" data-page-node-id="LvBUfW5G5NUBYFvoLoSF1X">8笔</span></td>
+<td data-page-node-id="S0aSlYjOzLopNRl0xSOTx9">+2.562<br data-page-node-id="Dxi5bCTSVbZFwnEPPhrLNN"><span class="sub" data-page-node-id="gn0uX7LXP17zPyCC8ShU1s">6笔</span></td>
+<td class="gain" data-page-node-id="5Q5zOwqT0HYZtSuoqtIxpl">+0.900</td>
+<td class="sub" data-page-node-id="FLnjnbbs3b7hMoYIO3xuno">ot拦5</td>
+<td class="sub" data-page-node-id="FmhhiCLC9Nue2MZSvZv3FJ"></td>
+</tr><tr data-page-node-id="t1ymMMkY5jY8ZEu6pxKE7l">
+<td class="sym" data-page-node-id="yeB2ISTvVR4OftoofLXBt7">ao</td><td data-page-node-id="4YxAzVioxwNfEopMrDvzBn">氧化铝</td><td data-page-node-id="iVrYrhaAT7ZZSmkkFa6B0C">有色</td>
+<td data-page-node-id="K5pNzzKuoYu3T2Y9OcOhAz">-0.439</td>
+<td data-page-node-id="Ch76kwcUjM3mbahuNCN7F5">保持threshold</td>
+<td data-page-node-id="cgleoQ1jvs964GFmwOdlJB">+0.690<br data-page-node-id="3Am9q2OravKn3mIF8gC3Ob"><span class="sub" data-page-node-id="IIa0LvWQ5QdnvS3t7CZFCG">7笔</span></td>
+<td data-page-node-id="8SUm4JWApV2OAdZn1BIiYV">+1.383<br data-page-node-id="hCtjZwzWOXmvtc1YGvEvNG"><span class="sub" data-page-node-id="tZ8A2BoUBGtlGNcgi2wD0o">5笔</span></td>
+<td class="gain" data-page-node-id="XBjhsD9vjvZCCnHNvFysCK">+0.694</td>
+<td class="sub" data-page-node-id="RFryqALs688eEz8IdPzlDj">ot拦5</td>
+<td class="sub" data-page-node-id="WzqDAWiDwWjOXGOUxdHkAv"></td>
+</tr><tr data-page-node-id="pMXF8o8lMP0x5htSDDDyKb">
+<td class="sym" data-page-node-id="E33k2kYBDEpWrS3VSVE1we">ag</td><td data-page-node-id="lrWAP9qwxdO7yW3AG3dFfJ">沪银</td><td data-page-node-id="6A5G2IPOrOIj3mxOpfm0tN">贵金属</td>
+<td data-page-node-id="P6e4A8GjxIqH7QrcdvUWvv">+0.217</td>
+<td data-page-node-id="FjBwEM0nEF9LQm2Aoi2Z7a">启用C门</td>
+<td data-page-node-id="ogcKqLJskuV5ytfmbhO49l">+2.194<br data-page-node-id="jJDunX603Lgv5VvRq6lJBr"><span class="sub" data-page-node-id="JskvsGGapHZApFsjvpwTY4">15笔</span></td>
+<td data-page-node-id="VAmUTG2pLbG26CVtP68oyh">+2.759<br data-page-node-id="XyjeEqLEHHNtzuStGdzhxa"><span class="sub" data-page-node-id="WHpSU498vVLGqwCobiGmBX">12笔</span></td>
+<td class="gain" data-page-node-id="e4VAG9kPnb1ZWCJwQFC7QP">+0.565</td>
+<td class="sub" data-page-node-id="zRlDbNcmoF7Y4ksu11DsfX">ot拦16</td>
+<td class="sub" data-page-node-id="wCjNESapEnYr5F4htRGowD"></td>
+</tr><tr data-page-node-id="0ifjxNSDUr8igvnjwHa9YI">
+<td class="sym" data-page-node-id="7XKwfs0V2O2mfWBgSyhp56">ru</td><td data-page-node-id="MesHrvuWm9O8m63xD7xvJQ">橡胶</td><td data-page-node-id="aSiYbSpGNITRyuKtYMDWa1">化工</td>
+<td data-page-node-id="A8nBkfqs7Fs8D0ING5kMjS">+0.332</td>
+<td data-page-node-id="sl5hRobKBolyFoufGfzKHc">启用C门</td>
+<td data-page-node-id="HGcVizN5lznMroMQRPLXc0">+0.538<br data-page-node-id="eEiAkkDrvQgF7SXR0ZpoAY"><span class="sub" data-page-node-id="mBAF8iLdo7RvSlb9ehf7PZ">28笔</span></td>
+<td data-page-node-id="Hw99zPlf6gcKgHpiWCWt2E">+1.073<br data-page-node-id="ZC25pvAtIhhTfX1TQ2UECq"><span class="sub" data-page-node-id="uUBb6WqFohVZvEd5IZ8Fv2">22笔</span></td>
+<td class="gain" data-page-node-id="27utPD9cc4Fqia6W39YuD7">+0.535</td>
+<td class="sub" data-page-node-id="aXm7PWrEMRUuieNQXE79E1">ot拦10</td>
+<td class="sub" data-page-node-id="HqrUN7dE9JTwQd3Dw81xCy"></td>
+</tr><tr data-page-node-id="sEmM0xOvYZ4Ljve26QJOMG">
+<td class="sym" data-page-node-id="eL8BWHVJAMU33vS9gMpXyp">rb</td><td data-page-node-id="hbyyEKkUTlSEdUNvtWHz2p">螺纹钢</td><td data-page-node-id="KOWQGF3qC0BBIPpiTd8wgI">黑系</td>
+<td data-page-node-id="AasvHoilFuEXZnctMPLqJW">+0.733</td>
+<td data-page-node-id="lOO1vBbHzBJaAfeqyVm54H">保持threshold</td>
+<td data-page-node-id="BD12M3iwYojs1iLDZQpwJZ">+1.280<br data-page-node-id="3kQAkp28QoyeanYj863zdm"><span class="sub" data-page-node-id="yxhza18nnYLOdaLszq4L7F">6笔</span></td>
+<td data-page-node-id="ChF5JcOsS7xLiZvkgwF8sf">+1.742<br data-page-node-id="lragp7jR5mTDKX0MAHk9Vn"><span class="sub" data-page-node-id="zYEY0jOSQTEBbzYrPIM2mY">5笔</span></td>
+<td class="gain" data-page-node-id="p0HrDUaVFBkdmtZbf1hsst">+0.462</td>
+<td class="sub" data-page-node-id="QK3tzNirdspg5rwpqc5Gwk">ot拦2</td>
+<td class="sub" data-page-node-id="eccv9wGAt2fBIx8aMTRYjL"></td>
+</tr><tr data-page-node-id="aYKClL1p44AIquV5USzACy">
+<td class="sym" data-page-node-id="U1VAZ7wvLAkTWB0sbXBYvZ">c</td><td data-page-node-id="VTbJ4Bl0cBBCvSqxQVwWTf">玉米</td><td data-page-node-id="r0TS8OCj8Huc0DqEM68OLF">农产品</td>
+<td data-page-node-id="JKA4kQhYS1vOdwtb0hHRw5">+0.000</td>
+<td data-page-node-id="msCiYE7UxXo5QyQwv6dsas">保持threshold</td>
+<td data-page-node-id="RH0XPWGIrrRTmYRW5EfZpA">+2.166<br data-page-node-id="NYKDW0rZPLjpRDMQ8pDyOz"><span class="sub" data-page-node-id="EHio29Ux0pgbYMdma2QqQX">10笔</span></td>
+<td data-page-node-id="rZwkzlrxFLt9mavJ9R9IXG">+2.527<br data-page-node-id="fIuRihkzV4CIQ9Tcb4UYje"><span class="sub" data-page-node-id="skNHt5wvs23zOoIekvcQa6">9笔</span></td>
+<td class="gain" data-page-node-id="bXNWRffHdMlqk10AS5UaMV">+0.360</td>
+<td class="sub" data-page-node-id="PO1sFe6sGgLWrpvDGfy0O5">ot拦1</td>
+<td class="sub" data-page-node-id="BWrswZJDOg0iPKc4wi6i1T"></td>
+</tr><tr data-page-node-id="nwLx1HAm5JEwGZMY4VTpDS">
+<td class="sym" data-page-node-id="HEov6PzTfqtDjYgVE1WfnQ">cu</td><td data-page-node-id="HKzQflJJYob5ZCnmm9vDOP">沪铜</td><td data-page-node-id="pLNAU6h6USuMWDnIS1HB9y">有色</td>
+<td data-page-node-id="mLlCFA3S0olKZHGimuwccd">+0.108</td>
+<td data-page-node-id="7kwGxcSdNj8q1E48jBBoQU">启用C门</td>
+<td data-page-node-id="dp0kNyDpJXD9vBLVtTfYAU">+0.554<br data-page-node-id="CEB6cv2Vli4L5tPNdzo8AX"><span class="sub" data-page-node-id="UwjsfbIDKhsKCIsjoGdiXA">22笔</span></td>
+<td data-page-node-id="uDnnIR8g55YVcK3TyN5GJZ">+0.897<br data-page-node-id="XClklO1svnxLqkbbUCX2zr"><span class="sub" data-page-node-id="oRYTywDpFhq2rGof9BxDLf">19笔</span></td>
+<td class="gain" data-page-node-id="zGJNb7anTvvIQuqSbENy1H">+0.344</td>
+<td class="sub" data-page-node-id="mToGp9MUmxs7Z1XYIetQky">ot拦8</td>
+<td class="sub" data-page-node-id="Uv2f1J1HjO2HiRLjlGmO6x"></td>
+</tr><tr data-page-node-id="Qsgt1KjPcJ80Lt4vRPDbdn">
+<td class="sym" data-page-node-id="hyRVrQoisxdN7XIuSEXMh6">PK</td><td data-page-node-id="pHjRShqkrIQa7USPqyzS3O">花生</td><td data-page-node-id="ZlUHDZWxfP668BSZmoCYtJ">农产品</td>
+<td data-page-node-id="BbIXyAyyKmr7e02K737R9A">+0.022</td>
+<td data-page-node-id="0ixETgohBUmoR4lDYF1qUX">保持threshold</td>
+<td data-page-node-id="wQJVCCThYHzpPWaRyP2nAl">+0.076<br data-page-node-id="ikGUwmLmq444AmH4YojaAF"><span class="sub" data-page-node-id="RAzEkgOFnZtZtX0XGpoRoC">16笔</span></td>
+<td data-page-node-id="0hS9vqOtieIHVhMTatNwrk">+0.397<br data-page-node-id="4dKD530nocfxPL55LrzlNc"><span class="sub" data-page-node-id="G7YOVlNH24mTDUjl7lSP92">15笔</span></td>
+<td class="gain" data-page-node-id="q6FRwYcp2CVlgnGUArOJQN">+0.321</td>
+<td class="sub" data-page-node-id="RT6AYxUSgOwjtHDfXsaSWc">ot拦11</td>
+<td class="sub" data-page-node-id="jXcr4rSI5BJmPWGO6uT7Po"></td>
+</tr><tr data-page-node-id="IRjBuGlQ7fHJ7tyfZGrG0T">
+<td class="sym" data-page-node-id="g1XxN39crhN9dbR5XlDQwG">eb</td><td data-page-node-id="nFEBmKoujffkECXUAi7QQG">苯乙烯</td><td data-page-node-id="SIg8u70ojw2yJiHOAAJ8QD">化工</td>
+<td data-page-node-id="DpZn977FRYHmXkpCjxd4AK">+0.139</td>
+<td data-page-node-id="5CVZpEYHFkiFO0sLcCMdr9">启用C门</td>
+<td data-page-node-id="rC8GHDHBLDw6p2eujEON0B">+1.907<br data-page-node-id="iPyDxijAEbnOpNZ18ZYrzE"><span class="sub" data-page-node-id="IFBxbNUSIENproH7O5LGbV">11笔</span></td>
+<td data-page-node-id="02RtWFVSLDZm7Ha1tbDFHc">+2.129<br data-page-node-id="n7hfg1U7JERyjBJ9JgxN3G"><span class="sub" data-page-node-id="Zrxlgeq8MFPSHhb7PCFGpQ">10笔</span></td>
+<td class="gain" data-page-node-id="qp0fwLXpBg8rJ8pSlUJ9ss">+0.222</td>
+<td class="sub" data-page-node-id="6a7I9YZSdoxxxrOmcx0CUx">ot拦9</td>
+<td class="sub" data-page-node-id="cHALrdJi98JWcqQ5pMzoBH"></td>
+</tr><tr data-page-node-id="HdJGkV4dFG4Aj7I4ozCV9p">
+<td class="sym" data-page-node-id="eUEgtWjHoFH16jYRMhWIQH">al</td><td data-page-node-id="DC8FMn0LnQuBOfJd8SxEU3">沪铝</td><td data-page-node-id="eg1g2NewQfulD4CxhTywoY">有色</td>
+<td data-page-node-id="NiLPn9mGVZBHoTto3czNyx">+0.029</td>
+<td data-page-node-id="GVnUEFfywlhsMTASyjKjq1">保持threshold</td>
+<td data-page-node-id="fRXAAGguoXRdvMnPr9HQUC">-0.077<br data-page-node-id="c3e2G8otO3Bd3loWc92DzG"><span class="sub" data-page-node-id="wcab9d951zrr70E0Kkd3CE">21笔</span></td>
+<td data-page-node-id="8ERaiL9PcNuFZeV0pKVHKX">+0.144<br data-page-node-id="0BUmUKGnSY9wi4L2GCQF0Q"><span class="sub" data-page-node-id="jVAghJ3SNNoObe06l2SThL">20笔</span></td>
+<td class="gain" data-page-node-id="R5b8RaVlcwgo97Uj9vVYVH">+0.221</td>
+<td class="sub" data-page-node-id="FyBqqZpUlf2m3HWIRpXaDQ">ot拦24</td>
+<td class="sub" data-page-node-id="0hsBXzhlMPDHxCArwixOB9"></td>
+</tr><tr data-page-node-id="bIGZhi5yvkJ0ObGFjlcEat">
+<td class="sym" data-page-node-id="ZjkiovBBOLOibs4lAHN3qS">p</td><td data-page-node-id="b1G1iA1FBBKKHsH87B6LCe">棕榈油</td><td data-page-node-id="5yvREXi7ZOWHmOabXD6DIX">农产品</td>
+<td data-page-node-id="WZrk6bbosDjwpFHCWxlclV">+0.102</td>
+<td data-page-node-id="w04FM2wZDYcxSg4ocotQ1c">启用C门</td>
+<td data-page-node-id="9p1SOd11WYyraCuA5fpFNp">+0.034<br data-page-node-id="fv8dGL59YcnrPsla1GWsdT"><span class="sub" data-page-node-id="BAWhnfaFxRLhW1minzft3I">84笔</span></td>
+<td data-page-node-id="hY6mdYMHbV13KGhiVogRJQ">+0.231<br data-page-node-id="2NnDShYSbDjFndjGYHzrmc"><span class="sub" data-page-node-id="hTASsFGMRjqSkBlDBYN7la">71笔</span></td>
+<td class="gain" data-page-node-id="9E7TkfYan0Z7zDkavuwTCq">+0.197</td>
+<td class="sub" data-page-node-id="8YyE41YpywEwpEUs3aDEKz">ot拦71</td>
+<td class="sub" data-page-node-id="w8dCvq83PEqawlAUYaOssa"></td>
+</tr><tr data-page-node-id="biuRgYzO4zDMtgQdOxWg3Q">
+<td class="sym" data-page-node-id="YdaoPcmxqulTubTXwUWf3R">TA</td><td data-page-node-id="xFDE7XU8AUZPVbgiwRJu3Q">PTA</td><td data-page-node-id="awJ49ECHUjERHWAlthU4Z5">化工</td>
+<td data-page-node-id="pjPqFcKAlE9QjOjxyvAT3F">+0.042</td>
+<td data-page-node-id="mQFMgWb4Gk1kNDExS3BJAz">保持threshold</td>
+<td data-page-node-id="uVfpF4LIJNDYkNqLsP7l4c">+0.632<br data-page-node-id="mVpdNPKHXryyrPzZRtwpEF"><span class="sub" data-page-node-id="R1jsuXFKjTocnCh5UNkiZV">40笔</span></td>
+<td data-page-node-id="JueNq3YSVXMCyuvQgAgyRd">+0.827<br data-page-node-id="ftnguCft7mPZ1pPIngICBB"><span class="sub" data-page-node-id="f8gJfmDrtPBsnOx71zkbsM">36笔</span></td>
+<td class="gain" data-page-node-id="fzl5yBc6WF5AfBW9dQY0Ck">+0.196</td>
+<td class="sub" data-page-node-id="oHQnEBRNS2l7jqzOipq5r5">ot拦41</td>
+<td class="sub" data-page-node-id="XympSjVjXWJHsFnp0c4wBX"></td>
+</tr><tr data-page-node-id="zJLfQ0sCKxHXB3Z9nrJoEG">
+<td class="sym" data-page-node-id="97vCPuyhHXU91XzTYLE6Bp">CF</td><td data-page-node-id="Pj8LbHUctOGq8pufebIz2E">棉花</td><td data-page-node-id="qziGcz7B5rBLi9Aci8EQzb">农产品</td>
+<td data-page-node-id="swBLe5a4ko9e40i8OeyFeA">+0.043</td>
+<td data-page-node-id="u1trKGCBp1SDHGfTbgOPqH">保持threshold</td>
+<td data-page-node-id="QkzC9dOZrvZ5CSGhwhUqVr">+2.188<br data-page-node-id="VDOa4INsYR9SdvCzeXNjps"><span class="sub" data-page-node-id="V9yDlN6xFpsE0apLspTjID">30笔</span></td>
+<td data-page-node-id="xGe27kOW9rKHCv7Xn5Tyjy">+2.374<br data-page-node-id="Bi53holthBmqNoi5c24gv0"><span class="sub" data-page-node-id="N9FlYTX0phxWBPQF7ilHRL">27笔</span></td>
+<td class="gain" data-page-node-id="CRyeIjjkb3pDbGsL4Pi3ol">+0.185</td>
+<td class="sub" data-page-node-id="pdYC8kOZsqyIokR62hJmoK">ot拦9</td>
+<td class="sub" data-page-node-id="zwCB5HVK4uEBk8cBbMje5I"></td>
+</tr><tr data-page-node-id="2fxyZ19BxxtyKZTHMAOyEh">
+<td class="sym" data-page-node-id="Zbj0dxpLSeHSRRgPg13AXD">l</td><td data-page-node-id="pN8szuOnrujZwSWTQ3BheB">塑料</td><td data-page-node-id="Kp9F1jAmMd3EcsMIlQce8b">化工</td>
+<td data-page-node-id="By6kXD4tJqjUDEO84SYFrs">+0.125</td>
+<td data-page-node-id="uS2QRiZsJeydJKTskEmzEJ">启用C门</td>
+<td data-page-node-id="BXVXLuGcQw65aWZCgG2yIC">+0.782<br data-page-node-id="BnHLOdV4ldsCFIuRAKJG84"><span class="sub" data-page-node-id="A2e0FsbX3k0podT64FdcuV">18笔</span></td>
+<td data-page-node-id="adERgT05nfB83LFo0pjsVD">+0.964<br data-page-node-id="CqZqM9wPRyNDm4wu7mXOZq"><span class="sub" data-page-node-id="WVjSwHQvz4qnlMi5KATFPN">15笔</span></td>
+<td class="gain" data-page-node-id="FTcvKH8mVj8PQ5AbSAkaFt">+0.182</td>
+<td class="sub" data-page-node-id="ARld6CWqJpEaJNfsThKCmj">ot拦4</td>
+<td class="sub" data-page-node-id="cj351BtsWi38KRGSBGofAL"></td>
+</tr><tr data-page-node-id="9GRjgtitSas5QQRXEKgGGv">
+<td class="sym" data-page-node-id="cnLwSYsMXaQohOzKHNHu0E">pg</td><td data-page-node-id="A2bECgdAlgxdkqweh311Vl">液化气</td><td data-page-node-id="XrGd39gPfrTqsnf1mqlXt8">能源</td>
+<td data-page-node-id="yKZjlxW0Etj1O5KNokux0y">-0.879</td>
+<td data-page-node-id="fITxzbCxFIlUXb2O4ABWCW">保持threshold</td>
+<td data-page-node-id="BGrk0mJ55VznxW2KHttojc">+0.112<br data-page-node-id="shTsxip6pLg6XPYDrRvCOQ"><span class="sub" data-page-node-id="VEQhkgzqqDlxiMaqdiME0L">11笔</span></td>
+<td data-page-node-id="Y0HrlvnfEoLYOSAnT1FSOu">+0.281<br data-page-node-id="QmDhFseLpEHMgzloZmFmld"><span class="sub" data-page-node-id="gNaMrU5J6cz4wIFo8UFwVb">10笔</span></td>
+<td class="gain" data-page-node-id="uJebDY0RFvSaWbVqPT5mr8">+0.169</td>
+<td class="sub" data-page-node-id="q81VSjCH4vRJC55JE3V9Gk">ot拦14</td>
+<td class="sub" data-page-node-id="SlLMr0NXoYAFxDDmB0G4T4"></td>
+</tr><tr data-page-node-id="tnpuDoNSENzJil3EwJeSFl">
+<td class="sym" data-page-node-id="XdmQ61NbkWTpVBZpplZmwM">bu</td><td data-page-node-id="4kX4it8OosZF5TBRiDw6FS">沥青</td><td data-page-node-id="53W3vjqsdoOfOfDSm6g0AY">能源</td>
+<td data-page-node-id="KhbxGO5mezLIZtNEyrwSYI">+0.008</td>
+<td data-page-node-id="qSa607j4R5XHEXOKitFF1p">保持threshold</td>
+<td data-page-node-id="mfHp9gDLHzLyEqHBEuyENO">-0.191<br data-page-node-id="4I8F3fEWa8cKwF1GE6Wy05"><span class="sub" data-page-node-id="y83vIFwsaBYt8x7sJXCahW">31笔</span></td>
+<td data-page-node-id="RULaAvdTDmiDGxpGvW30Pj">-0.024<br data-page-node-id="ggbR09V15rBL1EIpyMI1Hu"><span class="sub" data-page-node-id="FqiIbP3v9gI63sZz0gMi8Z">25笔</span></td>
+<td class="gain" data-page-node-id="9BJHMY1cqQ4Axme6S1oJ8D">+0.167</td>
+<td class="sub" data-page-node-id="rh77KpNCZlrr2OftBceNep">ot拦19</td>
+<td class="sub" data-page-node-id="WJdvgnp4RdleNIXG2rHV5g"></td>
+</tr><tr data-page-node-id="EuUyxFkXzUBNqMgxrzn6BP">
+<td class="sym" data-page-node-id="K4si6tdwqLOzBgCOYUtoQ1">v</td><td data-page-node-id="9RBYEUQYPBZwD6Hs7vpCpP">PVC</td><td data-page-node-id="YIKpF3FSa6z933zoKlm2f5">化工</td>
+<td data-page-node-id="9SNb3XwItxAceQe8p1n3mp">-0.343</td>
+<td data-page-node-id="iyMLsKRDZjsGFZrQ6gKHjE">保持threshold</td>
+<td data-page-node-id="HOvXoMZTYFZtGHDTFaw3fV">+0.770<br data-page-node-id="E4wDS6veJR4orrvRhM2q2f"><span class="sub" data-page-node-id="Yq6LowCwxEgIXOJub8ZebF">29笔</span></td>
+<td data-page-node-id="EUTFUdTdKwqFHRuHBXZd0o">+0.903<br data-page-node-id="fh4f8DJE3tcuA6XvDIxp9c"><span class="sub" data-page-node-id="pPGd4Agg3mHdLjj2oHB0K5">29笔</span></td>
+<td class="gain" data-page-node-id="rRinGKqc9EKUFg1hwJg5h3">+0.133</td>
+<td class="sub" data-page-node-id="qBTKzxi5r8undKGKKF9TZc">ot拦31</td>
+<td class="sub" data-page-node-id="rYhGb2vP1TnrlBbDBkRPv8"></td>
+</tr><tr data-page-node-id="DQ58XUQYrEBXUgfILGKKRr">
+<td class="sym" data-page-node-id="fbHDg6egLWlpuWPHNcjjrk">ni</td><td data-page-node-id="UC491cBkAagivlnhzeIHCx">沪镍</td><td data-page-node-id="wW6RVD4K9xqHcbbHGtlFfh">有色</td>
+<td data-page-node-id="QPL9EBAEvwWimzCzCCK44H">+0.049</td>
+<td data-page-node-id="ULlCT33ScYxwpP1Ih9E7o5">保持threshold</td>
+<td data-page-node-id="5ZoNs2zlgJUzYrI4m2RP5u">+0.022<br data-page-node-id="E4xgloXp6lCF4dGFq6hEcv"><span class="sub" data-page-node-id="jSEdPpj6rpQdXDCUIbgh52">33笔</span></td>
+<td data-page-node-id="r0KIymRzE1bmADKFDdweLe">+0.138<br data-page-node-id="Hgey4osOna7UJyE6AWbvnr"><span class="sub" data-page-node-id="0yficC3e5n0e8zLxQtEttc">31笔</span></td>
+<td class="gain" data-page-node-id="QZTUdawjKU274QOQVaFg4r">+0.116</td>
+<td class="sub" data-page-node-id="Gp6DaC90XqoMADUzV8sXof">ot拦37</td>
+<td class="sub" data-page-node-id="LkMpiCtizizWLgzKqpHmtG"></td>
+</tr><tr data-page-node-id="zHrEEEPcF0s17JSAjC33M0">
+<td class="sym" data-page-node-id="WECvPEL6eF7O1z5qkVcQhh">JM</td><td data-page-node-id="5o8cMtG8UC1PqUGoSaMWpN">焦煤</td><td data-page-node-id="PZloLM6KdHxPFFSM1a3aLU">黑系</td>
+<td data-page-node-id="SFAN3mdhMUReE9SyiEoUsQ">+0.791</td>
+<td data-page-node-id="wSOrz2jdCRmiobpJur2ZmE">启用C门</td>
+<td data-page-node-id="EzQWLEtiDWnX7XfZ6u8swe">+0.311<br data-page-node-id="Vs2pjU1tywhG9cnHscDGvJ"><span class="sub" data-page-node-id="QFWSBwDFdbAspW1LrxfRNk">15笔</span></td>
+<td data-page-node-id="NAFIp1io2fcYqxYc104BPG">+0.406<br data-page-node-id="8HCTmIZhqT3PfOIhj4IHpE"><span class="sub" data-page-node-id="O8F0zN495hCBPH4HT8s97u">13笔</span></td>
+<td class="gain" data-page-node-id="V2ABuCV8IB4y6gKmKHetq5">+0.095</td>
+<td class="sub" data-page-node-id="NaSw646BDRsXGXAOBHimkZ">ot拦11</td>
+<td class="sub" data-page-node-id="3f3YPZJ3zkfOXc7aFjQYqG"></td>
+</tr><tr data-page-node-id="Yhd1zAhpJF4bECfppHhCSW">
+<td class="sym" data-page-node-id="keFsJUIqZ248kaucgUEG66">ss</td><td data-page-node-id="Wel9CuLm6UeJhoD4hJGI5u">不锈钢</td><td data-page-node-id="KZXI6Oqo0Fch90FMw4qQDU">黑系</td>
+<td data-page-node-id="8WFOg9rHHY2sYTu5tADt98">+0.287</td>
+<td data-page-node-id="4TG1H5ZCCRAGsh4ckSJ3GH">启用C门</td>
+<td data-page-node-id="aRYuyjEddBLJNEvGsBgF5m">+0.141<br data-page-node-id="Up1nt9WyDUJnEqHpgVbwmw"><span class="sub" data-page-node-id="bGT0EKKx9mLNGHvLfQ5Z0W">15笔</span></td>
+<td data-page-node-id="ZRBoE6AVlRxgqLfK7MXPBm">+0.225<br data-page-node-id="yLkBRWiy6AniburreYwQ1k"><span class="sub" data-page-node-id="vR7AB0HcvcHEGfXl1BNX8L">14笔</span></td>
+<td class="gain" data-page-node-id="qt0Z16xYo2tz9YdsOeJTmB">+0.084</td>
+<td class="sub" data-page-node-id="UOTl3uHH3XbF8OsmCb80Po">ot拦12</td>
+<td class="sub" data-page-node-id="uQ0Ii6Fasl3knNXpYteuBR"></td>
+</tr><tr data-page-node-id="kuQOmDw9lyp80C3tuTVErq">
+<td class="sym" data-page-node-id="qCFVmlQiWgAWxIup2t5ruZ">si</td><td data-page-node-id="w76qM27dUu1A6nV3dQF6GT">工业硅</td><td data-page-node-id="IK1W5oQShc9TLrS0rgmqwP">有色</td>
+<td data-page-node-id="1ntxH0iwKU9nuVEhNemJd3">-0.704</td>
+<td data-page-node-id="EePeAk5xBEyx0nCqQ4jjz4">保持threshold</td>
+<td data-page-node-id="LYOfXb7lPzW4ZevbyQK6Xk">-0.883<br data-page-node-id="vZmtMuqzuXCPaFZqc7PksA"><span class="sub" data-page-node-id="cGHB3TsLnG8dFAvWGundES">6笔</span></td>
+<td data-page-node-id="5FYfI6ANK1Du2qvY99EYFz">-0.819<br data-page-node-id="yfFRBmtDQ8IuiqEPZVGGsF"><span class="sub" data-page-node-id="VlrmqfMzYnbEThUiNGG1Z7">4笔</span></td>
+<td class="gain" data-page-node-id="oC0avxOo3StSAuD9t21tZi">+0.065</td>
+<td class="sub" data-page-node-id="Ck63TbZkYmQsNw1OXwGONl">ot拦5</td>
+<td class="sub" data-page-node-id="ykbsYo9m6I0lg45BpEJ1x6"></td>
+</tr><tr data-page-node-id="OXWgYWbg03jfKYBOHXFhu9">
+<td class="sym" data-page-node-id="yLOi6lwhoa5nWSOt0UDEX7">SH</td><td data-page-node-id="6jskrSIYcAaJAqK5B4BFUP">烧碱</td><td data-page-node-id="rHQugJVn3UokwMfUaICFFy">化工</td>
+<td data-page-node-id="HFj3GVef2CX6gakcbt5d8n">-0.001</td>
+<td data-page-node-id="ikGfp1NQ2R5ireeY0l8G1A">保持threshold</td>
+<td data-page-node-id="CGCvxugSHAcLcBWyGUKV0T">+1.312<br data-page-node-id="NcsKj8z1mggnosQnIHFjQw"><span class="sub" data-page-node-id="cIyFsHtP1GDbXuCf5zLJA6">6笔</span></td>
+<td data-page-node-id="vHawP65cOPOblBsJ7x9Jzz">+1.367<br data-page-node-id="unZpYUH11AgjiMRtAqKstO"><span class="sub" data-page-node-id="0tQqw007IcW52t2Q0k0vdA">5笔</span></td>
+<td class="gain" data-page-node-id="srH3NEyUNjjHnz8o9RJc3r">+0.055</td>
+<td class="sub" data-page-node-id="EPgJdIRKHDbB8PMRwICXHQ">ot拦2</td>
+<td class="sub" data-page-node-id="2zLFuWV3JbAQNUuB5awiGR"></td>
+</tr><tr data-page-node-id="do7ATcmOdfKZp7aMDkAB2d">
+<td class="sym" data-page-node-id="YhAE4DSxclCUz0SzkRxCAE">sp</td><td data-page-node-id="C0nTVhxEkJsUwSyoHFGIzo">纸浆</td><td data-page-node-id="m6dQzB0rceSbIlVE7vHRS7">化工</td>
+<td data-page-node-id="hYYEJiityI4nUGur7WnG2n">+0.030</td>
+<td data-page-node-id="0Ej3RR7BaFA8Ntmh7YG7Bt">保持threshold</td>
+<td data-page-node-id="ldAVEA7lkGgM0CTmYMObpa">+0.473<br data-page-node-id="deWTuNNloBq6d707qRNQpp"><span class="sub" data-page-node-id="pKU1QRbp2E4Mpb9JMGKJHx">18笔</span></td>
+<td data-page-node-id="ALtBBgtDyjuYmailQCe2cD">+0.527<br data-page-node-id="td0echxrO5NPe9NyVUI0DT"><span class="sub" data-page-node-id="2BNLwGjAAFWQ7I23VkRpw8">16笔</span></td>
+<td class="gain" data-page-node-id="x2tE3lALWQNXDDmPWkqCkR">+0.054</td>
+<td class="sub" data-page-node-id="rgZD3qyVadC90OjrpyEUHB">ot拦17</td>
+<td class="sub" data-page-node-id="PqjXFwN2eH48HhImjGALCm"></td>
+</tr><tr data-page-node-id="Cu76eLCzlrPYeL9GBJtiGi">
+<td class="sym" data-page-node-id="ETouRlGxyOdYiTWTnp26St">y</td><td data-page-node-id="PTKlX3kXRoiyWmCEDKpDNl">豆油</td><td data-page-node-id="CW3NGXu3Cga22GRwc8b27d">农产品</td>
+<td data-page-node-id="ZfHUrfXAA2BnNmfDhHUhbL">+0.140</td>
+<td data-page-node-id="PEwMmbf55ngJv6fuVmygh5">启用C门</td>
+<td data-page-node-id="pe6zzkotPzcbCrTaILIngK">-0.041<br data-page-node-id="yPMNiLCiMZoE1S6jw92KZc"><span class="sub" data-page-node-id="cKCp5Q5Vh6laR9Tn0CiWQa">18笔</span></td>
+<td data-page-node-id="neKsrwIdmDOvRgwCkf368V">-0.039<br data-page-node-id="tksp0NMYRScHpiqAE0ZuqB"><span class="sub" data-page-node-id="2VXx8QYkcTSKV7fXL6JOVS">16笔</span></td>
+<td class="flat" data-page-node-id="nfN1SuJZIhM8EBOqkORmHj">+0.002</td>
+<td class="sub" data-page-node-id="parPoCxxexCQlkEdhCkB0R">ot拦11</td>
+<td class="sub" data-page-node-id="XylreGdNCdLrEr8EXkqQb9"></td>
+</tr><tr data-page-node-id="npLJE0RQFTbR7E0cp1lVH2">
+<td class="sym" data-page-node-id="l8yEGynjhtjLIpWlNKzR8r">SA</td><td data-page-node-id="ZPygBnDWyeUHA5dfWaPEFS">纯碱</td><td data-page-node-id="qVE3iddR3bhsiCDLsloXIw">化工</td>
+<td data-page-node-id="5JKtVqWKimAWPUZeQthmHz">+0.388</td>
+<td data-page-node-id="7CH8rQjHuOXrFNs2Gv2ONL">保持threshold</td>
+<td data-page-node-id="s4JGEpJXS86PMOL081pB6e">+1.186<br data-page-node-id="atGlJg9pBfFGLMlyX4eC4F"><span class="sub" data-page-node-id="7vGj5jymMr88WNVCtYJlzC">5笔</span></td>
+<td data-page-node-id="hCfXJgAzOHYqdf3K5zt6VF">+1.185<br data-page-node-id="44skjCzLW8RwoKXBbYfFBU"><span class="sub" data-page-node-id="RaRBpIFLUPNcwXQO9veDuB">5笔</span></td>
+<td class="flat" data-page-node-id="5XswIXsaufNuR76sDDazUd">-0.001</td>
+<td class="sub" data-page-node-id="06CFh0xaE0YZPBHmDSb9mh">ot拦3</td>
+<td class="sub" data-page-node-id="dm7Uoit1e5gxg4g9Q0iuzy"></td>
+</tr><tr data-page-node-id="Q3Ac1YSTK6etkfpizAYANL">
+<td class="sym" data-page-node-id="vTASmV8iht2xgLwCuBUcNF">sn</td><td data-page-node-id="Ke85VCNkxPAGzeqvFJoyRK">沪锡</td><td data-page-node-id="Ya8C5EuqxnV0hFl5iBCZUa">有色</td>
+<td data-page-node-id="tMCGgkpOXm0cwWckD0YKJ3">-1.188</td>
+<td data-page-node-id="q7NcGukfd0U17s2yrAaInO">保持threshold</td>
+<td data-page-node-id="O9cPvoTXJLDM9fCjaWgLRQ">+2.378<br data-page-node-id="8wzPelyX4mWmjU4x80EGeM"><span class="sub" data-page-node-id="OzoUY8v2zqmUeqXL851QEl">6笔</span></td>
+<td data-page-node-id="tF7tDFnPocytBCOaqBfJKR">+2.376<br data-page-node-id="FOSrp9zCwDRIDSELtY8McX"><span class="sub" data-page-node-id="mKVYTKwHNMlEeXHJfr9wqO">7笔</span></td>
+<td class="flat" data-page-node-id="WdTlTdxCHHA8JZm42xrAAw">-0.002</td>
+<td class="sub" data-page-node-id="NrZG9eb5bRDf62YFl0auSv">ot拦4</td>
+<td class="sub" data-page-node-id="yHbSzOvPFnzxeVicau8WBv"></td>
+</tr><tr data-page-node-id="qCdqwuao3STG78BXaTRBGi">
+<td class="sym" data-page-node-id="7XiMtMujYKGLi0q8xnmrU8">FG</td><td data-page-node-id="Wl6MwLXZo5dogwPMb80AN0">玻璃</td><td data-page-node-id="cS0Bm94EzAYY6EZ1cPbzOp">化工</td>
+<td data-page-node-id="SyeibqZLlpsqF2PLD5yaBP">-0.579</td>
+<td data-page-node-id="Npb22waWoMfCbRhHkVUtGV">保持threshold</td>
+<td data-page-node-id="PmIojg2QsVVqLLWkUBjzVG">+0.545<br data-page-node-id="AKqwRvrDOVLfg659nUecGt"><span class="sub" data-page-node-id="iLns9SVqVtvX7OQw6gsUkn">8笔</span></td>
+<td data-page-node-id="7DzX16wyobvcxHJxb3UJuD">+0.541<br data-page-node-id="YL8rvWIqEAlanfgrEBLVHT"><span class="sub" data-page-node-id="yMqTaMo74hFQwpAst7Ci7F">8笔</span></td>
+<td class="flat" data-page-node-id="wtpTPxvkRpcERJ9uiE2hv5">-0.005</td>
+<td class="sub" data-page-node-id="xlOmzBhbyEyJDYlebwYX3T">ot拦1</td>
+<td class="sub" data-page-node-id="i8uSk8GGjKjHf0lbpI0Rx3"></td>
+</tr><tr data-page-node-id="u4JUWMd50ULGbty6tOFCXO">
+<td class="sym" data-page-node-id="oJSWj6Hs9du4M3tDDjlbN4">pp</td><td data-page-node-id="yAzjULlNEoao7T6Om022Js">聚丙烯</td><td data-page-node-id="5HS9Cd7fvnEzgq5GRJPAZn">化工</td>
+<td data-page-node-id="X8IsToyqCfP1qibJtLeNqh">+0.346</td>
+<td data-page-node-id="xyou7DVkpvQjFkEXTpCE4h">启用C门</td>
+<td data-page-node-id="CqwuxvG99MzGnz5NqQkx38">+0.434<br data-page-node-id="oqmEUFufX3j0tqJf2rUEKB"><span class="sub" data-page-node-id="MVng73roeABMWKHzn679Z0">17笔</span></td>
+<td data-page-node-id="U1spTvd40Dmkzf40pXoAh9">+0.368<br data-page-node-id="2dQzDzHNjt1ohh2bW3oRdy"><span class="sub" data-page-node-id="P7PW1bpjyZjnX2hKCKFJ1q">17笔</span></td>
+<td class="loss" data-page-node-id="QclrYUNFtyB2awCRtwjHyk">-0.066</td>
+<td class="sub" data-page-node-id="2uqrnFmzbDjUbQ2XPG5BHE">ot拦18</td>
+<td class="sub" data-page-node-id="589JEEfp8geItEXObBMG64"></td>
+</tr><tr data-page-node-id="SDsmPKZT6Ce1tilkGMTT19">
+<td class="sym" data-page-node-id="dTQTMh07SNEL7M8BVTEVjw">SR</td><td data-page-node-id="sYiCJ0kHSGyyaEKl1VpI8T">白糖</td><td data-page-node-id="CRC4BfYWiqENDMDwqPDfov">农产品</td>
+<td data-page-node-id="FEZhGZrDyOhplMswdCpG3f">+0.108</td>
+<td data-page-node-id="ZsekB7kuO1qJVMfAIbHMBF">启用C门</td>
+<td data-page-node-id="ebvwDYu9C2CJrPD8fEJ0YB">+0.590<br data-page-node-id="Hc9z4xbqGPpGmgPUBfF0N9"><span class="sub" data-page-node-id="y85PUi1emHX2j0BHRnxpwX">14笔</span></td>
+<td data-page-node-id="L9TXjTOhAkS7GkOHTMBNhZ">+0.515<br data-page-node-id="a6zwNdIJFS3V6Rn4rWrkCX"><span class="sub" data-page-node-id="eqjiHnWXEoelNbDSaJSoKB">13笔</span></td>
+<td class="loss" data-page-node-id="xi1OYIs7MDtVQS5Z9MnRUO">-0.075</td>
+<td class="sub" data-page-node-id="bFMohUQPxoz4imPpoFx7Dz">ot拦3</td>
+<td class="sub" data-page-node-id="ijUhFQLzMCe4NBZy2OmBfs"></td>
+</tr><tr data-page-node-id="CKFaq6a9uLqxoMlfTPgmLD">
+<td class="sym" data-page-node-id="CEY8MAy5maQuBbrHUxYWpm">UR</td><td data-page-node-id="I5DDHyH98JBf3AXxEi678K">尿素</td><td data-page-node-id="GCdfkYwhNgupsDXoDagbNO">化工</td>
+<td data-page-node-id="yQyRI4yD2dTeACR8TuGKE7">+0.138</td>
+<td data-page-node-id="kBUTHdAEqWNhmpfxM0RoAE">启用C门</td>
+<td data-page-node-id="5jer0Yz0YktU4S2L61Euvi">+0.040<br data-page-node-id="G50R1BWz7zBrlGI0PaLgEV"><span class="sub" data-page-node-id="HQeAq8nanfVr01vaS97kF0">21笔</span></td>
+<td data-page-node-id="ZyQYQ3tz5WTarpVt9JmjK5">-0.100<br data-page-node-id="ao2Lo7B0KnvUlKEDAC8Win"><span class="sub" data-page-node-id="TYvQkRlVF35RGPU787pDqT">23笔</span></td>
+<td class="loss" data-page-node-id="mRZVyAjygFbipQGjWkETqM">-0.140</td>
+<td class="sub" data-page-node-id="p4LRjVDiZ9USEadoXtY9OA">ot拦21</td>
+<td class="sub" data-page-node-id="b9AD6opFzo0TmyA7wse3kM"></td>
+</tr><tr data-page-node-id="aCire1AIXnJu3KQ3Dt3j24">
+<td class="sym" data-page-node-id="yRfxZkaB3v8FBzvpXHFpyN">AP</td><td data-page-node-id="Vqid8viUg5P6VPFwIHTWCL">苹果</td><td data-page-node-id="ZUSRbMbgNQkZFEpRxrE2tq">农产品</td>
+<td data-page-node-id="sfE39ruISlvTmJ7IGYgBQv">-0.663</td>
+<td data-page-node-id="It2Jxu3wSX3iicj5WJX9gv">保持threshold</td>
+<td data-page-node-id="nMZLsiYRL242b2mWjpGFia">-0.149<br data-page-node-id="PmLmW0X6sD6nv3hcEBfbXg"><span class="sub" data-page-node-id="s2nD4bbs5Cyk0TtuWOUuX0">21笔</span></td>
+<td data-page-node-id="mQkKDTwGy7ZMURVnWB5kxZ">-0.294<br data-page-node-id="9n5JHRbKtlE0uCSHpG0AEc"><span class="sub" data-page-node-id="Gn8FQCvZf4VccJMBRujacF">19笔</span></td>
+<td class="loss" data-page-node-id="P97PVPNsEGJrQqrFA0LUQO">-0.145</td>
+<td class="sub" data-page-node-id="2YhFBNoHcDlHiFA484p8E8">ot拦22</td>
+<td class="sub" data-page-node-id="fW8QJf4r59NyYJamYFviGL"></td>
+</tr><tr data-page-node-id="YlqvPPiRj0cJStb2jWJYf1">
+<td class="sym" data-page-node-id="t72c3ngQ1SXH2PuyX684wY">zn</td><td data-page-node-id="REDNmc5LB47OWddDommwFM">沪锌</td><td data-page-node-id="mraDBeGTfggKpPqyEx6c65">有色</td>
+<td data-page-node-id="hA90ARXMUeDgmArrBa0UMm">-0.218</td>
+<td data-page-node-id="eN8asOXL825SodV9f5zpYq">保持threshold</td>
+<td data-page-node-id="uCJtGGP6byIha8T0JCzha3">+0.432<br data-page-node-id="6rBKpBpWSwvCYg5ANgrzgi"><span class="sub" data-page-node-id="sb7RC1IEMCeFNmKJLbw9kz">17笔</span></td>
+<td data-page-node-id="jtzlJM5trfhB0ekMq2B0eH">+0.258<br data-page-node-id="mEpBjUyLBiYQhqmdqk4n9c"><span class="sub" data-page-node-id="oATZz1yiE0sJEQYQVHAe3i">14笔</span></td>
+<td class="loss" data-page-node-id="AbAAXO2FrrQNrBo556fXYd">-0.174</td>
+<td class="sub" data-page-node-id="1WKv9aC86oEG2DECMpbvnb">ot拦10</td>
+<td class="sub" data-page-node-id="t3nCRD1cRMaDfDkmrYIAhU"></td>
+</tr><tr data-page-node-id="YPxqjQyKrwFa3O4f14uaJw">
+<td class="sym" data-page-node-id="JmPqXQGWRpbMGzEQI5S51o">fu</td><td data-page-node-id="iBHYIBwW1lhy7AUO6SAAmq">燃油</td><td data-page-node-id="hM87hsbTDzoREehlZyOb1P">能源</td>
+<td data-page-node-id="xI3UCwseS6BxBOqIRBCuYH">+0.073</td>
+<td data-page-node-id="AjnhFWe5QYv7oAGXGQzews">启用C门</td>
+<td data-page-node-id="rYBGx4KENAlrGVN5URq9zC">+0.614<br data-page-node-id="Y9ROPjnrer6tuOimRtfQCc"><span class="sub" data-page-node-id="Jl17EY8zEyvA9XW6E1yH59">37笔</span></td>
+<td data-page-node-id="NcQZGUG4Lbq2NFonGXuzO3">+0.388<br data-page-node-id="YiFF2Rqg31tbsbLmezBK18"><span class="sub" data-page-node-id="GhRzxCY9T0vtn2VZlsHyP0">33笔</span></td>
+<td class="loss" data-page-node-id="tVWz4ac1assCmEaN5lyxBt">-0.226</td>
+<td class="sub" data-page-node-id="rMZe2cV1hvF7WVjY9MP3ra">ot拦13</td>
+<td class="sub" data-page-node-id="8M5qVyhRwCZyZjYSQPmLtX"></td>
+</tr><tr data-page-node-id="Nm0thEsKCIcWMuX6m2R3l1">
+<td class="sym" data-page-node-id="yAsNYFi6MRt6bUt7leFo9Y">ec</td><td data-page-node-id="2LrMAE08cGxLD7HaKcKe7O">欧线</td><td data-page-node-id="oQAhk9uAowNOeFI7vxKqUJ">航运</td>
+<td data-page-node-id="18VWKAWx5nM3iFp3NEUfZl">-0.009</td>
+<td data-page-node-id="iIIj8mOyw3z2mp7BGEBizT">保持threshold</td>
+<td data-page-node-id="qXmLEV28QWTzLtR01O4J0r">+1.213<br data-page-node-id="vdDeRvDkeCDadU7t1tFLgU"><span class="sub" data-page-node-id="ZIx2O4p8goHIdYpJYikiq9">4笔</span></td>
+<td data-page-node-id="RRwsdqYBWKjG88zKJ0oiQQ">+0.959<br data-page-node-id="MgyddSBJs5OKVvNUUKGTXj"><span class="sub" data-page-node-id="1rLkGhcuKhJMQB7CS9D8cf">3笔</span></td>
+<td class="loss" data-page-node-id="DezUEWRNk55r4v7AKBnyeQ">-0.254</td>
+<td class="sub" data-page-node-id="OWDO7i7Z5NMpOOkCDALXKe">ot拦2</td>
+<td class="sub" data-page-node-id="paROuZ4T7M2oDYH05Tt9Fx"></td>
+</tr><tr data-page-node-id="CJIx1W08qsiqtsc4FRIrbM">
+<td class="sym" data-page-node-id="FHuzw1SK9JG26WAx32ABy4">lc</td><td data-page-node-id="0nuxkSr5xcsHlbSMOqtCEo">碳酸锂</td><td data-page-node-id="Q57eDdTFkgbN4gP9wwfGp0">有色</td>
+<td data-page-node-id="gyo5IFEzUmHqEBuTlpzuQj">+0.083</td>
+<td data-page-node-id="VSmhX1ycbXXwF0iSTW93Ka">启用C门</td>
+<td data-page-node-id="KAa2K4F4Nf9Z7kWU3gp1vZ">+1.431<br data-page-node-id="RYFuIxyBEcrWuhD1AJk4E8"><span class="sub" data-page-node-id="ve2lFpSRUJZdRy7VeOja4O">16笔</span></td>
+<td data-page-node-id="Foex95ZOVrvb1WmbarzXGd">+0.931<br data-page-node-id="IALbyheVvEYD7NnxLGDV4L"><span class="sub" data-page-node-id="IxYoHji7HKOCafkQxNSkUE">16笔</span></td>
+<td class="loss" data-page-node-id="caN9y0r5R1ZwDrOaBeqaJT">-0.500</td>
+<td class="sub" data-page-node-id="AEU5Ipsn05d3WeCCNWstNo">ot拦19</td>
+<td class="sub" data-page-node-id="KcbFFUb3sBVaPctgoB0InO"></td>
+</tr><tr data-page-node-id="uHKj7taaWFwEuMnbnvw1ll">
+<td class="sym" data-page-node-id="DI85LJ4cPTAOTpqhT6JZsY">lh</td><td data-page-node-id="ZnhZzpihjFio4rSbAk9mbj">生猪</td><td data-page-node-id="4GD2ET1uNhaF12y7yige6B">农产品</td>
+<td data-page-node-id="lPFmEOtbn3cp5JkOCey1el">-0.215</td>
+<td data-page-node-id="qXMwHBWjUuWad7CkBYliR9">保持threshold</td>
+<td data-page-node-id="Om8NLzuGOA1yutdNsG8mJc">+1.125<br data-page-node-id="Z2Ouxzl9P1e82GXOVDEahM"><span class="sub" data-page-node-id="ylercPvJizhjhpqaPA2Yyz">11笔</span></td>
+<td data-page-node-id="7PfbFZGmlHzQ9eXgnSrpyA">+0.466<br data-page-node-id="5GclNMnzVtNdDaFaB9lBUF"><span class="sub" data-page-node-id="02rKaG1RCpdKHVFj9qLLp9">12笔</span></td>
+<td class="loss" data-page-node-id="6KyhQOPlPx0CJuBAQ5hzbg">-0.659</td>
+<td class="sub" data-page-node-id="UYoE4UckB4AOtyGApmyEkS">ot拦6</td>
+<td class="sub" data-page-node-id="OVQ8JHOKbqgs1mRq89GRed"></td>
+</tr><tr data-page-node-id="CNvAE0XdJhGdplyCbgqaTv">
+<td class="sym" data-page-node-id="IH10hFHOCwxAY35DxPBuSx">PX</td><td data-page-node-id="mYrCtRanM1D7jcZOk8kBVQ">对二甲苯</td><td data-page-node-id="QJMEJFD7hKJEFh7auFJVq5">化工</td>
+<td data-page-node-id="gHJo3BzCrM4OWoraTGV3dy">+0.051</td>
+<td data-page-node-id="9Y6QF0ULQ8EeC59kIgCjAQ">保持threshold</td>
+<td data-page-node-id="KXW0bNRQcPToWAgX2Sn63Q">+4.396<br data-page-node-id="JKYm3p2VA9GcuACLJMABEq"><span class="sub" data-page-node-id="axkh1722FFhnVKtypYCYO5">3笔</span></td>
+<td data-page-node-id="po7l8sW0aUiUYr8aiLwyQf">+3.039<br data-page-node-id="EYbTlys3Gfa8phQs3DJC4j"><span class="sub" data-page-node-id="mIOwKMlimfCmyeFPgHMq6i">4笔</span></td>
+<td class="loss" data-page-node-id="wpH4uVoW3fwnvHKJCWhsSy">-1.357</td>
+<td class="sub" data-page-node-id="GESDY4Dl3ydr39gGjfnNtj">ot拦7</td>
+<td class="sub" data-page-node-id="Axjh35rzJgC61TjeL2jliz"></td>
+</tr><tr data-page-node-id="LFzZWzRyHQBHAQHaz6Hiby">
+<td class="sym" data-page-node-id="YWF4WcYFmjmyfo2bkEZfci">J</td><td data-page-node-id="JI5FNAPvxDgUIe01xnVcGo">焦炭</td><td data-page-node-id="ZzPGG8FP4UAsnuSMZkJrzg">黑系</td>
+<td data-page-node-id="KaEDDW4sRsRsNSf3HEAsIF">-7.136</td>
+<td data-page-node-id="AEdXnGp9bHAmFpGS7hElZz">保持threshold</td>
+<td data-page-node-id="PpdgVPrdDtrRlvnSmgp5mm">-1.106<br data-page-node-id="r4mxEfE6sCAZIDLUCR0Qng"><span class="sub" data-page-node-id="nExah6UOY8PlwjMn2KAywS">1笔</span></td>
+<td data-page-node-id="x69uL1FkREcdp3I8RXcxYE">-1.106<br data-page-node-id="6qxGi7MLlHuvsywxHVTxOV"><span class="sub" data-page-node-id="wzD30kotLE7J7JHO2BnCzg">1笔</span></td>
+<td class="flat" data-page-node-id="TmefgKnf8A6NhBns61FPVT">+0.000</td>
+<td class="sub" data-page-node-id="Zkz51UXzmBDzBrtGH0NI9L">ot拦2</td>
+<td class="sub" data-page-node-id="rIB78Ifvq0qp0R3SwjiIV0"></td>
+</tr><tr data-page-node-id="IYXNgLeLx4LKfyBEdOfQmr">
+<td class="sym" data-page-node-id="qggUbMide2vDNEgs8SXgTZ">cs</td><td data-page-node-id="jm3I3FQEDPMT65iU3DIstj">淀粉</td><td data-page-node-id="ySkePhPelzRG0yzFhN1k7Y">农产品</td>
+<td data-page-node-id="FqtFT3iGcHZiP6wrTqgA7C">+0.122</td>
+<td data-page-node-id="s3nKPzAo1Im5k7k90YBhId">启用C门</td>
+<td data-page-node-id="kbmPANPFD49IQJ2DRrnXCI">-0.880<br data-page-node-id="Ei7niacYNCeHtROfGDUqjJ"><span class="sub" data-page-node-id="5DrxyRvG8V7Ar8aSzlAaBC">9笔</span></td>
+<td data-page-node-id="9qfjWoqnh5gA0Tzad0KIQV">-0.880<br data-page-node-id="aHmiEgnoX7gjv8IQoU6ivS"><span class="sub" data-page-node-id="IM2j7jhLLulFStuDHjKaJR">9笔</span></td>
+<td class="flat" data-page-node-id="83R84deQCgUtmFpn1kH7EK">+0.000</td>
+<td class="sub" data-page-node-id="HBoPMYPWUqBMNDiMvPzDx6">ot拦2</td>
+<td class="sub" data-page-node-id="ZnKLF0E5NJ64Lw1B2f7UMB"></td>
+</tr><tr data-page-node-id="07PNxzMkMSwTzo5xQeteLE">
+<td class="sym" data-page-node-id="N7fW6HCMftNwBRa5zZaleA">PF</td><td data-page-node-id="3SNp8WRuMRFt1XSjjbYU3A">短纤</td><td data-page-node-id="nWKBhtlr3cH4SjPZuVJfJq">化工</td>
+<td data-page-node-id="gcUoTLcamiNeHC468EN4je">-0.849</td>
+<td data-page-node-id="mFfypWltdZsY7B535a9SFH">保持threshold</td>
+<td data-page-node-id="BnxYzoTovLOaI1vDPmiQyb">+0.814<br data-page-node-id="HOUCSGAQmb0kOKiWLDfYjD"><span class="sub" data-page-node-id="P6rLbslT1Aa59kWcpOkRuP">4笔</span></td>
+<td data-page-node-id="IHx3ZCTTCFJWoVhrcSkFQc">+0.814<br data-page-node-id="xKP5twfVwUnc1E5UWil7K0"><span class="sub" data-page-node-id="3AkTUpA7ZVOgejBjcuI0Ro">4笔</span></td>
+<td class="flat" data-page-node-id="AYSkTUBorE9GyYyclUUlyo">+0.000</td>
+<td class="sub" data-page-node-id="vgLw5LtyqMGX08AnFSdLtW">ot拦3</td>
+<td class="sub" data-page-node-id="eD8HxVcl7tvUHDJnjr0dEH"></td>
+</tr><tr data-page-node-id="FgrAJ4dW2EzcDvP6PVBbRv">
+<td class="sym" data-page-node-id="eWogWTCUes6Cj7VRdejBfN">OI</td><td data-page-node-id="jvx8HDlwNbSxAi3wTeOebl">菜油</td><td data-page-node-id="9kFLB8CptOgbynijfNGMgA">农产品</td>
+<td data-page-node-id="rlrCwemQADxNFsVdp9cdYB">+0.038</td>
+<td data-page-node-id="tAPg6Utm9oqPRDbKirmvMG">保持threshold</td>
+<td data-page-node-id="EUx7QCnomch4jskfBkOBH2">+0.189<br data-page-node-id="RH0HlyxRAIE76EyKNhH44G"><span class="sub" data-page-node-id="0vMsUD1LQtaz2Bv9LfwxTU">13笔</span></td>
+<td data-page-node-id="qyz4qKFfU8KdX5wxjljCd6">+0.189<br data-page-node-id="vUsGDWQ2ZBGaUZHgLy9U0t"><span class="sub" data-page-node-id="CHt5LHwvLgEidqDnIZFa8y">13笔</span></td>
+<td class="flat" data-page-node-id="uoLspreiVYhUQ7cFnZVxH3">+0.000</td>
+<td class="sub" data-page-node-id="FqhnlQs6VqyxQ03gpcpaP6">ot拦1</td>
+<td class="sub" data-page-node-id="qQcBnz6GUbxVYFCl76riIO"></td>
+</tr><tr data-page-node-id="CtjNKuDsTcFL7SlglQhrnl">
+<td class="sym" data-page-node-id="rh4bllHMkeEWLtA1Znsou2">sc<span class="tag skip" data-page-node-id="zSCl9bN8jK9Lh4D1kNDj9e">补全·无成交</span></td><td data-page-node-id="y0mbjLOKMDHVTIwfFFCu9k">sc</td><td data-page-node-id="KjqqmS88mPtlW9cHRSFGZj">?</td>
+<td data-page-node-id="u5XY7LAofASTzTB45D29BS">  -  </td>
+<td data-page-node-id="5LUQ5luWtWjA1r5j0ElesB">-</td>
+<td data-page-node-id="L8IntnhP8CdDiAy0U6UDrm">  -  <br data-page-node-id="zUG8qbvvpi83rmJQBAITJx"><span class="sub" data-page-node-id="lrFYBclvoXmwABhMgJCZTN">None笔</span></td>
+<td data-page-node-id="cRn1LY9r3TIRL3te3Tf02y">  -  <br data-page-node-id="7tWP2mWQ6l4OgYTTxZeQw3"><span class="sub" data-page-node-id="LWqiutEfB8UAUKrxY8VKL0">None笔</span></td>
+<td class="flat" data-page-node-id="1OUNbGpvS3DZmB4gySMiBU">  -  </td>
+<td class="sub" data-page-node-id="DpTFXcsLi2nbpNBn8B0h6G">ot拦0</td>
+<td class="sub" data-page-node-id="S5tp0YnRWthPW3h5pRA67X">skipped_no_trades</td>
+</tr><tr data-page-node-id="xzhB1MMdAfiDH6v4jqmXCO">
+<td class="sym" data-page-node-id="dZGBGo48HC0PBCygeZkvQW">SA01<span class="tag inert" data-page-node-id="TktsoubnS7EEUc9PbuIyKk">补全·门惰性</span></td><td data-page-node-id="1GEpeBMfWs50MAFSG9beKT">SA01</td><td data-page-node-id="vXjCSxVX1ySrU4RZXp98Jq">?</td>
+<td data-page-node-id="eIsZf4dZLeJDeEnPvt8Rfj">  -  </td>
+<td data-page-node-id="YvsMWdZQmS1M1vFRPLKNyD">-</td>
+<td data-page-node-id="aYu4B18eFCblGr9deBdQZB">  -  <br data-page-node-id="NFpPHrwRGWEl5W8ohz7hBd"><span class="sub" data-page-node-id="TbkLRxySDQJObcvb50tgP9">None笔</span></td>
+<td data-page-node-id="jwLL7IN5G5ShSEqw6gNZYP">  -  <br data-page-node-id="SFZMHDGFvXxHkvYPuUIkyA"><span class="sub" data-page-node-id="AyNAtTjKrHwnun5SvjDyBA">None笔</span></td>
+<td class="flat" data-page-node-id="jAXghNleEA71hC5KjZ1YYq">  -  </td>
+<td class="sub" data-page-node-id="2nojLtJfEBOqm1l5FSt1Bk">ot拦0</td>
+<td class="sub" data-page-node-id="KD44R9xOIfoILqYmXsjwAd">gate_inert_no_klineC</td>
+</tr></tbody></table>
+<div class="sub" data-page-node-id="WGi3Rh9s3p6eMCOmUuOGEu">红=增益 / 绿=有损（A股惯例）。ot拦=oppose 门在 IS+OOS 全样本拦下的信号数。补全品种带标签。</div>
+
+<h2 data-page-node-id="77nm0RNd9maf5zM5KmIu3K">四、结论</h2>
+<div class="note" data-page-node-id="BicJFX4O7GBOAZmCPzKBxu">
+1. <b data-page-node-id="jtA3SDP8G1YwteyNWJiTOr">OOS 已验证总体 = 41 只</b>（= prior 41，门可用且有回测成交），oppose 门 OOS 均值 Δ=+0.066，二项 p=0.0351（显著✓）→ 与 prior 结论一致：门方向稳健、真实小幅增益。补全未改变该结论（sc/SA01 零成交，无法纳入验证）。<br data-page-node-id="KR77Dz7zwwkrE0s4E16rMD">
+2. <b data-page-node-id="CQQ7OPKHcypaYb8FyM1DCG">sc（补全·新跑）</b>：有 kline C、门可用，但回测零成交 → 门 OOS 不可验证；live 若偶发信号门仍会按 kline C 拦截，风险可忽略，建议盘中监控其拦截/通过计数。<br data-page-node-id="660I0muKfapeglebDbxutx">
+3. <b data-page-node-id="qlOS7VXbfvn1KCjb8uHJAg">SA01（补全·门惰性）</b>：无 kline C → 门永不拦截，且零成交，对实盘零影响（安全默认）。<br data-page-node-id="hicp0kAHgAdUqpl3qNDC00">
+4. <b data-page-node-id="IgWYunJuC2u21UVFlvq0AH">全市场部署覆盖</b>：43 只活跃品种现全部有明确 OOS 结论——41 只已验证（oppose Δ=+0.066、p=0.0351 显著），2 只零成交不可验证（sc 门可用 / SA01 门惰性）。无未覆盖品种。
+</div>
+</div></body></html>

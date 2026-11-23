@@ -2,8 +2,8 @@
 #  CI：单元测试 + 冒烟测试
 # ==============================================================================
 #  触发时机：
-#    · PR 到 main/master → Linux + 3.11 单元测试（快速反馈）
-#    · push 到 main/master → Linux/macOS + 3.10/3.11/3.12 全矩阵 + 覆盖率
+#    · PR 到 main/master → Linux + 3.12/3.13 单元测试（快速反馈）
+#    · push 到 main/master → Linux/macOS + 3.12/3.13 全矩阵 + 覆盖率
 #    · Merge Queue → 合并前最终验证（保证 main 永远绿）
 #    · 手动触发
 # ==============================================================================
@@ -129,14 +129,12 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        # PR 和 push 都跑全 Python 版本矩阵（Required checks 要求 3.10/3.11/3.12 全部通过）
+        # PR 和 push 都跑全 Python 版本矩阵（Required checks 要求 3.12/3.13 全部通过）
         os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
-        python-version: ${{ fromJSON('["3.10", "3.11", "3.12"]') }}
+        python-version: ${{ fromJSON('["3.12", "3.13"]') }}
         scope: ["unit"]
         exclude:
-          # macOS 上只跑 3.11（减少资源消耗，macOS runner 贵）
-          - os: macos-latest
-            python-version: "3.10"
+          # macOS 上只跑 3.13（减少资源消耗，macOS runner 贵）
           - os: macos-latest
             python-version: "3.12"
 
@@ -201,7 +199,7 @@ jobs:
   #  PR 阶段不跑（慢），只在 push 到 main 时跑，保障集成层质量
   # ========================================================================
   integration-test:
-    name: "Py 3.11 · integration"
+    name: "Py 3.13 · integration"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: detect-changes
@@ -216,20 +214,20 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Restore pytest cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: .pytest_cache
-          key: pytest-${{ runner.os }}-py3.11-integration-${{ github.sha }}
+          key: pytest-${{ runner.os }}-py3.13-integration-${{ github.sha }}
           restore-keys: |
-            pytest-${{ runner.os }}-py3.11-integration-
+            pytest-${{ runner.os }}-py3.13-integration-
 
       - name: Run integration tests
         run: |
           python run_tests.py integration \
-            --junit test-results/3.11-integration.xml \
+            --junit test-results/3.13-integration.xml \
             --slow 2000
 
       - name: Integration test summary
@@ -239,7 +237,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项 | 值 |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| Python 版本 | 3.11 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python 版本 | 3.13 |" >> $GITHUB_STEP_SUMMARY
           echo "| 测试范围 | integration |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "> 仅在 push 到 main 时运行，保障集成层质量" >> $GITHUB_STEP_SUMMARY
@@ -248,7 +246,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
-          name: test-results-py3.11-integration
+          name: test-results-py3.13-integration
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
@@ -270,7 +268,7 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Run tests with coverage
         run: |
@@ -318,7 +316,7 @@ jobs:
       - name: Setup Python and deps
         uses: ./.github/actions/setup-python-deps
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Run tests with coverage
         run: |

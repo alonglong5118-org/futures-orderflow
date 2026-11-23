@@ -72,7 +72,7 @@ fi
 
 # 构建 type 列表的正则（兼容 bash 3.x / macOS 默认 bash）
 type_regex=$(IFS='|'; echo "${ALLOWED_TYPES[*]}")
-PATTERN="^(${type_regex})(\([a-zA-Z0-9._-]+\))?!?: .+"
+PATTERN="^(${type_regex})(\([^()]+\))?!?: .+"
 
 if echo "$commit_msg_clean" | grep -Eq "$PATTERN"; then
     # 格式正确，检查长度

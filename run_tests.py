@@ -4,7 +4,11 @@
 ==========================
 
 用法:
-  python run_tests.py                  # 跑全部单元测试（Python + JS）
+  .venv/bin/python3 run_tests.py       # 跑全部单元测试（Python + JS）
+
+注意: 必须用带 numpy/pandas 的解释器（.venv/bin/python3 或 workbuddy python）。
+用系统 python3 跑会因缺依赖误报 70+ 个"失败"（部分导入污染 sys.modules 级联），
+脚本开头会自动自检并在缺依赖时快速报错（exit 2）。
   python run_tests.py gap_stop         # 只跑某个模块
   python run_tests.py smoke            # 冒烟测试（<10s，核心功能快速验证）
   python run_tests.py unit             # 只跑单元测试（不含集成/高级）
@@ -52,6 +56,7 @@ TEST_MODULES = {
     "params": "tests.test_params",
     "strategies": "tests.test_strategies",
     "config": "tests.test_config",
+    "feature_flags_wiring": "tests.test_feature_flags_wiring",
     "weights": "tests.test_weights",
     "flow_aggregator": "tests.test_flow_aggregator",
     "compute_strategy": "tests.test_compute_strategy",
@@ -129,6 +134,8 @@ TEST_MODULES = {
     "performance": "tests.test_performance",
     "consistency_watchdog": "tests.test_consistency_watchdog",
     "risk_gate_property": "tests.test_risk_gate_property",
+    # 配置治理：短路（DISABLED_SYMBOLS）必须每个条目都有「可核查原因」
+    "disabled_contract": "tests.test_disabled_contract",
 }
 
 # 默认全量测试时跳过的模块（性能测试等耗时/波动大的）
@@ -145,6 +152,7 @@ SMOKE_TESTS = {
     "regime",  # 市场状态
     "property_fuzz",  # 属性测试（快速验证数学属性）
     "four_dim_pure",  # 四维纯函数
+    "disabled_contract",  # 短路原因契约（配置治理：被禁品种必须有可核查原因）
 }
 
 # 单元测试（不含集成/属性/基准/性能）
@@ -833,7 +841,20 @@ def _iter_tests(suite):
             yield test
 
 
+def _check_interpreter():
+    """解释器自检：测试依赖 numpy/pandas，用错 python 会误报大量失败。"""
+    for dep in ("numpy", "pandas"):
+        try:
+            __import__(dep)
+        except ImportError:
+            print(f"❌ 当前 python 缺少 {dep}：{sys.executable}")
+            print("   测试会误报 70+ 个失败（部分导入污染 sys.modules 级联）。")
+            print("   请改用带依赖的解释器：.venv/bin/python3 run_tests.py")
+            sys.exit(2)
+
+
 def main():
+    _check_interpreter()
     args = sys.argv[1:]
 
     if "--list" in args or "-l" in args:

@@ -22,6 +22,45 @@ import account_tracker as at  # P0-10 fix: needed by check_account_fields
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _account():
+    """当前线程账户（HTTP ?account= 已切换，后台主循环为 default）。"""
+    try:
+        return at.get_account()
+    except Exception:
+        return "default"
+
+
+def _state_file():
+    return at.state_file_for(_account())
+
+
+def _journal_file():
+    try:
+        import trade_journal as tj
+
+        return tj._journal_file_for(_account())
+    except Exception:
+        return os.path.join(HERE, "trade_journal.json")
+
+
+def _killswitch_file():
+    try:
+        import risk_state_machine as rsm
+
+        return rsm._kill_state_file_for(_account())
+    except Exception:
+        return os.path.join(HERE, "killswitch_state.json")
+
+
+def _drawdown_file():
+    try:
+        import drawdown_guard as ddg
+
+        return ddg._state_file_for(_account())
+    except Exception:
+        return os.path.join(HERE, "drawdown_state.json")
+
+
 def _safe_load(path):
     try:
         if not os.path.exists(path):
@@ -34,19 +73,19 @@ def _safe_load(path):
 
 def check_state_files_exist():
     missing = []
-    for f in ["account_state.json", "trade_journal.json", "drawdown_state.json"]:
-        if not os.path.exists(os.path.join(HERE, f)):
-            missing.append(f)
+    for f in [_state_file(), _journal_file(), _drawdown_file()]:
+        if not os.path.exists(f):
+            missing.append(os.path.basename(f))
     ok = len(missing) == 0
     return {"ok": ok, "name": "状态文件存在性", "detail": f"缺失: {missing}" if missing else "所有必要文件存在"}
 
 
 def check_account_journal_consistency():
     issues = []
-    st, err = _safe_load(os.path.join(HERE, "account_state.json"))
+    st, err = _safe_load(_state_file())
     if err:
         return {"ok": False, "name": "账户↔交易记录持仓一致性", "detail": f"account_state 加载失败: {err}"}
-    tj, err2 = _safe_load(os.path.join(HERE, "trade_journal.json"))
+    tj, err2 = _safe_load(_journal_file())
     if err2:
         return {"ok": False, "name": "账户↔交易记录持仓一致性", "detail": f"trade_journal 加载失败: {err2}"}
 
@@ -79,10 +118,10 @@ def check_account_journal_consistency():
 
 
 def check_killswitch_staleness():
-    ks, err = _safe_load(os.path.join(HERE, "killswitch_state.json"))
+    ks, err = _safe_load(_killswitch_file())
     if err:
         return {"ok": False, "name": "风险状态机数据新鲜度", "detail": f"加载失败: {err}"}
-    st, err2 = _safe_load(os.path.join(HERE, "account_state.json"))
+    st, err2 = _safe_load(_state_file())
     if err2:
         return {"ok": False, "name": "风险状态机数据新鲜度", "detail": f"account_state 加载失败: {err2}"}
 
@@ -141,7 +180,7 @@ def check_killswitch_staleness():
 
 
 def check_drawdown_validity():
-    dd, err = _safe_load(os.path.join(HERE, "drawdown_state.json"))
+    dd, err = _safe_load(_drawdown_file())
     if err:
         return {"ok": False, "name": "回撤水位线有效性", "detail": f"加载失败: {err}"}
     peak = dd.get("peak_equity")
@@ -155,6 +194,8 @@ def check_drawdown_validity():
 
 
 def check_paper_account():
+    if _account() != "default":
+        return {"ok": True, "name": "模拟盘权益一致性", "detail": f"账户 {_account()} 无 paper_account（仅模拟盘适用），跳过"}
     pa, err = _safe_load(os.path.join(HERE, "paper_account.json"))
     if err:
         return {"ok": False, "name": "模拟盘权益一致性", "detail": f"加载失败: {err}"}
@@ -256,7 +297,7 @@ def check_account_fields():
     except Exception as e:
         return False, f"账户状态文件无法加载: {e}", {}
     problems = []
-    details = {"file": "account_state.json", "keys_present": list(st.keys())}
+    details = {"file": os.path.basename(_state_file()), "keys_present": list(st.keys())}
     for k in required:
         if k not in st or st.get(k) is None:
             problems.append(f"缺少关键字段 {k}")

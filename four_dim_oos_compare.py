@@ -14,6 +14,7 @@
                         日线定信号 + 5m bar 做出场，验证 P-G 尾仓在细粒度下的真实表现
   --1h                → 1h 出场细化：FIVE_M_TARGETS 同上，但把 5m 先 resample 为 1h
                         再跑同一套出场逻辑，作为 日线→1h→5m 粒度阶梯的中间档（无原生1h数据）
+  --force             → 忽略既有结果文件，强制从头全量重跑（默认断点续跑，避免静默读缓存）
 
 对比指标（逐品种并列）：笔数 / 期望R / 胜率 / 最大回撤(R) / t2达成率 / 尾仓占比 /
 各 regime 期望R；并给出 Δ 与判定（改善/退化/持平）。
@@ -165,6 +166,7 @@ def main():
     use_5m = "--5m" in flags
     use_1h = "--1h" in flags
     args = [a for a in flags if not a.startswith("--")]
+    use_force = "--force" in flags
 
     # 单实例锁：防止看门狗/自愈重启时双实例写同一结果文件
     lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".oos_lock")
@@ -205,10 +207,13 @@ def main():
         out_name = "oos_compare_result.json"
 
     # 断点续跑：恢复已完成品种，崩溃/重启后从断点继续，不从头重跑、不卡死循环
+    # ⚠️ --force 时忽略既有结果文件，强制从头全量重跑（避免「静默读缓存续跑」复现陷阱）
     rows = []
     failures = []
     completed_syms = set()
-    if os.path.exists(out_name):
+    if use_force and os.path.exists(out_name):
+        print(f"[--force] 忽略已有 {out_name}，从头全量重跑", flush=True)
+    if os.path.exists(out_name) and not use_force:
         try:
             with open(out_name, encoding="utf-8") as f:
                 prev = json.load(f)

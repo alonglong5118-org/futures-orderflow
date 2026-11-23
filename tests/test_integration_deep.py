@@ -149,7 +149,14 @@ class TestDeepBacktestIntegration(unittest.TestCase):
         self.assertGreaterEqual(result_small["trades"], 0)
 
     def test_different_symbols_same_structure(self):
-        """不同品种回测结果结构一致"""
+        """不同品种回测结果结构一致
+
+        注意：walk_forward_backtest 在窗口内 0 成交时返回「早退 dict」，只有
+        symbol/trades/note/roll_skipped/consec_skipped，不含 expR / win_rate /
+        trades_detail / by_regime / exit_reasons 等统计键。因此按成交数是否为 0
+        分两种契约断言，而不是无条件断言完整键（否则 rb.tail(300) 恰逢 0 成交
+        时本测试会假失败——纯 HEAD 亦可复现）。
+        """
         df_rb = load_daily("rb")
         df_hc = load_daily("hc")
         if df_rb is None or df_hc is None or len(df_rb) < 300 or len(df_hc) < 300:
@@ -158,10 +165,18 @@ class TestDeepBacktestIntegration(unittest.TestCase):
         result_rb = walk_forward_backtest("rb", cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_rb.tail(300))
         result_hc = walk_forward_backtest("hc", cfg=DEFAULT_CONFIG, min_bars=60, df_in=df_hc.tail(300))
 
-        # 结构应该一致
-        for key in ["symbol", "trades", "expR", "win_rate", "trades_detail", "by_regime", "exit_reasons"]:
-            self.assertIn(key, result_rb)
-            self.assertIn(key, result_hc)
+        COMMON_KEYS = ["symbol", "trades"]
+        FULL_KEYS = ["symbol", "trades", "expR", "win_rate", "trades_detail", "by_regime", "exit_reasons"]
+
+        for tag, res in (("rb", result_rb), ("hc", result_hc)):
+            if res.get("trades", 0) == 0:
+                # 早退契约：0 成交时只保证公共键，且 note 应说明原因
+                for key in COMMON_KEYS:
+                    self.assertIn(key, res, f"{tag} 0成交早退结果缺少公共键 {key}")
+                self.assertEqual(res["trades"], 0, f"{tag} 早退结果 trades 必须为 0")
+            else:
+                for key in FULL_KEYS:
+                    self.assertIn(key, res, f"{tag} 完整结果缺少键 {key}")
 
     def test_trade_detail_regime_valid(self):
         """每笔交易的 regime 是有效值"""

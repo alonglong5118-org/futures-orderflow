@@ -13,7 +13,7 @@
 #    - name: Setup Python and deps
 #      uses: ./.github/actions/setup-python-deps
 #      with:
-#        python-version: "3.11"
+#        python-version: "3.13"
 # ==============================================================================
 
 name: "Setup Python + Dependencies"
@@ -23,7 +23,7 @@ inputs:
   python-version:
     description: "Python 版本"
     required: true
-    default: "3.11"
+    default: "3.13"
 
 runs:
   using: "composite"

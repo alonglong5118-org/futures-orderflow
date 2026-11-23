@@ -269,12 +269,20 @@ class TestTakeProfitEdgeCases:
         assert r["tail_pct"] == 0.25
 
     def test_sim_exit_no_bars(self):
-        """空 bar 列表 → 不触发出场。"""
+        """空 bar 列表 → 不触发出场（按期初价离场）。
+
+        2026-10-15 修正：本测试原先断言 reason == "no_exit"，
+        但 sim_exit_bars 的文档契约（take_profit_utils.py:123）明确
+        exit_reason ∈ {"止损", "止盈2R", "尾仓离场", "期末平"}，
+        空 bars 走return entry, "期末平", -1。旧断言是过时的英文契约残留。
+        """
         from take_profit_utils import sim_exit_bars
 
         ep = {"stop": 90.0, "t1": 110.0, "t2": 120.0, "tail_enabled": False}
         exit_price, reason, idx = sim_exit_bars([], 1, 100.0, ep)
-        assert reason == "no_exit"
+        assert reason == "期末平"
+        assert idx == -1
+        assert exit_price == pytest.approx(100.0)
 
     def test_sim_exit_stop_hit_first_bar(self):
         """第一根 bar 就打止损 → 立即止损出场。"""
@@ -283,7 +291,7 @@ class TestTakeProfitEdgeCases:
         ep = {"stop": 90.0, "t1": 110.0, "t2": 120.0, "tail_enabled": False}
         bars = [(95.0, 85.0)]  # high=95, low=85 穿过 stop=90
         exit_price, reason, idx = sim_exit_bars(bars, 1, 100.0, ep)
-        assert reason == "stop"
+        assert reason == "止损"  # 2026-10-15 按真实契约修正（原 "stop"）
         assert idx == 0
 
     def test_sim_exit_short_stop(self):
@@ -293,7 +301,7 @@ class TestTakeProfitEdgeCases:
         ep = {"stop": 110.0, "t1": 90.0, "t2": 80.0, "tail_enabled": False}
         bars = [(115.0, 105.0)]  # high=115 穿过 stop=110
         exit_price, reason, idx = sim_exit_bars(bars, -1, 100.0, ep)
-        assert reason == "stop"
+        assert reason == "止损"  # 2026-10-15 按真实契约修正（原 "stop"）
 
     def test_sim_exit_then_t2_then_tail(self):
         """t1 平半 → t2 进入尾仓 → 尾仓跟踪止盈。"""
@@ -317,7 +325,14 @@ class TestTakeProfitEdgeCases:
             # low=108 > 105, 还没打到...
         ]
         exit_price, reason, idx = sim_exit_bars(bars, 1, 100.0, ep)
-        assert reason == "t2"  # 第二根 bar 打到 t2，进入尾仓态（但尾仓还没打到）
+        # 2026-10-15 修正：本例原断言 reason == "t2"，但它自己的注释已写明
+        # 「进尾仓态（但尾仓还没打到）」—— 断言与注释自相矛盾。
+        # 实测行为（已逐值核实）：bar0 到 t1 减半仓、bar1 到 t2 进尾仓态、
+        # bar2 尾仓止损线(120-15=105) 未被打到(low=108>105)，
+        # 遍历完所有 bar 后以最后一根收盘价离场 → (119.0, "期末平", 2)。
+        assert reason == "期末平"
+        assert idx == 2
+        assert exit_price == pytest.approx(119.0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1042,7 +1057,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest("t_score_utils not available")
+            pytest.skip("t_score_utils not available")
 
         scores, mean, std = z_score_list([50.0])
         # 单值时均值 = 原值，标准差 = 0
@@ -1054,7 +1069,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest("t_score_utils not available")
+            pytest.skip("t_score_utils not available")
 
         scores, mean, std = z_score_list([])
         assert scores == []
@@ -1066,7 +1081,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest("t_score_utils not available")
+            pytest.skip("t_score_utils not available")
 
         scores, mean, std = z_score_list([50.0, 50.0, 50.0])
         assert mean == pytest.approx(50.0)
@@ -1079,7 +1094,7 @@ class TestTScoreEdgeCases:
         try:
             from t_score_utils import z_score_list
         except ImportError:
-            self.skipTest("t_score_utils not available")
+            pytest.skip("t_score_utils not available")
 
         data = [-2, -1, 0, 1, 2]
         scores, mean, std = z_score_list(data)

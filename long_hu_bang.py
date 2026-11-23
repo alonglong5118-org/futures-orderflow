@@ -12,7 +12,7 @@ long_hu_bang.py — 每日龙虎榜（前 20 会员持仓排名）抓取 → cpo
 - 龙虎榜每日 ~16:30 由交易所公布；本脚本默认抓「今天」，抓不到则自动回溯最近 retry_days 个交易日。
 - 只抓四维策略实际覆盖的品种（见 *_SYMS），避免整所抓取导致 OOM。
 - SHFE / INE 直接解析交易所官方 JSON（绕开 akshare 对 2025 版接口字段名的解析缺陷）。
-- CZCE / DCE / GFEX 用 akshare；若未安装则自动 pip 安装。
+- CZCE / GFEX 用 akshare；DCE 改用天勤 query_symbol_ranking（akshare 的 DCE 接口已失效，见 fetch_dce_tianqin）。
 - 任一交易所抓取失败仅跳过该所，不影响其它所与已写盘数据（优雅降级）。
 
 用法：
@@ -252,6 +252,63 @@ def fetch_dce(ak, date):
     return recs
 
 
+def fetch_dce_tianqin(date_str):
+    """DCE 会员持仓排名改用天勤 query_symbol_ranking（akshare 的 DCE 接口已失效）。
+
+    返回与 fetch_dce 同格式的 recs：[{symbol,exchange,long_oi,short_oi,long_chg,short_chg}, ...]。
+    天勤排名数据有 ~10 交易日延迟，故取 <= date_str 的最近可用交易日聚合 top-20 会员。
+    """
+    recs = []
+    try:
+        from tqsdk import TqApi, TqAuth
+    except Exception as e:
+        print(f"  [DCE-天勤] tqsdk 不可用: {e}")
+        return recs
+    cfg_path = os.path.join(HERE, "tq_config.json")
+    if not os.path.exists(cfg_path):
+        print("  [DCE-天勤] 缺少 tq_config.json")
+        return recs
+    cfg = json.load(open(cfg_path, encoding="utf-8"))
+    user, pw = cfg.get("tq_username"), cfg.get("tq_password")
+    if not (user and pw):
+        print("  [DCE-天勤] tq_config.json 缺少用户名/密码")
+        return recs
+    try:
+        dt = datetime.datetime.strptime(date_str, "%Y%m%d").date()
+    except Exception:
+        dt = datetime.date.today()
+    start = dt - datetime.timedelta(days=45)
+    contracts = {"JM": "DCE.jm2609", "J": "DCE.j2609", "jd": "DCE.jd2609", "lh": "DCE.lh2609"}
+    api = TqApi(auth=TqAuth(user, pw))
+    try:
+        for sym, contract in contracts.items():
+            try:
+                df = api.query_symbol_ranking(contract, "LONG", days=70, start_dt=start)
+            except Exception as e:
+                print(f"  [DCE-天勤] {sym} 查询异常: {repr(e)[:100]}")
+                continue
+            if df is None or df.shape[0] == 0:
+                continue
+            df = df[df["datetime"] <= date_str]
+            if df.shape[0] == 0:
+                continue
+            latest = df["datetime"].max()
+            g = df[df["datetime"] == latest]
+            recs.append(
+                dict(
+                    symbol=sym,
+                    exchange="DCE",
+                    long_oi=int(round(float(g["long_oi"].sum()))),
+                    short_oi=int(round(float(g["short_oi"].sum()))),
+                    long_chg=int(round(float(g["long_change"].sum()))),
+                    short_chg=int(round(float(g["short_change"].sum()))),
+                )
+            )
+    finally:
+        api.close()
+    return recs
+
+
 def fetch_gfex(ak, date):
     recs = []
     patch_calendar(date)
@@ -395,7 +452,12 @@ def run(date=None, retry_days=4):
         # 可靠的所先抓；DCE/GFEX/INE 加超时保护（网络挂起时跳过，不拖垮整次）
         recs += timed(fetch_czce, 40, ak, ds)
         recs += timed(fetch_shfe, 40, requests, ds)
-        recs += timed(fetch_dce, 35, ak, ds)
+        # DCE 改用天勤（akshare 的 DCE 接口已失效）；天勤失败再兜底 akshare
+        dce = fetch_dce_tianqin(ds)
+        if dce:
+            recs += dce
+        else:
+            recs += timed(fetch_dce, 35, ak, ds)
         recs += timed(fetch_gfex, 35, ak, ds)
         recs += timed(fetch_ine, 30, requests, ds)
         if recs:
@@ -417,7 +479,7 @@ def run(date=None, retry_days=4):
         hist.append(
             {"date": used_date, "C_score": cscore["C_score"], "net": cscore["net"], "net_chg": cscore["net_chg"]}
         )
-        hist = hist[-30:]
+        hist = hist[-600:]  # 2026-09-07 上调：保留更长历史，支持 OOS 回测按交易日查 C
         cache[sym] = {
             "date": used_date,
             "exchange": rec["exchange"],

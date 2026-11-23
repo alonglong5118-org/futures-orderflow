@@ -66,11 +66,13 @@ def get_engine() -> PaperTradingEngine | None:
     return _engine
 
 
-def tick(state: dict | None = None) -> dict:
+def tick(state: dict | None = None, allow_open: bool = True) -> dict:
     """每轮调用：检查新信号 + 检查持仓 TP/SL。
 
     Args:
         state: live runner 的 state 字典，用于注入 paper_trading 状态
+        allow_open: 是否允许开新仓。熔断/状态机锁死时传 False —— 只平不开
+                    （check_positions 仍执行以止损止盈，check_new_signals 跳过）。
 
     Returns:
         dict: {new_trades: [], closed: []}
@@ -81,8 +83,8 @@ def tick(state: dict | None = None) -> dict:
     result = {"new_trades": [], "closed": []}
 
     try:
-        # 1. 检查新信号（自动开仓）
-        if _engine.config["enabled"]:
+        # 1. 检查新信号（自动开仓）——熔断锁死时跳过（只平不开）
+        if _engine.config["enabled"] and allow_open:
             new_trades = _engine.check_new_signals()
             result["new_trades"] = new_trades
     except Exception as e:
@@ -178,12 +180,13 @@ def handle_api(handler) -> None:
             resp = {"ok": True, "msg": "账户已重置", "state": get_state()}
 
         elif action == "config":
-            # 更新配置
+            # 更新配置（支持两种格式：顶层字段或嵌套在 config 字段中）
             config_keys = [
                 "enabled",
                 "max_positions",
                 "max_lots_per_trade",
                 "risk_per_trade_pct",
+                "max_usage_pct",
                 "default_lots",
                 "use_signal_lots",
                 "enable_trailing",
@@ -192,7 +195,9 @@ def handle_api(handler) -> None:
                 "cooldown_minutes",
                 "slippage_pts",
             ]
-            updates = {k: body_json[k] for k in config_keys if k in body_json}
+            # 优先从顶层读取，其次从 config 字段读取
+            source = body_json.get("config", body_json)
+            updates = {k: source[k] for k in config_keys if k in source}
             _engine.update_config(**updates)
             resp = {"ok": True, "config": _engine.config, "state": get_state()}
 

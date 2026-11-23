@@ -24,52 +24,191 @@ import time
 
 # 主力合约映射（品种 → akshare 合约代码）
 ALL_CONTRACTS = {
-    # 持仓品种
-    "zn": "ZN2610",
-    "ss": "SS2610",
-    "fu": "FU2611",
-    "sp": "SP2611",
+    # 2026-09-08 全量同步 minishare 权威主力合约
+    # SYMBOLS 里有 54 个品种，此处全部覆盖
+    "AP": "AP2701",
+    "CF": "CF2701",
+    "FG": "FG2701",
     "J": "J2701",
-    "eb": "EB2610",
-    "pg": "PG2610",
-    # 其他品种（可按需扩展）
-    "cu": "CU2610",
-    "al": "AL2610",
-    "ni": "NI2610",
-    "sn": "SN2610",
-    "pb": "PB2610",
-    "au": "AU2610",
-    "ag": "AG2610",
-    "rb": "RB2610",
-    "hc": "HC2610",
-    "bu": "BU2610",
-    "ru": "RU2701",
-    "sc": "SC2610",
-    "eg": "EG2610",
-    "l": "L2701",
-    "pp": "PP2701",
-    "v": "V2701",
-    "m": "M2701",
-    "y": "Y2701",
+    "JM": "JM2701",
+    "MA": "MA2610",
+    "OI": "OI2701",
+    "PF": "PF2611",
+    "PK": "PK2611",
+    "PR": "PR2611",
+    "PX": "PX2611",
+    "RM": "RM2611",
+    "SA": "SA2701",
+    "SA01": "SA2701",
+    "SH": "SH2611",
+    "SR": "SR2701",
+    "TA": "TA2701",
+    "UR": "UR2701",
     "a": "A2611",
+    "ag": "AG2610",
+    "al": "AL2610",
+    "ao": "AO2701",
+    "au": "AU2610",
     "b": "B2611",
-    "p": "P2701",
+    "bu": "BU2611",
     "c": "C2611",
     "cs": "CS2611",
-    "jd": "JD2610",
+    "cu": "CU2610",
+    "eb": "EB2610",
+    "ec": "EC2610",
+    "eg": "EG2610",
+    "fu": "FU2611",
+    "hc": "HC2701",
+    "i": "I2701",
+    "jd": "JD2611",
+    "l": "L2701",
+    "lc": "LC2610",
     "lh": "LH2611",
-    "fg": "FG2701",
-    "sa": "SA2701",
-    "ma": "MA2610",
-    "ta": "TA2701",
-    "cf": "CF2701",
-    "rm": "RM2609",
-    "oi": "OI2611",
-    "sr": "SR2701",
-    "ur": "UR2701",
-    "ap": "AP2610",
-    "pk": "PK2610",
+    "m": "M2701",
+    "ni": "NI2610",
+    "p": "P2701",
+    "pg": "PG2610",
+    "pp": "PP2701",
+    "rb": "RB2701",
+    "rr": "RR2610",
+    "ru": "RU2701",
+    "sc": "SC2610",
+    "si": "SI2610",
+    "sn": "SN2610",
+    "sp": "SP2611",
+    "ss": "SS2610",
+    "v": "V2701",
+    "y": "Y2701",
+    "zn": "ZN2610",
 }
+
+
+# ============ 动态主力合约解析（2026-10-15 加固）============
+# 背景：本文件原有一张纯静态 ALL_CONTRACTS（2026-09-08 手工同步一次）。
+# 实测该表 54 个品种中 28 个已陈旧（如 cu=CU2610 而真主力已是 CU2611、zn=ZN2610→ZN2612），
+# 而本表被 account_tracker._get_ak_prices_batch 用于拉「持仓品种实时价」，
+# 也被 runner 用于后台轮询 => 陈旧表会让持仓浮盈挂在非主力合约上（流动性差、价差大）。
+#
+# 权威源优先级（后者仅作兜底，永不反向覆盖）：
+#   1) main_overrides.json        —— refresh_main_contracts.py 每 2h 刷新（已装 akshare），
+#      且 2026-10-15 起会用 minishare_hot_contracts 对齐
+#   2) minishare_hot_contracts.json —— minishare_live 运行时真实取价合约（按成交量选主力）
+#   3) ALL_CONTRACTS静态表         —— 上述两者都不可用时的兜底
+#
+# 关键：contract_of() 是唯一对外解析入口，静态表只做兜底，
+# 保证「跟踪/成交/浮盈」永远用最新当前主力，而不是几个月前的手工快照。
+import json as _json
+import os as _os
+
+_HERE = _os.path.dirname(_os.path.abspath(__file__))
+_OVR_FILE = _os.path.join(_HERE, "main_overrides.json")
+_HOT_FILE = _os.path.join(_HERE, "minishare_hot_contracts.json")
+
+# 解析结果缓存（避免每轮 poll 都读盘）
+_resolve_cache = {}          # sym_lower -> (code, source, resolved_at)
+_RESOLVE_TTL = 180.0         # 缓存有效期 3 分钟（refresh 每 2h，此频率足够跟换月）
+_resolve_lock = threading.Lock()
+
+
+def _read_json(path):
+    try:
+        if not _os.path.exists(path):
+            return None
+        with open(path, encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception as e:
+        print(f"[akshare_live] 读取 {path} 失败: {e}")
+        return None
+
+
+def _norm_map(raw):
+    """把主力映射统一成 {sym_lower: code}。兼容 value 为 dict（含 main 键）与 str 两种形态。"""
+    out = {}
+    if not isinstance(raw, dict):
+        return out
+    for k, v in raw.items():
+        if isinstance(v, dict):
+            code = v.get("main") or v.get("contract") or v.get("code") or ""
+        else:
+            code = v
+        if code and k:
+            out[str(k).lower()] = str(code).upper()
+    return out
+
+
+def contract_of(sym, force=False):
+    """解析品种的当前主力合约代码。**唯一对外入口**，静态表仅兜底。
+
+    返回 code（字符串，找不到返回 None）。
+    缓存 TTL=_RESOLVE_TTL 秒，换月后最多 3 分钟内跟随新主力。
+    """
+    if not sym:
+        return None
+    s = str(sym).lower()
+    now = time.time()
+    with _resolve_lock:
+        hit = _resolve_cache.get(s)
+        if hit and not force and (now - hit[2]) < _RESOLVE_TTL:
+            return hit[0]
+
+    code = None
+    src = None
+    ov = _norm_map(_read_json(_OVR_FILE))
+    if ov.get(s):
+        code, src = ov[s], "override"
+    if not code:
+        hot = _norm_map(_read_json(_HOT_FILE))
+        if hot.get(s):
+            code, src = hot[s], "hot"
+
+    # 兜底：静态表（大小写两种键都试）
+    if not code:
+        code = ALL_CONTRACTS.get(s) or ALL_CONTRACTS.get(s.upper())
+        src = "static_fallback" if code else None
+
+    with _resolve_lock:
+        _resolve_cache[s] = (code, src, now)
+    return code
+
+
+def contract_source(sym, force=False):
+    """返回 (code, source)，用于诊断面板显示合约来源。"""
+    code = contract_of(sym, force=force)
+    with _resolve_lock:
+        src = (_resolve_cache.get(str(sym).lower()) or (None, None, 0))[1]
+    return code, src
+
+
+def resolve_all(force=False):
+    """批量解析并返回 {sym_lower: code}，同时报告与静态表的差异（换月自检用）。"""
+    out = {}
+    diffs = []
+    for k in set(list(ALL_CONTRACTS.keys()) + ["cu", "zn", "sc", "si", "lc", "ru", "jd"]):
+        s = str(k).lower()
+        c, src = contract_source(s, force=force)
+        if not c:
+            continue
+        out[s] = c
+        static = ALL_CONTRACTS.get(s) or ALL_CONTRACTS.get(s.upper())
+        if static and str(static).upper() != c:
+            diffs.append((s, static, c, src))
+    return out, diffs
+
+
+# 启动即做一次解析自检，把「静态表 vs 真实主力」的差异直接打进日志（换月可视）
+try:
+    _map0, _diffs0 = resolve_all(force=True)
+    if _diffs0:
+        print(f"[akshare_live] 主力合约动态解析启用：{len(_map0)} 品种，"
+              f"{len(_diffs0)} 个静态表陈旧已自动跟随真实主力")
+        for _s, _old, _new, _src in _diffs0[:8]:
+            print(f"[akshare_live]   换月跟随: {_s} {_old} → {_new}（源={_src}）")
+        if len(_diffs0) > 8:
+            print(f"[akshare_live]   ... 另有 {len(_diffs0) - 8} 个（详见 resolve_all()）")
+    else:
+        print(f"[akshare_live] 主力合约动态解析启用：{len(_map0)} 品种，静态表无陈旧")
+except Exception as e:
+    print(f"[akshare_live] 主力动态解析初始化异常（退回纯静态表）: {e}")
 
 
 class AkshareFeed:
@@ -176,9 +315,9 @@ class AkshareFeed:
 
         for sym in syms:
             sym_lower = sym.lower()
-            code = ALL_CONTRACTS.get(sym_lower)
-            if not code:
-                code = ALL_CONTRACTS.get(sym.upper())
+            # 2026-10-15: 走动态解析（override → hot → 静态兜底），
+            # 不再直读静态表 —— 静态表 28/54 陈旧，会拉错合约的价格。
+            code = contract_of(sym_lower)
             if not code:
                 # 未知品种，尝试使用缓存中的旧值
                 if sym_lower in self._cache:

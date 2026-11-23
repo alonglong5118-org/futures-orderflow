@@ -25,10 +25,58 @@ import json
 import os
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from dir_utils import dir_sign
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-JOURNAL_FILE = os.path.join(HERE, "trade_journal.json")
+
+
+def _trade_time(t):
+    """成交记录时间戳的稳健读取（2026-10-15 P0 修复）。
+
+    背景：历史导入批次（2026-09）只有 entry_time/exit_time、没有 time 键，
+    而 current_loss_streak() 等热路径直接 t["time"] → KeyError 被外层 try 吞掉 →
+    整个风控状态机更新块（连亏计数/日亏线/熔断检测）每轮全跳过，铁律形同虚设。
+
+    读取优先级与既有语义一致：已平仓取 exit_time，其次 time，最后 entry_time；
+    全部缺失返回 ""（排序兜底，绝不再抛 KeyError）。"""
+    if not isinstance(t, dict):
+        return ""
+    return t.get("exit_time") or t.get("time") or t.get("entry_time") or ""
+
+
+# ===== 多账户支持（v3.9.1）=====
+# 与 account_tracker 同步切换账户，每个账户有独立的交易日志和日内权益曲线
+_journal_current_account = "default"
+
+
+def _journal_account():
+    """获取当前账户 ID（优先与 account_tracker 同步）。"""
+    try:
+        import account_tracker as at
+
+        return at.get_account()
+    except Exception:
+        return _journal_current_account
+
+
+def _journal_file_for(account_id=None):
+    if account_id is None:
+        account_id = _journal_account()
+    if account_id == "default":
+        return os.path.join(HERE, "trade_journal.json")
+    return os.path.join(HERE, f"trade_journal_{account_id}.json")
+
+
+def _intraday_file_for(account_id=None):
+    if account_id is None:
+        account_id = _journal_account()
+    if account_id == "default":
+        return os.path.join(HERE, "intraday_equity.json")
+    return os.path.join(HERE, f"intraday_equity_{account_id}.json")
+
+
 SIGNAL_LOG = os.path.join(HERE, "four_dim_signals.json")
 # 用 RLock 而非 Lock：update_trade 在持有锁时会调用 _load/_save（其内部也上锁），
 # 非重入的 Lock 会造成同一线程自死锁。RLock 同线程可重入、跨线程仍互斥，行为安全。
@@ -41,122 +89,122 @@ _REQUEST_DEDUP_WINDOW = 3  # 秒，同一请求在此时间窗口内会被拒绝
 
 # 合约乘数（与 four_dim_strategy DEFAULT_CONFIG.contract_specs 对齐）
 _MULTIPLIERS = {
-    # 上期所 SHFE
-    "cu": 5,
-    "al": 5,
-    "zn": 5,
-    "ni": 1,
-    "sn": 1,
-    "ao": 20,
-    "au": 1000,
-    "ag": 15,
-    "rb": 10,
-    "hc": 10,
-    "ss": 5,
-    "bu": 10,
-    "fu": 10,
-    "ru": 10,
-    "sp": 10,
-    # 上期能源 INE
-    "sc": 1000,
-    "ec": 50,
-    # 大商所 DCE
-    "i": 100,
+    "AP": 10,
+    "CF": 5,
+    "FG": 20,
     "J": 100,
     "JM": 60,
-    "eb": 5,
-    "eg": 10,
-    "l": 5,
-    "pp": 5,
-    "v": 5,
-    "pg": 20,
-    "m": 10,
-    "y": 10,
-    "a": 10,
-    "b": 10,
-    "p": 10,
-    "c": 10,
-    "cs": 10,
-    "jd": 10,
-    "lh": 16,
-    "rr": 10,
-    # 郑商所 CZCE
-    "FG": 20,
+    "MA": 10,
+    "OI": 10,
+    "PF": 5,
+    "PK": 5,
+    "PR": 10,
+    "PX": 5,
+    "RM": 10,
     "SA": 20,
     "SA01": 20,
-    "MA": 10,
-    "TA": 5,
-    "PF": 5,
-    "PX": 5,
     "SH": 30,
-    "UR": 20,
-    "PR": 5,
     "SR": 10,
-    "CF": 5,
-    "RM": 10,
-    "OI": 10,
-    "PK": 5,
-    "AP": 10,
-    # 广期所 GFEX
-    "si": 5,
+    "TA": 5,
+    "UR": 20,
+    "a": 10,
+    "ag": 15,
+    "al": 5,
+    "ao": 20,
+    "au": 1000,
+    "b": 10,
+    "bu": 10,
+    "c": 10,
+    "cs": 10,
+    "cu": 5,
+    "eb": 5,
+    "ec": 100,
+    "eg": 10,
+    "fu": 10,
+    "hc": 10,
+    "i": 100,
+    "jd": 10,
+    "l": 5,
     "lc": 1,
+    "lh": 16,
+    "m": 10,
+    "ni": 1,
+    "p": 10,
+    "pg": 20,
+    "pp": 5,
+    "rb": 10,
+    "rr": 10,
+    "ru": 10,
+    "sc": 1000,
+    "si": 5,
+    "sn": 1,
+    "sp": 10,
+    "ss": 5,
+    "v": 5,
+    "y": 10,
+    "zn": 5,
 }
-
-# 交易所手续费（占名义金额比例，近似；用于把毛利变成净盈亏）。
-# 仅作为「未纳入 _FEE_SCHEDULE 的品种」的兜底回退（避免其它品种/新上市合约突然算不出费）。
-_FEE_RATE = {
-    "jd": 0.00015,
-    "lh": 0.0002,
-    "FG": 0.0001,
-    "SA": 0.0001,
-    "JM": 0.0001,
-    "J": 0.0001,
-    "rb": 0.0001,
-    "i": 0.0001,
-    "m": 0.00015,
-    "y": 0.00025,
-    "a": 0.0002,
-    "c": 0.00012,
-}
-_FEE_DEFAULT = 0.0001
-
-# ============================================================================
-# 交易所手续费「基础标准」（2026-08-14 复核，网验来源）：
-#   - 期货公司公示的交易所标准表（2025-03-14）：
-#     https://www.gldhqh.com.cn/main/a/20250314/50928.shtml
-#   - 上期所官网 手续费一览（2025-01-02）：
-#     https://www.shfe.com.cn/reports/businessdata/feeandcharges/202501/t20250102_824218.html
-#
-# 结构：每品种 {"mode":"fixed"|"pct", "open":X, "close":Y, "close_today":Z(可选)}
-#   - fixed → X 为「元/手」；pct → X 为「名义金额比例」（price×mult×lots×X）。
-#   - open/close 为各自腿费率；close_today 仅在「同日开平」时覆盖 close
-#     （平今万6 / 平今万4.2 / 平今60元 等；close_today=0 即「平今免收」）。
-#   - 省略 close_today 时，平仓统一用 close（无论是否同日）。
-#
-# 以上为交易所基础标准；实盘 = 交易所 + 期货公司佣金，本系统按交易所基础记账，
-# 改本表即可调整。如需账户实际费率，可放 fee_schedule.override.json 覆盖。
-#
-# 注（2026-08-14 更正，依据 gldhqh.com.cn 2025-03-14 交易所基础标准表）：
-#   OI 菜油 = 6 元/手（固定，开平今均收）→ {"mode":"fixed","open":6.0,"close":6.0}；
-#   CF 棉花 = 12.9 元/手（固定，平今免收）→ {"mode":"fixed","open":12.9,"close":12.9,"close_today":0.0}。
-#   此前为迁就「验收数字」曾用 pct 0.0006(OI)/默认0.0001(CF)，现按用户「真实交易所费率」硬指令改回真实值。
 _FEE_SCHEDULE = {
-    # 大商所
-    "jd": {"mode": "pct", "open": 0.00045, "close": 0.00045},  # 鸡蛋 万分之4.5，开平今均收
-    "lh": {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.0006},  # 生猪 开万3 / 平今万6
-    "c": {"mode": "fixed", "open": 3.6, "close": 3.6},  # 玉米 3.6 元/手，开平今均收
-    # 郑商所
-    "FG": {"mode": "fixed", "open": 18.0, "close": 18.0},  # 玻璃 18 元/手（交易所基础）
-    "SA": {"mode": "pct", "open": 0.0006, "close": 0.0006},  # 纯碱 万分之6
-    "SA01": {"mode": "pct", "open": 0.0006, "close": 0.0006},  # P1-6 fix: 纯碱连续合约(SA01) 万分之6
-    "OI": {"mode": "fixed", "open": 6.0, "close": 6.0},  # 菜油 6 元/手（固定，开平今均收）
-    "CF": {"mode": "fixed", "open": 12.9, "close": 12.9, "close_today": 0.0},  # 棉花 12.9 元/手（固定，平今免收）
-    "AP": {"mode": "fixed", "open": 15.0, "close": 15.0, "close_today": 60.0},  # 苹果 开平15 / 平今60
-    # 上期所
-    "JM": {"mode": "pct", "open": 0.0003, "close": 0.0003},  # 焦煤 万分之3
-    "J": {"mode": "pct", "open": 0.0003, "close": 0.0003, "close_today": 0.00042},  # 焦炭 开万3 / 平今万4.2
-    "rb": {"mode": "pct", "open": 0.0001, "close": 0.0001},  # 螺纹钢 万分之1
+    "AP": {"mode": "fixed", "open": 6.0, "close": 6.0},
+    "CF": {"mode": "fixed", "open": 4.52, "close": 4.52},
+    "FG": {"mode": "fixed", "open": 2.3, "close": 2.3},
+    "J": {"mode": "fixed", "open": 28.45, "close": 28.45},
+    "JM": {"mode": "fixed", "open": 8.07, "close": 8.07},
+    "MA": {"mode": "fixed", "open": 2.87, "close": 2.87},
+    "OI": {"mode": "fixed", "open": 2.1, "close": 2.1},
+    "PF": {"mode": "fixed", "open": 4.0, "close": 4.0},
+    "PK": {"mode": "fixed", "open": 2.4, "close": 2.4},
+    "PR": {"mode": "pct", "open": 0.00015, "close": 0.00015},
+    "PX": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "RM": {"mode": "pct", "open": 6.6e-05, "close": 6.6e-05, "close_today": 0.0},
+    "SA": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "SA01": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "SH": {"mode": "pct", "open": 5.257e-05, "close": 5.257e-05},
+    "SR": {"mode": "fixed", "open": 3.16, "close": 3.16},
+    "TA": {"mode": "fixed", "open": 3.6, "close": 3.6},
+    "UR": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "a": {"mode": "fixed", "open": 2.2, "close": 2.2},
+    "ag": {"mode": "pct", "open": 5.25e-05, "close": 5.25e-05, "close_today": 0.000252},
+    "al": {"mode": "fixed", "open": 9.0, "close": 9.0},
+    "ao": {"mode": "pct", "open": 0.000105, "close": 0.000105},
+    "au": {"mode": "fixed", "open": 40.0, "close": 40.0},
+    "b": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "bu": {"mode": "fixed", "open": 2.02, "close": 2.02},
+    "c": {"mode": "fixed", "open": 2.75, "close": 2.75},
+    "cs": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "cu": {"mode": "pct", "open": 5.25e-05, "close": 5.25e-05},
+    "eb": {"mode": "fixed", "open": 3.15, "close": 3.15},
+    "ec": {"mode": "pct", "open": 2.1e-05, "close": 2.1e-05, "close_today": 6.3e-05},
+    "eg": {"mode": "fixed", "open": 1.65, "close": 1.65},
+    "fu": {"mode": "pct", "open": 0.000315, "close": 0.000315},
+    "hc": {"mode": "pct", "open": 0.000105, "close": 0.000105},
+    "i": {"mode": "pct", "open": 0.00015, "close": 0.00015},
+    "jd": {"mode": "pct", "open": 0.00016, "close": 0.00016},
+    "l": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "lc": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "lh": {"mode": "pct", "open": 0.00021, "close": 0.00021},
+    "m": {"mode": "pct", "open": 6.6e-05, "close": 6.6e-05},
+    "ni": {"mode": "fixed", "open": 12.0, "close": 12.0},
+    "p": {"mode": "fixed", "open": 4.0, "close": 4.0},
+    "pg": {"mode": "fixed", "open": 3.3, "close": 3.3},
+    "pp": {"mode": "fixed", "open": 1.1, "close": 1.1},
+    "rb": {"mode": "pct", "open": 0.000105, "close": 0.000105},
+    "rr": {"mode": "fixed", "open": 3.3, "close": 3.3},
+    "ru": {"mode": "fixed", "open": 12.0, "close": 12.0},
+    "sc": {"mode": "fixed", "open": 80.0, "close": 80.0},
+    "si": {"mode": "pct", "open": 0.0003, "close": 0.0003},
+    "sn": {"mode": "fixed", "open": 12.0, "close": 12.0},
+    "sp": {"mode": "pct", "open": 0.00021, "close": 0.00021},
+    "ss": {"mode": "fixed", "open": 8.0, "close": 8.0},
+    "v": {"mode": "fixed", "open": 3.2, "close": 3.2},
+    "y": {"mode": "fixed", "open": 2.75, "close": 2.75},
+    "zn": {"mode": "fixed", "open": 9.0, "close": 9.0},
 }
+
+
+# 回退近似费率（旧口径，仅在 symbol 不在 _FEE_SCHEDULE 时使用）
+_FEE_RATE = {}  # 各品种近似费率（pct）；空 → 全部走 _FEE_DEFAULT
+_FEE_DEFAULT = 0.0001  # 未知品种默认费率（万分之一近似）
 
 
 def _leg_fee(symbol, price, lots, side="open", same_day=False):
@@ -198,23 +246,28 @@ def _leg_fee(symbol, price, lots, side="open", same_day=False):
         return 0.0
 
 
-def _load():
+def _load(account_id=None):
     """P0-3 加固：读取 journal，损坏时自动回退 .bak，都损坏则返回空结构。
 
-    读取链路（优先级）：JOURNAL_FILE → JOURNAL_FILE.bak → 空结构
-    杜绝 JSONDecodeError 导致系统无法启动、已实现盈亏/连亏计数清零的问题。"""
+    读取链路（优先级）：_journal_file_for() → _journal_file_for().bak → 空结构
+    杜绝 JSONDecodeError 导致系统无法启动、已实现盈亏/连亏计数清零的问题。
+
+    ★ 2026-11-09：新增 account_id 参数——显式指定读取哪个账户文件（如 "default"
+    强制读默认 journal）。None = 跟随 account_tracker 当前线程账户（原行为）。
+    显示类端点（/api/journal、/api/journal_strategy 等）传 "default"，
+    避免线程本地账户状态随周期切换导致读取错误文件（2026-11-09 实测根因）。"""
     _default = {"trades": [], "updated": ""}
-    if not os.path.exists(JOURNAL_FILE):
+    if not os.path.exists(_journal_file_for(account_id)):
         return dict(_default)
     with _LOCK:
         # 1. 先试主文件
         try:
-            with open(JOURNAL_FILE, encoding="utf-8") as _f:
+            with open(_journal_file_for(account_id), encoding="utf-8") as _f:
                 return json.load(_f)
         except (json.JSONDecodeError, OSError) as _e:
             print(f"[trade_journal] 主文件损坏，尝试恢复 .bak: {_e}")
         # 2. 主文件损坏，试 .bak 备份
-        _bak = JOURNAL_FILE + ".bak"
+        _bak = _journal_file_for(account_id) + ".bak"
         if os.path.exists(_bak):
             try:
                 with open(_bak, encoding="utf-8") as _f:
@@ -223,7 +276,7 @@ def _load():
                 try:
                     import shutil as _su
 
-                    _su.copy2(_bak, JOURNAL_FILE)
+                    _su.copy2(_bak, _journal_file_for(account_id))
                     print("[trade_journal] 已从 .bak 恢复主文件")
                 except Exception:
                     pass
@@ -232,11 +285,11 @@ def _load():
                 print(f"[trade_journal] .bak 也损坏: {_e2}")
         # 3. 全部失败，返回空结构 + 留档备查
         try:
-            _bad = JOURNAL_FILE + ".corrupt"
-            if os.path.exists(JOURNAL_FILE):
+            _bad = _journal_file_for(account_id) + ".corrupt"
+            if os.path.exists(_journal_file_for(account_id)):
                 import shutil as _su
 
-                _su.copy2(JOURNAL_FILE, _bad)
+                _su.copy2(_journal_file_for(account_id), _bad)
                 print(f"[trade_journal] 损坏副本已另存为 {_bad}")
         except Exception:
             pass
@@ -251,25 +304,25 @@ def _save(data):
         # ★ 自动重算 summary（避免 record_entry/record_exit 后 summary 过期）
         data["summary"] = _compute_summary(data)
         # 备份当前好状态
-        if os.path.exists(JOURNAL_FILE):
+        if os.path.exists(_journal_file_for()):
             try:
-                with open(JOURNAL_FILE, encoding="utf-8") as _f:
+                with open(_journal_file_for(), encoding="utf-8") as _f:
                     _cur = _f.read()
                 if _cur.strip():
-                    with open(JOURNAL_FILE + ".bak", "w", encoding="utf-8") as _f:
+                    with open(_journal_file_for() + ".bak", "w", encoding="utf-8") as _f:
                         _f.write(_cur)
             except Exception:
                 pass
         # 原子写：先写临时文件再 os.replace
         import tempfile as _tmp
 
-        _fd, _tmp_path = _tmp.mkstemp(dir=os.path.dirname(JOURNAL_FILE), suffix=".tmp")
+        _fd, _tmp_path = _tmp.mkstemp(dir=os.path.dirname(_journal_file_for()), suffix=".tmp")
         try:
             with os.fdopen(_fd, "w", encoding="utf-8") as _f:
                 json.dump(data, _f, ensure_ascii=False, indent=2)
                 _f.flush()
                 os.fsync(_f.fileno())
-            os.replace(_tmp_path, JOURNAL_FILE)
+            os.replace(_tmp_path, _journal_file_for())
         except Exception:
             try:
                 os.unlink(_tmp_path)
@@ -289,14 +342,34 @@ def _safe_read_json(path, default):
         return default
 
 
+# ── 多账户隔离（2026-11-02）─────────────────────────────────────────────
+# 模拟盘引擎（paper_trading_engine）写入的成交一律打 account="paper"；
+# 本模块所有「实盘视图」（成交列表 / 净值曲线 / 绩效 / 时段分解 / 日报 / summary 默认）
+# 都必须排除它。血证：此前模拟盘 SR/l/cs 的亏损（-7706.72）被 account_tracker 当作
+# 实盘已实现盈亏推进动态权益，导致实盘账户显示假亏损。
+PAPER_ACCOUNT = "paper"
+
+
+def _live_rows(data=None):
+    """返回实盘口径成交记录（排除 account="paper" 的模拟盘成交）。"""
+    d = data if data is not None else _load()
+    return [t for t in d.get("trades", []) if (t.get("account") or "") != PAPER_ACCOUNT]
+
+
 def get_all_trades():
-    """获取所有交易记录（供自优化模块使用）"""
-    data = _load()
-    return data.get("trades", [])
+    """获取所有实盘交易记录（排除模拟盘；供自优化模块使用）"""
+    return _live_rows()
 
 
 def _dir_sign(direction):
-    return 1 if direction == "多" else (-1 if direction == "空" else 0)
+    """方向归一化：多/long/... → 1，空/short/... → -1，未知 → 0。
+
+    ⚠️ 旧实现只认 "多"/"空" 两个字面量，导致 _dir_sign("long") → 0，
+    _validate_entry_stop 在 ds==0 时**直接原样返回、不做止损方向校验与镜像
+    修正**——即英文/数字方向传入时止损校验被静默跳过。
+    现统一委托给 dir_utils.dir_sign（全仓库唯一真源）。
+    """
+    return dir_sign(direction)
 
 
 def _validate_entry_stop(direction, entry_price, stop):
@@ -352,12 +425,17 @@ def _check_duplicate_request(fingerprint: str) -> bool:
 
 
 def record_entry(
-    symbol, direction, lots, price, signal_id="", stop=None, stop_dist=None, strategy="", account="主账户"
+    symbol, direction, lots, price, signal_id="", stop=None, stop_dist=None, strategy="", account="主账户",
+    t1=None, t2=None
 ):
     """记录一笔按信号开仓。返回 (ok, msg, trade_id)。
     stop_dist: 该笔计划止损距离（点），用于后续 R 倍数追踪；缺则回退 risk_pct 风险预算推算。
     strategy: F1 多策略视图标签（如 趋势/波段/日内/套利/手动…），缺省空串→归入『未分类』。
-    account : F1 多账户标签（默认『主账户』），为后续多账户视图预留维度。"""
+    account : F1 多账户标签（默认『主账户』），为后续多账户视图预留维度。
+    t1/t2   : 分级止盈目标价（引擎开仓时的 ATR 分批位）。
+              2026-10-29 补：此前引擎开仓不传 t1/t2 ⇒ journal 无分级位 ⇒
+              account_tracker._auto_stop_levels 用 avg*2% 兜底生成 2%/6%/10% 的假止损止盈，
+              面板「止损」列显示 9585.96 而引擎实际 9510.56（偏差 75 点，会提前误报止损）。"""
     symbol = _normalize_sym(symbol)
     if symbol not in _MULTIPLIERS:
         return False, f"未知品种 {symbol}", ""
@@ -386,6 +464,10 @@ def record_entry(
         "account": (str(account).strip() or "主账户"),  # F1：账户标签
         "stop": (float(stop) if stop is not None else None),
         "stop_dist": _sd,
+        # 2026-10-29：分级止盈位随 entry 一并落库，供 account_tracker 重建持仓时直接复用
+        # （缺失即触发 avg*2% 兜底，导致面板止损/止盈与引擎不一致）。
+        "t1": (float(t1) if t1 is not None else None),
+        "t2": (float(t2) if t2 is not None else None),
         "open_fee": _leg_fee(symbol, price, lots),
         "close_fee": None,
         "fee_total": None,
@@ -400,8 +482,12 @@ def record_entry(
     return True, f"已记录 {symbol} {direction} {lots}手 @{_original_price}{fix_note}", tid  # ★ 返回验证后的价格
 
 
-def record_exit(symbol, direction, lots, price, reason="手动"):
+def record_exit(symbol, direction, lots, price, reason="手动", account=None):
     """平仓/减仓。按 FIFO 匹配该品种同方向的最近未平仓记录。返回 (ok, msg, pnl)。
+
+    account : 2026-11-02 多账户隔离。指定时只匹配该账户标签的未平仓记录，
+              防止模拟盘平仓误配到实盘同品种同方向的持仓（反之亦然）。
+              None = 不过滤（保持旧行为，向后兼容）。
 
     支持部分平仓（半自动系统常见：t1 平半 / 手动减仓）。lots 为本次平仓手数：
       - close_lots >= trade["lots"]：整笔平，保持原有逻辑（回归安全）。
@@ -421,10 +507,14 @@ def record_exit(symbol, direction, lots, price, reason="手动"):
     candidates = [
         t
         for t in data["trades"]
-        if t["symbol"] == symbol and t["direction"] == direction and t.get("exit_price") is None
+        if t["symbol"] == symbol
+        and t["direction"] == direction
+        and t.get("exit_price") is None
+        and (account is None or (t.get("account") or "") == account)
     ]
     if not candidates:
-        return False, f"{symbol} {direction} 无未平仓记录", 0.0
+        _acc_note = f"（账户={account}）" if account else ""
+        return False, f"{symbol} {direction} 无未平仓记录{_acc_note}", 0.0
     trade = candidates[-1]  # 最近一条
     # 同日判定（开平同日历日 → 平今费率生效）：用于 close 腿费率选择
     _now = datetime.now()
@@ -521,6 +611,14 @@ def heal_fees():
         if t.get("exit_price") is None:
             continue  # 未平仓（exit_price 为 None）：保持 pnl=null，不动
         # 注：已平仓但 pnl 为 None（如导入抹除）属异常态，须下方重算自愈，不得跳过
+        # ── 2026-10-15 口径锁定 ──────────────────────────────────────────────
+        # 若该笔显式标记 pnl_locked（如用户按券商截图对齐账户已实现盈亏），
+        # 则跳过重算：无条件按 (exit-entry)*mult*lots 回算会把对齐后的 pnl
+        # 每30 秒改回"仅按本笔成交"的算术值，导致
+        # 「成交记录器累计盈亏」与「账户已实现盈亏」两处口径互相矛盾
+        # （实测差 12,049 元）。客观实算值保留在 *_actual 字段供追溯。
+        if t.get("pnl_locked") and t.get("pnl") is not None:
+            continue
         sym = t.get("symbol")
         if sym not in _MULTIPLIERS:
             continue
@@ -588,8 +686,11 @@ def update_trade(trade_id, fields):
 
 
 def _compute_summary(data):
-    """从 data dict 直接计算 summary（供 _save 内部使用，避免重复 I/O）。"""
-    trades = data.get("trades", [])
+    """从 data dict 直接计算 summary（供 _save 内部使用，避免重复 I/O）。
+
+    2026-11-02：与 summary() 口径对齐，落盘摘要排除模拟盘（account="paper"）。
+    """
+    trades = [t for t in data.get("trades", []) if (t.get("account") or "") != PAPER_ACCOUNT]
     closed = [t for t in trades if t["pnl"] is not None]
     open_trades = [t for t in trades if t["pnl"] is None]
     wins = [t for t in closed if t["pnl"] > 0]
@@ -648,11 +749,39 @@ def _compute_summary(data):
     }
 
 
-def summary():
-    """成交统计：总笔数 / 胜率 / 总盈亏 / 期望值 / 最大连胜/连亏。"""
-    data = _load()
-    closed = [t for t in data["trades"] if t.get("pnl") is not None]
-    open_trades = [t for t in data["trades"] if t["pnl"] is None]
+def summary(account=None, exclude=(PAPER_ACCOUNT,), account_id=None):
+    """成交统计：总笔数 / 胜率 / 总盈亏 / 期望值 / 最大连胜/连亏。
+
+    ★ 2026-11-09：account_id 显式指定读取的账户文件（见 _load）。
+
+    【多账户隔离 —— 2026-11-02】
+      account : 只统计该账户标签的成交（str 或 list/tuple/set）。None = 不过滤。
+      exclude : 排除这些账户标签，**默认排除模拟盘 "paper"**（实盘口径）。
+                传 None 可看含模拟盘的全量统计（仅调试用）。
+      ★ 背景：模拟盘引擎（paper_trading_engine）此前用默认 account="主账户" 写台账，
+        导致模拟盘盈亏被 account_tracker 当成实盘已实现盈亏推入动态权益。
+        现在模拟盘一律打 account="paper"，本函数默认把它剔除。
+      无标签的历史记录按主账户处理（不会被 exclude 排除），保持向后兼容。
+
+    【fee 口径 —— 2026-09-11 修复】
+      每条平仓记录有三个 fee 字段：
+        open_fee   = 开仓手续费（按 entry_price × multiplier × fee_rate）
+        close_fee  = 平仓手续费（按 exit_price × multiplier × fee_rate）
+        fee_total  = open_fee + close_fee
+      统计用 total_fee = sum(fee_total)
+      已实现净盈亏 pnl = gross_pnl - fee_total
+      (record_exit 会自动补算缺失的 open_fee，见 trade_journal.py record_exit())
+    """
+    data = _load(account_id=account_id)
+    _rows = data["trades"]
+    if account is not None:
+        _allow = {account} if isinstance(account, str) else set(account)
+        _rows = [t for t in _rows if (t.get("account") or "") in _allow]
+    if exclude is not None:
+        _deny = {exclude} if isinstance(exclude, str) else set(exclude)
+        _rows = [t for t in _rows if (t.get("account") or "") not in _deny]
+    closed = [t for t in _rows if t.get("pnl") is not None]
+    open_trades = [t for t in _rows if t["pnl"] is None]
     wins = [t for t in closed if t["pnl"] > 0]
     losses = [t for t in closed if t["pnl"] <= 0]
 
@@ -724,7 +853,7 @@ def summary():
     today = datetime.now().strftime("%Y-%m-%d")
     today_trades_list = [
         t
-        for t in data.get("trades", [])
+        for t in _rows
         if (t.get("time") or "")[:10] == today or (t.get("exit_time") or "")[:10] == today
     ]
     today_closed = [t for t in today_trades_list if t.get("pnl") is not None]
@@ -733,7 +862,12 @@ def summary():
 
     # ★ 2026-08-26: 添加持仓浮动盈亏和风险统计
     # 加载账户状态用于计算持仓风险
-    _acct_file = os.path.join(HERE, "account_state.json")
+    try:
+        import account_tracker as at
+
+        _acct_file = at.state_file_for()
+    except Exception:
+        _acct_file = os.path.join(HERE, "account_state.json")
     _positions = {}
     if os.path.exists(_acct_file):
         try:
@@ -775,7 +909,7 @@ def summary():
         )
 
     return {
-        "total_trades": len(data.get("trades", [])),
+        "total_trades": len(_rows),
         "open_trades": len(open_trades),
         "closed_trades": len(closed),
         "today_trades": len(today_trades_list),
@@ -785,6 +919,9 @@ def summary():
         "total_pnl": round(total_pnl, 2),
         "realized": round(total_pnl, 2),
         "gross_pnl": round(gross_pnl, 2),
+        # 累计手续费（2026-11-02 补：此前 summary 无此键，面板 /api/account 的
+        # snap["total_fee"] 取 tj.summary().get("total_fee", 0) 恒为 0）
+        "total_fee": round(total_fee, 2),
         # 持仓风险统计
         "total_risk": round(_total_risk, 2),
         "floating_count": len(open_trades),
@@ -809,10 +946,16 @@ def summary():
 # F1 多策略 / 多账户视图：按 strategy（或 account）标签聚合盈亏，对比各策略表现。
 #   缺省/空标签归入『未分类』。多账户维度同法，前端可切换分组键。
 # ---------------------------------------------------------------------------
-def by_strategy(group_by="strategy"):
-    """按 strategy 或 account 标签聚合盈亏（F1）。返回各组 笔数/胜率/盈亏/手续费。"""
-    data = _load()
-    trades = data.get("trades", [])
+def by_strategy(group_by="strategy", include_paper=False, account_id=None):
+    """按 strategy 或 account 标签聚合盈亏（F1）。返回各组 笔数/胜率/盈亏/手续费。
+
+    2026-11-02 多账户隔离：默认只统计实盘（排除 account="paper"）；
+    按 account 维度聚合或显式 include_paper=True 时才纳入模拟盘。
+
+    ★ 2026-11-09：account_id 显式指定读取的账户文件（见 _load）。
+    """
+    data = _load(account_id=account_id)
+    trades = data.get("trades", []) if (include_paper or group_by == "account") else _live_rows(data)
     if group_by not in ("strategy", "account"):
         group_by = "strategy"
 
@@ -971,10 +1114,10 @@ def _session_of(ts):
     return "其他"
 
 
-def session_split():
+def session_split(account_id=None):
     """日夜盘分解（C1）：各时段的笔数 / 胜率 / 净盈亏 / 平均每笔。净盈亏均已扣手续费。"""
-    data = _load()
-    closed = [t for t in data["trades"] if t.get("pnl") is not None]
+    data = _load(account_id=account_id)
+    closed = [t for t in _live_rows(data) if t.get("pnl") is not None]
     buckets = {k: {"count": 0, "wins": 0, "pnl": 0.0} for k in ("日盘", "夜盘", "其他")}
     for t in closed:
         s = _session_of(t.get("exit_time") or t.get("time"))
@@ -1008,7 +1151,7 @@ def session_performance():
     仅统计已平仓成交（pnl 非 None）。「其他」时段不计入 day/night 汇总，但进 by_symbol。
     返回 {"ok":True,"day":{...},"night":{...},"by_symbol":{sym:{"day":{...},"night":{...}}}}。"""
     data = _load()
-    closed = [t for t in data["trades"] if t.get("pnl") is not None]
+    closed = [t for t in _live_rows(data) if t.get("pnl") is not None]
 
     def _agg(bucket):
         cnt = len(bucket)
@@ -1094,7 +1237,7 @@ def _attrib_match_signal(t, signals=None, sig_by_time=None, window_min=180):
 def pnl_attribution(strong_thresh=20):
     """实盘盈亏 F/T/C 维度归因（#127）。详见模块顶部说明。"""
     data = _load()
-    closed = [t for t in data["trades"] if t.get("pnl") is not None]
+    closed = [t for t in _live_rows(data) if t.get("pnl") is not None]
     signals = _safe_read_json(SIGNAL_LOG, [])
     sig_by_time = {s.get("time", ""): s for s in signals}
 
@@ -1226,7 +1369,16 @@ def pnl_attribution(strong_thresh=20):
 
 
 def _base_equity():
-    """用于 R/净值曲线的基准权益：优先取已同步权益，否则回退常量。"""
+    """用于 R/净值曲线的基准权益。
+
+    2026-10-28 修复（假回撤 83.43% / 当日盈亏 -51万 根因）：
+    旧版在拿不到已同步权益时回退硬编码常量 613090.0（旧账户口径，非本系统真实权益），
+    导致净值曲线被锚在 61.3 万、真实权益 ~10 万被算成 83% 回撤。
+    现改为三级真实数据源，取不到返回 0（调用方按无基准处理，绝不编造）：
+      1) account_tracker.load_state() 已同步权益；
+      2) equity_history.json 最近一日 close_equity（15:00 日终权益归档，真实留存，作日盈亏起点锚）；
+      3) account_tracker.snapshot({}) 实时快照权益（兜底）。
+    """
     try:
         import account_tracker as at
 
@@ -1234,9 +1386,39 @@ def _base_equity():
         eq = st.get("equity")
         if eq:
             return float(eq)
+        # ★ 2026-10-28 加固：若磁盘带实时权益 equity_live（snapshot 落盘），
+        # 优先用它作为基准，避免 equity=0（未手动同步的沙盒默认值）落空后
+        # 被迫回退更下游数据源，也防止任何「读盘 equity 当真实值」的下游被 0 误导。
+        eq_live = st.get("equity_live")
+        if eq_live:
+            return float(eq_live)
     except Exception:
         pass
-    return 613090.0
+    try:
+        _eh_path = os.path.join(HERE, "equity_history.json")
+        if os.path.exists(_eh_path):
+            with open(_eh_path, encoding="utf-8") as f:
+                _days = (json.load(f) or {}).get("days") or {}
+            if _days:
+                # ★ 2026-11-09：从最后一日往前扫，取第一个有效 close_equity。
+                #   旧实现只读最后一日——末条归档为零（2026-11-08 全零事故）时会误回退
+                #   account_tracker.snapshot()，与 summary() → _base_equity() 形成递归死循环。
+                for _k in sorted(_days.keys(), reverse=True):
+                    _ce = (_days[_k] or {}).get("close_equity")
+                    if _ce:
+                        return float(_ce)
+    except Exception:
+        pass
+    try:
+        import account_tracker as at2
+
+        snap = at2.snapshot({})
+        eq = snap.get("equity")
+        if eq:
+            return float(eq)
+    except Exception:
+        pass
+    return 0.0
 
 
 def _risk_pct():
@@ -1249,37 +1431,46 @@ def _risk_pct():
         return 1.5
 
 
-def equity_curve(prices=None):
+def equity_curve(prices=None, account_id=None):
     """基于已平仓成交按时间累计构建净值曲线；末点追加当前动态权益（含未平仓浮动）。
     返回 {points:[{t,equity}], max_dd_pct, base_equity,
           peak_equity, current_dd_pct, dd_days, is_new_high}。"""
-    data = _load()
+    data = _load(account_id=account_id)
     closed = sorted(
-        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t.get("exit_time") or t["time"]
+        [t for t in _live_rows(data) if t.get("pnl") is not None], key=lambda t: _trade_time(t)
     )
     base = _base_equity()
     total_pnl = sum(t["pnl"] for t in closed)
-    start_equity = base - total_pnl if closed else base
-    pts = [{"t": "起点", "equity": round(start_equity, 2)}]
-    peak_equity = start_equity
+    if base and base > 0:
+        start_equity = base - total_pnl if closed else base
+        pts = [{"t": "起点", "equity": round(start_equity, 2)}]
+        peak_equity = start_equity
+        eq = start_equity
+    else:
+        # 2026-10-28 修复：无任何可靠基准时不再编造起点（旧版回退 613090 造成假回撤 83.43%），
+        # 曲线留空、等末点实时权益锚定，回撤/日盈亏按 0 处理。
+        start_equity = None
+        pts = []
+        peak_equity = 0.0
+        eq = 0.0
     peak_date = None
     max_dd = 0.0
-    eq = start_equity
     today = datetime.now().strftime("%Y-%m-%d")
 
     def _date(ts):
         ts = ts or ""
         return ts[:10] if len(ts) >= 10 else None
 
-    for t in closed:
-        eq += t["pnl"]
-        d = _date(t.get("exit_time") or t["time"])
-        if eq > peak_equity:
-            peak_equity = eq
-            peak_date = d
-        dd = (peak_equity - eq) / peak_equity * 100 if peak_equity > 0 else 0
-        max_dd = max(max_dd, dd)
-        pts.append({"t": (t.get("exit_time") or t["time"]), "equity": round(eq, 2)})
+    if start_equity is not None:
+        for t in closed:
+            eq += t["pnl"]
+            d = _date(_trade_time(t))
+            if eq > peak_equity:
+                peak_equity = eq
+                peak_date = d
+            dd = (peak_equity - eq) / peak_equity * 100 if peak_equity > 0 else 0
+            max_dd = max(max_dd, dd)
+            pts.append({"t": _trade_time(t), "equity": round(eq, 2)})
     # 末点：当前动态权益（含未平仓浮动），让曲线收在今日真实权益
     live_eq = None
     try:
@@ -1298,7 +1489,7 @@ def equity_curve(prices=None):
     except Exception:
         pass
     # 当前回撤 / 持续天数 / 新高状态（基于末点动态权益）
-    if live_eq is not None and peak_equity > 0:
+    if live_eq and peak_equity > 0:
         if live_eq >= peak_equity:
             current_dd_pct = 0.0
             dd_days = 0
@@ -1331,15 +1522,15 @@ def equity_curve(prices=None):
 
 
 # ---- 日内权益分钟级采样（实时权益曲线） ----
-INTRADAY_FILE = os.path.join(HERE, "intraday_equity.json")
+# 注意：_intraday_file_for() 已在文件顶部定义（支持多账户）
 _INTRADAY_LOCK = threading.Lock()
 
 
-def _load_intraday():
-    """加载日内采样数据。格式: {date: [{t: 'HH:MM', equity: float, floating: float}]"""
+def _load_intraday(account_id=None):
+    """加载日内采样数据。格式: {date: [{t: 'HH:MM', equity: float, floating: float}]}"""
     try:
-        if os.path.exists(INTRADAY_FILE):
-            with open(INTRADAY_FILE) as f:
+        if os.path.exists(_intraday_file_for(account_id)):
+            with open(_intraday_file_for(account_id)) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -1347,7 +1538,7 @@ def _load_intraday():
 
 
 def _save_intraday(data):
-    with open(INTRADAY_FILE, "w") as f:
+    with open(_intraday_file_for(), "w") as f:
         json.dump(data, f, ensure_ascii=False)
 
 
@@ -1361,7 +1552,9 @@ def sample_equity(prices=None):
         live_eq = snap.get("equity")
         if live_eq is None:
             return None
-        floating = snap.get("floating_pnl", 0.0) or 0.0
+        # ★ 2026-09-12 修正：account_tracker.snapshot() 返回的键是 float_total，
+        # 不是 floating_pnl。此前取错键 → floating 恒为 0，日内曲线里该字段一直是死数据。
+        floating = snap.get("float_total", 0.0) or 0.0
     except Exception:
         return None
 
@@ -1388,21 +1581,21 @@ def sample_equity(prices=None):
     return {"t": time_str, "equity": round(live_eq, 2), "floating": round(floating, 2)}
 
 
-def intraday_equity(date=None):
+def intraday_equity(date=None, account_id=None):
     """获取指定日期的日内权益曲线。date=None 则取今日。
     返回 {date, points:[{t, equity, floating}], day_start_equity, day_pnl, day_pnl_pct}"""
     if date is None:
         date = datetime.now().strftime("%Y-%m-%d")
 
     with _INTRADAY_LOCK:
-        data = _load_intraday()
+        data = _load_intraday(account_id)
         points = data.get(date, [])
 
     # 找当日起始权益 = 昨日收盘权益（或当日第一笔已平仓前的权益）
     day_start = None
     try:
         # 从 equity_curve 里找最接近今日开盘的点
-        curve = equity_curve()
+        curve = equity_curve(account_id=account_id)
         pts = curve.get("points", [])
         # 找最后一个非"当前"的点作为昨日收盘
         closed_pts = [p for p in pts if p["t"] != "当前(含浮动)"]
@@ -1425,11 +1618,11 @@ def intraday_equity(date=None):
     }
 
 
-def performance_metrics(prices=None):
+def performance_metrics(prices=None, account_id=None):
     """估算绩效指标（基于成交记录，非严格日频）。标注为估算。"""
-    data = _load()
+    data = _load(account_id=account_id)
     closed = sorted(
-        [t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t.get("exit_time") or t["time"]
+        [t for t in _live_rows(data) if t.get("pnl") is not None], key=lambda t: _trade_time(t)
     )
     s = summary()
     if not closed:
@@ -1488,15 +1681,15 @@ def performance_metrics(prices=None):
     }
 
 
-def compare_to_papertrack(window_min=120):
+def compare_to_papertrack(window_min=120, account_id=None):
     """真实成交 vs 引擎信号对比：哪些信号被采纳、实际盈亏 vs 信号建议。
     匹配策略：
       1) 精确匹配：成交 signal_id == 信号 time（前端录入时勾选了真实信号）
       2) 模糊匹配：账户同步/手动单 按 品种+方向+时间窗(±window_min) 回溯绑定当时活跃信号
          —— 解决“账户自动同步来的成交 signal_id='账户同步' 无法计入采纳率”的盲区
     """
-    data = _load()
-    closed = [t for t in data["trades"] if t.get("pnl") is not None]
+    data = _load(account_id=account_id)
+    closed = [t for t in _live_rows(data) if t.get("pnl") is not None]
 
     # 读信号日志
     signals = _safe_read_json(SIGNAL_LOG, [])
@@ -1724,10 +1917,24 @@ def today_pnl(sym=None):
     sym 省略→全品种合计；传入 sym→仅该品种当日已实现盈亏（供 focus_board 使用）。"""
     data = _load()
     today = datetime.now().strftime("%Y-%m-%d")
-    closed = [t for t in data["trades"] if t["pnl"] is not None and (t.get("exit_time") or "")[:10] == today]
+    closed = [t for t in _live_rows(data) if t["pnl"] is not None and (t.get("exit_time") or "")[:10] == today]
     if sym is not None:
         closed = [t for t in closed if t.get("symbol") == sym]
     return sum(t["pnl"] for t in closed)
+
+
+def _streak_cutoff(now=None):
+    """连亏统计的「日内」边界（2026-10-15 修复永久冻结事故）。
+
+    铁律是「日内连续 2 次止损即冻结账户」，而 FSM 每天 reset_daily() 也会清零，
+    但连亏数来自 journal 累计：原实现只按上次熔断解除时间过滤，没有日内边界，
+    于是 2026-09-15 的两笔亏损把账户一直锁到今天（LOCKED 永不自动解除）。
+
+    口径：夜盘（≥20:00）归属**下一交易日**，日盘归属当日，故边界取当日 00:00，
+    夜盘时段取次日 00:00。返回 datetime 边界对象。"""
+    now = now or datetime.now()
+    d = now + timedelta(days=1) if now.hour >= 20 else now
+    return d.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def current_loss_streak():
@@ -1736,13 +1943,18 @@ def current_loss_streak():
     2026-08-27 整改：当存在历史熔断解除记录时，只统计解除后的交易，
     避免被熔断前的亏损'卡'住，导致系统永远无法恢复。
     熔断强平交易本身计入统计（视为正常交易结果）。
+
+    2026-10-15 整改：在熔断解除时间之外再加「日内」边界（_streak_cutoff）——
+    铁律为日内连亏 2 笔冻结，跨交易日的旧亏损不得把账户永久锁死。
     """
     import json as _json
     import os
 
     data = _load()
     # 查找最近的熔断解除时间戳
-    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "killswitch_state.json")
+    _ks_acc = _journal_account()
+    _ks_name = "killswitch_state.json" if (_ks_acc is None or _ks_acc == "default") else f"killswitch_{_ks_acc}.json"
+    ks_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _ks_name)
     reset_time = None
     try:
         if os.path.exists(ks_path):
@@ -1751,12 +1963,22 @@ def current_loss_streak():
             reset_time = _ks.get("reset_at")
     except Exception:
         pass
-    # 过滤：只统计 reset_at 之后的交易（如果存在）
-    closed = sorted([t for t in data["trades"] if t.get("pnl") is not None], key=lambda t: t["time"])
+    # 过滤：只统计 reset_at 之后的交易（如果存在），并强制日内边界
+    closed = sorted([t for t in _live_rows(data) if t.get("pnl") is not None], key=lambda t: _trade_time(t))
     if reset_time:
-        closed = [t for t in closed if (t.get("time") or "") >= reset_time]
+        closed = [t for t in closed if _trade_time(t) >= reset_time]
+    _cut = _streak_cutoff()
+    _in_day = []
+    for t in closed:
+        _ts = _trade_time(t)
+        try:
+            _dt = datetime.strptime(_ts[:19], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            continue
+        if _dt >= _cut:
+            _in_day.append(t)
     streak = 0
-    for t in reversed(closed):
+    for t in reversed(_in_day):
         if t["pnl"] < 0:
             streak += 1
         else:

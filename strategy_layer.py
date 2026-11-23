@@ -49,6 +49,33 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
     return tr.rolling(n, min_periods=n).mean()
 
 
+def dual_range_vol(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    """双差值波动估计 DR(N)/√N（Dual Thrust range，OOS 采纳 2026-08-31）。
+
+    Range = max(滚动HH−滚动LC, 滚动HC−滚动LL)：
+    HH−LC 含向上跳空、HC−LL 含向下跳空，取大者对跳空方向不偏不倚，
+    比 ATR 更适合中国期货夜盘/长假频繁跳空场景。
+    √N 缩放：随机游走下 E[range_N]/E[TR]=√N，归一到 ATR 量级，零拟合参数。
+    仅用于止损/止盈通道（行情分类保持 ATR）。
+    """
+    h, l, c = df["high"], df["low"], df["close"]
+    hh = h.rolling(n, min_periods=n).max()
+    ll = l.rolling(n, min_periods=n).min()
+    hc = c.rolling(n, min_periods=n).max()
+    lc = c.rolling(n, min_periods=n).min()
+    dr = pd.concat([hh - lc, hc - ll], axis=1).max(axis=1)
+    return dr / math.sqrt(n)
+
+
+def _dual_range_array(high, low, close, window):
+    """双差值波动估计 numpy 数组版（回测引擎用，与 dual_range_vol 同口径）。"""
+    hh = pd.Series(high).rolling(window).max().values
+    ll = pd.Series(low).rolling(window).min().values
+    hc = pd.Series(close).rolling(window).max().values
+    lc = pd.Series(close).rolling(window).min().values
+    return np.maximum(hh - lc, hc - ll) / np.sqrt(window)
+
+
 def rsi(s: pd.Series, n: int = 14) -> pd.Series:
     """相对强弱指数。"""
     d = s.diff()
@@ -778,7 +805,9 @@ def load_robust_gate_file(path=None):
 
 def backfill_robust_pool_gate(drift_json=None, out_path=None, auto_adapt=None, cfg=None):
     """从 calibration_drift.json 回灌稳健池 OOS_expR 门槛。"""
-    c = cfg or _ROBUST_GATE_CFG
+    # cfg 可能只覆盖部分键（如 _STRAT_CFG["robust_pool_gate"] 缺 default_stability/default_oos_expR），
+    # 用默认配置打底再合并，缺键回落到 _ROBUST_GATE_CFG，避免 KeyError 导致回灌静默空转。
+    c = {**_ROBUST_GATE_CFG, **(cfg or {})}
     aa = auto_adapt if auto_adapt is not None else c["auto_adapt"]
     drift_json = drift_json or DRIFT_JSON_PATH
     out_path = out_path or ROBUST_GATE_FILE

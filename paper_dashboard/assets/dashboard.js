@@ -6,19 +6,81 @@
   'use strict';
 
   // --- Configuration ---
-  var API_URL = '/api/paper-trading';
+  // 账户列表：支持多账户切换
+  var ACCOUNTS = [
+    { id: 'paper', name: '策略模拟盘', api: '/api/paper-trading', badge: '自动策略', subtitle: 'Paper Trading' },
+    { id: 'trisense', name: '三感参谋实盘', api: '/api/trisense-replay', badge: '实盘跟踪', subtitle: 'TriSense Advisor' },
+  ];
+  var currentAccount = 'paper';
+
   var REFRESH_INTERVAL = 3000; // 默认 3 秒刷新
   var REFRESH_PAUSED_ON_HIDDEN = true; // 页面隐藏时暂停刷新
   var DEMO_RETRY_INTERVAL = 30000; // Demo 模式下每 30 秒尝试重连真实 API
 
-  // 从 URL 参数读取刷新间隔配置（?refresh=5000）
+  // 从 URL 参数读取配置（?account=trisense&refresh=5000）
   (function() {
     var params = new URLSearchParams(window.location.search);
     var customInterval = parseInt(params.get('refresh'));
     if (customInterval && customInterval >= 1000) {
       REFRESH_INTERVAL = customInterval;
     }
+    var accountParam = params.get('account');
+    if (accountParam && ACCOUNTS.some(function(a) { return a.id === accountParam; })) {
+      currentAccount = accountParam;
+    }
   })();
+
+  // 获取当前账户的 API 地址
+  function getApi() {
+    var acc = ACCOUNTS.find(function(a) { return a.id === currentAccount; });
+    return acc ? acc.api : ACCOUNTS[0].api;
+  }
+
+  // 获取当前账户信息
+  function getCurrentAccount() {
+    return ACCOUNTS.find(function(a) { return a.id === currentAccount; }) || ACCOUNTS[0];
+  }
+
+  // 切换账户
+  function switchAccount(id) {
+    if (id === currentAccount) return;
+    var acc = ACCOUNTS.find(function(a) { return a.id === id; });
+    if (!acc) return;
+    currentAccount = id;
+    // 更新 URL（不刷新页面）
+    var url = new URL(window.location.href);
+    url.searchParams.set('account', id);
+    window.history.replaceState({}, '', url.toString());
+    // 更新 UI
+    updateAccountUI();
+    // 清空旧数据，立即刷新
+    currentData = null;
+    lastDataHash = null;
+    fetchData();
+  }
+
+  // 更新账户相关的 UI 显示
+  function updateAccountUI() {
+    var acc = getCurrentAccount();
+    // 页面标题
+    document.title = acc.name + ' · 三感参谋仪表盘';
+    // 标题区
+    var titleEl = document.getElementById('dashboard-title');
+    if (titleEl) titleEl.textContent = acc.name;
+    var subtitleEl = document.getElementById('dashboard-subtitle');
+    if (subtitleEl) subtitleEl.textContent = acc.subtitle;
+    // 切换按钮状态
+    ACCOUNTS.forEach(function(a) {
+      var btn = document.getElementById('account-btn-' + a.id);
+      if (btn) {
+        if (a.id === currentAccount) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      }
+    });
+  }
 
   // --- State ---
   var currentData = null;
@@ -149,7 +211,7 @@
       default_lots: rawConfig.default_lots != null ? rawConfig.default_lots : 1,
       cooldown_minutes: rawConfig.cooldown_minutes != null ? rawConfig.cooldown_minutes : 30,
       enable_trailing: rawConfig.enable_trailing != null ? rawConfig.enable_trailing : true,
-      trailing_lock_r: rawConfig.trailing_lock_r != null ? rawConfig.trailing_lock_r : 0.5
+      trailing_lock_R: rawConfig.trailing_lock_R != null ? rawConfig.trailing_lock_R : 0.5
     };
 
     return {
@@ -227,7 +289,7 @@
 
   // --- API Functions ---
   function apiGet() {
-    return fetch(API_URL, { cache: 'no-store' })
+    return fetch(getApi(), { cache: 'no-store' })
       .then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -241,7 +303,7 @@
   }
 
   function apiPost(body) {
-    return fetch(API_URL, {
+    return fetch(getApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -613,7 +675,7 @@
       var t = el('cfg-trailing');
       if (cfg.enable_trailing) t.classList.add('active'); else t.classList.remove('active');
     }
-    if (cfg.trailing_lock_r != null) el('cfg-trailing-lock').value = cfg.trailing_lock_r;
+    if (cfg.trailing_lock_R != null) el('cfg-trailing-lock').value = cfg.trailing_lock_R;
   }
 
   // --- Toggle & Status ---
@@ -891,7 +953,7 @@
         default_lots: parseInt(document.getElementById('cfg-default-lots').value),
         cooldown_minutes: parseInt(document.getElementById('cfg-cooldown').value),
         enable_trailing: trailingEl.classList.contains('active'),
-        trailing_lock_r: parseFloat(document.getElementById('cfg-trailing-lock').value)
+        trailing_lock_R: parseFloat(document.getElementById('cfg-trailing-lock').value)
       };
 
       apiPost({ action: 'config', config: config }).then(function(result) {
@@ -954,7 +1016,7 @@
         default_lots: 1,
         cooldown_minutes: 30,
         enable_trailing: true,
-        trailing_lock_r: 0.5
+        trailing_lock_R: 0.5
       },
       positions: {
         'IF2409': {
@@ -1027,6 +1089,9 @@
 
   // --- Init ---
   function init() {
+    // 初始化账户 UI
+    updateAccountUI();
+
     // 给交易记录容器加 id，用于滚动位置保存
     var tradesWrap = document.querySelector('.panel.col-full .table-wrap');
     if (tradesWrap && !tradesWrap.id) {
@@ -1063,5 +1128,8 @@
   } else {
     init();
   }
+
+  // 暴露全局函数，供 HTML 中的按钮调用
+  window.__switchAccount = switchAccount;
 
 })();

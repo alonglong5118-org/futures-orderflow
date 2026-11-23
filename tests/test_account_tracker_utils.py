@@ -70,7 +70,8 @@ class TestDirSignAcc(unittest.TestCase):
         self.assertEqual(_dir_sign(""), 0)
         self.assertEqual(_dir_sign("平"), 0)
         self.assertEqual(_dir_sign(None), 0)
-        self.assertEqual(_dir_sign("做多"), 0)  # 必须精确匹配"多"
+        self.assertEqual(_dir_sign("做多"), 1)  # _dir_sign 已扩展识别 做多/做空/多头 等同义词
+        self.assertEqual(_dir_sign("做空"), -1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
